@@ -16,7 +16,7 @@
  * under the License.
  */
 
-package io.ballerina.lib.ai.plugin;
+package io.ballerina.stdlib.ai.plugin;
 
 import io.ballerina.compiler.api.symbols.AnnotationSymbol;
 import io.ballerina.compiler.api.symbols.FunctionSymbol;
@@ -35,10 +35,10 @@ import io.ballerina.compiler.syntax.tree.NonTerminalNode;
 import io.ballerina.compiler.syntax.tree.SeparatedNodeList;
 import io.ballerina.compiler.syntax.tree.SpecificFieldNode;
 import io.ballerina.compiler.syntax.tree.SyntaxKind;
-import io.ballerina.lib.ai.plugin.diagnostics.CompilationDiagnostic;
 import io.ballerina.projects.DocumentId;
 import io.ballerina.projects.plugins.AnalysisTask;
 import io.ballerina.projects.plugins.SyntaxNodeAnalysisContext;
+import io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic;
 import io.ballerina.tools.diagnostics.Diagnostic;
 import io.ballerina.tools.diagnostics.Location;
 
@@ -48,13 +48,13 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-import static io.ballerina.lib.ai.plugin.ToolAnnotationConfig.DESCRIPTION_FIELD_NAME;
-import static io.ballerina.lib.ai.plugin.ToolAnnotationConfig.NAME_FIELD_NAME;
-import static io.ballerina.lib.ai.plugin.ToolAnnotationConfig.PARAMETERS_FIELD_NAME;
-import static io.ballerina.lib.ai.plugin.diagnostics.CompilationDiagnostic.INVALID_RETURN_TYPE_IN_TOOL;
-import static io.ballerina.lib.ai.plugin.diagnostics.CompilationDiagnostic.PARAMETER_IS_NOT_A_SUBTYPE_OF_ANYDATA;
-import static io.ballerina.lib.ai.plugin.diagnostics.CompilationDiagnostic.UNABLE_TO_GENERATE_SCHEMA_FOR_FUNCTION;
-import static io.ballerina.lib.ai.plugin.diagnostics.CompilationDiagnostic.XML_PARAMETER_NOT_SUPPORTED_BY_TOOL;
+import static io.ballerina.stdlib.ai.plugin.ToolAnnotationConfig.DESCRIPTION_FIELD_NAME;
+import static io.ballerina.stdlib.ai.plugin.ToolAnnotationConfig.NAME_FIELD_NAME;
+import static io.ballerina.stdlib.ai.plugin.ToolAnnotationConfig.PARAMETERS_FIELD_NAME;
+import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.INVALID_RETURN_TYPE_IN_TOOL;
+import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.PARAMETER_IS_NOT_A_SUBTYPE_OF_ANYDATA;
+import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.UNABLE_TO_GENERATE_SCHEMA_FOR_FUNCTION;
+import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.XML_PARAMETER_NOT_SUPPORTED_BY_TOOL;
 
 /**
  * Analyzes a Ballerina AI tools and report diagnostics.

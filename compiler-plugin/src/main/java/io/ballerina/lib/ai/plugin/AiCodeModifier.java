@@ -16,7 +16,7 @@
  * under the License.
  */
 
-package io.ballerina.lib.ai.plugin;
+package io.ballerina.stdlib.ai.plugin;
 
 import io.ballerina.compiler.syntax.tree.SyntaxKind;
 import io.ballerina.projects.DocumentId;

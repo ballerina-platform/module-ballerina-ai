@@ -15,14 +15,18 @@
 // under the License.
 
 import ballerina/http;
-import ballerinax/ai;
+import ballerina/ai;
 
-configurable string apiKey = ?;
-configurable string deploymentId = ?;
-configurable string apiVersion = ?;
-configurable string serviceUrl = ?;
+isolated client class ProviderImpl {
+    *ai:ModelProvider;
 
-final ai:ModelProvider model = check new ai:AzureOpenAiProvider(serviceUrl, apiKey, deploymentId, apiVersion);
+    isolated remote function chat(ai:ChatMessage[] messages, ai:ChatCompletionFunctions[] tools, string? stop)
+        returns ai:ChatAssistantMessage|ai:LlmError {
+        return {role: ai:ASSISTANT};
+    }
+}
+
+final ai:ModelProvider model = new ProviderImpl();
 final ai:Agent agent = check new (
     systemPrompt = {
         role: "Math Tutor",

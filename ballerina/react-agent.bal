@@ -236,8 +236,8 @@ Action:
 ${BACKTICKS}
 $JSON_BLOB
 ${BACKTICKS}
-Observation: action result
-... (repeat Thought/Action/Observation N times)
+${OBSERVATION_KEY}: action result
+... (repeat Thought/Action/${OBSERVATION_KEY} N times)
 Thought: I know what to respond
 Action:
 ${BACKTICKS}

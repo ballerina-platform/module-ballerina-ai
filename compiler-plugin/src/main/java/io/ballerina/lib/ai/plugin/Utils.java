@@ -16,7 +16,7 @@
  * under the License.
  */
 
-package io.ballerina.lib.ai.plugin;
+package io.ballerina.stdlib.ai.plugin;
 
 import io.ballerina.compiler.api.symbols.AnnotationSymbol;
 import io.ballerina.compiler.api.symbols.Documentable;
@@ -33,8 +33,7 @@ import io.ballerina.projects.plugins.SyntaxNodeAnalysisContext;
  * Util class for the compiler plugin.
  */
 public class Utils {
-    public static final String BALLERINAX_ORG = "ballerinax";
-    private static final String BALLERINA_ORG = "ballerina";
+    public static final String BALLERINA_ORG = "ballerina";
     private static final String TOOL_ANNOTATION_NAME = "AgentTool";
     private static final String AI_PACKAGE_NAME = "ai";
     private static final String HTTP_PACKAGE_NAME = "http";
@@ -53,7 +52,7 @@ public class Utils {
     public static boolean isAgentModuleSymbol(Symbol symbol) {
         return symbol.getModule().isPresent()
                 && AI_PACKAGE_NAME.equals(symbol.getModule().get().id().moduleName())
-                && BALLERINAX_ORG.equals(symbol.getModule().get().id().orgName());
+                && BALLERINA_ORG.equals(symbol.getModule().get().id().orgName());
     }
 
     public static boolean isHttpModuleSymbol(Symbol symbol) {

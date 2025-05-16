@@ -1,40 +1,8 @@
 ## Overview
 
-This module provides APIs for building AI agents using Large Language Models (LLMs).
+This module offers APIs for developing AI applications and agents powered by Large Language Models (LLMs).
 
 AI agents use LLMs to process natural language inputs, generate responses, and make decisions based on given instructions. These agents can be designed for various tasks, such as answering questions, automating workflows, or interacting with external systems.
-
-## Prerequisites
-
-Before using this module in your Ballerina application, first you must select your LLM provider and obtain the nessary configuration to engage the LLM. Currenlty the module supports the following LLM Providers and You can obtain the nessary configuration by using the folllowing intrusctons
-
-### OpenAI Provider
-
-- Create an [OpenAI account](https://beta.openai.com/signup/).
-- Obtain an API key by following [these instructions](https://platform.openai.com/docs/api-reference/authentication).
-
-### Azure OpenAI Provider
-
-- Create an [Azure](https://azure.microsoft.com/en-us/features/azure-portal/) account.
-- Create an [Azure OpenAI resource](https://learn.microsoft.com/en-us/azure/cognitive-services/openai/how-to/create-resource).
-- Obtain the tokens. Refer to the [Azure OpenAI Authentication](https://learn.microsoft.com/en-us/azure/cognitive-services/openai/reference#authentication) guide to learn how to generate and use tokens.
-
-### Anthropic Provider
-
-- Create an [Anthropic account](https://www.anthropic.com/signup).
-- Obtain an API key by following [these instructions](https://docs.anthropic.com/en/api/getting-started).
-
-### MistralAI Provider
-
-- Create a [Mistral account](https://console.mistral.ai/).
-- Obtain an API key by following [these instructions](https://docs.mistral.ai/getting-started/quickstart/#account-setup)
-
-### Ollama Provider
-
-- Install [Ollama](https://ollama.com) on your system.
-- Download the required LLM models using the Ollama CLI.
-- Ensure the Ollama service is running before making API requests.
-- Refer to the [Ollama documentation](https://github.com/ollama/ollama/blob/main/docs/modelfile.md#parameter) for additional configuration details.
 
 ## Quickstart
 
@@ -45,7 +13,7 @@ To use the `ai` module in your Ballerina application, update the `.bal` file as 
 Import the `ai` module.
 
 ```ballerina
-import ballerinax/ai;
+import ballerina/ai;
 ```
 
 ### Step 2: Define the System Prompt
@@ -61,10 +29,16 @@ ai:SystemPrompt systemPrompt = {
 
 ### Step 3: Define the Model Provider
 
-The `ai` module supports multiple LLM providers. Here's how to define the OpenAI provider:
+Ballerina currently supports multiple model providers, which you can explore [here on Ballerina Central](https://central.ballerina.io/search?q=module-ballerinax-ai.model.provider.&sort=relevance%2CDESC&page=1&m=packages).
+
+In addition to these prebuilt implementations, you also have the flexibility to implement your own custom provider.
+
+Here's how to initialize the prebuilt OpenAI model provider:
 
 ```ballerina
-final ai:OpenAiProvider openAiModel = check new ("openAiApiKey", modelType = ai:GPT_4O);
+import ballerinax/ai.model.provider.openai;
+
+final ai:ModelProvider openAiModel = check new openai:Provider("openAiApiKey", modelType = openai:GPT_4O);
 ```
 
 ### Step 4: Define the tools
@@ -123,6 +97,6 @@ If using the agent with a single session, you can omit the `sessionId` parameter
 
 ## Examples
 
-The `ai` module provides practical examples illustrating usage in various scenarios. Explore these [examples](https://github.com/ballerina-platform/module-ballerinax-ai.agent/tree/main/examples/), covering the following use cases:
+The `ai` module provides practical examples illustrating usage in various scenarios. Explore these [examples](https://github.com/ballerina-platform/module-ballerina-ai/tree/main/examples/), covering the following use cases:
 
-1. [Personal AI Assistant](https://github.com/ballerina-platform/module-ballerinax-ai.agent/tree/main/examples/personal-ai-assistant) - Demonstrates how to implement a personal AI assistant using Ballerina AI module along with Google Calendar and Gmail integrations
+1. [Personal AI Assistant](https://github.com/ballerina-platform/module-ballerina-ai/tree/main/examples/personal-ai-assistant) - Demonstrates how to implement a personal AI assistant using Ballerina AI module along with Google Calendar and Gmail integrations

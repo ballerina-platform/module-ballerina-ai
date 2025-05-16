@@ -16,7 +16,7 @@
  * under the License.
  */
 
-package io.ballerina.lib.ai.plugin;
+package io.ballerina.stdlib.ai.plugin;
 
 import io.ballerina.compiler.api.SemanticModel;
 import io.ballerina.compiler.api.symbols.ClassSymbol;
@@ -75,7 +75,7 @@ public class OpenAPIGenerator implements AnalysisTask<SyntaxNodeAnalysisContext>
     public static final String OPENAPI = "openapi";
     public static final String OAS_PATH_SEPARATOR = "/";
     public static final String UNDERSCORE = "_";
-    public static final String BALLERINAX = "ballerinax";
+    public static final String BALLERINA = "ballerina";
     public static final String AI_AGENT = "ai";
     public static final String EMPTY = "";
     public static final String LISTENER = "Listener";
@@ -158,7 +158,7 @@ public class OpenAPIGenerator implements AnalysisTask<SyntaxNodeAnalysisContext>
             return false;
         }
 
-        Optional<Symbol> listenerTypeSymbol = semanticModel.types().getTypeByName(BALLERINAX, AI_AGENT, EMPTY,
+        Optional<Symbol> listenerTypeSymbol = semanticModel.types().getTypeByName(BALLERINA, AI_AGENT, EMPTY,
                 LISTENER);
         if (listenerTypeSymbol.isEmpty() || listenerTypeSymbol.get().kind() != SymbolKind.CLASS) {
             return false;

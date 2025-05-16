@@ -16,7 +16,7 @@
  * under the License.
  */
 
-package io.ballerina.lib.ai.plugin;
+package io.ballerina.stdlib.ai.plugin;
 
 import io.ballerina.compiler.syntax.tree.AnnotationNode;
 import io.ballerina.compiler.syntax.tree.ClassDefinitionNode;
@@ -62,9 +62,9 @@ import static io.ballerina.compiler.syntax.tree.SyntaxKind.OPEN_BRACE_TOKEN;
 import static io.ballerina.compiler.syntax.tree.SyntaxKind.QUALIFIED_NAME_REFERENCE;
 import static io.ballerina.compiler.syntax.tree.SyntaxKind.SEMICOLON_TOKEN;
 import static io.ballerina.compiler.syntax.tree.SyntaxKind.SPECIFIC_FIELD;
-import static io.ballerina.lib.ai.plugin.ToolAnnotationConfig.DESCRIPTION_FIELD_NAME;
-import static io.ballerina.lib.ai.plugin.ToolAnnotationConfig.NAME_FIELD_NAME;
-import static io.ballerina.lib.ai.plugin.ToolAnnotationConfig.PARAMETERS_FIELD_NAME;
+import static io.ballerina.stdlib.ai.plugin.ToolAnnotationConfig.DESCRIPTION_FIELD_NAME;
+import static io.ballerina.stdlib.ai.plugin.ToolAnnotationConfig.NAME_FIELD_NAME;
+import static io.ballerina.stdlib.ai.plugin.ToolAnnotationConfig.PARAMETERS_FIELD_NAME;
 
 /**
  * Modifies the AI tool annotations with the generated tool configuration.

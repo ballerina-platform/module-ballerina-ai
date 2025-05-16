@@ -16,14 +16,14 @@
  * under the License.
  */
 
-package io.ballerina.lib.ai.compiler;
+package io.ballerina.stdlib.ai.compiler;
 
-import io.ballerina.lib.ai.plugin.diagnostics.CompilationDiagnostic;
 import io.ballerina.projects.DiagnosticResult;
 import io.ballerina.projects.ProjectEnvironmentBuilder;
 import io.ballerina.projects.directory.BuildProject;
 import io.ballerina.projects.environment.Environment;
 import io.ballerina.projects.environment.EnvironmentBuilder;
+import io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic;
 import io.ballerina.tools.diagnostics.Diagnostic;
 import io.ballerina.tools.diagnostics.DiagnosticSeverity;
 import io.ballerina.tools.diagnostics.Location;
@@ -35,11 +35,11 @@ import java.nio.file.Paths;
 import java.text.MessageFormat;
 import java.util.Iterator;
 
-import static io.ballerina.lib.ai.plugin.diagnostics.CompilationDiagnostic.AGENT_MUST_BE_FINAL;
-import static io.ballerina.lib.ai.plugin.diagnostics.CompilationDiagnostic.INVALID_RETURN_TYPE_IN_TOOL;
-import static io.ballerina.lib.ai.plugin.diagnostics.CompilationDiagnostic.PARAMETER_IS_NOT_A_SUBTYPE_OF_ANYDATA;
-import static io.ballerina.lib.ai.plugin.diagnostics.CompilationDiagnostic.UNABLE_TO_GENERATE_SCHEMA_FOR_FUNCTION;
-import static io.ballerina.lib.ai.plugin.diagnostics.CompilationDiagnostic.XML_PARAMETER_NOT_SUPPORTED_BY_TOOL;
+import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.AGENT_MUST_BE_FINAL;
+import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.INVALID_RETURN_TYPE_IN_TOOL;
+import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.PARAMETER_IS_NOT_A_SUBTYPE_OF_ANYDATA;
+import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.UNABLE_TO_GENERATE_SCHEMA_FOR_FUNCTION;
+import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.XML_PARAMETER_NOT_SUPPORTED_BY_TOOL;
 
 /**
  * Contains compiler plugin tests for validating the Ballerina AI tool.

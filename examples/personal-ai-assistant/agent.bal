@@ -11,7 +11,8 @@
 // specific language governing permissions and limitations
 // under the License.
 
-import ballerinax/ai;
+import ballerina/ai;
+import ballerinax/ai.model.provider.openai;
 import ballerinax/googleapis.calendar;
 import ballerinax/googleapis.gmail;
 
@@ -76,10 +77,11 @@ Guidelines:
 - Prioritize clarity, efficiency, and user convenience in all tasks.`
 };
 
-final ai:OpenAiProvider openAiModel = check new (openAiApiKey, modelType = ai:GPT_4O);
+final ai:ModelProvider openAiModel = check new openai:Provider(openAiApiKey, modelType = openai:GPT_4O);
 final ai:Agent personalAiAssistantAgent = check new (
     systemPrompt = systemPrompt,
     model = openAiModel,
     tools = [readEmails, sendEmail, getCalanderEvents, createCalanderEvent],
-    memory = new ai:MessageWindowChatMemory(20)
+    memory = new ai:MessageWindowChatMemory(20),
+    verbose = true
 );

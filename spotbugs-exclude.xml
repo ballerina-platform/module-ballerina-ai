@@ -17,7 +17,7 @@
   -->
 <FindBugsFilter>
     <Match>
-        <Class name="io.ballerina.lib.ai.plugin.ToolAnnotationAnalysisTask"/>
+        <Class name="io.ballerina.stdlib.ai.plugin.ToolAnnotationAnalysisTask"/>
         <Bug pattern="UWF_FIELD_NOT_INITIALIZED_IN_CONSTRUCTOR"/>
     </Match>
 </FindBugsFilter>

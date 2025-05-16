@@ -16,7 +16,7 @@
  * under the License.
  */
 
-package io.ballerina.lib.ai.plugin;
+package io.ballerina.stdlib.ai.plugin;
 
 import io.ballerina.projects.plugins.CodeAnalysisContext;
 import io.ballerina.projects.plugins.CodeAnalyzer;

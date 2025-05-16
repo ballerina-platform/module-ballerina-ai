@@ -15,7 +15,7 @@
 // under the License.
 
 import ballerina/lang.regexp;
-import ballerinax/ai;
+import ballerina/ai;
 
 isolated function getNumbers(string prompt) returns string[] {
     regexp:Span[] spans = re `-?\d+\.?\d*`.findAll(prompt);
