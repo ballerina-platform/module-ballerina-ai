@@ -28,23 +28,23 @@ isolated function getToolParameterTypes(FunctionTool functionPointer) returns ma
 }
 
 isolated function getParameterTypes(FunctionTool functionPointer) returns map<any> = @java:Method {
-    'class: "io.ballerina.lib.ai.Utils"
+    'class: "io.ballerina.stdlib.ai.Utils"
 } external;
 
 isolated function isMapType(typedesc<anydata> typedescVal) returns boolean = @java:Method {
-    'class: "io.ballerina.lib.ai.Utils"
+    'class: "io.ballerina.stdlib.ai.Utils"
 } external;
 
 isolated function getFunctionName(FunctionTool toolFunction) returns string = @java:Method {
-    'class: "io.ballerina.lib.ai.Utils"
+    'class: "io.ballerina.stdlib.ai.Utils"
 } external;
 
 isolated function getArgsWithDefaultValues(FunctionTool toolFunction, map<anydata> value)
 returns map<anydata> = @java:Method {
-    'class: "io.ballerina.lib.ai.Utils"
+    'class: "io.ballerina.stdlib.ai.Utils"
 } external;
 
 isolated function invokeOnChatMessageFunction(any event, string eventFunction, service object {} serviceObj) 
     returns ChatRespMessage|error = @java:Method {
-        'class: "io.ballerina.lib.ai.NativeHttpToChatServiceAdaptor"
+        'class: "io.ballerina.stdlib.ai.NativeHttpToChatServiceAdaptor"
 } external;

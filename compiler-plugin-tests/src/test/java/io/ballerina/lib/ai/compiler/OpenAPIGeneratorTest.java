@@ -16,7 +16,7 @@
  * under the License.
  */
 
-package io.ballerina.lib.ai.compiler;
+package io.ballerina.stdlib.ai.compiler;
 
 import io.ballerina.projects.BuildOptions;
 import io.ballerina.projects.DiagnosticResult;

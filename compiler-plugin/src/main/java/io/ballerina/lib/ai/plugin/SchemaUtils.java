@@ -16,7 +16,7 @@
  * under the License.
  */
 
-package io.ballerina.lib.ai.plugin;
+package io.ballerina.stdlib.ai.plugin;
 
 import io.ballerina.compiler.api.symbols.FunctionSymbol;
 import io.ballerina.compiler.api.symbols.FunctionTypeSymbol;
@@ -35,8 +35,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import static io.ballerina.lib.ai.plugin.ToolAnnotationAnalysisTask.EMPTY_STRING;
-import static io.ballerina.lib.ai.plugin.ToolAnnotationAnalysisTask.NIL_EXPRESSION;
+import static io.ballerina.stdlib.ai.plugin.ToolAnnotationAnalysisTask.EMPTY_STRING;
+import static io.ballerina.stdlib.ai.plugin.ToolAnnotationAnalysisTask.NIL_EXPRESSION;
 
 /**
  * Utility class for generating and manipulating function tool parameter schemas.

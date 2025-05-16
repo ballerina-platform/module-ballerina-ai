@@ -1,6 +1,6 @@
 [plugin]
 id = "ai-compiler-plugin"
-class = "io.ballerina.lib.ai.plugin.AiCompilerPlugin"
+class = "io.ballerina.stdlib.ai.plugin.AiCompilerPlugin"
 
 [[dependency]]
 path = "../compiler-plugin/build/libs/ai-compiler-plugin-@project.version@.jar"

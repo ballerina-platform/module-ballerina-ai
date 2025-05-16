@@ -14,28 +14,12 @@
 // specific language governing permissions and limitations
 // under the License.
 
-// model default parameters 
-const GPT3_5_MODEL_NAME = "gpt-3.5-turbo";
 const OBSERVATION_KEY = "Observation";
-const DEFAULT_MAX_TOKEN_COUNT = 512;
-const DEFAULT_TEMPERATURE = 0.7d;
 
 // openapi
 const OPENAPI_COMPONENTS_KEY = "components";
 const OPENAPI_PATTERN_DATE = "yyyy-MM-dd";
 const OPENAPI_PATTERN_DATE_TIME = "yyyy-MM-dd'T'HH:mm:ssZ";
-
-// openai
-const OPENAI_SERVICE_URL = "https://api.openai.com/v1";
-
-// Anthropic
-const ANTHROPIC_SERVICE_URL = "https://api.anthropic.com/v1";
-
-// Mistral AI
-const MISTRAL_AI_SERVICE_URL = "https://api.mistral.ai/v1";
-
-// Deepseek
-const DEEPSEEK_SERVICE_URL = "https://api.deepseek.com";
 
 //agent
 const THOUGHT_KEY = "Thought:";

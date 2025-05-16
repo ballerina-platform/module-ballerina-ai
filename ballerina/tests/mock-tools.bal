@@ -46,7 +46,8 @@ isolated function sendMail(record {|string senderEmail; MessageRequest messageRe
     }
 }
 
-public client class MockLLM {
+public isolated client class MockLLM {
+    *ModelProvider;
     isolated remote function chat(ChatMessage[] messages, ChatCompletionFunctions[] tools, string? stop)
         returns ChatAssistantMessage|LlmError {
         ChatMessage lastMessage = messages.pop();

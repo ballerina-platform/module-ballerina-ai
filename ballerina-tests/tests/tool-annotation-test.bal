@@ -16,7 +16,7 @@
 
 import ballerina/io;
 import ballerina/test;
-import ballerinax/ai;
+import ballerina/ai;
 
 @test:Config {
     dataProvider: getTools

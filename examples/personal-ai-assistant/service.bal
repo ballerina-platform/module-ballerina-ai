@@ -12,7 +12,7 @@
 // under the License.
 
 import ballerina/http;
-import ballerinax/ai;
+import ballerina/ai;
 
 service on new ai:Listener(9090) {
     resource function post chat(@http:Payload ai:ChatReqMessage request) returns ai:ChatRespMessage|error {

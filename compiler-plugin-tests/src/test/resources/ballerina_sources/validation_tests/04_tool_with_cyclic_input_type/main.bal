@@ -14,7 +14,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-import ballerinax/ai;
+import ballerina/ai;
 
 type User record {|
     Friend[] friends;

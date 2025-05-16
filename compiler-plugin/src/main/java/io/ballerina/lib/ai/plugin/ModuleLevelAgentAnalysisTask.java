@@ -16,7 +16,7 @@
  * under the License.
  */
 
-package io.ballerina.lib.ai.plugin;
+package io.ballerina.stdlib.ai.plugin;
 
 import io.ballerina.compiler.api.symbols.Symbol;
 import io.ballerina.compiler.api.symbols.SymbolKind;
@@ -31,17 +31,17 @@ import io.ballerina.compiler.syntax.tree.SeparatedNodeList;
 import io.ballerina.compiler.syntax.tree.SyntaxKind;
 import io.ballerina.compiler.syntax.tree.Token;
 import io.ballerina.compiler.syntax.tree.TypeDescriptorNode;
-import io.ballerina.lib.ai.plugin.diagnostics.CompilationDiagnostic;
 import io.ballerina.projects.DocumentId;
 import io.ballerina.projects.plugins.AnalysisTask;
 import io.ballerina.projects.plugins.SyntaxNodeAnalysisContext;
+import io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic;
 import io.ballerina.tools.diagnostics.Diagnostic;
 
 import java.util.Map;
 import java.util.Optional;
 
-import static io.ballerina.lib.ai.plugin.Utils.BALLERINAX_ORG;
-import static io.ballerina.lib.ai.plugin.diagnostics.CompilationDiagnostic.AGENT_MUST_BE_FINAL;
+import static io.ballerina.stdlib.ai.plugin.Utils.BALLERINA_ORG;
+import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.AGENT_MUST_BE_FINAL;
 
 /**
  * Analyzes a Ballerina AI Agent defined at module level.
@@ -108,7 +108,7 @@ class ModuleLevelAgentAnalysisTask implements AnalysisTask<SyntaxNodeAnalysisCon
                         return moduleName.size() == 1
                                 && moduleName.get(0).text().contains(AI_MODULE_NAME)
                                 && orgNameOpt.isPresent()
-                                && orgNameOpt.get().orgName().text().equals(BALLERINAX_ORG);
+                                && orgNameOpt.get().orgName().text().equals(BALLERINA_ORG);
                     }).findFirst();
 
             if (agentModuleImport.isEmpty() || agentModuleImport.get().prefix().isEmpty()) {

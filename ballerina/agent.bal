@@ -14,6 +14,8 @@
 // specific language governing permissions and limitations
 // under the License.
 
+const INFER_TOOL_COUNT = "INFER_TOOL_COUNT";
+
 # Represents the system prompt given to the agent.
 @display {label: "System Prompt"}
 public type SystemPrompt record {|
@@ -56,9 +58,10 @@ public type AgentConfiguration record {|
     @display {label: "Agent Type"}
     AgentType agentType = FUNCTION_CALL_AGENT;
 
-    # The maximum number of iterations the agent performs to complete the task
+    # The maximum number of iterations the agent performs to complete the task.
+    # By default, it is set to the number of tools + 1.
     @display {label: "Maximum Iterations"}
-    int maxIter = 5;
+    INFER_TOOL_COUNT|int maxIter = INFER_TOOL_COUNT;
 
     # Specifies whether verbose logging is enabled
     @display {label: "Verbose"}
@@ -80,7 +83,8 @@ public isolated distinct client class Agent {
     #
     # + config - Configuration used to initialize an agent
     public isolated function init(@display {label: "Agent Configuration"} *AgentConfiguration config) returns Error? {
-        self.maxIter = config.maxIter;
+        INFER_TOOL_COUNT|int maxIter = config.maxIter;
+        self.maxIter = maxIter is INFER_TOOL_COUNT ? config.tools.length() + 1 : maxIter;
         self.verbose = config.verbose;
         self.systemPrompt = config.systemPrompt.cloneReadOnly();
         self.agent = config.agentType is REACT_AGENT ? check new ReActAgent(config.model, config.tools, config.memory)

@@ -1,10 +1,10 @@
 [package]
-org = "ballerinax"
+org = "ballerina"
 name = "ai_tests"
 version = "@toml.version@"
 
 [[dependency]]
-org = "ballerinax"
+org = "ballerina"
 name = "ai"
 version = "@toml.version@"
 repository = "local"
