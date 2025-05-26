@@ -115,8 +115,6 @@ task updateTomlFiles {
 
 test {
     dependsOn(updateTomlFiles)
-    systemProperty "ballerina.offline.flag", "true"
-    systemProperty "ballerina.distribution.version", "ballerina-${distributionVersion}"
     useTestNG()
 
     testLogging {
@@ -135,6 +133,5 @@ test {
 
 test.dependsOn ":ai-ballerina:build"
 compileTestJava.dependsOn ":ai-compiler-plugin:copyOpenApiJar"
-test.dependsOn ":ai-ballerina:publishAiPackageToLocal"
 test.finalizedBy jacocoTestReport
 jacocoTestReport.dependsOn test
