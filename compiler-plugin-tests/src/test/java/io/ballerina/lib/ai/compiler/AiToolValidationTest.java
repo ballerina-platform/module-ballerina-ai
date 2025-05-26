@@ -45,12 +45,9 @@ import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.XM
  * Contains compiler plugin tests for validating the Ballerina AI tool.
  */
 public class AiToolValidationTest {
-    private static final String BALLERINA_HOME = "BALLERINA_HOME";
-    private static final String BALLERINA_DISTRIBUTION_VERSION = "ballerina.distribution.version";
     private static final Path RESOURCE_DIRECTORY = Paths.get("src", "test", "resources",
             "ballerina_sources", "validation_tests").toAbsolutePath();
-    private static final Path DISTRIBUTION_PATH = Paths.get(System.getenv(BALLERINA_HOME),
-            "distributions", System.getProperty(BALLERINA_DISTRIBUTION_VERSION)).toAbsolutePath();
+    private static final Path DISTRIBUTION_PATH = Paths.get("../", "target", "ballerina-runtime").toAbsolutePath();
 
     @Test
     public void testToolInputTypeValidation() {

@@ -29,6 +29,8 @@ def tomlVersion = stripBallerinaExtensionVersion("${project.version}")
 def ballerinaTomlFilePlaceHolder = new File("${project.rootDir}/build-config/resources/BallerinaTest.toml")
 def ballerinaTomlFile = new File("$project.projectDir/Ballerina.toml")
 def testCoverageParam = "--code-coverage --coverage-format=xml"
+def ballerinaDist = "${project.rootDir}/target/ballerina-runtime"
+def distributionBinPath =  "${ballerinaDist}/bin"
 
 def stripBallerinaExtensionVersion(String extVersion) {
     if (extVersion.matches(project.ext.timestampedVersionRegex)) {
@@ -101,7 +103,6 @@ task initializeVariables {
 
 task ballerinaTest {
     dependsOn(":${packageName}-ballerina:build")
-    dependsOn(":${packageName}-ballerina:publishAiPackageToLocal")
     dependsOn(updateTomlFiles)
     dependsOn(initializeVariables)
     finalizedBy(commitTomlFiles)
@@ -111,9 +112,9 @@ task ballerinaTest {
             workingDir project.projectDir
             environment "JAVA_OPTS", "-DBALLERINA_DEV_COMPILE_BALLERINA_ORG=true"
             if (Os.isFamily(Os.FAMILY_WINDOWS)) {
-                commandLine 'cmd', '/c', "${balJavaDebugParam} bal.bat test ${graalvmFlag} ${testParams} --offline ${groupParams} ${disableGroups} ${debugParams} && exit %%ERRORLEVEL%%"
+                commandLine 'cmd', '/c', "${balJavaDebugParam} ${distributionBinPath}/bal.bat test ${graalvmFlag} ${testParams} --offline ${groupParams} ${disableGroups} ${debugParams} && exit %%ERRORLEVEL%%"
             } else {
-                commandLine 'sh', '-c', "${balJavaDebugParam} bal test ${graalvmFlag} ${testParams} --offline ${groupParams} ${disableGroups} ${debugParams}"
+                commandLine 'sh', '-c', "${balJavaDebugParam} ${distributionBinPath}/bal test ${graalvmFlag} ${testParams} --offline ${groupParams} ${disableGroups} ${debugParams}"
             }
         }
     }
@@ -128,11 +129,9 @@ clean {
 }
 
 build.dependsOn ":${packageName}-ballerina:build"
-build.dependsOn ":${packageName}-ballerina:publishAiPackageToLocal"
 build.dependsOn ":${packageName}-compiler-plugin:build"
 test.dependsOn ":${packageName}-ballerina:build"
 test.dependsOn ":${packageName}-compiler-plugin:build"
-test.dependsOn ":${packageName}-ballerina:publishAiPackageToLocal"
 
 publishToMavenLocal.dependsOn build
 publish.dependsOn build
