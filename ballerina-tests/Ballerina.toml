@@ -7,7 +7,6 @@ version = "1.0.0"
 org = "ballerina"
 name = "ai"
 version = "1.0.0"
-repository = "local"
 
 [build-options]
 observabilityIncluded = true
