@@ -3,10 +3,5 @@ org = "ballerina"
 name = "ai_tests"
 version = "1.0.0"
 
-[[dependency]]
-org = "ballerina"
-name = "ai"
-version = "1.0.0"
-
 [build-options]
 observabilityIncluded = true
