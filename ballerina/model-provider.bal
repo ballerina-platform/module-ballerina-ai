@@ -88,7 +88,7 @@ public type FunctionCall record {|
     # Name of the function
     string name;
     # Arguments of the function
-    string arguments;
+    map<json>? arguments = {};
     # Identifier for the tool call
     string id?;
 |};

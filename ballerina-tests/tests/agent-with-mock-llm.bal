@@ -83,25 +83,25 @@ isolated client distinct class MockLlm {
             return {role: ai:ASSISTANT, content: getAnswer(query)};
         }
         if query.toLowerAscii().includes("mail") {
-            ai:FunctionCall functionCall = {name: "getEmails", arguments: {}.toJsonString()};
+            ai:FunctionCall functionCall = {name: "getEmails"};
             return {role: ai:ASSISTANT, toolCalls: [functionCall]};
         }
         if query.toLowerAscii().includes("search") {
             regexp:Span? span = re `'.*'`.find(query);
             string searchQuery = span is () ? "No search query" : span.substring();
-            ai:FunctionCall functionCall = {name: "searchDoc", arguments: {searchQuery}.toJsonString()};
+            ai:FunctionCall functionCall = {name: "searchDoc", arguments: {searchQuery}};
             return {role: ai:ASSISTANT, toolCalls: [functionCall]};
         }
         if query.toLowerAscii().includes("sum") || query.toLowerAscii().includes("add") {
             decimal[] numbers = getDecimals(getNumbers(query));
-            ai:FunctionCall functionCall = {name: "sum", arguments: {numbers}.toJsonString()};
+            ai:FunctionCall functionCall = {name: "sum", arguments: {numbers}};
             return {role: ai:ASSISTANT, toolCalls: [functionCall]};
         }
         if query.toLowerAscii().includes("mult") || query.toLowerAscii().includes("prod") {
             string[] numbers = getNumbers(query);
             int a = getInt(numbers.shift());
             int b = getInt(numbers.shift());
-            ai:FunctionCall functionCall = {name: "mutiply", arguments: {a, b}.toJsonString()};
+            ai:FunctionCall functionCall = {name: "mutiply", arguments: {a, b}};
             return {role: ai:ASSISTANT, toolCalls: [functionCall]};
         }
         return error ai:LlmError("I can't understand");

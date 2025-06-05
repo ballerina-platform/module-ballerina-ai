@@ -57,18 +57,9 @@ isolated distinct client class FunctionCallAgent {
         if name is () {
             return error LlmInvalidGenerationError("Missing name", name = llmResponse.name, arguments = llmResponse.arguments);
         }
-        string? stringArgs = llmResponse.arguments;
-        map<json>|error? arguments = ();
-        if stringArgs is string {
-            arguments = stringArgs.fromJsonStringWithType();
-        }
-        if arguments is error {
-            return error LlmInvalidGenerationError("Invalid arguments", arguments, name = llmResponse.name, arguments = stringArgs);
-        }
-
         return {
             name,
-            arguments,
+            arguments: llmResponse.arguments,
             id: llmResponse.id
         };
     }

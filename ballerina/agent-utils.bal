@@ -356,7 +356,7 @@ isolated function updateExecutionResultInMemory(ExecutionResult|LlmChatResponse|
 
         ChatAssistantMessage assistantMessage = {
             role: ASSISTANT,
-            toolCalls: [{name: tool.name, id: tool.id, arguments: tool.arguments.toJsonString()}]
+            toolCalls: [{name: tool.name, id: tool.id, arguments: tool.arguments}]
         };
         temporaryMemory.push(assistantMessage);
 
