@@ -24,7 +24,8 @@ public enum InputType {
     BOOLEAN = "boolean",
     NUMBER = "number",
     OBJECT = "object",
-    ARRAY = "array"
+    ARRAY = "array",
+    NULL = "null"
 }
 
 # Primitive types supported by the Tool schemas.
