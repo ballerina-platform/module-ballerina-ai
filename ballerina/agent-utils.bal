@@ -74,7 +74,7 @@ public type ToolOutput record {|
     anydata|error value;
 |};
 
-type BaseAgent distinct isolated client object {
+type BaseAgent distinct isolated object {
     ModelProvider model;
     ToolStore toolStore;
     Memory memory;
