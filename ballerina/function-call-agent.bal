@@ -18,7 +18,7 @@ import ballerina/log;
 
 # Function call agent. 
 # This agent uses OpenAI function call API to perform the tool selection.
-isolated distinct client class FunctionCallAgent {
+isolated distinct class FunctionCallAgent {
     *BaseAgent;
     # Tool store to be used by the agent
     final ToolStore toolStore;

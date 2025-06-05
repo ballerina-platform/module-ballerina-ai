@@ -69,7 +69,7 @@ public type AgentConfiguration record {|
 |};
 
 # Represents an agent.
-public isolated distinct client class Agent {
+public isolated distinct class Agent {
     final FunctionCallAgent functionCallAgent;
     private final int maxIter;
     private final readonly & SystemPrompt systemPrompt;
