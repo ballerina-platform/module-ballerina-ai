@@ -99,5 +99,5 @@ isolated function getChatAssistantMessage(string content) returns ai:ChatAssista
 final MockLlm model = new;
 ai:Agent agent = check new (model = model,
     systemPrompt = {role: "Math tutor", instructions: "Help the students with their questions."},
-    tools = [sum, mutiply], agentType = ai:REACT_AGENT
+    tools = [sum, mutiply]
 );

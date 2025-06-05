@@ -74,7 +74,7 @@ public type ToolOutput record {|
     anydata|error value;
 |};
 
-public type BaseAgent distinct isolated client object {
+type BaseAgent distinct isolated client object {
     ModelProvider model;
     ToolStore toolStore;
     Memory memory;
@@ -93,11 +93,11 @@ public type BaseAgent distinct isolated client object {
     # + return - LLM response containing the tool or chat response (or an error if the call fails)
     public isolated function selectNextTool(ExecutionProgress progress, string sessionId = DEFAULT_SESSION_ID) returns json|LlmError;
 
-    isolated remote function run(string query, int maxIter = 5, string|map<json> context = {}, boolean verbose = true, string sessionId = DEFAULT_SESSION_ID) returns record {|(ExecutionResult|ExecutionError)[] steps; string answer?;|};
+    public isolated function run(string query, int maxIter = 5, string|map<json> context = {}, boolean verbose = true, string sessionId = DEFAULT_SESSION_ID) returns record {|(ExecutionResult|ExecutionError)[] steps; string answer?;|};
 };
 
 # An iterator to iterate over agent's execution
-public class Iterator {
+class Iterator {
     *object:Iterable;
     private final Executor executor;
 
@@ -107,7 +107,7 @@ public class Iterator {
     # + sessionId - The ID associated with the agent memory
     # + query - Natural language query to be executed by the agent
     # + context - Contextual information to be used by the agent during the execution
-    public isolated function init(BaseAgent agent, string sessionId, *ExecutionProgress progress) {
+    isolated function init(BaseAgent agent, string sessionId, *ExecutionProgress progress) {
         self.executor = new (agent, sessionId, progress);
     }
 
@@ -121,7 +121,7 @@ public class Iterator {
 }
 
 # An executor to perform step-by-step execution of the agent.
-public class Executor {
+class Executor {
     private boolean isCompleted = false;
     private final string sessionId;
     private final BaseAgent agent;
@@ -134,7 +134,7 @@ public class Executor {
     # + query - Natural language query to be executed by the agent
     # + history - Execution history of the agent (This is used to continue an execution paused without completing)
     # + context - Contextual information to be used by the agent during the execution
-    public isolated function init(BaseAgent agent, string sessionId, *ExecutionProgress progress) {
+    isolated function init(BaseAgent agent, string sessionId, *ExecutionProgress progress) {
         self.sessionId = sessionId;
         self.agent = agent;
         self.progress = progress;
@@ -239,7 +239,7 @@ public class Executor {
 # + verbose - If true, then print the reasoning steps (default: true)
 # + sessionId - The ID associated with the memory
 # + return - Returns the execution steps tracing the agent's reasoning and outputs from the tools
-public isolated function run(BaseAgent agent, string query, int maxIter, string|map<json> context, boolean verbose,
+isolated function run(BaseAgent agent, string query, int maxIter, string|map<json> context, boolean verbose,
         string sessionId = DEFAULT_SESSION_ID) returns record {|(ExecutionResult|ExecutionError)[] steps; string answer?;|} {
     lock {
         (ExecutionResult|ExecutionError)[] steps = [];
@@ -247,10 +247,8 @@ public isolated function run(BaseAgent agent, string query, int maxIter, string|
         string? content = ();
         Iterator iterator = new (agent, sessionId, query = query, context = context);
         int iter = 0;
-        ChatSystemMessage reactSystemMessage = agent is ReActAgent
-            ? {role: SYSTEM, content: string `${agent.instructionPrompt} You can use these information if needed: ${context.toString()}`}
-            : {role: SYSTEM, content: context.toString()};
-        updateMemory(agent.memory, sessionId, reactSystemMessage);
+        ChatSystemMessage systemMessage = {role: SYSTEM, content: context.toString()};
+        updateMemory(agent.memory, sessionId, systemMessage);
 
         ChatUserMessage userMessage = {role: USER, content: query};
         updateMemory(agent.memory, sessionId, userMessage);
@@ -269,12 +267,6 @@ public isolated function run(BaseAgent agent, string query, int maxIter, string|
                 content = step.content;
                 if verbose {
                     io:println(string `${"\n\n"}Final Answer: ${step.content}${"\n\n"}`);
-                }
-                if agent is ReActAgent {
-                    json finalAnswer = {action: "Final Answer", action_input: step.content};
-                    ChatAssistantMessage assistantMessage = {role: ASSISTANT, content: string `${BACKTICKS}${finalAnswer.toJsonString()}${BACKTICKS}\"`};
-                    temporaryMemory.push(assistantMessage);
-                    break;
                 }
                 ChatAssistantMessage assistantMessage = {role: "assistant", content: step.content};
                 temporaryMemory.push(assistantMessage);
@@ -348,11 +340,11 @@ isolated function getObservationString(anydata|error observation) returns string
 #
 # + agent - Agent instance
 # + return - Array of tools registered with the agent
-public isolated function getTools(BaseAgent agent) returns Tool[] => agent.toolStore.tools.toArray();
+public isolated function getTools(Agent agent) returns Tool[] => agent.functionCallAgent.toolStore.tools.toArray();
 
-public isolated function updateMemory(Memory memory, string sessionId, ChatMessage message) {
+isolated function updateMemory(Memory memory, string sessionId, ChatMessage message) {
     error? updationStation = memory.update(sessionId, message);
-    if (updationStation is error) {
+    if updationStation is error {
         log:printError("Error occured while updating the memory", updationStation);
     }
 }

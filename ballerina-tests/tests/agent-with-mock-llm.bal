@@ -14,8 +14,8 @@
 // specific language governing permissions and limitations
 // under the License.
 
-import ballerina/lang.regexp;
 import ballerina/ai;
+import ballerina/lang.regexp;
 
 isolated function getNumbers(string prompt) returns string[] {
     regexp:Span[] spans = re `-?\d+\.?\d*`.findAll(prompt);
@@ -77,47 +77,41 @@ isolated client distinct class MockLlm {
         ai:ChatMessage lastMessage = messages.pop();
         string query = lastMessage is ai:ChatUserMessage|ai:ChatFunctionMessage ? lastMessage.content ?: "" : "";
         if query.includes("Mail Body") {
-            MockLlmToolCall toolCall = {action: "Final answer", action_input: query};
-            return getChatAssistantMessage(string `Answer is:  ${toolCall.toJsonString()})`);
+            return {role: ai:ASSISTANT, content: query};
         }
         if query.includes("Answer is:") {
-            MockLlmToolCall toolCall = {action: "Final answer", action_input: getAnswer(query)};
-            return getChatAssistantMessage(string `Answer is:  ${toolCall.toJsonString()})`);
+            return {role: ai:ASSISTANT, content: getAnswer(query)};
         }
         if query.toLowerAscii().includes("mail") {
-            MockLlmToolCall toolCall = {action: "getEmails", action_input: {}};
-            return getChatAssistantMessage(string `I need to call the searchDoc tool. Action: ${toolCall.toJsonString()}`);
+            ai:FunctionCall functionCall = {name: "getEmails", arguments: {}.toJsonString()};
+            return {role: ai:ASSISTANT, toolCalls: [functionCall]};
         }
         if query.toLowerAscii().includes("search") {
             regexp:Span? span = re `'.*'`.find(query);
             string searchQuery = span is () ? "No search query" : span.substring();
-            MockLlmToolCall toolCall = {action: "searchDoc", action_input: {searchQuery}};
-            return getChatAssistantMessage(string `I need to call the searchDoc tool. Action: ${toolCall.toJsonString()}`);
+            ai:FunctionCall functionCall = {name: "searchDoc", arguments: {searchQuery}.toJsonString()};
+            return {role: ai:ASSISTANT, toolCalls: [functionCall]};
         }
         if query.toLowerAscii().includes("sum") || query.toLowerAscii().includes("add") {
             decimal[] numbers = getDecimals(getNumbers(query));
-            MockLlmToolCall toolCall = {action: "sum", action_input: {numbers}};
-            return getChatAssistantMessage(string `I need to call the sum tool. Action: ${toolCall.toJsonString()}`);
+            ai:FunctionCall functionCall = {name: "sum", arguments: {numbers}.toJsonString()};
+            return {role: ai:ASSISTANT, toolCalls: [functionCall]};
         }
         if query.toLowerAscii().includes("mult") || query.toLowerAscii().includes("prod") {
             string[] numbers = getNumbers(query);
             int a = getInt(numbers.shift());
             int b = getInt(numbers.shift());
-            MockLlmToolCall toolCall = {action: "mutiply", action_input: {a, b}};
-            return getChatAssistantMessage(string `I need to call the sum tool. Action: ${toolCall.toJsonString()}`);
+            ai:FunctionCall functionCall = {name: "mutiply", arguments: {a, b}.toJsonString()};
+            return {role: ai:ASSISTANT, toolCalls: [functionCall]};
         }
         return error ai:LlmError("I can't understand");
     }
 }
 
-isolated function getChatAssistantMessage(string content) returns ai:ChatAssistantMessage {
-    return {role: ai:ASSISTANT, content};
-}
-
 final MockLlm model = new;
 final ai:Agent agent = check new (model = model,
     systemPrompt = {role: "Math tutor", instructions: "Help the students with their questions."},
-    tools = [sum, mutiply, new SearchToolKit(), getEmails], agentType = ai:REACT_AGENT
+    tools = [sum, mutiply, new SearchToolKit(), getEmails]
 );
 
 isolated class SearchToolKit {

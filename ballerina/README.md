@@ -90,7 +90,7 @@ final ai:Agent mathTutorAgent = check new (
 Finally, invoke the agent by calling the `run` method:
 
 ```ballerina
-mathTutorAgent->run("What is 8 + 9 multiplied by 10", sessionId = "student-one");
+mathTutorAgent.run("What is 8 + 9 multiplied by 10", sessionId = "student-one");
 ```
 
 If using the agent with a single session, you can omit the `sessionId` parameter.
