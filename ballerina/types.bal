@@ -42,3 +42,8 @@ public type ChatService distinct service object {
     *http:Service;
     resource function post chat(@http:Payload ChatReqMessage request) returns ChatRespMessage|error;
 };
+
+type ExecutionTrace record {|
+    (ExecutionResult|ExecutionError)[] steps;
+    string answer?;
+|};
