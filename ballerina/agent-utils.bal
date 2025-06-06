@@ -53,7 +53,7 @@ public type ExecutionError record {|
 |};
 
 # An chat response by the LLM
-public type LlmChatResponse record {|
+type LlmChatResponse record {|
     # A text response to the question
     string content;
 |};
@@ -93,7 +93,8 @@ type BaseAgent distinct isolated object {
     # + return - LLM response containing the tool or chat response (or an error if the call fails)
     isolated function selectNextTool(ExecutionProgress progress, string sessionId = DEFAULT_SESSION_ID) returns json|LlmError;
 
-    isolated function run(string query, int maxIter = 5, string|map<json> context = {}, boolean verbose = true, string sessionId = DEFAULT_SESSION_ID) returns record {|(ExecutionResult|ExecutionError)[] steps; string answer?;|};
+    isolated function run(string query, int maxIter = 5, string|map<json> context = {}, boolean verbose = true,
+            string sessionId = DEFAULT_SESSION_ID) returns ExecutionTrace;
 };
 
 # An iterator to iterate over agent's execution
@@ -240,7 +241,7 @@ class Executor {
 # + sessionId - The ID associated with the memory
 # + return - Returns the execution steps tracing the agent's reasoning and outputs from the tools
 isolated function run(BaseAgent agent, string query, int maxIter, string|map<json> context, boolean verbose,
-        string sessionId = DEFAULT_SESSION_ID) returns record {|(ExecutionResult|ExecutionError)[] steps; string answer?;|} {
+        string sessionId = DEFAULT_SESSION_ID) returns ExecutionTrace {
     lock {
         (ExecutionResult|ExecutionError)[] steps = [];
 
