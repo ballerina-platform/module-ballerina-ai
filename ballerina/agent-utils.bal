@@ -84,16 +84,16 @@ type BaseAgent distinct isolated object {
     #
     # + llmResponse - Raw LLM response
     # + return - A record containing the tool decided by the LLM, chat response or an error if the response is invalid
-    public isolated function parseLlmResponse(json llmResponse) returns LlmToolResponse|LlmChatResponse|LlmInvalidGenerationError;
+    isolated function parseLlmResponse(json llmResponse) returns LlmToolResponse|LlmChatResponse|LlmInvalidGenerationError;
 
     # Use LLM to decide the next tool/step.
     #
     # + progress - Execution progress with the current query and execution history
     # + sessionId - The ID associated with the agent memory
     # + return - LLM response containing the tool or chat response (or an error if the call fails)
-    public isolated function selectNextTool(ExecutionProgress progress, string sessionId = DEFAULT_SESSION_ID) returns json|LlmError;
+    isolated function selectNextTool(ExecutionProgress progress, string sessionId = DEFAULT_SESSION_ID) returns json|LlmError;
 
-    public isolated function run(string query, int maxIter = 5, string|map<json> context = {}, boolean verbose = true, string sessionId = DEFAULT_SESSION_ID) returns record {|(ExecutionResult|ExecutionError)[] steps; string answer?;|};
+    isolated function run(string query, int maxIter = 5, string|map<json> context = {}, boolean verbose = true, string sessionId = DEFAULT_SESSION_ID) returns record {|(ExecutionResult|ExecutionError)[] steps; string answer?;|};
 };
 
 # An iterator to iterate over agent's execution
