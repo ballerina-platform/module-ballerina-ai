@@ -46,7 +46,7 @@ isolated distinct class FunctionCallAgent {
     #
     # + llmResponse - Raw LLM response
     # + return - A record containing the tool decided by the LLM, chat response or an error if the response is invalid
-    public isolated function parseLlmResponse(json llmResponse) returns LlmToolResponse|LlmChatResponse|LlmInvalidGenerationError {
+    isolated function parseLlmResponse(json llmResponse) returns LlmToolResponse|LlmChatResponse|LlmInvalidGenerationError {
         if llmResponse is string {
             return {content: llmResponse};
         }
@@ -69,7 +69,7 @@ isolated distinct class FunctionCallAgent {
     # + progress - Execution progress with the current query and execution history
     # + sessionId - The ID associated with the agent memory
     # + return - LLM response containing the tool or chat response (or an error if the call fails)
-    public isolated function selectNextTool(ExecutionProgress progress, string sessionId = DEFAULT_SESSION_ID) returns json|LlmError {
+    isolated function selectNextTool(ExecutionProgress progress, string sessionId = DEFAULT_SESSION_ID) returns json|LlmError {
         ChatMessage[] messages = createFunctionCallMessages(progress);
         ChatMessage[]|MemoryError additionalMessages = self.memory.get(sessionId);
         if additionalMessages is MemoryError {
@@ -100,7 +100,7 @@ isolated distinct class FunctionCallAgent {
     # + verbose - If true, then print the reasoning steps (default: true)
     # + sessionId - The ID associated with the agent memory
     # + return - Returns the execution steps tracing the agent's reasoning and outputs from the tools
-    public isolated function run(string query, int maxIter = 5, string|map<json> context = {}, boolean verbose = true,
+    isolated function run(string query, int maxIter = 5, string|map<json> context = {}, boolean verbose = true,
             string sessionId = DEFAULT_SESSION_ID)
         returns record {|(ExecutionResult|ExecutionError)[] steps; string answer?;|} {
         return run(self, query, maxIter, context, verbose, sessionId);
