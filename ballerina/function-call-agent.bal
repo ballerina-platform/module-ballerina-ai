@@ -18,7 +18,7 @@ import ballerina/log;
 
 # Function call agent. 
 # This agent uses OpenAI function call API to perform the tool selection.
-public isolated distinct client class FunctionCallAgent {
+isolated distinct class FunctionCallAgent {
     *BaseAgent;
     # Tool store to be used by the agent
     final ToolStore toolStore;
@@ -34,7 +34,7 @@ public isolated distinct client class FunctionCallAgent {
     # + model - LLM model instance
     # + tools - Tools to be used by the agent
     # + memory - The memory associated with the agent.
-    public isolated function init(ModelProvider model, (BaseToolKit|ToolConfig|FunctionTool)[] tools,
+    isolated function init(ModelProvider model, (BaseToolKit|ToolConfig|FunctionTool)[] tools,
             Memory? memory = new MessageWindowChatMemory()) returns Error? {
         self.toolStore = check new (...tools);
         self.model = model;
@@ -46,7 +46,7 @@ public isolated distinct client class FunctionCallAgent {
     #
     # + llmResponse - Raw LLM response
     # + return - A record containing the tool decided by the LLM, chat response or an error if the response is invalid
-    public isolated function parseLlmResponse(json llmResponse) returns LlmToolResponse|LlmChatResponse|LlmInvalidGenerationError {
+    isolated function parseLlmResponse(json llmResponse) returns LlmToolResponse|LlmChatResponse|LlmInvalidGenerationError {
         if llmResponse is string {
             return {content: llmResponse};
         }
@@ -57,18 +57,9 @@ public isolated distinct client class FunctionCallAgent {
         if name is () {
             return error LlmInvalidGenerationError("Missing name", name = llmResponse.name, arguments = llmResponse.arguments);
         }
-        string? stringArgs = llmResponse.arguments;
-        map<json>|error? arguments = ();
-        if stringArgs is string {
-            arguments = stringArgs.fromJsonStringWithType();
-        }
-        if arguments is error {
-            return error LlmInvalidGenerationError("Invalid arguments", arguments, name = llmResponse.name, arguments = stringArgs);
-        }
-
         return {
             name,
-            arguments,
+            arguments: llmResponse.arguments,
             id: llmResponse.id
         };
     }
@@ -78,7 +69,7 @@ public isolated distinct client class FunctionCallAgent {
     # + progress - Execution progress with the current query and execution history
     # + sessionId - The ID associated with the agent memory
     # + return - LLM response containing the tool or chat response (or an error if the call fails)
-    public isolated function selectNextTool(ExecutionProgress progress, string sessionId = DEFAULT_SESSION_ID) returns json|LlmError {
+    isolated function selectNextTool(ExecutionProgress progress, string sessionId = DEFAULT_SESSION_ID) returns json|LlmError {
         ChatMessage[] messages = createFunctionCallMessages(progress);
         ChatMessage[]|MemoryError additionalMessages = self.memory.get(sessionId);
         if additionalMessages is MemoryError {
@@ -109,7 +100,7 @@ public isolated distinct client class FunctionCallAgent {
     # + verbose - If true, then print the reasoning steps (default: true)
     # + sessionId - The ID associated with the agent memory
     # + return - Returns the execution steps tracing the agent's reasoning and outputs from the tools
-    isolated remote function run(string query, int maxIter = 5, string|map<json> context = {}, boolean verbose = true,
+    isolated function run(string query, int maxIter = 5, string|map<json> context = {}, boolean verbose = true,
             string sessionId = DEFAULT_SESSION_ID)
         returns record {|(ExecutionResult|ExecutionError)[] steps; string answer?;|} {
         return run(self, query, maxIter, context, verbose, sessionId);

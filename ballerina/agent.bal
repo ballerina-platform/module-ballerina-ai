@@ -54,10 +54,6 @@ public type AgentConfiguration record {|
     @display {label: "Tools"}
     (BaseToolKit|ToolConfig|FunctionTool)[] tools = [];
 
-    # Type of the agent
-    @display {label: "Agent Type"}
-    AgentType agentType = FUNCTION_CALL_AGENT;
-
     # The maximum number of iterations the agent performs to complete the task.
     # By default, it is set to the number of tools + 1.
     @display {label: "Maximum Iterations"}
@@ -73,8 +69,8 @@ public type AgentConfiguration record {|
 |};
 
 # Represents an agent.
-public isolated distinct client class Agent {
-    private final BaseAgent agent;
+public isolated distinct class Agent {
+    final FunctionCallAgent functionCallAgent;
     private final int maxIter;
     private final readonly & SystemPrompt systemPrompt;
     private final boolean verbose;
@@ -87,8 +83,7 @@ public isolated distinct client class Agent {
         self.maxIter = maxIter is INFER_TOOL_COUNT ? config.tools.length() + 1 : maxIter;
         self.verbose = config.verbose;
         self.systemPrompt = config.systemPrompt.cloneReadOnly();
-        self.agent = config.agentType is REACT_AGENT ? check new ReActAgent(config.model, config.tools, config.memory)
-            : check new FunctionCallAgent(config.model, config.tools, config.memory);
+        self.functionCallAgent = check new FunctionCallAgent(config.model, config.tools, config.memory);
     }
 
     # Executes the agent for a given user query.
@@ -96,8 +91,8 @@ public isolated distinct client class Agent {
     # + query - The natural language input provided to the agent
     # + sessionId - The ID associated with the agent memory
     # + return - The agent's response or an error
-    isolated remote function run(@display {label: "Query"} string query, @display {label: "Session ID"} string sessionId = DEFAULT_SESSION_ID) returns string|Error {
-        var result = self.agent->run(query, self.maxIter, getFomatedSystemPrompt(self.systemPrompt), self.verbose, sessionId);
+    public isolated function run(@display {label: "Query"} string query, @display {label: "Session ID"} string sessionId = DEFAULT_SESSION_ID) returns string|Error {
+        var result = self.functionCallAgent.run(query, self.maxIter, getFomatedSystemPrompt(self.systemPrompt), self.verbose, sessionId);
         string? answer = result.answer;
         if answer is string {
             return answer;
