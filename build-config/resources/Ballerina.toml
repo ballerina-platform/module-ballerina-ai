@@ -12,7 +12,7 @@ repository = "https://github.com/ballerina-platform/module-ballerina-ai"
 graalvmCompatible = true
 
 [[platform.java21.dependency]]
-groupId = "io.ballerina.stdlib."
+groupId = "io.ballerina.stdlib"
 artifactId = "ai-native"
 version = "@toml.version@"
 path = "../native/build/libs/ai-native-@project.version@.jar"
