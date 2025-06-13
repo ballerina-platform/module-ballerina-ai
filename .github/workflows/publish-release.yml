@@ -14,4 +14,3 @@ jobs:
     with:
       package-name: ai
       package-org: ballerina
-      additional-publish-flags: '-PpublishToCentral=false'
