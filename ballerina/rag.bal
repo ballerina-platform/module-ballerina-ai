@@ -15,9 +15,20 @@
 // under the License.
 
 # Represents document retriever that finds relevant documents based on query similarity.
+public type Retriever distinct isolated object {
+    # Retrieves relevant documents for the given query.
+    #
+    # + query - The text query to search for
+    # + filters - Optional metadata filters to apply during retrieval
+    # + return - An array of matching documents with similarity scores, or an `Error` if retrieval fails
+    public isolated function retrieve(string query, MetadataFilters? filters = ()) returns DocumentMatch[]|Error;
+};
+
+# Represents document retriever that finds relevant documents based on query similarity.
 # The `Retriever` combines query embedding generation and vector search
 # to return matching documents along with their similarity scores.
-public distinct isolated class Retriever {
+public distinct isolated class VectorRetriever {
+    *Retriever;
     private final VectorStore vectorStore;
     private final EmbeddingProvider embeddingModel;
 
@@ -47,10 +58,25 @@ public distinct isolated class Retriever {
     }
 }
 
+# Represents a knowledge base for managing document indexing and retrieval operations.
+public type KnowledgeBase distinct isolated object {
+    # Indexes a collection of documents.
+    #
+    # + documents - The array of documents to index
+    # + return - An `Error` if indexing fails; otherwise, `nil`
+    public isolated function index(Document[] documents) returns Error?;
+
+    # Returns the retriever for this knowledge base.
+    #
+    # + return - The `Retriever` instance for performing document searches
+    public isolated function getRetriever() returns Retriever;
+};
+
 # Represents a vector knowledge base for managing document indexing and retrieval operations.
 # The `VectorKnowledgeBase` handles converting documents to embeddings,
 # storing them in a vector store, and enabling retrieval through a `Retriever`.
 public distinct isolated class VectorKnowledgeBase {
+    *KnowledgeBase;
     private final VectorStore vectorStore;
     private final EmbeddingProvider embeddingModel;
     private final Retriever retriever;
@@ -62,7 +88,7 @@ public distinct isolated class VectorKnowledgeBase {
     public isolated function init(VectorStore vectorStore, EmbeddingProvider embeddingModel) {
         self.vectorStore = vectorStore;
         self.embeddingModel = embeddingModel;
-        self.retriever = new Retriever(vectorStore, embeddingModel);
+        self.retriever = new VectorRetriever(vectorStore, embeddingModel);
     }
 
     # Indexes a collection of documents.
@@ -93,7 +119,7 @@ public distinct isolated class VectorKnowledgeBase {
 # to generate context-aware responses to user queries.
 public distinct isolated class Rag {
     private final ModelProvider model;
-    private final VectorKnowledgeBase knowledgeBase;
+    private final KnowledgeBase knowledgeBase;
     private final RagPromptTemplate promptTemplate;
 
     # Creates a new `Rag` instance.
@@ -105,7 +131,7 @@ public distinct isolated class Rag {
     # Defaults to `DefaultRagPromptTemplate` if not provided
     # + return - `nil` on success, or an `Error` if initialization fails
     public isolated function init(ModelProvider? model = (),
-            VectorKnowledgeBase? knowledgeBase = (),
+            KnowledgeBase? knowledgeBase = (),
             RagPromptTemplate promptTemplate = new DefaultRagPromptTemplate()) returns Error? {
         self.model = model ?: check getDefaultModelProvider();
         self.knowledgeBase = knowledgeBase ?: check getDefaultKnowledgeBase();
