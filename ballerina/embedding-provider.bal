@@ -17,7 +17,7 @@
 import ai.intelligence;
 
 # Represents an embedding provider that converts text documents into vector embeddings for similarity search.
-public type EmbeddingProvider isolated client object {
+public type EmbeddingProvider distinct isolated client object {
 
     # Converts the given document into a vector embedding.
     #
@@ -27,7 +27,7 @@ public type EmbeddingProvider isolated client object {
 };
 
 # WSO2 embedding provider implementation that provides embedding capabilities using WSO2's AI service.
-public isolated client class Wso2EmbeddingProvider {
+public distinct isolated client class Wso2EmbeddingProvider {
     *EmbeddingProvider;
     private final intelligence:Client embeddingClient;
 

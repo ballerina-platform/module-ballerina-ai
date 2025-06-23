@@ -15,7 +15,7 @@
 // under the License.
 
 # Represents a vector store that provides persistence, management, and search capabilities for vector embeddings.
-public type VectorStore isolated object {
+public type VectorStore distinct isolated object {
 
     # Adds vector entries to the store.
     #
@@ -38,7 +38,7 @@ public type VectorStore isolated object {
 };
 
 # An in-memory vector store implementation that provides simple storage for vector entries.
-public isolated class InMemoryVectorStore {
+public distinct isolated class InMemoryVectorStore {
     *VectorStore;
     private final VectorEntry[] entries = [];
     private final int topK;

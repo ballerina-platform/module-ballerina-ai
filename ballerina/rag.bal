@@ -17,7 +17,7 @@
 # Represents document retriever that finds relevant documents based on query similarity.
 # The `Retriever` combines query embedding generation and vector search
 # to return matching documents along with their similarity scores.
-public isolated class Retriever {
+public distinct isolated class Retriever {
     private final VectorStore vectorStore;
     private final EmbeddingProvider embeddingModel;
 
@@ -50,7 +50,7 @@ public isolated class Retriever {
 # Represents a vector knowledge base for managing document indexing and retrieval operations.
 # The `VectorKnowledgeBase` handles converting documents to embeddings,
 # storing them in a vector store, and enabling retrieval through a `Retriever`.
-public isolated class VectorKnowledgeBase {
+public distinct isolated class VectorKnowledgeBase {
     private final VectorStore vectorStore;
     private final EmbeddingProvider embeddingModel;
     private final Retriever retriever;
@@ -91,7 +91,7 @@ public isolated class VectorKnowledgeBase {
 # Orchestrates a Retrieval-Augmented Generation (RAG) pipeline.
 # The `Rag` class manages document retrieval, prompt construction, and language model interaction
 # to generate context-aware responses to user queries.
-public isolated class Rag {
+public distinct isolated class Rag {
     private final ModelProvider model;
     private final VectorKnowledgeBase knowledgeBase;
     private final RagPromptTemplate promptTemplate;

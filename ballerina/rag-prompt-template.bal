@@ -16,7 +16,7 @@
 
 # Represents a RAG prompt template that builds structured prompts from retrieved context and user queries
 # for presentation to Large Language Models in RAG systems.
-public type RagPromptTemplate isolated object {
+public type RagPromptTemplate distinct isolated object {
 
     # Builds a prompt from the given context documents and query.
     #
@@ -29,7 +29,7 @@ public type RagPromptTemplate isolated object {
 # Default implementation of a RAG prompt template.
 # Provides a standard template for combining context documents with user queries,
 # creating system prompts that instruct the model to answer based on the provided context.
-public isolated class DefaultRagPromptTemplate {
+public distinct isolated class DefaultRagPromptTemplate {
     *RagPromptTemplate;
 
     # Builds a default prompt. Creates a system prompt that includes the context documents,

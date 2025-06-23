@@ -119,7 +119,7 @@ public type Wso2ProviderConfig record {|
 configurable Wso2ProviderConfig? wso2ProviderConfig = ();
 
 # WSO2 model provider implementation that provides chat completion capabilities using WSO2's AI services.
-public isolated client class Wso2ModelProvider {
+public isolated distinct client class Wso2ModelProvider {
     *ModelProvider;
     private final intelligence:Client llmClient;
 
