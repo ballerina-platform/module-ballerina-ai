@@ -12,6 +12,7 @@ org = "ballerina"
 name = "ai"
 version = "1.0.1"
 dependencies = [
+	{org = "ballerina", name = "data.jsondata"},
 	{org = "ballerina", name = "file"},
 	{org = "ballerina", name = "http"},
 	{org = "ballerina", name = "io"},
@@ -24,7 +25,8 @@ dependencies = [
 	{org = "ballerina", name = "yaml"}
 ]
 modules = [
-	{org = "ballerina", packageName = "ai", moduleName = "ai"}
+	{org = "ballerina", packageName = "ai", moduleName = "ai"},
+	{org = "ballerina", packageName = "ai", moduleName = "ai.intelligence"}
 ]
 
 [[package]]
