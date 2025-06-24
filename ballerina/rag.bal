@@ -66,10 +66,12 @@ public type KnowledgeBase distinct isolated object {
     # + return - An `Error` if indexing fails; otherwise, `nil`
     public isolated function index(Document[] documents) returns Error?;
 
-    # Returns the retriever for this knowledge base.
+    # Retrieves relevant documents for the given query.
     #
-    # + return - The `Retriever` instance for performing document searches
-    public isolated function getRetriever() returns Retriever;
+    # + query - The text query to search for
+    # + filters - Optional metadata filters to apply during retrieval
+    # + return - An array of matching documents with similarity scores, or an `Error` if retrieval fails
+    public isolated function retrieve(string query, MetadataFilters? filters = ()) returns DocumentMatch[]|Error;
 };
 
 # Represents a vector knowledge base for managing document indexing and retrieval operations.
@@ -106,11 +108,13 @@ public distinct isolated class VectorKnowledgeBase {
         check self.vectorStore.add(entries);
     }
 
-    # Returns the retriever for this knowledge base.
+    # Retrieves relevant documents for the given query.
     #
-    # + return - The `Retriever` instance for performing document searches
-    public isolated function getRetriever() returns Retriever {
-        return self.retriever;
+    # + query - The text query to search for
+    # + filters - Optional metadata filters to apply during retrieval
+    # + return - An array of matching documents with similarity scores, or an `Error` if retrieval fails
+    public isolated function retrieve(string query, MetadataFilters? filters = ()) returns DocumentMatch[]|Error {
+        return self.retriever.retrieve(query, filters);
     }
 }
 
@@ -145,7 +149,7 @@ public distinct isolated class Rag {
     # + filters - Optional metadata filters for document retrieval.
     # + return - The generated response, or an `Error` if the operation fails.
     public isolated function query(string query, MetadataFilters? filters = ()) returns string|Error {
-        DocumentMatch[] context = check self.knowledgeBase.getRetriever().retrieve(query, filters);
+        DocumentMatch[] context = check self.knowledgeBase.retrieve(query, filters);
         Prompt prompt = self.promptTemplate.format(context.'map(ctx => ctx.document), query);
         ChatMessage[] messages = self.mapPromptToChatMessages(prompt);
         ChatAssistantMessage response = check self.model->chat(messages, []);
