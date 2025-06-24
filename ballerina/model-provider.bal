@@ -125,10 +125,31 @@ public isolated distinct client class Wso2ModelProvider {
 
     # Initializes a new `WSO2ModelProvider` instance.
     #
-    # + config - The configuration containing the service URL and access token
+    # + serviceUrl - The base URL of WSO2 intelligence API endpoint
+    # + accessToken - The access token for authenticating API requests
+    # + connectionConfig - Additional HTTP connection configuration
     # + return - `nil` on success, or an `Error` if initialization fails
-    public isolated function init(*Wso2ProviderConfig config) returns Error? {
-        intelligence:Client|error llmClient = new (config = {auth: {token: config.accessToken}}, serviceUrl = config.serviceUrl);
+    public isolated function init(string serviceUrl, string accessToken, *ConnectionConfig connectionConfig) returns Error? {
+        intelligence:ConnectionConfig intelligenceConfig = {
+            auth: {
+                token: accessToken
+            },
+            httpVersion: connectionConfig.httpVersion,
+            http1Settings: connectionConfig.http1Settings,
+            http2Settings: connectionConfig.http2Settings,
+            timeout: connectionConfig.timeout,
+            forwarded: connectionConfig.forwarded,
+            poolConfig: connectionConfig.poolConfig,
+            cache: connectionConfig.cache,
+            compression: connectionConfig.compression,
+            circuitBreaker: connectionConfig.circuitBreaker,
+            retryConfig: connectionConfig.retryConfig,
+            responseLimits: connectionConfig.responseLimits,
+            secureSocket: connectionConfig.secureSocket,
+            proxy: connectionConfig.proxy,
+            validation: connectionConfig.validation
+        };
+        intelligence:Client|error llmClient = new (config = intelligenceConfig, serviceUrl = serviceUrl);
         if llmClient is error {
             return error Error("Failed to initialize Wso2ModelProvider", llmClient);
         }

@@ -181,7 +181,7 @@ isolated function getDefaultModelProvider() returns Wso2ModelProvider|Error {
         return error Error("The `wso2ProviderConfig` is not configured correctly."
         + " Ensure that the WSO2 model provider configuration is defined in your TOML file.");
     }
-    return new Wso2ModelProvider(config);
+    return new Wso2ModelProvider(config.serviceUrl, config.accessToken);
 }
 
 isolated function getDefaultKnowledgeBase() returns VectorKnowledgeBase|Error {
@@ -190,7 +190,7 @@ isolated function getDefaultKnowledgeBase() returns VectorKnowledgeBase|Error {
         return error Error("The `wso2ProviderConfig` is not configured correctly."
         + " Ensure that the WSO2 model provider configuration is defined in your TOML file.");
     }
-    EmbeddingProvider|Error wso2EmbeddingProvider = new Wso2EmbeddingProvider(config);
+    EmbeddingProvider|Error wso2EmbeddingProvider = new Wso2EmbeddingProvider(config.serviceUrl, config.accessToken);
     if wso2EmbeddingProvider is Error {
         return error Error("error creating default vector knowledge base");
     }
