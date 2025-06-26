@@ -191,7 +191,7 @@ public isolated distinct client class Wso2ModelProvider {
             if message is ChatAssistantMessage {
                 intelligence:ChatCompletionRequestMessage assistantMessage = {role: ASSISTANT};
                 FunctionCall[]? toolCalls = message.toolCalls;
-                if toolCalls is FunctionCall[] {
+                if toolCalls is FunctionCall[] && toolCalls.length() > 0 {
                     assistantMessage["function_call"] = {
                         name: toolCalls[0].name,
                         arguments: toolCalls[0].arguments.toJsonString()

@@ -74,6 +74,9 @@ public distinct isolated client class Wso2EmbeddingProvider {
         if response is error {
             return error Error("Error generating embedding for provided document", response);
         }
+        if response.data.length() == 0 {
+            return error Error("No embeddings generated for the provided document");
+        }
         return response.data[0].embedding;
     }
 }
