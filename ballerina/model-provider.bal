@@ -93,6 +93,14 @@ public type FunctionCall record {|
     string id?;
 |};
 
+public type Prompt object {
+   *object:RawTemplate;
+
+   public string[] & readonly strings;
+   public (anydata|Document)[] insertions;
+};
+
+
 # Represents an extendable client for interacting with an AI model.
 public type ModelProvider distinct isolated client object {
     # Sends a chat request to the model with the given messages and tools.
@@ -102,4 +110,6 @@ public type ModelProvider distinct isolated client object {
     # + return - Function to be called, chat response or an error in-case of failures
     isolated remote function chat(ChatMessage[] messages, ChatCompletionFunctions[] tools = [], string? stop = ())
         returns ChatAssistantMessage|LlmError;
+
+    public isolated function generate(Prompt prompt, typedesc<anydata> td) returns td|error;
 };
