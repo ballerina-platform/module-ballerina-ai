@@ -124,3 +124,21 @@ public enum VectorStoreQueryMode {
     SPARSE,
     HYBRID
 }
+
+# Represents a document match result with similarity score.
+#
+# + document - The matched document
+# + similarityScore - Similarity score indicating document relevance to the query
+public type DocumentMatch record {|
+    Document document;
+    float similarityScore;
+|};
+
+# Represents a prompt constructed by `RagPromptTemplate` object.
+#
+# + systemPrompt - System-level instructions that given to a Large Language Model
+# + userPrompt - The user's question or query given to the Large Language Model
+public type Prompt record {|
+    string systemPrompt?;
+    string userPrompt;
+|};

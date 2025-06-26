@@ -1,0 +1,2 @@
+# Force LF line endings for Java source files
+*.java text eol=lf
