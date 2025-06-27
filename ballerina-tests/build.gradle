@@ -50,7 +50,6 @@ task updateTomlFiles {
     doLast {
         def newBallerinaToml = ballerinaTomlFilePlaceHolder.text.replace("@toml.version@", tomlVersion)
         newBallerinaToml = newBallerinaToml.replace("@project.version@", project.version)
-        newBallerinaToml = newBallerinaToml.replace("@project.root@", project.rootDir.toString())
         ballerinaTomlFile.text = newBallerinaToml
     }
 }
