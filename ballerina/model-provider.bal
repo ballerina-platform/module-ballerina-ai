@@ -95,6 +95,10 @@ public type FunctionCall record {|
     string id?;
 |};
 
+# Represents a prompt.
+# 
+# + strings - Read-only array of string literals from the template
+# + insertions - Array of values to be inserted into the template, can be any data or Document types
 public type Prompt object {
    *object:RawTemplate;
 
