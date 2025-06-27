@@ -1,14 +1,9 @@
-<<<<<<< HEAD
 # Enforce LF for all files
 * text=auto eol=lf
 
 # Explicitly handle key file types
 *.bal text eol=lf
 *.md text eol=lf
-=======
-#
-# https://help.github.com/articles/dealing-with-line-endings/
-#
 # Linux start script should use lf
 /gradlew        text eol=lf
 
@@ -20,4 +15,3 @@
 
 # Java source files should always use LF
 *.java          text eol=lf
->>>>>>> 9ac28b0 (Fix EOL in different operating systems)
