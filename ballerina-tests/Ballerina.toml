@@ -5,3 +5,10 @@ version = "1.0.1"
 
 [build-options]
 observabilityIncluded = true
+
+[[platform.java21.dependency]]
+groupId = "io.ballerina.stdlib"
+artifactId = "ai-native"
+version = "1.0.1"
+path = "../native/build/libs/ai-native-@project.version@-tests.jar"
+testOnly = true
