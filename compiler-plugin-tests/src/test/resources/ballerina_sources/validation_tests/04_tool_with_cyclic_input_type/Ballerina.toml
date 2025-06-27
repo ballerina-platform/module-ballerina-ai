@@ -5,3 +5,16 @@ version = "1.0.1"
 
 [build-options]
 observabilityIncluded = true
+
+[[platform.java21.dependency]]
+groupId = "io.ballerina.stdlib"
+artifactId = "ai-native"
+version = "1.0.1"
+path = "/Users/admin/Desktop/Workspace/Literate_Programming/impl/fork-repos/module-ballerina-ai/native/build/libs/ai-native-1.0.1-SNAPSHOT.jar"
+
+[[platform.java21.dependency]]
+groupId = "io.ballerina.stdlib"
+artifactId = "ai-native"
+version = "1.0.1"
+path = "/Users/admin/Desktop/Workspace/Literate_Programming/impl/fork-repos/module-ballerina-ai/native/build/libs/ai-native-1.0.1-SNAPSHOT-tests.jar"
+testOnly = true
