@@ -1,0 +1,7 @@
+# Enforce LF for all files
+* text=auto eol=lf
+
+# Explicitly handle key file types
+*.java text eol=lf
+*.bal text eol=lf
+*.md text eol=lf
