@@ -1,3 +1,25 @@
+// Copyright (c) 2025 WSO2 LLC (http://www.wso2.com).
+//
+// WSO2 LLC. licenses this file to you under the Apache License,
+// Version 2.0 (the "License"); you may not use this file except
+// in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing,
+// software distributed under the License is distributed on an
+// "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+// KIND, either express or implied.  See the License for the
+// specific language governing permissions and limitations
+// under the License.
+import ballerina/constraint;
+import ballerina/time;
+
+string:RegExp ftpUrlRegex = re `ftp://[^\s"'<>]+`;
+string:RegExp httpUrlRegex = re `http://[^\s"'<>]+`;
+string:RegExp googleDriveUrlRegex = re `https://drive.google.com/[^\s"'<>]+`;
+
 # Enumeration of supported document types
 public enum DocumentKind {
     # Text document type
@@ -10,38 +32,6 @@ public enum DocumentKind {
     FILE = "file"
 }
 
-# Enumeration of MIME types for different document formats
-public enum DocumentMimeType {
-    # Plain text format
-    TEXT_PLAIN = "text/plain",
-    # HTML format
-    TEXT_HTML = "text/html",
-    # CSS format
-    TEXT_CSS = "text/css",
-    # CSV format
-    TEXT_CSV = "text/csv",
-    # JPEG image format
-    IMAGE_JPEG = "image/jpeg",
-    # PNG image format
-    IMAGE_PNG = "image/png",
-    # GIF image format
-    IMAGE_GIF = "image/gif",
-    # SVG image format
-    IMAGE_SVG = "image/svg+xml",
-    # WebP image format
-    IMAGE_WEBP = "image/webp",
-    # JSON format
-    APPLICATION_JSON = "application/json",
-    # XML format
-    APPLICATION_XML = "application/xml",
-    # PDF format
-    APPLICATION_PDF = "application/pdf",
-    # ZIP archive format
-    APPLICATION_ZIP = "application/zip",
-    # Binary data format
-    APPLICATION_OCTET_STREAM = "application/octet-stream"
-}
-
 # Enumeration of supported audio formats
 public enum AudioFormat {
     # WAV audio format
@@ -51,10 +41,13 @@ public enum AudioFormat {
 }
 
 # Represents a URL pointing to the content of a document
-public type Url record {|
-    # The URL pointing to the content of the document
-    string url;
-|};
+@constraint:String {
+    pattern: {
+        value: re `${httpUrlRegex}|${ftpUrlRegex}|${googleDriveUrlRegex}`,
+        message: "A valid URL pointing to the document content, must be either http, ftp or google drive URL."
+    }
+}
+public type Url string;
 
 # Record type for file ID reference of a document
 public type FileId record {|
@@ -64,13 +57,23 @@ public type FileId record {|
 
 # Represents additional metadata associated with documents
 public type DocumentMetaData record {|
+    # Optional MIME type specification for the file
+    string mimeType?;
+    # Optional file name for the document
+    string fileName?;
+    # Optional file size in bytes
+    decimal fileSize?;
+    # Optional creation timestamp of the file
+    string|time:Utc createdAt?;
+    # Optional modification timestamp of the file
+    string|time:Utc modifiedAt?;
     json...;
 |};
 
 # Represents the common structure for all document types
 public type Document record {|
     # The type of document (text, image, audio, or file)
-    DocumentKind 'type;
+    string 'type;
     # Optional metadata associated with the document
     DocumentMetaData metadata?;
     # The actual content of the document
@@ -113,6 +116,4 @@ public type FileDocument record {|
     readonly FILE 'type = FILE;
     # File content - can be URL, binary data, or file ID reference
     byte[]|Url|FileId content;
-    # Optional MIME type specification for the file
-    DocumentMimeType mimeType?;
 |};
