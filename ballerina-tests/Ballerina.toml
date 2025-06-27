@@ -1,7 +1,7 @@
 [package]
 org = "ballerina"
 name = "ai_tests"
-version = "@toml.version@"
+version = "1.0.1"
 
 [build-options]
 observabilityIncluded = true
@@ -9,6 +9,6 @@ observabilityIncluded = true
 [[platform.java21.dependency]]
 groupId = "io.ballerina.stdlib"
 artifactId = "ai-native"
-version = "@toml.version@"
-path = "../native/build/libs/ai-native-1.0.1-tests.jar"
+version = "1.0.1"
+path = "../native/build/libs/ai-native-1.0.1-SNAPSHOT-tests.jar"
 testOnly = true
