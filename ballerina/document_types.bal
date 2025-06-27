@@ -64,9 +64,9 @@ public type DocumentMetaData record {|
     # Optional file size in bytes
     decimal fileSize?;
     # Optional creation timestamp of the file
-    string|time:Utc createdAt?;
+    time:Utc createdAt?;
     # Optional modification timestamp of the file
-    string|time:Utc modifiedAt?;
+    time:Utc modifiedAt?;
     json...;
 |};
 
