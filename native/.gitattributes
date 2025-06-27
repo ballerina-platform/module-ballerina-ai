@@ -1,6 +1,0 @@
-# Enforce LF for all text files
-* text=auto eol=lf
-
-# Explicitly handle specific files
-*.java text eol=lf
-*.bal text eol=lf
