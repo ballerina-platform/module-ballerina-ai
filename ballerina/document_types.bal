@@ -17,7 +17,7 @@
 import ballerina/constraint;
 import ballerina/time;
 
-final string:RegExp FILE_URL = re `[a-zA-Z][a-zA-Z0-9+.-]*://(?:[^@\s"']+@)?[^\s"']+`;
+final string:RegExp urlRegExpr = re `[a-zA-Z][a-zA-Z0-9+.-]*://(?:[^@\s"']+@)?[^\s"']+`;
 
 # Enumeration of supported document types.
 public enum DocumentKind {
@@ -34,8 +34,8 @@ public enum DocumentKind {
 # Represents a URL pointing to the document.
 @constraint:String {
     pattern: {
-        value: FILE_URL,
-        message: "A valid URL pointing to the document content."
+        value: urlRegExpr,
+        message: "Must be a valid URL"
     }
 }
 public type Url string;
