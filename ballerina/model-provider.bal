@@ -119,5 +119,5 @@ public type ModelProvider distinct isolated client object {
     # + prompt - The prompt to process
     # + td - Type descriptor specifying the expected return type format
     # + return - Generated content in the specified type format, or an error if generation fails
-    public isolated function generate(Prompt prompt, typedesc<anydata> td) returns td|error;
+    public isolated function generate(Prompt prompt, typedesc<anydata> td = <>) returns td|error;
 };
