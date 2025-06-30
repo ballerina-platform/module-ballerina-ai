@@ -96,14 +96,12 @@ public type FunctionCall record {|
 |};
 
 # Represents a prompt.
-# 
-# + strings - Read-only array of string literals from the template
-# + insertions - Array of values to be inserted into the template, can be any data or Document types
 public type Prompt object {
-   *object:RawTemplate;
-
-   public string[] & readonly strings;
-   public (anydata|Document)[] insertions;
+    *object:RawTemplate;
+    # + strings - Read-only array of string literals from the template
+    public string[] & readonly strings;
+    # + insertions - Array of values to be inserted into the template, can be any data or Document types
+    public (anydata|Document)[] insertions;
 };
 
 # Represents an extendable client for interacting with an AI model.
