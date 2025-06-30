@@ -100,7 +100,8 @@ public type Prompt object {
     *object:RawTemplate;
     # The fixed string parts of the template.
     public string[] & readonly strings;
-    # The interpolations in the template. Can include anydata or Document values.
+    # The insertions in the template. 
+    # Insertions of type `Document` may be handled in specialized ways by implementations.
     public (anydata|Document)[] insertions;
 };
 
