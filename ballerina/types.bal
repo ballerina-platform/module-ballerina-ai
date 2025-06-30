@@ -16,9 +16,6 @@
 
 import ballerina/http;
 
-# Represents a JSON schema for a Ballerina type.
-public annotation map<json> JsonSchema on type;
-
 # Represents a request message for the chat service.
 #
 # + sessionId - A unique identifier for the chat session.
