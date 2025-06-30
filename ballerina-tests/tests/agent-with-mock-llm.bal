@@ -108,7 +108,7 @@ isolated client distinct class MockLlm {
         return error ai:LlmError("I can't understand");
     }
 
-    public isolated function generate(ai:Prompt prompt, typedesc<anydata> td) returns td|error = @java:Method {
+    public isolated function generate(ai:Prompt prompt, typedesc<anydata> td = <>) returns td|ai:Error = @java:Method {
         'class: "io.ballerina.lib.ai.MockGenerator"
     } external;
 }
