@@ -31,18 +31,15 @@ import io.ballerina.runtime.api.values.BTypedesc;
 public class MockGenerator {
     public static Object generate(BObject prompt, BTypedesc expectedType) {
         Type type = expectedType.getDescribingType();
+        int tag = type.getTag();
         BString strings = prompt.getStringValue(StringUtils.fromString("strings"));
-        if (type.getTag() == TypeTags.STRING_TAG) {
-            return strings;
-        } else if (type.getTag() == TypeTags.INT_TAG) {
-            return Integer.parseInt(strings.getValue());
-        } else if (type.getTag() == TypeTags.FLOAT_TAG) {
-            return Double.parseDouble(strings.getValue());
-        } else if (type.getTag() == TypeTags.BOOLEAN_TAG) {
-            return Boolean.parseBoolean(strings.getValue());
-        } else {
-            throw new RuntimeException("Unsupported type: " + type.getName() +
+        return switch (tag) {
+            case TypeTags.STRING_TAG -> strings;
+            case TypeTags.INT_TAG -> Integer.parseInt(strings.getValue());
+            case TypeTags.FLOAT_TAG -> Double.parseDouble(strings.getValue());
+            case TypeTags.BOOLEAN_TAG -> Boolean.parseBoolean(strings.getValue());
+            default -> throw new RuntimeException("Unsupported type: " + type.getName() +
                     ". Supported types are: string, int, float, boolean for Mock LLM test.");
-        }
+        };
     }
 }
