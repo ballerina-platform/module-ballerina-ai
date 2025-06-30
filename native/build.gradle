@@ -67,10 +67,6 @@ task validateSpotbugs() {
     }
 }
 
-checkstyleTest {
-    enabled = false
-}
-
 checkstyle {
     toolVersion '7.8.2'
     configFile file("${rootDir}/build-config/checkstyle/build/checkstyle.xml")
@@ -83,6 +79,7 @@ tasks.withType(Checkstyle) {
 
 spotbugsMain.finalizedBy validateSpotbugs
 checkstyleMain.dependsOn(":checkstyle:downloadCheckstyleRuleFiles")
+checkstyleTest.dependsOn(":checkstyle:downloadCheckstyleRuleFiles")
 
 compileJava {
     doFirst {
