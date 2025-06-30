@@ -159,7 +159,7 @@ public class AiToolValidationTest {
         Iterator<Diagnostic> diagnosticIterator = diagnosticResult.errors().iterator();
         Diagnostic diagnostic = diagnosticIterator.next();
         String message = getErrorMessage(AGENT_MUST_BE_FINAL);
-        assertErrorMessage(diagnostic, message, 100, 1);
+        assertErrorMessage(diagnostic, message, 105, 1);
     }
 
     private DiagnosticResult getDiagnosticResult(String path) {

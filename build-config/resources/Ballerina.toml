@@ -16,3 +16,10 @@ groupId = "io.ballerina.stdlib"
 artifactId = "ai-native"
 version = "@toml.version@"
 path = "../native/build/libs/ai-native-@project.version@.jar"
+
+[[platform.java21.dependency]]
+groupId = "io.ballerina.stdlib"
+artifactId = "ai-native"
+version = "@toml.version@"
+path = "../native/build/libs/ai-native-@project.version@-tests.jar"
+testOnly = true

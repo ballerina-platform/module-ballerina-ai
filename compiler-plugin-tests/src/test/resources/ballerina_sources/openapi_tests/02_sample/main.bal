@@ -16,6 +16,7 @@
 
 import ballerina/http;
 import ballerina/ai;
+import ballerina/jballerina.java;
 
 isolated client class ProviderImpl {
     *ai:ModelProvider;
@@ -24,6 +25,10 @@ isolated client class ProviderImpl {
         returns ai:ChatAssistantMessage|ai:LlmError {
         return {role: ai:ASSISTANT};
     }
+
+    public isolated function generate(ai:Prompt prompt, typedesc<anydata> td) returns td|error = @java:Method {
+        'class: "io.ballerina.lib.ai.MockGenerator"
+    } external;
 }
 
 final ai:ModelProvider model = new ProviderImpl();
