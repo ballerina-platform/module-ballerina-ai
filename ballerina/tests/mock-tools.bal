@@ -1,6 +1,6 @@
 import ballerina/io;
-import ballerina/lang.regexp;
 import ballerina/jballerina.java;
+import ballerina/lang.regexp;
 
 type SearchParams record {|
     string query;
@@ -63,7 +63,7 @@ public isolated client class MockLLM {
         return error LlmError("Unexpected prompt to MockLLM");
     }
 
-    public isolated function generate(Prompt prompt, typedesc<anydata> td) returns td|error = @java:Method {
+    public isolated function generate(Prompt prompt, typedesc<anydata> td = <>) returns td|Error = @java:Method {
         'class: "io.ballerina.lib.ai.MockGenerator"
     } external;
 }
