@@ -50,13 +50,13 @@ public type FileId record {|
 public type DocumentMetaData record {|
     # MIME type of the document
     string mimeType?;
-    # File name for the document
+    # Document name for the document
     string documentName?;
-    # File size in bytes
+    # Document size in bytes
     decimal documentSize?;
-    # Creation timestamp of the file
+    # Creation timestamp of the document
     time:Utc createdAt?;
-    # Modification timestamp of the file
+    # Modification timestamp of the document
     time:Utc modifiedAt?;
     json...;
 |};
@@ -85,7 +85,7 @@ public type ImageDocument record {|
     *Document;
     # Fixed type identifier for image documents
     readonly IMAGE 'type = IMAGE;
-    # Image content - can be either a URL or binary data
+    # Image content, either a URL or binary data
     Url|byte[] content;
 |};
 
@@ -105,6 +105,6 @@ public type FileDocument record {|
     *Document;
     # Fixed type identifier for file documents
     readonly FILE 'type = FILE;
-    # File content - can be URL, binary data, or file ID reference
+    # File content, a URL, binary data, or a file ID reference
     byte[]|Url|FileId content;
 |};
