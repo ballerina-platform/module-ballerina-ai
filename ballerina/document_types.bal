@@ -16,9 +16,32 @@
 import ballerina/constraint;
 import ballerina/time;
 
-string:RegExp ftpUrlRegex = re `ftp://[^\s"'<>]+`;
-string:RegExp httpUrlRegex = re `http://[^\s"'<>]+`;
-string:RegExp googleDriveUrlRegex = re `https://drive.google.com/[^\s"'<>]+`;
+final string:RegExp HTTP_URL = re `(http|https)://[^\s"']+`;
+final string:RegExp FTP_URL = re `ftp://[^\s"']+`;
+final string:RegExp FTPS_URL = re `ftps://[^\s"']+`;
+final string:RegExp FTP_WITH_AUTH_URL = re `ftp://[^@\s"']+@[^\s"']+`;
+
+final string:RegExp GOOGLE_DRIVE_FILE_URL = re `https://drive\.google\.com/file/d/[a-zA-Z0-9_-]+`;
+final string:RegExp GOOGLE_DRIVE_DOWNLOAD_URL = re `https://drive\.google\.com/uc\?export=download&id=[a-zA-Z0-9_-]+`;
+final string:RegExp GOOGLE_DRIVE_FOLDER_URL = re `https://drive\.google\.com/drive/folders/[a-zA-Z0-9_-]+`;
+
+final string:RegExp AMAZON_S3_URL = re `https://[a-zA-Z0-9-]+\.s3\.amazonaws\.com/[^\s"']+`;
+final string:RegExp AMAZON_S3_CUSTOM_DOMAIN_URL = re `https://[a-zA-Z0-9.-]+/[^\s"']+`;
+final string:RegExp AMAZON_S3_PRESIGNED_URL = re `https://[a-zA-Z0-9-]+\.s3\.amazonaws\.com/[^\s"']+\?[^\s"']+`;
+
+final string:RegExp ONEDRIVE_FILE_URL = re `https://onedrive\.live\.com/embed\?resid=[a-zA-Z0-9!_-]+`;
+final string:RegExp ONEDRIVE_DOWNLOAD_URL = re `https://onedrive\.live\.com/download\?resid=[a-zA-Z0-9!_-]+`;
+
+final string:RegExp GITHUB_RAW_URL = re `https://raw\.githubusercontent\.com/[^\s"']+`;
+final string:RegExp GITHUB_REPO_FILE_URL = re `https://github\.com/[^\s"']+/blob/[^\s"']+`;
+
+final string:RegExp DROPBOX_URL = re `https://www\.dropbox\.com/s/[a-zA-Z0-9]+/[^\s"']+`;
+final string:RegExp DROPBOX_DOWNLOAD_URL = re `https://www\.dropbox\.com/s/[a-zA-Z0-9]+/[^\s"']+\?dl=[01]`;
+
+final string:RegExp LOCAL_FILE_WINDOWS_URL = re `file:///[a-zA-Z]:\\[^\s"']+`;
+final string:RegExp LOCAL_FILE_UNIX_URL = re `file:////[^\s"']+`;
+
+final string:RegExp FILE_URL = re `HTTP_URL|FTP_URL|FTPS_URL|FTP_WITH_AUTH_URL|GOOGLE_DRIVE_FILE_URL|GOOGLE_DRIVE_DOWNLOAD_URL|GOOGLE_DRIVE_FOLDER_URL|AMAZON_S3_URL|AMAZON_S3_CUSTOM_DOMAIN_URL|AMAZON_S3_PRESIGNED_URL|ONEDRIVE_FILE_URL|ONEDRIVE_DOWNLOAD_URL|GITHUB_RAW_URL|GITHUB_REPO_FILE_URL|DROPBOX_URL|DROPBOX_DOWNLOAD_URL|LOCAL_FILE_WINDOWS_URL|LOCAL_FILE_UNIX_URL`;
 
 # Enumeration of supported document types
 public enum DocumentKind {
@@ -32,18 +55,10 @@ public enum DocumentKind {
     FILE = "file"
 }
 
-# Enumeration of supported audio formats
-public enum AudioFormat {
-    # WAV audio format
-    WAV = "wav",
-    # MP3 audio format
-    MP3 = "mp3"
-}
-
 # Represents a URL pointing to the content of a document
 @constraint:String {
     pattern: {
-        value: re `${httpUrlRegex}|${ftpUrlRegex}|${googleDriveUrlRegex}`,
+        value: FILE_URL,
         message: "A valid URL pointing to the document content, must be either http, ftp or google drive URL."
     }
 }
@@ -57,15 +72,15 @@ public type FileId record {|
 
 # Represents additional metadata associated with documents
 public type DocumentMetaData record {|
-    # Optional MIME type specification for the file
+    # MIME type specification for the file
     string mimeType?;
-    # Optional file name for the document
+    # File name for the document
     string fileName?;
-    # Optional file size in bytes
+    # File size in bytes
     decimal fileSize?;
-    # Optional creation timestamp of the file
+    # Creation timestamp of the file
     time:Utc createdAt?;
-    # Optional modification timestamp of the file
+    # Modification timestamp of the file
     time:Utc modifiedAt?;
     json...;
 |};
@@ -74,7 +89,7 @@ public type DocumentMetaData record {|
 public type Document record {|
     # The type of document (text, image, audio, or file)
     string 'type;
-    # Optional metadata associated with the document
+    # Metadata associated with the document
     DocumentMetaData metadata?;
     # The actual content of the document
     anydata content;
@@ -104,7 +119,7 @@ public type AudioDocument record{|
     # Fixed type identifier for audio documents
     readonly AUDIO 'type = AUDIO;
     # Audio format specification (defaults to WAV)
-    AudioFormat format = WAV;
+    string format = "wav";
     # Audio content - can be either a URL reference or binary data
     Url|byte[] content;
 |};
