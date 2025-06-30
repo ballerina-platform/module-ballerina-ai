@@ -18,5 +18,4 @@
 
 module io.ballerina.lib.ai {
     requires io.ballerina.runtime;
-    exports io.ballerina.lib.ai;
 }
