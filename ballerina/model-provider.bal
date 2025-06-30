@@ -93,12 +93,12 @@ public type FunctionCall record {|
     string id?;
 |};
 
-# Represents a prompt.
+# Raw template type for prompts.
 public type Prompt object {
     *object:RawTemplate;
-    # + strings - Read-only array of string literals from the template
+    # The fixed string parts of the template.
     public string[] & readonly strings;
-    # + insertions - Array of values to be inserted into the template, can be any data or Document types
+    # The interpolations in the template.
     public (anydata|Document)[] insertions;
 };
 
@@ -115,7 +115,7 @@ public type ModelProvider distinct isolated client object {
     # Sends a chat request to the model and generates a value that belongs to the type
     # corresponding to the type descriptor argument.
     # 
-    # + prompt - The prompt to process
+    # + prompt - The prompt to use in the chat messages
     # + td - Type descriptor specifying the expected return type format
     # + return - Generates a value that belongs to the type, or an error if generation fails
     public isolated function generate(Prompt prompt, typedesc<anydata> td = <>) returns td|Error;
