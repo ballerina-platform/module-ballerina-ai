@@ -20,9 +20,7 @@ package io.ballerina.lib.ai;
 
 import io.ballerina.runtime.api.types.Type;
 import io.ballerina.runtime.api.types.TypeTags;
-import io.ballerina.runtime.api.utils.StringUtils;
 import io.ballerina.runtime.api.values.BObject;
-import io.ballerina.runtime.api.values.BString;
 import io.ballerina.runtime.api.values.BTypedesc;
 
 /*
@@ -31,12 +29,11 @@ import io.ballerina.runtime.api.values.BTypedesc;
 public class MockGenerator {
     public static Object generate(BObject prompt, BTypedesc expectedType) {
         Type type = expectedType.getDescribingType();
-        BString strings = prompt.getStringValue(StringUtils.fromString("strings"));
         return switch (type.getTag()) {
-            case TypeTags.STRING_TAG -> strings;
-            case TypeTags.INT_TAG -> Integer.parseInt(strings.getValue());
-            case TypeTags.FLOAT_TAG -> Double.parseDouble(strings.getValue());
-            case TypeTags.BOOLEAN_TAG -> Boolean.parseBoolean(strings.getValue());
+            case TypeTags.STRING_TAG -> "2";
+            case TypeTags.INT_TAG -> 2;
+            case TypeTags.FLOAT_TAG -> 2f;
+            case TypeTags.BOOLEAN_TAG -> true;
             default -> throw new RuntimeException("Unsupported type: " + type.getName() +
                     ". Supported types are: string, int, float, boolean for Mock LLM test.");
         };

@@ -100,7 +100,7 @@ public type Prompt object {
     public string[] & readonly strings;
     # The insertions in the template. 
     # Insertions of type `Document` may be handled in specialized ways by implementations.
-    public (anydata|Document)[] insertions;
+    public (anydata|Document|Document[])[] insertions;
 };
 
 # Represents an extendable client for interacting with an AI model.
