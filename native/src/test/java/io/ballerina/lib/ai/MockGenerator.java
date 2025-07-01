@@ -31,9 +31,8 @@ import io.ballerina.runtime.api.values.BTypedesc;
 public class MockGenerator {
     public static Object generate(BObject prompt, BTypedesc expectedType) {
         Type type = expectedType.getDescribingType();
-        int tag = type.getTag();
         BString strings = prompt.getStringValue(StringUtils.fromString("strings"));
-        return switch (tag) {
+        return switch (type.getTag()) {
             case TypeTags.STRING_TAG -> strings;
             case TypeTags.INT_TAG -> Integer.parseInt(strings.getValue());
             case TypeTags.FLOAT_TAG -> Double.parseDouble(strings.getValue());

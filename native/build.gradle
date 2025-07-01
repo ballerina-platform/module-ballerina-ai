@@ -99,13 +99,11 @@ compileTestJava {
     }
 }
 
-// Creates a JAR containing test classes
 task testJar(type: Jar) {
     archiveClassifier = 'tests'
     from sourceSets.test.output
 }
 
-// Optional: Make the test JAR part of your build artifacts
 artifacts {
     archives testJar
 }
