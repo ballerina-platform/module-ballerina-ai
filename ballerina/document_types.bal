@@ -31,7 +31,7 @@ public enum DocumentKind {
     FILE = "file"
 }
 
-# Represents a URL pointing to the document.
+# Represents a URL.
 @constraint:String {
     pattern: {
         value: urlRegExpr,
@@ -40,20 +40,20 @@ public enum DocumentKind {
 }
 public type Url string;
 
-# Record type for file ID reference of a document.
+# Represents an ID referring to a file.
 public type FileId record {|
     # Unique identifier for the file
     string fileId;
 |};
 
-# Represents additional metadata associated with documents.
-public type DocumentMetaData record {|
+# Represents metadata associated with documents.
+public type DocumentMetadata record {|
     # MIME type of the document
     string mimeType?;
-    # Document name for the document
+    # Name of the document
     string documentName?;
     # Document size in bytes
-    decimal documentSize?;
+    int documentSize?;
     # Creation timestamp of the document
     time:Utc createdAt?;
     # Modification timestamp of the document
@@ -66,8 +66,8 @@ public type Document record {|
     # The type of document (text, image, audio, file, etc.)
     string 'type;
     # Metadata associated with the document
-    DocumentMetaData metadata?;
-    # The actual content of the document
+    DocumentMetadata metadata?;
+    # The content of the document
     anydata content;
 |};
 
