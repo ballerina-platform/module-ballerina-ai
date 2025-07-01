@@ -79,32 +79,3 @@ public type TextDocument record {|
     # The text content of the document
     string content;
 |};
-
-# Represents documents containing image data.
-public type ImageDocument record {|
-    *Document;
-    # Fixed type identifier for image documents
-    readonly IMAGE 'type = IMAGE;
-    # Image content, either a URL or binary data
-    Url|byte[] content;
-|};
-
-# Represents documents containing audio data.
-public type AudioDocument record{|
-    *Document;
-    # Fixed type identifier for audio documents
-    readonly AUDIO 'type = AUDIO;
-    # Audio format specification (defaults to WAV)
-    string format = "wav";
-    # Audio content - can be either a URL or binary data
-    Url|byte[] content;
-|};
-
-# Represents generic file documents with various content sources.
-public type FileDocument record {|
-    *Document;
-    # Fixed type identifier for file documents
-    readonly FILE 'type = FILE;
-    # File content, a URL, binary data, or a file ID reference
-    byte[]|Url|FileId content;
-|};
