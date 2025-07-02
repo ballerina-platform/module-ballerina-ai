@@ -99,7 +99,7 @@ public type Prompt object {
     # The fixed string parts of the template.
     public string[] & readonly strings;
     # The insertions in the template. 
-    # Insertions of type `Document` may be handled in specialized ways by implementations.
+    # Insertions of type `Document` and `Document[]` may be handled in specialized ways by implementations.
     public (anydata|Document|Document[])[] insertions;
 };
 
@@ -116,7 +116,7 @@ public type ModelProvider distinct isolated client object {
     # Sends a chat request to the model and generates a value that belongs to the type
     # corresponding to the type descriptor argument.
     # 
-    # + prompt - The prompt to use in the chat messages
+    # + prompt - The prompt to use in the chat request
     # + td - Type descriptor specifying the expected return type format
     # + return - Generates a value that belongs to the type, or an error if generation fails
     public isolated function generate(Prompt prompt, typedesc<anydata> td = <>) returns td|Error;
