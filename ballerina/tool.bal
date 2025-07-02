@@ -60,6 +60,13 @@ public isolated class ToolStore {
                 toolList.push(toolConfig);
             } else if tool is BaseToolKit {
                 ToolConfig[] toolsFromToolKit = tool.getTools(); // TODO remove this after Ballerina fixes nullpointer exception
+                if tool is McpToolKit {
+                    foreach ToolConfig element in toolsFromToolKit {
+                        lock {
+                            self.mcpTools[element.name] = ();
+                        }
+                    }
+                }
                 toolList.push(...toolsFromToolKit);
             } else {
                 toolList.push(tool);
@@ -90,7 +97,17 @@ public isolated class ToolStore {
                 inputs = inputs ?: (), instruction = instruction);
         }
         isolated function caller = self.tools.get(name).caller;
-        ToolExecutionResult|error execution = trap executeTool(caller, inputValues);
+        ToolExecutionResult|error execution;
+        lock {
+            execution = trap executeTool(caller, self.mcpTools.hasKey(name) 
+                ? {
+                    params: {
+                        name,
+                        arguments: inputValues.cloneReadOnly()
+                    }
+                }
+                : inputValues.cloneReadOnly());
+        }
         if execution is error {
             return error ToolExecutionError("Tool execution failed.", execution, toolName = name,
                 inputs = inputValues.length() == 0 ? {} : inputValues);
