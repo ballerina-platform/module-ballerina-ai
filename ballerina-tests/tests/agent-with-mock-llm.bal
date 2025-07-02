@@ -76,6 +76,9 @@ isolated client distinct class MockLlm {
         returns ai:ChatAssistantMessage|ai:LlmError {
         ai:ChatMessage lastMessage = messages.pop();
         string query = lastMessage is ai:ChatUserMessage|ai:ChatFunctionMessage ? lastMessage.content ?: "" : "";
+        if query.includes("Greet") {
+            return {role: ai:ASSISTANT, content: "Hey John! Welcome to Ballerina!"};
+        }
         if query.includes("Mail Body") {
             return {role: ai:ASSISTANT, content: query};
         }
