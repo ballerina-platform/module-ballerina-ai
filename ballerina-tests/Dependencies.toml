@@ -19,6 +19,7 @@ dependencies = [
 	{org = "ballerina", name = "jballerina.java"},
 	{org = "ballerina", name = "lang.regexp"},
 	{org = "ballerina", name = "log"},
+	{org = "ballerina", name = "mcp"},
 	{org = "ballerina", name = "mime"},
 	{org = "ballerina", name = "time"},
 	{org = "ballerina", name = "url"},
@@ -269,6 +270,15 @@ dependencies = [
 	{org = "ballerina", name = "jballerina.java"},
 	{org = "ballerina", name = "lang.value"},
 	{org = "ballerina", name = "observe"}
+]
+
+[[package]]
+org = "ballerina"
+name = "mcp"
+version = "0.4.2"
+dependencies = [
+	{org = "ballerina", name = "http"},
+	{org = "ballerina", name = "jballerina.java"}
 ]
 
 [[package]]
