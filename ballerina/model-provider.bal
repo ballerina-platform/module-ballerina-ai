@@ -101,7 +101,7 @@ public type Prompt object {
     # The fixed string parts of the template.
     public string[] & readonly strings;
     # The insertions in the template. 
-    # Insertions of type `Document` may be handled in specialized ways by implementations.
+    # Insertions of type `Document` and `Document[]` may be handled in specialized ways by implementations.
     public (anydata|Document|Document[])[] insertions;
 };
 
