@@ -33,3 +33,11 @@ function testAgentToolExecution() returns error? {
     result = check agent.run("I'm John. Greet me once");
     test:assertEquals(result, "Hey John! Welcome to Ballerina!");
 }
+
+@test:Config {
+    groups: ["mcp"]
+}
+function testAgentToolExecutionforMcpServer() returns error? {
+    string result = check agent.run("I'm John. Greet me once");
+    test:assertEquals(result, "Hey John! Welcome to Ballerina!");
+}
