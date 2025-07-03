@@ -59,3 +59,6 @@ docker.env
 
 # ignore ballerina installer in github runner
 *.deb
+
+build
+node_modules

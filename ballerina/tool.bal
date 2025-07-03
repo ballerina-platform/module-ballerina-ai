@@ -32,7 +32,7 @@ public type Tool record {|
     # Description of the tool
     string description;
     # Variables that should be generated with the help of the LLMs
-    JsonInputSchema variables?;
+    map<json> variables?;
     # Constants that are defined by the users
     map<json> constants = {};
     # Function that should be called to execute the tool
@@ -41,6 +41,7 @@ public type Tool record {|
 
 public isolated class ToolStore {
     public final map<Tool> & readonly tools;
+    private map<()> mcpTools = {};
 
     # Register tools to the agent. 
     # These tools will be by the LLM to perform tasks.
@@ -59,6 +60,13 @@ public isolated class ToolStore {
                 toolList.push(toolConfig);
             } else if tool is BaseToolKit {
                 ToolConfig[] toolsFromToolKit = tool.getTools(); // TODO remove this after Ballerina fixes nullpointer exception
+                if tool is McpToolKit {
+                    foreach ToolConfig element in toolsFromToolKit {
+                        lock {
+                            self.mcpTools[element.name] = ();
+                        }
+                    }
+                }
                 toolList.push(...toolsFromToolKit);
             } else {
                 toolList.push(tool);
@@ -89,7 +97,17 @@ public isolated class ToolStore {
                 inputs = inputs ?: (), instruction = instruction);
         }
         isolated function caller = self.tools.get(name).caller;
-        ToolExecutionResult|error execution = trap executeTool(caller, inputValues);
+        ToolExecutionResult|error execution;
+        lock {
+            execution = trap executeTool(caller, self.mcpTools.hasKey(name) 
+                ? {
+                    params: {
+                        name,
+                        arguments: inputValues.cloneReadOnly()
+                    }
+                }
+                : inputValues.cloneReadOnly());
+        }
         if execution is error {
             return error ToolExecutionError("Tool execution failed.", execution, toolName = name,
                 inputs = inputValues.length() == 0 ? {} : inputValues);
@@ -183,13 +201,13 @@ isolated function registerTool(map<Tool & readonly> toolMap, ToolConfig[] tools)
             return error Error("Duplicated tools. Tool name should be unique.", toolName = name);
         }
 
-        JsonInputSchema|error? variables = tool.parameters.cloneWithType();
+        map<json>|error? variables = tool.parameters.cloneWithType();
         if variables is error {
             return error Error("Unable to regesiter tool", variables);
         }
         map<json> constants = {};
 
-        if variables is JsonInputSchema {
+        if variables is map<json> {
             constants = resolveSchema(variables) ?: {};
         }
 
@@ -204,7 +222,7 @@ isolated function registerTool(map<Tool & readonly> toolMap, ToolConfig[] tools)
     }
 }
 
-isolated function resolveSchema(JsonInputSchema schema) returns map<json>? {
+isolated function resolveSchema(map<json> schema) returns map<json>? {
     // TODO fix when all values are removed as constant, to use null schema
     if schema is ObjectInputSchema {
         map<JsonSubSchema>? properties = schema.properties;

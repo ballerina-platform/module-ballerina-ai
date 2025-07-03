@@ -77,6 +77,9 @@ isolated client distinct class MockLlm {
         returns ai:ChatAssistantMessage|ai:LlmError {
         ai:ChatMessage lastMessage = messages.pop();
         string query = lastMessage is ai:ChatUserMessage|ai:ChatFunctionMessage ? lastMessage.content ?: "" : "";
+        if query.includes("Greet") {
+            return {role: ai:ASSISTANT, content: "Hey John! Welcome to Ballerina!"};
+        }
         if query.includes("Mail Body") {
             return {role: ai:ASSISTANT, content: query};
         }
@@ -108,7 +111,7 @@ isolated client distinct class MockLlm {
         return error ai:LlmError("I can't understand");
     }
 
-    public isolated function generate(ai:Prompt prompt, typedesc<anydata> td = <>) returns td|ai:Error = @java:Method {
+    isolated remote function generate(ai:Prompt prompt, typedesc<anydata> td = <>) returns td|ai:Error = @java:Method {
         'class: "io.ballerina.lib.ai.MockGenerator"
     } external;
 }

@@ -113,29 +113,32 @@ function testHttpToolKitInitialization() {
     test:assertEquals(tools[0].name, "httpGet");
     test:assertEquals(tools[0].description, "test HTTP GET tool");
     map<json> expectedToolSchema = {
-        'type: "object",
-        required: ["httpInput"],
         properties: {
             httpInput: {
+                'type: "object",
                 properties: {
-                    path: {'const: "/example-get/{pathParam}"},
+                    path: {
+                        'const: "/example-get/{pathParam}"
+                    },
                     parameters: {
                         'type: "object",
                         required: ["pathParam"],
-                        properties: {"pathParam": {'type: "string"}}
+                        properties: {
+                            pathParam: {
+                                'type: "string"
+                            }
+                        }
                     }
-                },
-                'type: "object"
+                }
             }
-        }
+        },
+        required: ["httpInput"]
     };
     test:assertEquals(tools[0].parameters, expectedToolSchema);
 
     test:assertEquals(tools[1].name, "httpPostWithSimpleSchema");
     test:assertEquals(tools[1].description, "test HTTP POST tool with simple schema");
     expectedToolSchema = {
-        'type: "object",
-        required: ["httpInput"],
         properties: {
             httpInput: {
                 properties: {
@@ -151,15 +154,14 @@ function testHttpToolKitInitialization() {
                 },
                 'type: "object"
             }
-        }
+        },
+        required: ["httpInput"]
     };
     test:assertEquals(tools[1].parameters, expectedToolSchema);
 
     test:assertEquals(tools[2].name, "httpDeleteWithComplexSchema");
     test:assertEquals(tools[2].description, "test HTTP DELETE tool with complex schema");
     expectedToolSchema = {
-        'type: "object",
-        required: ["httpInput"],
         properties: {
             httpInput: {
                 properties: {
@@ -182,15 +184,14 @@ function testHttpToolKitInitialization() {
                 },
                 'type: "object"
             }
-        }
+        },
+        required: ["httpInput"]
     };
     test:assertEquals(tools[2].parameters, expectedToolSchema);
 
     test:assertEquals(tools[3].name, "testDefaultWithNull");
     test:assertEquals(tools[3].description, "test HTTP DELETE tool with complex schema");
     expectedToolSchema = {
-        'type: "object",
-        required: ["httpInput"],
         properties: {
             httpInput: {
                 properties: {
@@ -213,7 +214,8 @@ function testHttpToolKitInitialization() {
                 },
                 'type: "object"
             }
-        }
+        },
+        required: ["httpInput"]
     };
     test:assertEquals(tools[3].parameters, expectedToolSchema);
 }

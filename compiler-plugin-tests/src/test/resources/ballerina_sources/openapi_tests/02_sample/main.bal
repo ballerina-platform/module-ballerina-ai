@@ -26,7 +26,7 @@ isolated client class ProviderImpl {
         return {role: ai:ASSISTANT};
     }
 
-    public isolated function generate(ai:Prompt prompt, typedesc<anydata> td = <>) returns td|ai:Error = @java:Method {
+    isolated remote function generate(ai:Prompt prompt, typedesc<anydata> td = <>) returns td|ai:Error = @java:Method {
         'class: "io.ballerina.lib.ai.MockGenerator"
     } external;
 }

@@ -29,4 +29,15 @@ function testAgentToolExecution() returns error? {
 
     result = check agent.run("List all mails");
     test:assertEquals(result, [{body: "Mail Body 1"}, {body: "Mail Body 2"}, {body: "Mail Body 3"}].toString());
+
+    result = check agent.run("I'm John. Greet me once");
+    test:assertEquals(result, "Hey John! Welcome to Ballerina!");
+}
+
+@test:Config {
+    groups: ["mcp"]
+}
+function testAgentToolExecutionforMcpServer() returns error? {
+    string result = check agent.run("I'm John. Greet me once");
+    test:assertEquals(result, "Hey John! Welcome to Ballerina!");
 }
