@@ -34,15 +34,14 @@ import io.ballerina.compiler.syntax.tree.ImportOrgNameNode;
 import io.ballerina.compiler.syntax.tree.ImportPrefixNode;
 import io.ballerina.compiler.syntax.tree.MappingConstructorExpressionNode;
 import io.ballerina.compiler.syntax.tree.MetadataNode;
-import io.ballerina.compiler.syntax.tree.MethodCallExpressionNode;
 import io.ballerina.compiler.syntax.tree.ModulePartNode;
-import io.ballerina.compiler.syntax.tree.NameReferenceNode;
 import io.ballerina.compiler.syntax.tree.Node;
 import io.ballerina.compiler.syntax.tree.NodeFactory;
 import io.ballerina.compiler.syntax.tree.NodeList;
 import io.ballerina.compiler.syntax.tree.NodeParser;
 import io.ballerina.compiler.syntax.tree.NodeVisitor;
 import io.ballerina.compiler.syntax.tree.QualifiedNameReferenceNode;
+import io.ballerina.compiler.syntax.tree.RemoteMethodCallActionNode;
 import io.ballerina.compiler.syntax.tree.SimpleNameReferenceNode;
 import io.ballerina.compiler.syntax.tree.SyntaxKind;
 import io.ballerina.compiler.syntax.tree.TreeModifier;
@@ -66,6 +65,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 
 import static io.ballerina.projects.util.ProjectConstants.EMPTY_STRING;
@@ -161,7 +161,7 @@ public class GenerateMethodModificationTask implements ModifierTask<SourceModifi
                 .visitGenerateMethodsAndGenerateJsonSchema(modulePartNode);
     }
 
-    private boolean processAIImportPrefixes(NodeList<ImportDeclarationNode> imports, Document document) {
+    private void processAIImportPrefixes(NodeList<ImportDeclarationNode> imports, Document document) {
         for (ImportDeclarationNode importDeclarationNode : imports) {
             Optional<ImportOrgNameNode> importOrgNameNode = importDeclarationNode.orgName();
             if (importOrgNameNode.isEmpty()) {
@@ -186,12 +186,10 @@ public class GenerateMethodModificationTask implements ModifierTask<SourceModifi
                         }
                     }
                     modifierData.importPrefixes.put(document.documentId(), importPrefix);
-                    return true;
+                    return;
                 }
             }
         }
-
-        return false;
     }
 
     private class GenerateMethodVisitor extends NodeVisitor {
@@ -218,28 +216,27 @@ public class GenerateMethodModificationTask implements ModifierTask<SourceModifi
             visit(modulePartNode);
         }
 
-        public void visit(MethodCallExpressionNode methodCallExpressionNode) {
-            NameReferenceNode methodNameRef = methodCallExpressionNode.methodName();
-            if (!(methodNameRef instanceof SimpleNameReferenceNode methodName
-                    && methodName.name().text().equals(GENERATE_METHOD_NAME))) {
-                this.visitSyntaxNode(methodCallExpressionNode);
+        public void visit(RemoteMethodCallActionNode remoteMethodCallActionNode) {
+            SimpleNameReferenceNode methodName = remoteMethodCallActionNode.methodName();
+            if (!methodName.name().text().equals(GENERATE_METHOD_NAME)) {
+                this.visitSyntaxNode(remoteMethodCallActionNode);
                 return;
             }
 
-            ExpressionNode expression = methodCallExpressionNode.expression();
+            ExpressionNode expression = remoteMethodCallActionNode.expression();
             semanticModel.typeOf(expression).ifPresent(expressionTypeSymbol ->
-                    getModelProviderSymbol(methodCallExpressionNode).ifPresent(moduleSymbol ->
+                    getModelProviderSymbol(remoteMethodCallActionNode).ifPresent(moduleSymbol ->
                             moduleSymbol.typeDefinitions().forEach(typeDefSymbol -> {
                                 if (typeDefSymbol.nameEquals(MODEL_PROVIDER_NAME)) {
                                     if (expressionTypeSymbol.subtypeOf(typeDefSymbol.typeDescriptor())) {
-                                        updateTypeSchemaForTypeDef(methodCallExpressionNode);
+                                        updateTypeSchemaForTypeDef(remoteMethodCallActionNode);
                                     }
                                 }
                             })));
         }
 
-        private void updateTypeSchemaForTypeDef(MethodCallExpressionNode methodCallExpressionNode) {
-            semanticModel.typeOf(methodCallExpressionNode).ifPresent(expTypeSymbol -> {
+        private void updateTypeSchemaForTypeDef(RemoteMethodCallActionNode remoteMethodCallActionNode) {
+            semanticModel.typeOf(remoteMethodCallActionNode).ifPresent(expTypeSymbol -> {
                 if (expTypeSymbol instanceof UnionTypeSymbol expTypeUnionSymbol) {
                     TypeSymbol nonErrorTypeSymbol = null;
                     TypeSymbol typeRefTypeSymbol = null;
@@ -264,11 +261,9 @@ public class GenerateMethodModificationTask implements ModifierTask<SourceModifi
 
         private static void populateTypeSchema(TypeSymbol memberType, TypeMapper typeMapper,
                                                Map<String, String> typeSchemas) {
-            switch (memberType) {
-                case TypeReferenceTypeSymbol typeReference ->
-                        typeSchemas.put(typeReference.definition().getName().get(),
-                                getJsonSchema(typeMapper.getSchema(typeReference)));
-                default -> { }
+            if (Objects.requireNonNull(memberType) instanceof TypeReferenceTypeSymbol typeReference) {
+                typeSchemas.put(typeReference.definition().getName().get(),
+                        getJsonSchema(typeMapper.getSchema(typeReference)));
             }
         }
 
