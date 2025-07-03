@@ -93,6 +93,16 @@ public type FunctionCall record {|
     string id?;
 |};
 
+# Raw template type for prompts.
+public type Prompt object {
+    *object:RawTemplate;
+    # The fixed string parts of the template.
+    public string[] & readonly strings;
+    # The insertions in the template. 
+    # Insertions of type `Document` and `Document[]` may be handled in specialized ways by implementations.
+    public (anydata|Document|Document[])[] insertions;
+};
+
 # Represents an extendable client for interacting with an AI model.
 public type ModelProvider distinct isolated client object {
     # Sends a chat request to the model with the given messages and tools.
@@ -102,4 +112,12 @@ public type ModelProvider distinct isolated client object {
     # + return - Function to be called, chat response or an error in-case of failures
     isolated remote function chat(ChatMessage[] messages, ChatCompletionFunctions[] tools = [], string? stop = ())
         returns ChatAssistantMessage|LlmError;
+
+    # Sends a chat request to the model and generates a value that belongs to the type
+    # corresponding to the type descriptor argument.
+    # 
+    # + prompt - The prompt to use in the chat request
+    # + td - Type descriptor specifying the expected return type format
+    # + return - Generates a value that belongs to the type, or an error if generation fails
+    public isolated function generate(Prompt prompt, typedesc<anydata> td = <>) returns td|Error;
 };

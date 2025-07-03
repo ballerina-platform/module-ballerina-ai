@@ -15,6 +15,7 @@
 // under the License.
 
 import ballerina/ai;
+import ballerina/jballerina.java;
 import ballerina/lang.regexp;
 
 isolated function getNumbers(string prompt) returns string[] {
@@ -106,6 +107,10 @@ isolated client distinct class MockLlm {
         }
         return error ai:LlmError("I can't understand");
     }
+
+    public isolated function generate(ai:Prompt prompt, typedesc<anydata> td = <>) returns td|ai:Error = @java:Method {
+        'class: "io.ballerina.lib.ai.MockGenerator"
+    } external;
 }
 
 final MockLlm model = new;

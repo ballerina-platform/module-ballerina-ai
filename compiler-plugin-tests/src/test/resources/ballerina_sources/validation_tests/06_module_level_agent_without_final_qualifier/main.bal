@@ -16,6 +16,7 @@
 
 import ballerina/lang.regexp;
 import ballerina/ai;
+import ballerina/jballerina.java;
 
 isolated function getNumbers(string prompt) returns string[] {
     regexp:Span[] spans = re `-?\d+\.?\d*`.findAll(prompt);
@@ -90,6 +91,10 @@ isolated client distinct class MockLlm {
         }
         return error ai:LlmError("I can't understand");
     }
+
+    isolated remote function generate(ai:Prompt prompt, typedesc<anydata> td = <>) returns td|Error = @java:Method {
+        'class: "io.ballerina.lib.ai.MockGenerator"
+    } external;
 }
 
 isolated function getChatAssistantMessage(string content) returns ai:ChatAssistantMessage {
