@@ -80,7 +80,7 @@ public type ChatCompletionFunctions record {|
     # Description of the function
     string description;
     # Parameters of the function
-    JsonInputSchema parameters?;
+    map<json> parameters?;
 |};
 
 # Function call record
