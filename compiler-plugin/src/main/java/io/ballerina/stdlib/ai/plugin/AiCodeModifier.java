@@ -19,6 +19,7 @@
 package io.ballerina.stdlib.ai.plugin;
 
 import io.ballerina.compiler.syntax.tree.SyntaxKind;
+import io.ballerina.openapi.service.mapper.type.TypeMapper;
 import io.ballerina.projects.DocumentId;
 import io.ballerina.projects.ModuleId;
 import io.ballerina.projects.plugins.CodeModifier;
@@ -38,6 +39,7 @@ public class AiCodeModifier extends CodeModifier {
 
     @Override
     public void init(CodeModifierContext codeModifierContext) {
+        AnalysisData analysisData = new AnalysisData();
         codeModifierContext.addSyntaxNodeAnalysisTask(new ToolAnnotationAnalysisTask(modifierContextMap),
                 SyntaxKind.ANNOTATION);
         codeModifierContext.addSyntaxNodeAnalysisTask(new ModuleLevelAgentAnalysisTask(modifierContextMap),
@@ -46,5 +48,12 @@ public class AiCodeModifier extends CodeModifier {
                 SyntaxKind.FUNCTION_DEFINITION);
         codeModifierContext.addSourceModifierTask(new AiSourceModifier(modifierContextMap,
                 modulesWithPredefinedInitMethods));
+        codeModifierContext.addSyntaxNodeAnalysisTask(
+                new TypeMapperImplInitializer(analysisData), SyntaxKind.MODULE_PART);
+        codeModifierContext.addSourceModifierTask(new GenerateMethodModificationTask(analysisData));
+    }
+
+    static final class AnalysisData {
+        TypeMapper typeMapper;
     }
 }

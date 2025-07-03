@@ -119,5 +119,5 @@ public type ModelProvider distinct isolated client object {
     # + prompt - The prompt to use in the chat request
     # + td - Type descriptor specifying the expected return type format
     # + return - Generates a value that belongs to the type, or an error if generation fails
-    public isolated function generate(Prompt prompt, typedesc<anydata> td = <>) returns td|Error;
+    isolated remote function generate(Prompt prompt, typedesc<anydata> td = <>) returns td|Error;
 };
