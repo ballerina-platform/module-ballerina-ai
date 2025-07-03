@@ -17,6 +17,8 @@
 import ballerina/constraint;
 import ballerina/time;
 
+public annotation map<json> JsonSchema on type;
+
 # Enumeration of supported document types.
 public enum DocumentKind {
     # Text document type
