@@ -53,7 +53,7 @@ public class AiCodeModifier extends CodeModifier {
         codeModifierContext.addSourceModifierTask(new GenerateMethodModificationTask(analysisData));
     }
 
-    static final class AnalysisData {
+    public static final class AnalysisData {
         TypeMapper typeMapper;
     }
 }
