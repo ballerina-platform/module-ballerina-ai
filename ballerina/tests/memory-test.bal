@@ -1,5 +1,5 @@
-import ballerina/test;
 import ballerina/io;
+import ballerina/test;
 
 @test:Config {}
 function testMemoryInitialization() returns error? {
@@ -16,7 +16,10 @@ function testMemoryUpdateSystemMesage() returns error? {
     _ = check chatMemory.update(DEFAULT_SESSION_ID, userMessage);
     ChatAssistantMessage assistantMessage = {role: "assistant", content: "Hello Bob! How can I assist you today?"};
     _ = check chatMemory.update(DEFAULT_SESSION_ID, assistantMessage);
-    ChatSystemMessage systemMessage = {role: "system", content: "You are an AI assistant to help users get answers. Respond to the human as helpfully and accurately as possible"};
+    ChatSystemMessage systemMessage = {
+        role: "system",
+        content: getPromptParts(`You are an AI assistant to help users get answers. Respond to the human as helpfully and accurately as possible`)
+    };
     _ = check chatMemory.update(DEFAULT_SESSION_ID, systemMessage);
     ChatMessage[] history = check chatMemory.get(DEFAULT_SESSION_ID);
     test:assertEquals(history[0], systemMessage);
@@ -30,7 +33,10 @@ function testUpdateExceedMemorySize() returns error? {
     _ = check chatMemory.update(DEFAULT_SESSION_ID, userMessage);
     ChatAssistantMessage assistantMessage = {role: "assistant", content: "Hello Bob! How can I assist you today?"};
     _ = check chatMemory.update(DEFAULT_SESSION_ID, assistantMessage);
-    ChatSystemMessage systemMessage = {role: "system", content: "You are an AI assistant to help users get answers. Respond to the human as helpfully and accurately as possible"};
+    ChatSystemMessage systemMessage = {
+        role: "system",
+        content: "You are an AI assistant to help users get answers. Respond to the human as helpfully and accurately as possible"
+    };
     _ = check chatMemory.update(DEFAULT_SESSION_ID, systemMessage);
     ChatUserMessage userMessage2 = {role: "user", content: "Add the numbers [2,3,4,5]"};
     _ = check chatMemory.update(DEFAULT_SESSION_ID, userMessage2);

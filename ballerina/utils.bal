@@ -44,7 +44,38 @@ returns map<anydata> = @java:Method {
     'class: "io.ballerina.stdlib.ai.Utils"
 } external;
 
-isolated function invokeOnChatMessageFunction(any event, string eventFunction, service object {} serviceObj) 
+isolated function invokeOnChatMessageFunction(any event, string eventFunction, service object {} serviceObj)
     returns ChatRespMessage|error = @java:Method {
-        'class: "io.ballerina.stdlib.ai.NativeHttpToChatServiceAdaptor"
+    'class: "io.ballerina.stdlib.ai.NativeHttpToChatServiceAdaptor"
 } external;
+
+isolated function getChatMessageStringContent(PromptParts|string prompt) returns string {
+    if prompt is string {
+        return prompt;
+    }
+    string str = prompt.strings[0];
+    anydata[] insertions = prompt.insertions;
+    foreach int i in 0 ..< insertions.length() {
+        anydata value = insertions[i];
+        string promptStr = prompt.strings[i + 1];
+        if value is TextDocument|TextChunk {
+            str = str + value.content + promptStr;
+            continue;
+        }
+        str = str + value.toString() + promptStr;
+    }
+    return str.trim();
+}
+
+# Returns the parts of a given `Prompt` as a `PromptParts` record.
+# This function extracts the `strings` and `insertions` fields from the provided `Prompt`
+# and returns them as a `PromptParts` record.
+#
+# + prompt - The `Prompt` object from which to extract the parts.
+# + return - A `PromptParts` record containing the `strings` and `insertions` from the input `Prompt`.
+public isolated function getPromptParts(Prompt prompt) returns PromptParts {
+    return {
+        strings: prompt.strings,
+        insertions: prompt.insertions
+    };
+}

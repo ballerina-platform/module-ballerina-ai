@@ -18,20 +18,18 @@
 public type Vector float[];
 
 # Represents a sparse vector storing only non-zero values with their corresponding indices.
-#
-# + indices - Array of indices where non-zero values are located 
-# + values - Array of non-zero floating-point values corresponding to the indices
 public type SparseVector record {|
+    # Array of indices where non-zero values are located 
     int[] indices;
+    # Array of non-zero floating-point values corresponding to the indices
     Vector values;
 |};
 
 # Represents a hybrid embedding containing both dense and sparse vector representations.
-#
-# + dense - Dense vector representation of the embedding
-# + sparse - Sparse vector representation of the embedding
 public type HybridVector record {|
+    # Dense vector representation of the embedding
     Vector dense;
+    # Sparse vector representation of the embedding
     SparseVector sparse;
 |};
 
@@ -58,69 +56,88 @@ public enum MetadataFilterCondition {
 
 # Represents a metadata filter for vector search operations.
 # Defines conditions to filter vectors based on their associated metadata values.
-#
-# + key - The name of the metadata field to filter
-# + operator - The comparison operator to use. Defaults to `EQUAL`
-# + value - - The value to compare the metadata field against
 public type MetadataFilter record {|
+    # The name of the metadata field to filter
     string key;
+    # The comparison operator to use. Defaults to `EQUAL`
     MetadataFilterOperator operator = EQUAL;
+    # The value to compare the metadata field against
     json value;
 |};
 
 # Represents a container for combining multiple metadata filters using logical operators.
 # Enables complex filtering by applying multiple conditions with AND/OR logic during vector search.
-#
-# + filters - An array of `MetadataFilter` or nested `MetadataFilters` to apply.
-# + condition - The logical operator (`AND` or `OR`) used to combine the filters. Defaults to `AND`.
 public type MetadataFilters record {|
+    # An array of `MetadataFilter` or nested `MetadataFilters` to apply
     (MetadataFilters|MetadataFilter)[] filters;
+    # The logical operator (`AND` or `OR`) used to combine the filters. Defaults to `AND`
     MetadataFilterCondition condition = AND;
 |};
 
 # Defines a query to the vector store with an embedding vector and optional metadata filters.
 # Supports precise search operations by combining vector similarity with metadata conditions.
-#
-# + embedding - The vector to use for similarity search.
-# + filters - Optional metadata filters to refine the search results.
 public type VectorStoreQuery record {|
+    # The vector to use for similarity search
     Embedding embedding;
+    # Optional metadata filters to refine the search results.
     MetadataFilters filters?;
 |};
 
-# Represents a document with content and optional metadata.
-#
-# + content - The main text content of the document
-# + metadata - Optional key-value pairs that provide additional information about the document
-public type Document record {|
-    string content;
-    map<anydata> metadata?;
-|};
-
-# Represents a vector entry combining an embedding with its source document.
-#
-# + id - Optional unique identifier for the vector entry
-# + embedding - The vector representation of the document content
-# + document - The original document associated with the embedding
+# Represents a vector entry combining an embedding with its source chunk. 
 public type VectorEntry record {|
+    # Optional unique identifier for the vector entry
     string id?;
+    # The vector representation of the chunk content
     Embedding embedding;
-    Document document;
+    # The chunk associated with the embedding
+    Chunk chunk;
 |};
 
-# Represents a vector match result with similarity score.
-#
-# + similarityScore - Similarity score indicating how closely the vector matches the query 
+# Represents a vector match result with similarity score. 
 public type VectorMatch record {|
     *VectorEntry;
+    # Similarity score indicating how closely the vector matches the query
     float similarityScore;
 |};
 
 # Represents query modes to be used with vector store.
-# Defines different search strategies for retrieving relevant documents
+# Defines different search strategies for retrieving relevant chunks
 # based on the type of embeddings and search algorithms to be used.
 public enum VectorStoreQueryMode {
+    # Uses dense vector embeddings for similarity search
     DENSE,
+    # Uses sparse vector embeddings for similarity search
     SPARSE,
+    # Uses hybrid embeddings that combine dense and sparse representations
     HYBRID
+}
+
+# Represents a match result with similarity score.
+public type QueryMatch record {|
+    # The chunk that matched the query
+    Chunk chunk;
+    # Similarity score indicating chunk relevance to the query
+    float similarityScore;
+|};
+
+# Represents a prompt.
+#
+# + strings - Read-only array of string literals from the template
+# + insertions - Array of values to be inserted into the template, can be anydata, Document, or Chunk types
+public type Prompt isolated object {
+    *object:RawTemplate;
+
+    public string[] & readonly strings;
+    public (anydata|Document|Document[]|Chunk|Chunk[])[] insertions;
+};
+
+# Represents the similarity metrics used for comparing vectors.
+# Defines how the similarity between vectors is calculated during search operations.
+public enum SimilarityMetric {
+    # Cosine similarity measures the cosine of the angle between two vectors
+    COSINE,
+    # Euclidean distance calculates the straight-line distance between two points in space
+    EUCLIDEAN,
+    # Reflect the directional similarity between two vectors
+    DOT_PRODUCT
 }
