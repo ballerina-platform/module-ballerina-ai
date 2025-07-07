@@ -3,11 +3,26 @@
   "includes":[{
     "pattern":"\\QMETA-INF/services/java.lang.System$LoggerFinder\\E"
   }, {
+    "pattern":"\\QMETA-INF/services/java.net.spi.InetAddressResolverProvider\\E"
+  }, {
+    "pattern":"\\QMETA-INF/services/java.net.spi.URLStreamHandlerProvider\\E"
+  }, {
+    "pattern":"\\QMETA-INF/services/java.nio.channels.spi.SelectorProvider\\E"
+  }, {
     "pattern":"\\QMETA-INF/services/java.time.zone.ZoneRulesProvider\\E"
+  }, {
+    "pattern":"\\QMETA-INF/services/java.util.spi.ResourceBundleControlProvider\\E"
   }, {
     "pattern":"\\QMETA-INF/services/org.slf4j.spi.SLF4JServiceProvider\\E"
   }, {
     "pattern":"\\Qlogging.properties\\E"
+  }, {
+    "pattern":"\\Qopennlp/opennlp-en-ud-ewt-sentence-1.2-2.5.0.bin\\E"
+  }, {
+    "pattern":"\\Qopennlp/tools/util/opennlp.version\\E"
   }]},
-  "bundles":[]
+  "bundles":[{
+    "name":"MessagesBundle",
+    "locales":[""]
+  }]
 }
