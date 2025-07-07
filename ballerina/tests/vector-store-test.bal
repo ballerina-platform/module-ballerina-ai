@@ -37,26 +37,88 @@ isolated client class MockEmbeddingProvider {
 }
 
 final MockEmbeddingProvider mockEmbeddingProvider = new;
+final readonly & string[] words = [
+    "puppy","car","automobile","happy","joyful","fast","quick","teacher","instructor",
+    "big","large","city","town","purchase","buy","intelligent","smart","doctor","physician"
+];
 
 @test:Config
-isolated function testInMemoryVectorStore() returns error? {
-    VectorStore vectorStore = check new InMemoryVectorStore(topK = 5);
-    string[] words = [
-        "puppy","car","automobile","happy","joyful","fast","quick","teacher","instructor","big",
-        "large","city","town","purchase","buy","intelligent","smart","doctor","physician"
-    ];
+isolated function testInMemoryStoreWithMetrics() returns error? {
+    VectorStore vectorStore1 = check new InMemoryVectorStore(topK = 5);
+    VectorStore vectorStore2 = check new InMemoryVectorStore(topK = 5, similarityMetric = DOT_PRODUCT);
+    VectorStore vectorStore3 = check new InMemoryVectorStore(topK = 5, similarityMetric = EUCLIDEAN);
 
     VectorEntry[] vectorEntries = [];
     foreach string word in words {
         TextChunk chunk = {content: word};
         Embedding embedding = check mockEmbeddingProvider->embed(chunk);
-
         vectorEntries.push({chunk, embedding});
     }
-    check vectorStore.add(vectorEntries);
+    check vectorStore1.add(vectorEntries);
+    check vectorStore2.add(vectorEntries);
+    check vectorStore3.add(vectorEntries);
 
     TextChunk dog = {content: "dog"};
     Embedding dogEmbedding = check mockEmbeddingProvider->embed(dog);
-    VectorMatch[] vectorMatch = check vectorStore.query({embedding: dogEmbedding});
-    test:assertEquals(vectorMatch[0].chunk.content, "puppy");
+
+    string expectedContent = "puppy";
+    VectorMatch[] matchWithCosine = check vectorStore1.query({embedding: dogEmbedding});
+    test:assertEquals(matchWithCosine[0].chunk.content, expectedContent);
+
+    VectorMatch[] matchWithDotProduct = check vectorStore2.query({embedding: dogEmbedding});
+    test:assertEquals(matchWithDotProduct[0].chunk.content, expectedContent);
+
+    VectorMatch[] matchWithEuclidean = check vectorStore2.query({embedding: dogEmbedding});
+    test:assertEquals(matchWithEuclidean[0].chunk.content, expectedContent);
+}
+
+@test:Config
+isolated function testInMemoryVectorStoreWithInvalidTopKConfig() {
+    VectorStore|Error vectorStore = new InMemoryVectorStore(topK = 0);
+    if vectorStore is Error {
+        test:assertEquals(vectorStore.message(), "topK must be greater than 0");
+    } else {
+        test:assertFail("Expected an 'Error' but got 'VectorStore'");
+    }
+}
+
+@test:Config
+isolated function testInMemoryVectorStoreWithSparseVector() returns error? {
+    VectorStore vectorStore = check new InMemoryVectorStore(topK = 5);
+    SparseVector vector = {indices: [], values: []};
+    VectorEntry entry = {embedding: vector, chunk: {'type: "text", content: "test"}};
+    Error? result = vectorStore.add([entry]);
+    if result is Error {
+        test:assertEquals(result.message(), "InMemoryVectorStore supports dense vectors exclusively");
+    } else {
+        test:assertFail("Expected an 'Error' but got '()'");
+    }
+}
+
+@test:Config
+isolated function testInMemoryVectorDeletion() returns error? {
+    VectorStore vectorStore = check new InMemoryVectorStore(topK = 5);
+    int id = 0;
+
+    VectorEntry[] vectorEntries = [];
+    foreach string word in words {
+        TextChunk chunk = {content: word};
+        Embedding embedding = check mockEmbeddingProvider->embed(chunk);
+        vectorEntries.push({chunk, embedding, id: id.toString()});
+        id += 1;
+    }
+
+    check vectorStore.add(vectorEntries);
+
+    foreach int i in 0 ..< vectorEntries.length() {
+        check vectorStore.delete(i.toString());
+    }
+
+    int invalidId = vectorEntries.length();
+    Error? result = vectorStore.delete(invalidId.toString());
+    if result is Error {
+        test:assertEquals(result.message(), string `Vector entry with reference id '${invalidId}' not found`);
+    } else {
+        test:assertFail("Expected an 'Error' but got '()'");
+    }
 }
