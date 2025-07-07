@@ -19,6 +19,7 @@ dependencies = [
 	{org = "ballerina", name = "jballerina.java"},
 	{org = "ballerina", name = "lang.regexp"},
 	{org = "ballerina", name = "log"},
+	{org = "ballerina", name = "math.vector"},
 	{org = "ballerina", name = "mcp"},
 	{org = "ballerina", name = "mime"},
 	{org = "ballerina", name = "time"},
@@ -268,6 +269,11 @@ dependencies = [
 	{org = "ballerina", name = "lang.value"},
 	{org = "ballerina", name = "observe"}
 ]
+
+[[package]]
+org = "ballerina"
+name = "math.vector"
+version = "1.2.0"
 
 [[package]]
 org = "ballerina"
