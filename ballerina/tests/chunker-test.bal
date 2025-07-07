@@ -91,7 +91,7 @@ function testRecursiveChunking() returns error? {
 }
 
 @test:Config {}
-function tesChunkingWithOverlap() returns error? {
+function testRecursiveChunkingWithOverlap() returns error? {
     TextDocument doc = {
         content: "Ballerina is a cloud-native programming language. It simplifies writing integrations. " +
         "Recursive chunking helps process long documents efficiently. " +
@@ -106,4 +106,16 @@ function tesChunkingWithOverlap() returns error? {
     test:assertEquals(chunks[1].content,
             "It simplifies writing integrations. Recursive chunking helps process long documents efficiently.");
     test:assertEquals(chunks[2].content, "Overlapping chunks retain context across boundaries.");
+}
+
+@test:Config {}
+function testRecursiveChunkingWithUnsupportedDocumentType() returns error? {
+    Document doc = {content: "test", 'type: "unknown"};
+    RecursiveChunkder chunker = new (100, 40);
+    Chunk[]|Error chunks = chunker.chunk(doc);
+    if chunks is Error {
+        test:assertEquals(chunks.message(), "Only text documents are supported for chunking");
+    } else {
+        test:assertFail("Expected an 'Error' but got 'Chunk[]'");
+    }
 }

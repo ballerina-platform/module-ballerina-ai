@@ -159,7 +159,7 @@ public isolated function augmentUserQuery(QueryMatch[]|Document[] context, strin
     } else if context is Document[] {
         relevantContext = context;
     }
-    Prompt userPrompt = `Answer the question based on the following provided context: 
+    Prompt userPrompt = `Answer the question based on the following provided context:
     <CONTEXT>${relevantContext}</CONTEXT>
     
     Question: ${query}`;

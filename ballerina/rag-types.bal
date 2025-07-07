@@ -141,3 +141,8 @@ public enum SimilarityMetric {
     # Reflect the directional similarity between two vectors
     DOT_PRODUCT
 }
+
+type InMemoryVectorEntry record {|
+    *VectorEntry;
+    readonly string id;
+|};
