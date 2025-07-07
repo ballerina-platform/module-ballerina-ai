@@ -16,3 +16,21 @@ groupId = "io.ballerina.stdlib"
 artifactId = "ai-native"
 version = "@toml.version@"
 path = "../native/build/libs/ai-native-@project.version@.jar"
+
+[[platform.java21.dependency]]
+groupId = "dev.langchain4j"
+artifactId = "langchain4j"
+version = "@langchain4j.version"
+path="./lib/langchain4j-@langchain4j.version.jar"
+
+[[platform.java21.dependency]]
+groupId = "dev.langchain4j"
+artifactId = "langchain4j-core"
+version = "@langchain4j.version"
+path="./lib/langchain4j-core-@langchain4j.version.jar"
+
+[[platform.java21.dependency]]
+groupId = "org.apache.opennlp"
+artifactId = "opennlp-tools"
+version = "@openNlpTools.version"
+path="./lib/opennlp-tools-@openNlpTools.version.jar"
