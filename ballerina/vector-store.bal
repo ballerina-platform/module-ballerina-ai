@@ -50,7 +50,10 @@ public distinct isolated class InMemoryVectorStore {
     #
     # + topK - The maximum number of top similar vectors to return in query results
     # + similarityMetric - The metric used for vector similarity
-    public isolated function init(int topK = 3, SimilarityMetric similarityMetric = COSINE) {
+    public isolated function init(int topK = 3, SimilarityMetric similarityMetric = COSINE) returns Error? {
+        if topK <= 0 {
+            return error Error("topK must be greater than 0");
+        }
         self.topK = topK;
         self.similarityMetric = similarityMetric;
     }

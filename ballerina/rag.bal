@@ -140,7 +140,11 @@ isolated function getDefaultKnowledgeBase() returns VectorKnowledgeBase|Error {
     if wso2EmbeddingProvider is Error {
         return error Error("Error creating default vector knowledge base");
     }
-    return new VectorKnowledgeBase(new InMemoryVectorStore(), wso2EmbeddingProvider);
+    InMemoryVectorStore|Error inMemoryVectorStore = check new InMemoryVectorStore();
+    if inMemoryVectorStore is Error {
+        return error Error("Error creatign default inMemoryVector store", inMemoryVectorStore);
+    }
+    return new VectorKnowledgeBase(inMemoryVectorStore, wso2EmbeddingProvider);
 }
 
 # Augments the user's query with relevant context.
