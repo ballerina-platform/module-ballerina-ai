@@ -163,5 +163,5 @@ public isolated function augmentUserQuery(QueryMatch[]|Document[] context, strin
     <CONTEXT>${relevantContext}</CONTEXT>
     
     Question: ${query}`;
-    return {role: USER, content: getPromptParts(userPrompt)};
+    return {role: USER, content: userPrompt};
 }
