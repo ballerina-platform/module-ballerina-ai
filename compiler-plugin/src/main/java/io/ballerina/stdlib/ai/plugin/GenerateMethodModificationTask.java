@@ -23,6 +23,7 @@ import io.ballerina.compiler.api.SemanticModel;
 import io.ballerina.compiler.api.symbols.ErrorTypeSymbol;
 import io.ballerina.compiler.api.symbols.ModuleSymbol;
 import io.ballerina.compiler.api.symbols.Symbol;
+import io.ballerina.compiler.api.symbols.TypeDefinitionSymbol;
 import io.ballerina.compiler.api.symbols.TypeReferenceTypeSymbol;
 import io.ballerina.compiler.api.symbols.TypeSymbol;
 import io.ballerina.compiler.api.symbols.UnionTypeSymbol;
@@ -71,11 +72,15 @@ import java.util.Optional;
 import static io.ballerina.projects.util.ProjectConstants.EMPTY_STRING;
 
 /**
- * Analyzes a Ballerina module init function.
+ * Modifier to add JSON schema annotations
+ * for types used in Model provider's `generate` method calls.
+ *
+ * @since 1.0.0
  */
 public class GenerateMethodModificationTask implements ModifierTask<SourceModifierContext> {
-    private static final String MODULE_NAME = "ai";
+    private static final String AI_MODULE_NAME = "ai";
     private static final String BALLERINA_ORG_NAME = "ballerina";
+    private static final String AI_MODULE_VERSION = "1";
     private final AiCodeModifier.AnalysisData analysisData;
     private final ModifierData modifierData;
 
@@ -99,11 +104,11 @@ public class GenerateMethodModificationTask implements ModifierTask<SourceModifi
             Collection<DocumentId> testDocumentIds = module.testDocumentIds();
 
             for (DocumentId documentId : documentIds) {
-                evaluateDocument(module, documentId, semanticModel);
+                analyzeDocument(module, documentId, semanticModel);
             }
 
             for (DocumentId documentId : testDocumentIds) {
-                evaluateDocument(module, documentId, semanticModel);
+                analyzeDocument(module, documentId, semanticModel);
             }
 
             for (DocumentId documentId : documentIds) {
@@ -118,33 +123,30 @@ public class GenerateMethodModificationTask implements ModifierTask<SourceModifi
         }
     }
 
-    private void evaluateDocument(Module module, DocumentId documentId, SemanticModel semanticModel) {
+    private void analyzeDocument(Module module, DocumentId documentId, SemanticModel semanticModel) {
         Document document = module.document(documentId);
         Node rootNode = document.syntaxTree().rootNode();
         if (!(rootNode instanceof ModulePartNode modulePartNode)) {
             return;
         }
 
-        processAIImportPrefixes(modulePartNode.imports(), document);
         evaluateGenerateMethod(document, semanticModel, modulePartNode, this.analysisData);
     }
 
     private static TextDocument modifyDocument(Document document, ModifierData modifierData) {
         ModulePartNode modulePartNode = document.syntaxTree().rootNode();
         DocumentId documentId = document.documentId();
-        String prefix = modifierData.importPrefixes.get(documentId);
-        boolean isAiImportPresent = prefix != null && !prefix.isEmpty();
+        String aiImportPrefix = getAiModuleImportPrefix(modulePartNode.imports());
+        boolean isAiImportPresent = aiImportPrefix != null;
 
         TypeDefinitionModifier typeDefinitionModifier =
                 new TypeDefinitionModifier(modifierData.typeSchemas, document, modifierData,
-                        isAiImportPresent ? prefix : MODULE_NAME);
+                        isAiImportPresent ? aiImportPrefix : AI_MODULE_NAME);
 
         ModulePartNode finalRoot = (ModulePartNode) modulePartNode.apply(typeDefinitionModifier);
         NodeList<ImportDeclarationNode> imports = finalRoot.imports();
-        if (modifierData.aiImportRequiredDocuments.contains(documentId)) {
-            if (!isAiImportPresent) {
-                imports = imports.add(createImportDeclarationForAIModule());
-            }
+        if (modifierData.aiImportRequiredDocuments.contains(documentId) && !isAiImportPresent) {
+            imports = imports.add(createImportDeclarationForAIModule());
         }
 
         finalRoot = finalRoot.modify(imports, finalRoot.members(), finalRoot.eofToken());
@@ -152,16 +154,16 @@ public class GenerateMethodModificationTask implements ModifierTask<SourceModifi
     }
 
     private static ImportDeclarationNode createImportDeclarationForAIModule() {
-        return NodeParser.parseImportDeclaration(String.format("import %s/%s;", BALLERINA_ORG_NAME, MODULE_NAME));
+        return NodeParser.parseImportDeclaration(String.format("import %s/%s;", BALLERINA_ORG_NAME, AI_MODULE_NAME));
     }
 
     private void evaluateGenerateMethod(Document document, SemanticModel semanticModel,
                                         ModulePartNode modulePartNode, AiCodeModifier.AnalysisData analysisData) {
-        new GenerateMethodVisitor(semanticModel, document, analysisData)
-                .visitGenerateMethodsAndGenerateJsonSchema(modulePartNode);
+        new GenerateMethodJsonSchemaGenerator(semanticModel, document, analysisData)
+                .generate(modulePartNode);
     }
 
-    private void processAIImportPrefixes(NodeList<ImportDeclarationNode> imports, Document document) {
+    private static String getAiModuleImportPrefix(NodeList<ImportDeclarationNode> imports) {
         for (ImportDeclarationNode importDeclarationNode : imports) {
             Optional<ImportOrgNameNode> importOrgNameNode = importDeclarationNode.orgName();
             if (importOrgNameNode.isEmpty()) {
@@ -174,45 +176,49 @@ public class GenerateMethodModificationTask implements ModifierTask<SourceModifi
             }
 
             for (IdentifierToken module : importDeclarationNode.moduleName()) {
-                if (MODULE_NAME.equals(module.text())) {
-                    String importPrefix = MODULE_NAME;
-                    Optional<ImportPrefixNode> prefix = importDeclarationNode.prefix();
-                    if (prefix.isPresent()) {
-                        String prefixText = prefix.get().prefix().text();
-                        if (!prefixText.equals("_")) {
-                            importPrefix = prefixText;
-                        } else {
-                            importPrefix = null;
-                        }
-                    }
-                    modifierData.importPrefixes.put(document.documentId(), importPrefix);
-                    return;
+                if (!AI_MODULE_NAME.equals(module.text())) {
+                    continue;
                 }
+
+                String importPrefix = AI_MODULE_NAME;
+                Optional<ImportPrefixNode> prefix = importDeclarationNode.prefix();
+                if (prefix.isPresent()) {
+                    String prefixText = prefix.get().prefix().text();
+                    if (!prefixText.equals("_")) {
+                        importPrefix = prefixText;
+                    } else {
+                        importPrefix = null;
+                    }
+                }
+                return importPrefix;
             }
         }
+        return null;
     }
 
-    private class GenerateMethodVisitor extends NodeVisitor {
+    private class GenerateMethodJsonSchemaGenerator extends NodeVisitor {
         private static final String GENERATE_METHOD_NAME = "generate";
         private static final String MODEL_PROVIDER_NAME = "ModelProvider";
-        private static final String MODEL_PROVIDER_MODULE_NAME = "ai";
-        private static final String MODEL_PROVIDER_MODULE_VERSION = "1";
-        private static final String MODEL_PROVIDER_MODULE_ORG = "ballerina";
         private static final String STRING = "string";
         private static final String BYTE = "byte";
         private static final String NUMBER = "number";
         private final SemanticModel semanticModel;
         private final Document document;
         private final TypeMapper typeMapper;
+        private final TypeDefinitionSymbol modelProviderSymbol;
 
-        public GenerateMethodVisitor(SemanticModel semanticModel, Document document,
-                                     AiCodeModifier.AnalysisData analyserData) {
+        public GenerateMethodJsonSchemaGenerator(SemanticModel semanticModel, Document document,
+                                                 AiCodeModifier.AnalysisData analyserData) {
             this.semanticModel = semanticModel;
             this.document = document;
             this.typeMapper = analyserData.typeMapper;
+            this.modelProviderSymbol = getAiModelProviderSymbol(document.syntaxTree().rootNode()).orElse(null);
         }
 
-        void visitGenerateMethodsAndGenerateJsonSchema(ModulePartNode modulePartNode) {
+        void generate(ModulePartNode modulePartNode) {
+            if (this.modelProviderSymbol == null) {
+                return;
+            }
             visit(modulePartNode);
         }
 
@@ -224,39 +230,39 @@ public class GenerateMethodModificationTask implements ModifierTask<SourceModifi
             }
 
             ExpressionNode expression = remoteMethodCallActionNode.expression();
-            semanticModel.typeOf(expression).ifPresent(expressionTypeSymbol ->
-                    getModelProviderSymbol(remoteMethodCallActionNode).ifPresent(moduleSymbol ->
-                            moduleSymbol.typeDefinitions().forEach(typeDefSymbol -> {
-                                if (typeDefSymbol.nameEquals(MODEL_PROVIDER_NAME)) {
-                                    if (expressionTypeSymbol.subtypeOf(typeDefSymbol.typeDescriptor())) {
-                                        updateTypeSchemaForTypeDef(remoteMethodCallActionNode);
-                                    }
-                                }
-                            })));
+            semanticModel.typeOf(expression).ifPresent(expressionTypeSymbol -> {
+                if (expressionTypeSymbol.subtypeOf(this.modelProviderSymbol.typeDescriptor())) {
+                    updateTypeSchemaForTypeDef(remoteMethodCallActionNode);
+                }
+            });
         }
 
         private void updateTypeSchemaForTypeDef(RemoteMethodCallActionNode remoteMethodCallActionNode) {
-            semanticModel.typeOf(remoteMethodCallActionNode).ifPresent(expTypeSymbol -> {
-                if (expTypeSymbol instanceof UnionTypeSymbol expTypeUnionSymbol) {
-                    TypeSymbol nonErrorTypeSymbol = null;
-                    TypeSymbol typeRefTypeSymbol = null;
-                    List<TypeSymbol> memberTypeSymbols = expTypeUnionSymbol.memberTypeDescriptors();
-                    for (TypeSymbol memberTypeSymbol: memberTypeSymbols) {
-                        if (memberTypeSymbol instanceof TypeReferenceTypeSymbol typeReferenceTypeSymbol) {
-                            typeRefTypeSymbol = typeReferenceTypeSymbol.typeDescriptor();
-                        }
+            semanticModel.typeOf(remoteMethodCallActionNode).ifPresent(this::updateTypeSchema);
+        }
 
-                        if (!(typeRefTypeSymbol instanceof ErrorTypeSymbol)) {
-                            nonErrorTypeSymbol = memberTypeSymbol;
-                        }
-                    }
+        private void updateTypeSchema(TypeSymbol expTypeSymbol) {
+            if (!(expTypeSymbol instanceof UnionTypeSymbol expTypeUnionSymbol)) {
+                return;
+            }
 
-                    if (!(nonErrorTypeSymbol instanceof TypeReferenceTypeSymbol)) {
-                        return;
-                    }
-                    populateTypeSchema(nonErrorTypeSymbol, typeMapper, modifierData.typeSchemas);
+            TypeSymbol nonErrorTypeSymbol = null;
+            TypeSymbol typeRefTypeSymbol = null;
+            List<TypeSymbol> memberTypeSymbols = expTypeUnionSymbol.memberTypeDescriptors();
+            for (TypeSymbol memberTypeSymbol: memberTypeSymbols) {
+                if (memberTypeSymbol instanceof TypeReferenceTypeSymbol typeReferenceTypeSymbol) {
+                    typeRefTypeSymbol = typeReferenceTypeSymbol.typeDescriptor();
                 }
-            });
+
+                if (!(typeRefTypeSymbol instanceof ErrorTypeSymbol)) {
+                    nonErrorTypeSymbol = memberTypeSymbol;
+                }
+            }
+
+            if (!(nonErrorTypeSymbol instanceof TypeReferenceTypeSymbol)) {
+                return;
+            }
+            populateTypeSchema(nonErrorTypeSymbol, typeMapper, modifierData.typeSchemas);
         }
 
         private static void populateTypeSchema(TypeSymbol memberType, TypeMapper typeMapper,
@@ -267,16 +273,31 @@ public class GenerateMethodModificationTask implements ModifierTask<SourceModifi
             }
         }
 
-        private Optional<ModuleSymbol> getModelProviderSymbol(Node node) {
+        private Optional<TypeDefinitionSymbol> getAiModelProviderSymbol(Node node) {
+            Optional<ModuleSymbol> aiModuleSymbol = getAiModuleSymbol(node);
+            if (aiModuleSymbol.isEmpty()) {
+                return Optional.empty();
+            }
+
+            for (TypeDefinitionSymbol typeDefSymbol: aiModuleSymbol.get().typeDefinitions()) {
+                if (typeDefSymbol.nameEquals(MODEL_PROVIDER_NAME)) {
+                    return Optional.of(typeDefSymbol);
+                }
+            }
+
+            return Optional.empty();
+        }
+
+        private Optional<ModuleSymbol> getAiModuleSymbol(Node node) {
             for (Symbol symbol : semanticModel.visibleSymbols(this.document, node.lineRange().startLine())) {
                 if (!(symbol instanceof ModuleSymbol moduleSymbol)) {
                     continue;
                 }
 
                 ModuleID id = moduleSymbol.id();
-                if (MODEL_PROVIDER_MODULE_ORG.equals(id.orgName())
-                        && MODEL_PROVIDER_MODULE_NAME.equals(id.moduleName())
-                        && id.version().startsWith(MODEL_PROVIDER_MODULE_VERSION)) {
+                if (BALLERINA_ORG_NAME.equals(id.orgName())
+                        && AI_MODULE_NAME.equals(id.moduleName())
+                        && id.version().startsWith(AI_MODULE_VERSION)) {
                     return Optional.of(moduleSymbol);
                 }
             }
@@ -303,25 +324,25 @@ public class GenerateMethodModificationTask implements ModifierTask<SourceModifi
 
             Map<String, Schema> properties = schema.getProperties();
             if (properties != null) {
-                properties.values().forEach(GenerateMethodVisitor::modifySchema);
+                properties.values().forEach(GenerateMethodJsonSchemaGenerator::modifySchema);
             }
 
             List<Schema> allOf = schema.getAllOf();
             if (allOf != null) {
                 schema.setType(null);
-                allOf.forEach(GenerateMethodVisitor::modifySchema);
+                allOf.forEach(GenerateMethodJsonSchemaGenerator::modifySchema);
             }
 
             List<Schema> anyOf = schema.getAnyOf();
             if (anyOf != null) {
                 schema.setType(null);
-                anyOf.forEach(GenerateMethodVisitor::modifySchema);
+                anyOf.forEach(GenerateMethodJsonSchemaGenerator::modifySchema);
             }
 
             List<Schema> oneOf = schema.getOneOf();
             if (oneOf != null) {
                 schema.setType(null);
-                oneOf.forEach(GenerateMethodVisitor::modifySchema);
+                oneOf.forEach(GenerateMethodJsonSchemaGenerator::modifySchema);
             }
 
             // Override default ballerina byte to json schema mapping
@@ -391,7 +412,6 @@ public class GenerateMethodModificationTask implements ModifierTask<SourceModifi
     static final class ModifierData {
         Map<String, String> typeSchemas = new HashMap<>();
         HashSet<DocumentId> aiImportRequiredDocuments = new HashSet<>();
-        Map<DocumentId, String> importPrefixes = new HashMap<>();
     }
 
     private static class TypeDefinitionModifier extends TreeModifier {
@@ -407,7 +427,7 @@ public class GenerateMethodModificationTask implements ModifierTask<SourceModifi
             this.typeSchemas = typeSchemas;
             this.document = document;
             this.modifierData = modifierData;
-            this.aiPrefix = aiPrefix != null ? aiPrefix : MODULE_NAME;
+            this.aiPrefix = aiPrefix != null ? aiPrefix : AI_MODULE_NAME;
         }
 
         @Override
