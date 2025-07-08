@@ -1,7 +1,6 @@
 import ballerina/io;
 import ballerina/jballerina.java;
 import ballerina/lang.regexp;
-import ballerina/jballerina.java;
 
 type SearchParams record {|
     string query;
