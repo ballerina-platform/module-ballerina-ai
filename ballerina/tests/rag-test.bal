@@ -34,6 +34,6 @@ isolated function testKnowledgeBase() returns error? {
 isolated function testaugmentUserQueryMethod() returns error? {
     QueryMatch[] queryMatch = check knowledgeBase.retrieve("dog");
     ChatUserMessage userMessage = augmentUserQuery(queryMatch, "What is similar to 'dog' ?");
-    test:assertTrue(userMessage.content is PromptParts, "Expected the 'content' field to be of type 'PromptParts',"
+    test:assertTrue(userMessage.content is Prompt, "Expected the 'content' field to be of type 'Prompt',"
             + " but found 'string' instead.");
 }

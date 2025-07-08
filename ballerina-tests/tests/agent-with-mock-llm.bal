@@ -78,7 +78,7 @@ isolated client distinct class MockLlm {
         if lastMessage !is ai:ChatUserMessage|ai:ChatFunctionMessage {
             return error ai:LlmError("I can't understand");
         }
-        ai:PromptParts|string? lasMessageContent = lastMessage.content;
+        ai:Prompt|string? lasMessageContent = lastMessage.content;
         string query = getChatMessageStringContent(lasMessageContent ?: "");
         if query.includes("Greet") {
             return {role: ai:ASSISTANT, content: "Hey John! Welcome to Ballerina!"};
@@ -115,7 +115,7 @@ isolated client distinct class MockLlm {
     }
 }
 
-isolated function getChatMessageStringContent(ai:PromptParts|string prompt) returns string {
+isolated function getChatMessageStringContent(ai:Prompt|string prompt) returns string {
     if prompt is string {
         return prompt;
     }

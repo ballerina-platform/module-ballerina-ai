@@ -24,20 +24,12 @@ public enum ROLE {
     FUNCTION = "function"
 }
 
-# Represents the parts of a prompt, including static string segments and dynamic insertions.
-public type PromptParts record {|
-    # Read-only array of string literals from the template
-    string[] & readonly strings;
-    # Array of values to be inserted into the template, can be anydata, Document, or Chunk types
-    (anydata|Document|Document[]|Chunk|Chunk[])[] insertions;
-|};
-
 # User chat message record.
 public type ChatUserMessage record {|
     # Role of the message
     USER role;
     # Content of the message
-    string|PromptParts content;
+    string|Prompt content;
     # An optional name for the participant
     # Provides the model information to differentiate between participants of the same role
     string name?;
@@ -48,7 +40,7 @@ public type ChatSystemMessage record {|
     # Role of the message
     SYSTEM role;
     # Content of the message
-    string|PromptParts content;
+    string|Prompt content;
     # An optional name for the participant
     # Provides the model information to differentiate between participants of the same role
     string name?;
@@ -250,7 +242,7 @@ public isolated distinct client class Wso2ModelProvider {
 
     private isolated function mapUserOrSystemMessage(ChatUserMessage|ChatSystemMessage message)
     returns intelligence:ChatCompletionRequestMessage {
-        PromptParts|string content = message.content;
+        Prompt|string content = message.content;
         intelligence:ChatCompletionRequestMessage trasnformedMessage = {
             role: message.role,
             "content": getChatMessageStringContent(content)

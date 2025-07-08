@@ -49,7 +49,7 @@ isolated function invokeOnChatMessageFunction(any event, string eventFunction, s
     'class: "io.ballerina.stdlib.ai.NativeHttpToChatServiceAdaptor"
 } external;
 
-isolated function getChatMessageStringContent(PromptParts|string prompt) returns string {
+isolated function getChatMessageStringContent(Prompt|string prompt) returns string {
     if prompt is string {
         return prompt;
     }
@@ -65,17 +65,4 @@ isolated function getChatMessageStringContent(PromptParts|string prompt) returns
         str = str + value.toString() + promptStr;
     }
     return str.trim();
-}
-
-# Returns the parts of a given `Prompt` as a `PromptParts` record.
-# This function extracts the `strings` and `insertions` fields from the provided `Prompt`
-# and returns them as a `PromptParts` record.
-#
-# + prompt - The `Prompt` object from which to extract the parts.
-# + return - A `PromptParts` record containing the `strings` and `insertions` from the input `Prompt`.
-public isolated function getPromptParts(Prompt prompt) returns PromptParts {
-    return {
-        strings: prompt.strings,
-        insertions: prompt.insertions
-    };
 }
