@@ -72,10 +72,14 @@ isolated function getEmails() returns stream<Mail, ai:Error?>|error? {
 isolated client distinct class MockLlm {
     *ai:ModelProvider;
 
-    isolated remote function chat(ai:ChatMessage[] messages, ai:ChatCompletionFunctions[] tools, string? stop)
+    isolated remote function chat(ai:ChatMessage[]|ai:ChatUserMessage messages, ai:ChatCompletionFunctions[] tools, string? stop)
         returns ai:ChatAssistantMessage|ai:LlmError {
-        ai:ChatMessage lastMessage = messages.pop();
-        string query = lastMessage is ai:ChatUserMessage|ai:ChatFunctionMessage ? lastMessage.content ?: "" : "";
+        ai:ChatMessage lastMessage = messages is ai:ChatUserMessage ? messages : messages.pop();
+        if lastMessage !is ai:ChatUserMessage|ai:ChatFunctionMessage {
+            return error ai:LlmError("I can't understand");
+        }
+        ai:Prompt|string? lasMessageContent = lastMessage.content;
+        string query = getChatMessageStringContent(lasMessageContent ?: "");
         if query.includes("Greet") {
             return {role: ai:ASSISTANT, content: "Hey John! Welcome to Ballerina!"};
         }
@@ -109,6 +113,24 @@ isolated client distinct class MockLlm {
         }
         return error ai:LlmError("I can't understand");
     }
+}
+
+isolated function getChatMessageStringContent(ai:Prompt|string prompt) returns string {
+    if prompt is string {
+        return prompt;
+    }
+    string str = prompt.strings[0];
+    anydata[] insertions = prompt.insertions;
+    foreach int i in 0 ..< insertions.length() {
+        anydata value = insertions[i];
+        string promptStr = prompt.strings[i + 1];
+        if value is ai:TextDocument|ai:TextChunk {
+            str = str + value.content + promptStr;
+            continue;
+        }
+        str = str + value.toString() + promptStr;
+    }
+    return str.trim();
 }
 
 final MockLlm model = new;

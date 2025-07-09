@@ -1,0 +1,1623 @@
+openapi: 3.0.1
+info:
+  title: Ai
+  version: 0.1.0
+  description: |
+    This OpenAPI specification is for the BI Intelligence Service of WSO2.
+servers:
+  - url: "{server}:{port}/ai/chat"
+    variables:
+      server:
+        default: http://localhost
+      port:
+        default: "9094"
+paths:
+  /embeddings:
+    post:
+      summary:
+        Get a vector representation of a given input that can be easily consumed
+        by machine learning models and algorithms.
+      operationId: embeddings_create
+      parameters:
+        - name: x-jwt-assertion
+          in: header
+          required: false
+          style: simple
+          explode: false
+          schema:
+            type: string
+            nullable: true
+          x-ballerina-name: xJwtAssertion
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmbeddingRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmbeddingResponse"
+      x-ballerina-display:
+        label: Generate Embeddings
+  /chat/completions:
+    post:
+      operationId: chatCompletions
+      parameters:
+        - name: x-jwt-assertion
+          in: header
+          required: false
+          style: simple
+          explode: false
+          schema:
+            type: string
+            nullable: true
+          x-ballerina-name: xJwtAssertion
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateChatCompletionRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateChatCompletionResponse"
+        "500":
+          description: InternalServerError
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorPayload"
+        "401":
+          description: Unauthorized
+        "429":
+          description: TooManyRequests
+        "400":
+          description: BadRequest
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorPayload"
+components:
+  schemas:
+    ImageQuality:
+      type: string
+      description: The quality of the image that will be generated
+      enum:
+        - standard
+        - hd
+      default: standard
+      x-ms-enum:
+        name: Quality
+        modelAsString: true
+        values:
+          - value: standard
+            description: Standard quality creates images with standard quality.
+            name: Standard
+          - value: hd
+            description:
+              HD quality creates images with finer details and greater consistency
+              across the image.
+            name: HD
+    ContentFilterIdResult:
+      required:
+        - filtered
+        - id
+      type: object
+      allOf:
+        - $ref: "#/components/schemas/ContentFilterResultBase"
+        - properties:
+            id:
+              type: string
+    InnerError:
+      type: object
+      properties:
+        content_filter_results:
+          allOf:
+            - $ref: "#/components/schemas/ContentFilterPromptResults"
+          x-ballerina-name: contentFilterResults
+        code:
+          $ref: "#/components/schemas/InnerErrorCode"
+      description: Inner error with additional details
+    ChatCompletionRequestMessage:
+      required:
+        - role
+      type: object
+      properties:
+        role:
+          $ref: "#/components/schemas/ChatCompletionRequestMessageRole"
+      discriminator:
+        propertyName: role
+        mapping:
+          system: "#/components/schemas/chatCompletionRequestMessageSystem"
+          user: "#/components/schemas/chatCompletionRequestMessageUser"
+          assistant: "#/components/schemas/chatCompletionRequestMessageAssistant"
+          tool: "#/components/schemas/chatCompletionRequestMessageTool"
+          function: "#/components/schemas/chatCompletionRequestMessageFunction"
+    ContentFilterDetectedResult:
+      required:
+        - detected
+        - filtered
+      type: object
+      allOf:
+        - $ref: "#/components/schemas/ContentFilterResultBase"
+        - properties:
+            detected:
+              type: boolean
+    ContentFilterResultsBase:
+      type: object
+      properties:
+        self_harm:
+          allOf:
+            - $ref: "#/components/schemas/ContentFilterSeverityResult"
+          x-ballerina-name: selfHarm
+        custom_blocklists:
+          type: array
+          items:
+            $ref: "#/components/schemas/ContentFilterIdResult"
+          x-ballerina-name: customBlocklists
+        hate:
+          $ref: "#/components/schemas/ContentFilterSeverityResult"
+        profanity:
+          $ref: "#/components/schemas/ContentFilterDetectedResult"
+        error:
+          $ref: "#/components/schemas/ErrorBase"
+        sexual:
+          $ref: "#/components/schemas/ContentFilterSeverityResult"
+        violence:
+          $ref: "#/components/schemas/ContentFilterSeverityResult"
+      description: Information about the content filtering results
+    CreateTranscriptionRequest:
+      required:
+        - file
+      type: object
+      properties:
+        file:
+          type: string
+          description: The audio file object to transcribe
+          format: binary
+        response_format:
+          allOf:
+            - $ref: "#/components/schemas/AudioResponseFormat"
+          x-ballerina-name: responseFormat
+        temperature:
+          type: number
+          description:
+            "The sampling temperature, between 0 and 1. Higher values like\
+            \ 0.8 will make the output more random, while lower values like 0.2 will\
+            \ make it more focused and deterministic. If set to 0, the model will\
+            \ use log probability to automatically increase the temperature until\
+            \ certain thresholds are hit"
+          default: 0
+        language:
+          type: string
+          description:
+            The language of the input audio. Supplying the input language
+            in ISO-639-1 format will improve accuracy and latency
+        prompt:
+          type: string
+          description:
+            An optional text to guide the model's style or continue a previous
+            audio segment. The prompt should match the audio language
+      description: Transcription request
+    ChatCompletionRequestMessageSystem:
+      required:
+        - content
+      allOf:
+        - $ref: "#/components/schemas/ChatCompletionRequestMessage"
+        - type: object
+          properties:
+            content:
+              type: string
+              description: The contents of the message
+              nullable: true
+    ChatCompletionRequestMessageUser:
+      required:
+        - content
+      allOf:
+        - $ref: "#/components/schemas/ChatCompletionRequestMessage"
+        - type: object
+          properties:
+            content:
+              nullable: true
+              oneOf:
+                - type: string
+                  description: The contents of the message.
+                - minimum: 1
+                  type: array
+                  description:
+                    "An array of content parts with a defined type, each can\
+                    \ be of type `text` or `image_url` when passing in images. You can\
+                    \ pass multiple images by adding multiple `image_url` content parts.\
+                    \ Image input is only supported when using the `gpt-4-visual-preview`\
+                    \ model."
+                  items:
+                    $ref: "#/components/schemas/ChatCompletionRequestMessageContentPart"
+    ChatCompletionToolChoiceOption:
+      description:
+        "Controls which (if any) function is called by the model. `none`\
+        \ means the model will not call a function and instead generates a message.\
+        \ `auto` means the model can pick between generating a message or calling\
+        \ a function. Specifying a particular function via `{\"type\": \"function\"\
+        , \"function\": {\"name\": \"my_function\"}}` forces the model to call that\
+        \ function"
+      oneOf:
+        - type: string
+          description:
+            "`none` means the model will not call a function and instead
+            generates a message. `auto` means the model can pick between generating
+            a message or calling a function"
+          enum:
+            - none
+            - auto
+        - $ref: "#/components/schemas/ChatCompletionNamedToolChoice"
+    GenerateImagesResponse:
+      required:
+        - created
+      type: object
+      properties:
+        data:
+          type: array
+          description: "The result data of the operation, if successful"
+          items:
+            $ref: "#/components/schemas/ImageResult"
+        created:
+          type: integer
+          description: The unix timestamp when the operation was created
+          format: unixtime
+          example: 1676540381
+        error:
+          $ref: "#/components/schemas/Error"
+    CreateTranslationRequest:
+      required:
+        - file
+      type: object
+      properties:
+        file:
+          type: string
+          description: The audio file to translate
+          format: binary
+        response_format:
+          allOf:
+            - $ref: "#/components/schemas/AudioResponseFormat"
+          x-ballerina-name: responseFormat
+        temperature:
+          type: number
+          description:
+            "The sampling temperature, between 0 and 1. Higher values like\
+            \ 0.8 will make the output more random, while lower values like 0.2 will\
+            \ make it more focused and deterministic. If set to 0, the model will\
+            \ use log probability to automatically increase the temperature until\
+            \ certain thresholds are hit"
+          default: 0
+        prompt:
+          type: string
+          description:
+            An optional text to guide the model's style or continue a previous
+            audio segment. The prompt should be in English
+      description: Translation request
+    ImageStyle:
+      type: string
+      description: The style of the generated images
+      enum:
+        - vivid
+        - natural
+      default: vivid
+      x-ms-enum:
+        name: Style
+        modelAsString: true
+        values:
+          - value: vivid
+            description: Vivid creates images that are hyper-realistic and dramatic.
+            name: Vivid
+          - value: natural
+            description: Natural creates images that are more natural and less hyper-realistic.
+            name: Natural
+    Enhancement:
+      type: object
+      properties:
+        grounding:
+          required:
+            - lines
+          type: object
+          properties:
+            lines:
+              type: array
+              items:
+                $ref: "#/components/schemas/Line"
+          description:
+            The grounding enhancement that returns the bounding box of
+            the objects detected in the image
+    ContentFilterChoiceResults:
+      type: object
+      description:
+        "Information about the content filtering category (hate, sexual,\
+        \ violence, self_harm), if it has been detected, as well as the severity level\
+        \ (very_low, low, medium, high-scale that determines the intensity and risk\
+        \ level of harmful content) and if it has been filtered or not. Information\
+        \ about third party text and profanity, if it has been detected, and if it\
+        \ has been filtered or not. And information about customer block list, if\
+        \ it has been filtered and its id"
+      allOf:
+        - $ref: "#/components/schemas/ContentFilterResultsBase"
+        - properties:
+            protected_material_text:
+              allOf:
+                - $ref: "#/components/schemas/ContentFilterDetectedResult"
+              x-ballerina-name: protectedMaterialText
+        - properties:
+            protected_material_code:
+              allOf:
+                - $ref: "#/components/schemas/ContentFilterDetectedWithCitationResult"
+              x-ballerina-name: protectedMaterialCode
+    InnerErrorCode:
+      type: string
+      description: Error codes for the inner error object
+      enum:
+        - ResponsibleAIPolicyViolation
+      x-ms-enum:
+        name: InnerErrorCode
+        modelAsString: true
+        values:
+          - value: ResponsibleAIPolicyViolation
+            description: The prompt violated one of more content filter rules.
+    ChatCompletionToolType:
+      type: string
+      description: "The type of the tool. Currently, only `function` is supported"
+      enum:
+        - function
+      x-ms-enum:
+        name: ChatCompletionToolType
+        modelAsString: true
+        values:
+          - value: function
+            description: The tool type is function.
+    ContentFilterPromptResults:
+      type: object
+      description:
+        "Information about the content filtering category (hate, sexual,\
+        \ violence, self_harm), if it has been detected, as well as the severity level\
+        \ (very_low, low, medium, high-scale that determines the intensity and risk\
+        \ level of harmful content) and if it has been filtered or not. Information\
+        \ about jailbreak content and profanity, if it has been detected, and if it\
+        \ has been filtered or not. And information about customer block list, if\
+        \ it has been filtered and its id"
+      allOf:
+        - $ref: "#/components/schemas/ContentFilterResultsBase"
+        - properties:
+            jailbreak:
+              $ref: "#/components/schemas/ContentFilterDetectedResult"
+    ChatCompletionResponseFormat:
+      type: string
+      description:
+        Setting to `json_object` enables JSON mode. This guarantees that
+        the message the model generates is valid JSON
+      nullable: true
+      example: json_object
+      enum:
+        - text
+        - json_object
+      default: text
+      x-ms-enum:
+        name: ChatCompletionResponseFormat
+        modelAsString: true
+        values:
+          - value: text
+            description: Response format is a plain text string.
+          - value: json_object
+            description: Response format is a JSON object.
+    ChatCompletionRequestMessageAssistant:
+      required:
+        - content
+      allOf:
+        - $ref: "#/components/schemas/ChatCompletionRequestMessage"
+        - type: object
+          properties:
+            tool_calls:
+              type: array
+              description:
+                "The tool calls generated by the model, such as function\
+                \ calls"
+              items:
+                $ref: "#/components/schemas/ChatCompletionMessageToolCall"
+              x-ballerina-name: toolCalls
+            content:
+              type: string
+              description: The contents of the message
+              nullable: true
+    ChatCompletionRequestMessageTool:
+      required:
+        - content
+        - tool_call_id
+      allOf:
+        - $ref: "#/components/schemas/ChatCompletionRequestMessage"
+        - type: object
+          properties:
+            tool_call_id:
+              type: string
+              description: Tool call that this message is responding to
+              x-ballerina-name: toolCallId
+            content:
+              type: string
+              description: The contents of the message
+              nullable: true
+          nullable: true
+    ChatCompletionRequestMessageContentPartType:
+      type: string
+      description: The type of the content part
+      enum:
+        - text
+        - image_url
+      x-ms-enum:
+        name: ChatCompletionRequestMessageContentPartType
+        modelAsString: true
+        values:
+          - value: text
+            description: The content part type is text.
+          - value: image_url
+            description: The content part type is image_url.
+    ToolCallType:
+      type: string
+      description: "The type of the tool call, in this case `function`"
+      enum:
+        - function
+      x-ms-enum:
+        name: ToolCallType
+        modelAsString: true
+        values:
+          - value: function
+            description: The tool call type is function.
+    ChatCompletionTool:
+      required:
+        - function
+        - type
+      type: object
+      properties:
+        function:
+          required:
+            - name
+            - parameters
+          type: object
+          properties:
+            description:
+              type: string
+              description:
+                "A description of what the function does, used by the model\
+                \ to choose when and how to call the function."
+            name:
+              type: string
+              description:
+                "The name of the function to be called. Must be a-z, A-Z,\
+                \ 0-9, or contain underscores and dashes, with a maximum length of\
+                \ 64."
+            parameters:
+              $ref: "#/components/schemas/ChatCompletionFunctionParameters"
+        type:
+          $ref: "#/components/schemas/ChatCompletionToolType"
+    DataSource:
+      required:
+        - type
+      type: object
+      properties:
+        type:
+          type: string
+          description: The data source type
+        parameters:
+          type: object
+          additionalProperties: true
+          description: The parameters to be used for the data source in runtime
+      description: The data source to be used for the Azure OpenAI on your data feature
+    Line:
+      required:
+        - spans
+        - text
+      type: object
+      properties:
+        spans:
+          type: array
+          description:
+            An array of spans that represent detected objects and its bounding
+            box information
+          items:
+            $ref: "#/components/schemas/Span"
+        text:
+          type: string
+      description:
+        "A content line object consisting of an adjacent sequence of content\
+        \ elements, such as words and selection marks"
+    ErrorPayload:
+      required:
+        - message
+        - method
+        - path
+        - reason
+        - status
+        - timestamp
+      type: object
+      properties:
+        reason:
+          type: string
+        path:
+          type: string
+        method:
+          type: string
+        message:
+          type: string
+        timestamp:
+          type: string
+        status:
+          type: integer
+          format: int64
+    ImageResult:
+      type: object
+      properties:
+        revised_prompt:
+          type: string
+          description:
+            "The prompt that was used to generate the image, if there was\
+            \ any revision to the prompt"
+          x-ballerina-name: revisedPrompt
+        b64_json:
+          type: string
+          description: The base64 encoded image
+          x-ballerina-name: b64Json
+        url:
+          type: string
+          description: The image url
+          example: https://www.contoso.com
+      description: "The image url or encoded image if successful, and an error otherwise"
+    AudioResponseFormat:
+      title: AudioResponseFormat
+      type: string
+      description: Defines the format of the output
+      enum:
+        - json
+        - text
+        - srt
+        - verbose_json
+        - vtt
+      x-ms-enum:
+        modelAsString: true
+    ExtensionsChatCompletionChoice:
+      type: object
+      allOf:
+        - $ref: "#/components/schemas/ChatCompletionChoiceCommon"
+        - properties:
+            enhancements:
+              $ref: "#/components/schemas/Enhancement"
+            message:
+              $ref: "#/components/schemas/Message"
+    ContentFilterSeverityResult:
+      required:
+        - filtered
+        - severity
+      type: object
+      allOf:
+        - $ref: "#/components/schemas/ContentFilterResultBase"
+        - properties:
+            severity:
+              type: string
+              enum:
+                - safe
+                - low
+                - medium
+                - high
+              x-ms-enum:
+                name: ContentFilterSeverity
+                modelAsString: true
+                values:
+                  - value: safe
+                    description:
+                      General content or related content in generic or non-harmful
+                      contexts.
+                  - value: low
+                    description: Harmful content at a low intensity and risk level.
+                  - value: medium
+                    description: Harmful content at a medium intensity and risk level.
+                  - value: high
+                    description: Harmful content at a high intensity and risk level.
+    ChatCompletionRequestMessageContentPartImage:
+      required:
+        - url
+      allOf:
+        - $ref: "#/components/schemas/ChatCompletionRequestMessageContentPart"
+        - type: object
+          properties:
+            detail:
+              $ref: "#/components/schemas/ImageDetailLevel"
+            url:
+              type: string
+              description: Either a URL of the image or the base64 encoded image data
+              format: uri
+    ChatCompletionRequestMessageContentPartText:
+      required:
+        - text
+      allOf:
+        - $ref: "#/components/schemas/ChatCompletionRequestMessageContentPart"
+        - type: object
+          properties:
+            text:
+              type: string
+              description: The text content
+    AudioResponse:
+      required:
+        - text
+      type: object
+      properties:
+        text:
+          type: string
+          description: Translated or transcribed text
+      description:
+        Translation or transcription response when response_format was
+        json
+    ChatCompletionNamedToolChoice:
+      type: object
+      properties:
+        function:
+          required:
+            - name
+          type: object
+          properties:
+            name:
+              type: string
+              description: The name of the function to call.
+        type:
+          type: string
+          description: "The type of the tool. Currently, only `function` is supported"
+          enum:
+            - function
+      description:
+        Specifies a tool the model should use. Use to force the model to
+        call a specific function
+    Message:
+      required:
+        - content
+        - role
+      type: object
+      properties:
+        role:
+          type: string
+          description: The role of the author of this message
+          enum:
+            - system
+            - user
+            - assistant
+            - tool
+        recipient:
+          type: string
+          description:
+            The recipient of the message in the format of <namespace>.<operation>.
+            Present if and only if the recipient is tool
+          example: Contoso.productsUsingGET
+        context:
+          type: object
+          properties:
+            messages:
+              minItems: 1
+              type: array
+              description:
+                Messages exchanged between model and extensions prior to
+                final message from model
+              nullable: true
+              items:
+                $ref: "#/components/schemas/Message"
+          description: The conversation context
+          nullable: true
+        index:
+          type: integer
+          description: The index of the message in the conversation
+        end_turn:
+          type: boolean
+          description: Whether the message ends the turn
+          x-ballerina-name: endTurn
+        content:
+          type: string
+          description: The contents of the message
+      description: A chat message
+    ImageSize:
+      type: string
+      description: The size of the generated images
+      enum:
+        - 1792x1024
+        - 1024x1792
+        - 1024x1024
+      default: 1024x1024
+      x-ms-enum:
+        name: Size
+        modelAsString: true
+        values:
+          - value: 1792x1024
+            description: The desired size of the generated image is 1792x1024 pixels.
+            name: Size1792x1024
+          - value: 1024x1792
+            description: The desired size of the generated image is 1024x1792 pixels.
+            name: Size1024x1792
+          - value: 1024x1024
+            description: The desired size of the generated image is 1024x1024 pixels.
+            name: Size1024x1024
+    ContentFilterResultBase:
+      required:
+        - filtered
+      type: object
+      properties:
+        filtered:
+          type: boolean
+    ChatCompletionFunctionCall:
+      required:
+        - arguments
+        - name
+      type: object
+      properties:
+        name:
+          type: string
+          description: The name of the function to call
+        arguments:
+          type: string
+          description:
+            "The arguments to call the function with, as generated by the\
+            \ model in JSON format. Note that the model does not always generate valid\
+            \ JSON, and may hallucinate parameters not defined by your function schema.\
+            \ Validate the arguments in your code before calling your function"
+      description:
+        "Deprecated and replaced by `tool_calls`. The name and arguments\
+        \ of a function that should be called, as generated by the model"
+    Span:
+      required:
+        - length
+        - offset
+        - polygon
+        - text
+      type: object
+      properties:
+        offset:
+          type: integer
+          description:
+            "The character offset within the text where the span begins.\
+            \ This offset is defined as the position of the first character of the\
+            \ span, counting from the start of the text as Unicode codepoints"
+        polygon:
+          type: array
+          description:
+            An array of objects representing points in the polygon that
+            encloses the detected object
+          items:
+            type: object
+            properties:
+              x:
+                type: number
+                description: The x-coordinate of the point.
+              "y":
+                type: number
+                description: The y-coordinate of the point.
+        length:
+          type: integer
+          description:
+            "The length of the span in characters, measured in Unicode\
+            \ codepoints"
+        text:
+          type: string
+          description: The text content of the span that represents the detected object
+      description:
+        A span object that represents a detected object and its bounding
+        box information
+    ChatCompletionRequestMessageRole:
+      type: string
+      description: The role of the messages author
+      enum:
+        - system
+        - user
+        - assistant
+        - tool
+        - function
+      x-ms-enum:
+        name: ChatCompletionRequestMessageRole
+        modelAsString: true
+        values:
+          - value: system
+            description: The message author role is system.
+          - value: user
+            description: The message author role is user.
+          - value: assistant
+            description: The message author role is assistant.
+          - value: tool
+            description: The message author role is tool.
+          - value: function
+            description: Deprecated. The message author role is function.
+    ChatCompletionRequestMessageFunction:
+      required:
+        - content
+        - function_call_id
+      allOf:
+        - $ref: "#/components/schemas/ChatCompletionRequestMessage"
+        - type: object
+          properties:
+            role:
+              type: string
+              description: "The role of the messages author, in this case `function`"
+              enum:
+                - function
+            name:
+              type: string
+              description: The contents of the message
+            content:
+              type: string
+              description: The contents of the message
+              nullable: true
+          description: Deprecated. Message that represents a function
+          nullable: true
+    ChatCompletionChoiceCommon:
+      type: object
+      properties:
+        finish_reason:
+          type: string
+          x-ballerina-name: finishReason
+        index:
+          type: integer
+    ChatCompletionRequestMessageContentPart:
+      required:
+        - type
+      type: object
+      properties:
+        type:
+          $ref: "#/components/schemas/ChatCompletionRequestMessageContentPartType"
+      discriminator:
+        propertyName: type
+        mapping:
+          text: "#/components/schemas/chatCompletionRequestMessageContentPartText"
+          image_url: "#/components/schemas/chatCompletionRequestMessageContentPartImage"
+    EmbeddingResponse:
+      required:
+        - data
+        - model
+        - object
+        - usage
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            required:
+              - embedding
+              - index
+              - object
+            type: object
+            properties:
+              index:
+                type: integer
+              embedding:
+                type: array
+                items:
+                  type: number
+                  format: float
+              object:
+                type: string
+        usage:
+          required:
+            - prompt_tokens
+            - total_tokens
+          type: object
+          properties:
+            prompt_tokens:
+              type: integer
+              x-ballerina-name: promptTokens
+            total_tokens:
+              type: integer
+              x-ballerina-name: totalTokens
+        model:
+          type: string
+        object:
+          type: string
+    EmbeddingRequest:
+      required:
+        - input
+      type: object
+      properties:
+        input:
+          description: |-
+            Input text to get embeddings for, encoded as a string. To get embeddings for multiple inputs in a single request, pass an array of strings. Each input must not exceed 2048 tokens in length.
+            Unless you are embedding code, we suggest replacing newlines (\n) in your input with a single space, as we have observed inferior results when newlines are present.
+          oneOf:
+            - type: string
+              nullable: true
+              example: This is a test.
+              default: ""
+            - maxItems: 2048
+              minItems: 1
+              type: array
+              items:
+                minLength: 1
+                type: string
+                nullable: false
+                example: This is a test.
+        user:
+          type: string
+          description: "A unique identifier representing your end-user, which\
+            \ can help monitoring and detecting abuse."
+          nullable: false
+        input_type:
+          type: string
+          description: input type of embedding search to use
+          example: query
+        model:
+          type: string
+          description: "ID of the model to use. You can use the Models_List\
+            \ operation to see all of your available models, or see our Models_Get\
+            \ overview for descriptions of them."
+          nullable: false
+      additionalProperties: true
+    CreateChatCompletionRequest:
+      required:
+        - messages
+      type: object
+      allOf:
+        - $ref: "#/components/schemas/ChatCompletionsRequestCommon"
+        - properties:
+            response_format:
+              type: object
+              properties:
+                type:
+                  $ref: "#/components/schemas/ChatCompletionResponseFormat"
+              description:
+                An object specifying the format that the model must output.
+                Used to enable JSON mode.
+              x-ballerina-name: responseFormat
+            seed:
+              maximum: 9223372036854776000
+              minimum: -9223372036854776000
+              type: integer
+              description:
+                "If specified, our system will make a best effort to sample\
+                \ deterministically, such that repeated requests with the same `seed`\
+                \ and parameters should return the same result.Determinism is not guaranteed,\
+                \ and you should refer to the `system_fingerprint` response parameter\
+                \ to monitor changes in the backend."
+              nullable: true
+              example: 1
+              default: 0
+            functions:
+              maxItems: 128
+              minItems: 1
+              type: array
+              description:
+                Deprecated in favor of `tools`. A list of functions the model
+                may generate JSON inputs for.
+              items:
+                $ref: "#/components/schemas/ChatCompletionFunction"
+            function_call:
+              description:
+                "Deprecated in favor of `tool_choice`. Controls how the model\
+                \ responds to function calls. \"none\" means the model does not call\
+                \ a function, and responds to the end-user. \"auto\" means the model\
+                \ can pick between an end-user or calling a function.  Specifying a\
+                \ particular function via `{\"name\":\\ \"my_function\"}` forces the\
+                \ model to call that function. \"none\" is the default when no functions\
+                \ are present. \"auto\" is the default if functions are present."
+              oneOf:
+                - type: string
+                  description:
+                    "`none` means the model will not call a function and instead
+                    generates a message. `auto` means the model can pick between generating
+                    a message or calling a function."
+                  enum:
+                    - none
+                    - auto
+                - required:
+                    - name
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                      description: The name of the function to call.
+                  description:
+                    "Specifying a particular function via `{\"name\": \"my_function\"\
+                    }` forces the model to call that function."
+              x-ballerina-name: functionCall
+            messages:
+              minItems: 1
+              type: array
+              description:
+                "A list of messages comprising the conversation so far. [Example\
+                \ Python code](https://github.com/openai/openai-cookbook/blob/main/examples/How_to_format_inputs_to_ChatGPT_models.ipynb)."
+              items:
+                $ref: "#/components/schemas/ChatCompletionRequestMessage"
+            tool_choice:
+              allOf:
+                - $ref: "#/components/schemas/ChatCompletionToolChoiceOption"
+              x-ballerina-name: toolChoice
+            tools:
+              minItems: 1
+              type: array
+              description:
+                "A list of tools the model may call. Currently, only functions\
+                \ are supported as a tool. Use this to provide a list of functions the\
+                \ model may generate JSON inputs for."
+              items:
+                $ref: "#/components/schemas/ChatCompletionTool"
+            "n":
+              maximum: 128
+              minimum: 1
+              type: integer
+              description:
+                How many chat completion choices to generate for each input
+                message.
+              nullable: true
+              example: 1
+              default: 1
+    ChatCompletionsResponseCommon:
+      required:
+        - created
+        - id
+        - model
+        - object
+      type: object
+      properties:
+        created:
+          type: integer
+          description:
+            The Unix timestamp (in seconds) of when the chat completion
+            was created
+          format: unixtime
+        usage:
+          $ref: "#/components/schemas/CompletionUsage"
+        model:
+          type: string
+          description: The model used for the chat completion
+        id:
+          type: string
+          description: A unique identifier for the chat completion
+        system_fingerprint:
+          type: string
+          description:
+            Can be used in conjunction with the `seed` request parameter
+            to understand when backend changes have been made that might impact determinism
+          x-ballerina-name: systemFingerprint
+        object:
+          $ref: "#/components/schemas/ChatCompletionResponseObject"
+    ImagesResponseFormat:
+      type: string
+      description: The format in which the generated images are returned
+      enum:
+        - url
+        - b64_json
+      default: url
+      x-ms-enum:
+        name: ImagesResponseFormat
+        modelAsString: true
+        values:
+          - value: url
+            description:
+              The URL that provides temporary access to download the generated
+              images.
+            name: Url
+          - value: b64_json
+            description: The generated images are returned as base64 encoded string.
+            name: Base64Json
+    ErrorBase:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+    ChatCompletionsRequestCommon:
+      type: object
+      properties:
+        top_p:
+          maximum: 1
+          minimum: 0
+          type: number
+          description: |-
+            An alternative to sampling with temperature, called nucleus sampling, where the model considers the results of the tokens with top_p probability mass. So 0.1 means only the tokens comprising the top 10% probability mass are considered.
+            We generally recommend altering this or `temperature` but not both
+          nullable: true
+          example: 1
+          x-ballerina-name: topP
+        frequency_penalty:
+          maximum: 2
+          minimum: -2
+          type: number
+          description:
+            "Number between -2.0 and 2.0. Positive values penalize new\
+            \ tokens based on their existing frequency in the text so far, decreasing\
+            \ the model's likelihood to repeat the same line verbatim"
+          x-ballerina-name: frequencyPenalty
+        logit_bias:
+          type: object
+          description:
+            "Modify the likelihood of specified tokens appearing in the\
+            \ completion. Accepts a json object that maps tokens (specified by their\
+            \ token ID in the tokenizer) to an associated bias value from -100 to\
+            \ 100. Mathematically, the bias is added to the logits generated by the\
+            \ model prior to sampling. The exact effect will vary per model, but values\
+            \ between -1 and 1 should decrease or increase likelihood of selection;\
+            \ values like -100 or 100 should result in a ban or exclusive selection\
+            \ of the relevant token"
+          nullable: true
+          x-ballerina-name: logitBias
+        stop:
+          description:
+            Up to 4 sequences where the API will stop generating further
+            tokens
+          oneOf:
+            - type: string
+              nullable: true
+            - maxItems: 4
+              minItems: 1
+              type: array
+              description: Array minimum size of 1 and maximum of 4
+              items:
+                type: string
+                nullable: false
+        stream:
+          type: boolean
+          description:
+            "If set, partial message deltas will be sent, like in ChatGPT.\
+            \ Tokens will be sent as data-only server-sent events as they become available,\
+            \ with the stream terminated by a `data: [DONE]` message"
+          nullable: true
+        max_tokens:
+          type: integer
+          description:
+            "The maximum number of tokens allowed for the generated answer.\
+            \ By default, the number of tokens the model can return will be (4096\
+            \ - prompt tokens)"
+          x-ballerina-name: maxTokens
+        presence_penalty:
+          maximum: 2
+          minimum: -2
+          type: number
+          description:
+            "Number between -2.0 and 2.0. Positive values penalize new\
+            \ tokens based on whether they appear in the text so far, increasing the\
+            \ model's likelihood to talk about new topics"
+          x-ballerina-name: presencePenalty
+        temperature:
+          maximum: 2
+          minimum: 0
+          type: number
+          description: |-
+            What sampling temperature to use, between 0 and 2. Higher values like 0.8 will make the output more random, while lower values like 0.2 will make it more focused and deterministic.
+            We generally recommend altering this or `top_p` but not both
+          nullable: true
+          example: 1
+        user:
+          type: string
+          description:
+            "A unique identifier representing your end-user, which can\
+            \ help Azure OpenAI to monitor and detect abuse"
+          nullable: false
+          example: user-1234
+    ChatCompletionResponseMessageRole:
+      type: string
+      description: The role of the author of the response message
+      enum:
+        - assistant
+    CompletionUsage:
+      required:
+        - completion_tokens
+        - prompt_tokens
+        - total_tokens
+      type: object
+      properties:
+        completion_tokens:
+          type: integer
+          description: Number of tokens in the generated completion
+          x-ballerina-name: completionTokens
+        prompt_tokens:
+          type: integer
+          description: Number of tokens in the prompt
+          x-ballerina-name: promptTokens
+        total_tokens:
+          type: integer
+          description: Total number of tokens used in the request (prompt + completion)
+          x-ballerina-name: totalTokens
+      description: Usage statistics for the completion request
+    ChatCompletionResponseObject:
+      type: string
+      description: The object type
+      enum:
+        - chat.completion
+      x-ms-enum:
+        name: ChatCompletionResponseObject
+        modelAsString: true
+        values:
+          - value: chat.completion
+            description: The object type is chat completion.
+    ExtensionsChatCompletionsResponse:
+      type: object
+      description: The response of the extensions chat completions
+      example:
+        id: "1"
+        object: extensions.chat.completion
+        created: 1679201802
+        model: gpt-3.5-turbo-0301
+        choices:
+          - index: 0
+            finish_reason: stop
+            message:
+              role: assistant
+              content:
+                "Seattle is a great place for hiking! Here are some of the best\
+                \ hiking places in Seattle according to Contoso Traveler [doc1] and\
+                \ West Coast Traveler, Snow Lake, Mount Si, and Mount Tenerife [doc2].\
+                \ I hope this helps! Let me know if you need more information."
+              end_turn: true
+              context:
+                messages:
+                  - role: tool
+                    content:
+                      "{\"citations\":[{\"filepath\":\"ContosoTraveler.pdf\",\"\
+                      content\":\"This is the content of the citation 1\"},{\"filepath\"\
+                      :\"WestCoastTraveler.html\",\"content\":\"This is the content of\
+                      \ the citation 2\"},{\"content\":\"This is the content of the citation\
+                      \ 3 without filepath\"}],\"intent\":\"hiking place in seattle\"}"
+                    end_turn: false
+      allOf:
+        - $ref: "#/components/schemas/ChatCompletionsResponseCommon"
+        - properties:
+            choices:
+              type: array
+              items:
+                $ref: "#/components/schemas/ExtensionsChatCompletionChoice"
+    PromptFilterResult:
+      type: object
+      properties:
+        content_filter_results:
+          allOf:
+            - $ref: "#/components/schemas/ContentFilterPromptResults"
+          x-ballerina-name: contentFilterResults
+        prompt_index:
+          type: integer
+          x-ballerina-name: promptIndex
+      description: Content filtering results for a single prompt in the request
+    PromptFilterResults:
+      type: array
+      description:
+        "Content filtering results for zero or more prompts in the request.\
+        \ In a streaming request, results for different prompts may arrive at different\
+        \ times or in different orders"
+      items:
+        $ref: "#/components/schemas/PromptFilterResult"
+    CreateChatCompletionResponse:
+      required:
+        - choices
+        - created
+        - id
+        - model
+        - object
+      type: object
+      allOf:
+        - $ref: "#/components/schemas/ChatCompletionsResponseCommon"
+        - properties:
+            prompt_filter_results:
+              allOf:
+                - $ref: "#/components/schemas/PromptFilterResults"
+              x-ballerina-name: promptFilterResults
+            choices:
+              type: array
+              items:
+                type: object
+                allOf:
+                  - $ref: "#/components/schemas/ChatCompletionChoiceCommon"
+                  - properties:
+                      content_filter_results:
+                        allOf:
+                          - $ref: "#/components/schemas/ContentFilterChoiceResults"
+                        x-ballerina-name: contentFilterResults
+                      message:
+                        $ref: "#/components/schemas/ChatCompletionResponseMessage"
+    Error:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        param:
+          type: string
+        type:
+          type: string
+        inner_error:
+          $ref: "#/components/schemas/InnerError"
+      allOf:
+        - $ref: "#/components/schemas/ErrorBase"
+    AudioVerboseResponse:
+      required:
+        - text
+      type: object
+      description:
+        Translation or transcription response when response_format was
+        verbose_json
+      allOf:
+        - $ref: "#/components/schemas/AudioResponse"
+        - properties:
+            duration:
+              type: number
+              description: Duration.
+            task:
+              type: string
+              description: Type of audio task.
+              enum:
+                - transcribe
+                - translate
+              x-ms-enum:
+                modelAsString: true
+            language:
+              type: string
+              description: Language.
+            segments:
+              type: array
+              items:
+                $ref: "#/components/schemas/AudioSegment"
+    ChatCompletionMessageToolCall:
+      required:
+        - function
+        - id
+        - type
+      type: object
+      properties:
+        function:
+          required:
+            - arguments
+            - name
+          type: object
+          properties:
+            name:
+              type: string
+              description: The name of the function to call.
+            arguments:
+              type: string
+              description:
+                "The arguments to call the function with, as generated\
+                \ by the model in JSON format. Note that the model does not always\
+                \ generate valid JSON, and may hallucinate parameters not defined\
+                \ by your function schema. Validate the arguments in your code before\
+                \ calling your function."
+          description: The function that the model called
+        id:
+          type: string
+          description: The ID of the tool call
+        type:
+          $ref: "#/components/schemas/ToolCallType"
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          $ref: "#/components/schemas/Error"
+    ContentFilterDetectedWithCitationResult:
+      required:
+        - detected
+        - filtered
+      type: object
+      allOf:
+        - $ref: "#/components/schemas/ContentFilterDetectedResult"
+        - properties:
+            citation:
+              type: object
+              properties:
+                license:
+                  type: string
+                URL:
+                  type: string
+                  x-ballerina-name: uRL
+    ChatCompletionResponseMessage:
+      type: object
+      properties:
+        role:
+          $ref: "#/components/schemas/ChatCompletionResponseMessageRole"
+        function_call:
+          allOf:
+            - $ref: "#/components/schemas/ChatCompletionFunctionCall"
+          x-ballerina-name: functionCall
+        tool_calls:
+          type: array
+          description: "The tool calls generated by the model, such as function calls"
+          items:
+            $ref: "#/components/schemas/ChatCompletionMessageToolCall"
+          x-ballerina-name: toolCalls
+        content:
+          type: string
+          description: The contents of the message
+          nullable: true
+      description: A chat completion message generated by the model
+    ImageGenerationsRequest:
+      required:
+        - prompt
+      type: object
+      properties:
+        response_format:
+          allOf:
+            - $ref: "#/components/schemas/ImagesResponseFormat"
+          x-ballerina-name: responseFormat
+        size:
+          $ref: "#/components/schemas/ImageSize"
+        style:
+          $ref: "#/components/schemas/ImageStyle"
+        prompt:
+          minLength: 1
+          type: string
+          description:
+            A text description of the desired image(s). The maximum length
+            is 4000 characters
+          format: string
+          example: a corgi in a field
+        user:
+          type: string
+          description:
+            "A unique identifier representing your end-user, which can\
+            \ help to monitor and detect abuse"
+          format: string
+          example: user123456
+        "n":
+          maximum: 1
+          minimum: 1
+          type: integer
+          description: The number of images to generate
+          default: 1
+        quality:
+          $ref: "#/components/schemas/ImageQuality"
+    ExtensionsChatCompletionsRequest:
+      required:
+        - messages
+      type: object
+      description: Request for the chat completions using extensions
+      example:
+        dataSources:
+          - type: AzureCognitiveSearch
+            parameters:
+              endpoint: https://mysearchexample.search.windows.net
+              key: "***(admin key)"
+              indexName: my-chunk-index
+              fieldsMapping:
+                titleField: productName
+                urlField: productUrl
+                filepathField: productFilePath
+                contentFields:
+                  - productDescription
+                contentFieldsSeparator: |2+
+
+              topNDocuments: 5
+              queryType: semantic
+              semanticConfiguration: defaultConfiguration
+              inScope: true
+              roleInformation: roleInformation
+        messages:
+          - role: user
+            content: Where can I find a hiking place in Seattle?
+        temperature: 0.9
+      allOf:
+        - $ref: "#/components/schemas/ChatCompletionsRequestCommon"
+        - properties:
+            enhancements:
+              type: object
+              properties:
+                grounding:
+                  type: object
+                  properties:
+                    enabled:
+                      type: boolean
+                      default: false
+                  description:
+                    Request object to specify if grounding enhancement is
+                    needed.
+                ocr:
+                  type: object
+                  properties:
+                    enabled:
+                      type: boolean
+                      default: false
+                  description: Request object to specify if ocr enhancement is needed.
+              description: The type of enhancements needed.
+            messages:
+              type: array
+              items:
+                $ref: "#/components/schemas/Message"
+            dataSources:
+              type: array
+              description:
+                The data sources to be used for the Azure OpenAI on your
+                data feature.
+              items:
+                $ref: "#/components/schemas/DataSource"
+    ImageDetailLevel:
+      type: string
+      description: Specifies the detail level of the image
+      enum:
+        - auto
+        - low
+        - high
+      default: auto
+      x-ms-enum:
+        name: ImageDetailLevel
+        modelAsString: true
+        values:
+          - value: auto
+            description: The image detail level is auto.
+          - value: low
+            description: The image detail level is low.
+          - value: high
+            description: The image detail level is high.
+    ChatCompletionFunction:
+      required:
+        - name
+      type: object
+      properties:
+        name:
+          type: string
+          description:
+            "The name of the function to be called. Must be a-z, A-Z, 0-9,\
+            \ or contain underscores and dashes, with a maximum length of 64"
+        description:
+          type: string
+          description: The description of what the function does
+        parameters:
+          $ref: "#/components/schemas/ChatCompletionFunctionParameters"
+    ChatCompletionFunctionParameters:
+      type: object
+      additionalProperties: true
+      description:
+        "The parameters the functions accepts, described as a JSON Schema\
+        \ object. See the [guide](/docs/guides/gpt/function-calling) for examples,\
+        \ and the [JSON Schema reference](https://json-schema.org/understanding-json-schema/)\
+        \ for documentation about the format"
+    AudioSegment:
+      type: object
+      properties:
+        start:
+          type: number
+          description: Segment start offset
+        temperature:
+          type: number
+          description: Temperature
+        avg_logprob:
+          type: number
+          description: Average log probability
+          x-ballerina-name: avgLogprob
+        no_speech_prob:
+          type: number
+          description: Probability of 'no speech'
+          x-ballerina-name: noSpeechProb
+        end:
+          type: number
+          description: Segment end offset
+        tokens:
+          type: array
+          description: Tokens of the text
+          items:
+            type: number
+            nullable: false
+        id:
+          type: integer
+          description: Segment identifier
+        text:
+          type: string
+          description: Segment text
+        seek:
+          type: number
+          description: Offset of the segment
+        compression_ratio:
+          type: number
+          description: Compression ratio
+          x-ballerina-name: compressionRatio
+      description: Transcription or translation segment
+  securitySchemes:
+    bearer:
+      type: oauth2
+      flows:
+        implicit:
+          authorizationUrl: https://login.microsoftonline.com/common/oauth2/v2.0/authorize
+          scopes: {}
+      x-tokenInfoFunc: api.middleware.auth.bearer_auth
+      x-scopeValidateFunc: api.middleware.auth.validate_scopes
+    apiKey:
+      type: apiKey
+      name: api-key
+      in: header
+      x-ballerina-name: apiKey

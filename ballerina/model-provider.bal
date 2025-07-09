@@ -14,6 +14,8 @@
 // specific language governing permissions and limitations
 // under the License.
 
+import ai.intelligence;
+
 # Roles for the chat messages.
 public enum ROLE {
     SYSTEM = "system",
@@ -27,7 +29,7 @@ public type ChatUserMessage record {|
     # Role of the message
     USER role;
     # Content of the message
-    string content;
+    string|Prompt content;
     # An optional name for the participant
     # Provides the model information to differentiate between participants of the same role
     string name?;
@@ -38,7 +40,7 @@ public type ChatSystemMessage record {|
     # Role of the message
     SYSTEM role;
     # Content of the message
-    string content;
+    string|Prompt content;
     # An optional name for the participant
     # Provides the model information to differentiate between participants of the same role
     string name?;
@@ -96,10 +98,155 @@ public type FunctionCall record {|
 # Represents an extendable client for interacting with an AI model.
 public type ModelProvider distinct isolated client object {
     # Sends a chat request to the model with the given messages and tools.
-    # + messages - List of chat messages 
+    # + messages - List of chat messages or a user message
     # + tools - Tool definitions to be used for the tool call
     # + stop - Stop sequence to stop the completion
     # + return - Function to be called, chat response or an error in-case of failures
-    isolated remote function chat(ChatMessage[] messages, ChatCompletionFunctions[] tools = [], string? stop = ())
-        returns ChatAssistantMessage|LlmError;
+    isolated remote function chat(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [], string? stop = ())
+        returns ChatAssistantMessage|Error;
 };
+
+# Represents configuratations of WSO2 provider.
+#
+# + serviceUrl - The URL for the WSO2 AI service
+# + accessToken - Access token for accessing WSO2 AI service
+public type Wso2ProviderConfig record {|
+    string serviceUrl;
+    string accessToken;
+|};
+
+# Configurable for WSO2 provider.
+configurable Wso2ProviderConfig? wso2ProviderConfig = ();
+
+const DEFAULT_TEMPERATURE = 0.7d;
+
+# WSO2 model provider implementation that provides chat completion capabilities using WSO2's AI services.
+public isolated distinct client class Wso2ModelProvider {
+    *ModelProvider;
+    private final intelligence:Client llmClient;
+    private final decimal temperature;
+
+    # Initializes a new `WSO2ModelProvider` instance.
+    #
+    # + serviceUrl - The base URL of WSO2 intelligence API endpoint
+    # + accessToken - The access token for authenticating API requests
+    # + temperature - The temperature for controlling randomness in the model's output  
+    # + connectionConfig - Additional HTTP connection configuration
+    # + return - `nil` on success, or an `ai:Error` if initialization fails
+    public isolated function init(@display {label: "Service URL"} string serviceUrl,
+            @display {label: "Access Token"} string accessToken,
+            @display {label: "Temperature"} decimal temperature = DEFAULT_TEMPERATURE,
+            @display {label: "Connection Configuration"} *ConnectionConfig connectionConfig) returns Error? {
+        intelligence:ConnectionConfig intelligenceConfig = {
+            auth: {
+                token: accessToken
+            },
+            httpVersion: connectionConfig.httpVersion,
+            http1Settings: connectionConfig.http1Settings,
+            http2Settings: connectionConfig.http2Settings,
+            timeout: connectionConfig.timeout,
+            forwarded: connectionConfig.forwarded,
+            poolConfig: connectionConfig.poolConfig,
+            cache: connectionConfig.cache,
+            compression: connectionConfig.compression,
+            circuitBreaker: connectionConfig.circuitBreaker,
+            retryConfig: connectionConfig.retryConfig,
+            responseLimits: connectionConfig.responseLimits,
+            secureSocket: connectionConfig.secureSocket,
+            proxy: connectionConfig.proxy,
+            validation: connectionConfig.validation
+        };
+        intelligence:Client|error llmClient = new (config = intelligenceConfig, serviceUrl = serviceUrl);
+        if llmClient is error {
+            return error Error("Failed to initialize Wso2ModelProvider", llmClient);
+        }
+        self.llmClient = llmClient;
+        self.temperature = temperature;
+    }
+
+    # Sends a chat request to the model with the given messages and tools.
+    #
+    # + messages - List of chat messages or a user message
+    # + tools - Tool definitions to be used for the tool call
+    # + stop - Stop sequence to stop the completion
+    # + return - Function to be called, chat response or an error in-case of failures
+    isolated remote function chat(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools, string? stop = ())
+    returns ChatAssistantMessage|Error {
+        intelligence:CreateChatCompletionRequest request = {
+            stop,
+            messages: self.mapToChatCompletionRequestMessage(messages),
+            temperature: self.temperature
+        };
+        if tools.length() > 0 {
+            request.functions = tools;
+        }
+        intelligence:CreateChatCompletionResponse|error response = self.llmClient->/chat/completions.post(request);
+        if response is error {
+            return error LlmConnectionError("Error while connecting to the model", response);
+        }
+        if response.choices.length() == 0 {
+            return error LlmInvalidResponseError("Empty response from the model when using function call API");
+        }
+        intelligence:ChatCompletionResponseMessage? message = response.choices[0].message;
+        ChatAssistantMessage chatAssistantMessage = {role: ASSISTANT, content: message?.content};
+        intelligence:ChatCompletionFunctionCall? functionCall = message?.functionCall;
+        if functionCall is intelligence:ChatCompletionFunctionCall {
+            chatAssistantMessage.toolCalls = [check self.mapToFunctionCall(functionCall)];
+        }
+        return chatAssistantMessage;
+    }
+
+    private isolated function mapToChatCompletionRequestMessage(ChatMessage[]|ChatUserMessage messages)
+    returns intelligence:ChatCompletionRequestMessage[] {
+        if messages is ChatUserMessage {
+            return [self.mapUserOrSystemMessage(messages)];
+        }
+        intelligence:ChatCompletionRequestMessage[] chatCompletionRequestMessages = [];
+        foreach ChatMessage message in messages {
+            if message is ChatAssistantMessage {
+                intelligence:ChatCompletionRequestMessage assistantMessage = {role: ASSISTANT};
+                FunctionCall[]? toolCalls = message.toolCalls;
+                if toolCalls is FunctionCall[] && toolCalls.length() > 0 {
+                    assistantMessage["function_call"] = {
+                        name: toolCalls[0].name,
+                        arguments: toolCalls[0].arguments.toJsonString()
+                    };
+                }
+                if message?.content is string {
+                    assistantMessage["content"] = message?.content;
+                }
+                chatCompletionRequestMessages.push(assistantMessage);
+            } else if message is ChatUserMessage|ChatSystemMessage {
+                intelligence:ChatCompletionRequestMessage trasnformedMessage = self.mapUserOrSystemMessage(message);
+                if message.name is string {
+                    trasnformedMessage["name"] = message.name;
+                }
+                chatCompletionRequestMessages.push(trasnformedMessage);
+            } else {
+                chatCompletionRequestMessages.push(message);
+            }
+        }
+        return chatCompletionRequestMessages;
+    }
+
+    private isolated function mapToFunctionCall(intelligence:ChatCompletionFunctionCall functionCall)
+    returns FunctionCall|LlmError {
+        do {
+            json jsonArgs = check functionCall.arguments.fromJsonString();
+            map<json>? arguments = check jsonArgs.cloneWithType();
+            return {name: functionCall.name, arguments};
+        } on fail error e {
+            return error LlmError("Invalid or malformed arguments received in function call response.", e);
+        }
+    }
+
+    private isolated function mapUserOrSystemMessage(ChatUserMessage|ChatSystemMessage message)
+    returns intelligence:ChatCompletionRequestMessage {
+        Prompt|string content = message.content;
+        intelligence:ChatCompletionRequestMessage trasnformedMessage = {
+            role: message.role,
+            "content": getChatMessageStringContent(content)
+        };
+        return trasnformedMessage;
+    }
+}

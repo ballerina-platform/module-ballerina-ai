@@ -10,28 +10,33 @@ distribution-version = "2201.12.0"
 [[package]]
 org = "ballerina"
 name = "ai"
-version = "1.0.1"
+version = "0.9.0"
 dependencies = [
+	{org = "ballerina", name = "data.jsondata"},
 	{org = "ballerina", name = "file"},
 	{org = "ballerina", name = "http"},
 	{org = "ballerina", name = "io"},
 	{org = "ballerina", name = "jballerina.java"},
 	{org = "ballerina", name = "lang.regexp"},
 	{org = "ballerina", name = "log"},
+	{org = "ballerina", name = "math.vector"},
 	{org = "ballerina", name = "mcp"},
 	{org = "ballerina", name = "mime"},
+	{org = "ballerina", name = "time"},
 	{org = "ballerina", name = "url"},
+	{org = "ballerina", name = "uuid"},
 	{org = "ballerina", name = "xmldata"},
 	{org = "ballerina", name = "yaml"}
 ]
 modules = [
-	{org = "ballerina", packageName = "ai", moduleName = "ai"}
+	{org = "ballerina", packageName = "ai", moduleName = "ai"},
+	{org = "ballerina", packageName = "ai", moduleName = "ai.intelligence"}
 ]
 
 [[package]]
 org = "ballerina"
 name = "ai_tests"
-version = "1.0.1"
+version = "0.9.0"
 dependencies = [
 	{org = "ballerina", name = "ai"},
 	{org = "ballerina", name = "http"},
@@ -265,6 +270,11 @@ dependencies = [
 	{org = "ballerina", name = "lang.value"},
 	{org = "ballerina", name = "observe"}
 ]
+
+[[package]]
+org = "ballerina"
+name = "math.vector"
+version = "1.2.0"
 
 [[package]]
 org = "ballerina"

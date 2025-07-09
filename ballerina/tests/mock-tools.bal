@@ -48,10 +48,11 @@ isolated function sendMail(record {|string senderEmail; MessageRequest messageRe
 
 public isolated client class MockLLM {
     *ModelProvider;
-    isolated remote function chat(ChatMessage[] messages, ChatCompletionFunctions[] tools, string? stop)
+
+    isolated remote function chat(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools, string? stop)
         returns ChatAssistantMessage|LlmError {
-        ChatMessage lastMessage = messages.pop();
-        string prompt = lastMessage is ChatUserMessage ? lastMessage.content : "";
+        ChatMessage lastMessage = messages is ChatUserMessage ? messages : messages.pop();
+        string prompt = lastMessage is ChatUserMessage ? getChatMessageStringContent(lastMessage.content) : "";
         if prompt.includes("Who is Leo DiCaprio's girlfriend? What is her current age raised to the 0.43 power?") {
             int queryLevel = regexp:findAll(re `observation`, prompt.toLowerAscii()).length();
             io:println(queryLevel, prompt);
