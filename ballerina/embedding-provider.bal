@@ -57,7 +57,7 @@ public distinct isolated client class Wso2EmbeddingProvider {
             proxy: connectionConfig.proxy,
             validation: connectionConfig.validation
         };
-        intelligence:Client|error embeddingClient = new (config = intelligenceConfig, serviceUrl = serviceUrl);
+        intelligence:Client|error embeddingClient = new (intelligenceConfig, serviceUrl);
         if embeddingClient is error {
             return error Error("Failed to initialize Wso2ModelProvider", embeddingClient);
         }
@@ -77,9 +77,10 @@ public distinct isolated client class Wso2EmbeddingProvider {
         if response is error {
             return error Error("Error generating embedding for provided chunk", response);
         }
-        if response.data.length() == 0 {
+        intelligence:EmbeddingResponse_data[] responseData = response.data;
+        if responseData.length() == 0 {
             return error Error("No embeddings generated for the provided chunk");
         }
-        return response.data[0].embedding;
+        return responseData[0].embedding;
     }
 }

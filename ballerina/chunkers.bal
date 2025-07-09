@@ -37,8 +37,9 @@ public isolated function chunkDocumentRecursively(Document document, int maxChun
     return chunkTextDocument(document, maxChunkSize, maxOverlapSize, strategy);
 }
 
-isolated function chunkTextDocument(TextDocument document, int chunkSize, int overlapSize, RecursiveChunkStrategy chunkStrategy)
-returns TextChunk[]|Error = @java:Method {
+isolated function chunkTextDocument(TextDocument document, int chunkSize, int overlapSize,
+        RecursiveChunkStrategy chunkStrategy, typedesc<TextChunk> textChunkType = TextChunk)
+        returns TextChunk[]|Error = @java:Method {
     'class: "io.ballerina.stdlib.ai.Chunkers"
 } external;
 
