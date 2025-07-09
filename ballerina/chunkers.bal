@@ -16,54 +16,25 @@
 
 import ballerina/jballerina.java;
 
-# Represents a document chunking strategy.
-# A `Chunker` is responsible for splitting a given `Document` into a list of smaller `Chunk`s.
-# This is typically used in Retrieval-Augmented Generation (RAG) pipelines to enable more
-# efficient retrieval and processing by breaking down large documents into manageable segments.
-public type Chunker isolated object {
-
-    # Splits the given document into smaller chunks.
-    #
-    # + document - The document to be chunked.
-    # + return - An array of `Chunk`s if successful, or an `ai:Error` otherwise.
-    public isolated function chunk(Document document) returns Chunk[]|Error;
-};
-
 # Provides functionality to recursively chunk a text document using a configurable strategy.
 #
 # The chunking process begins with the specified strategy and recursively falls back to 
 # finer-grained strategies if the content exceeds the configured `maxChunkSize`. Overlapping content 
 # between chunks can be controlled using `maxOverlapSize`.
-public isolated class RecursiveChunkder {
-    *Chunker;
-
-    private final int maxChunkSize;
-    private final int maxOverlapSize;
-    private final RecursiveChunkStrategy stratergy;
-
-    # Initializes the `RecursiveChunkder` with chunking constraints.
-    #
-    # + maxChunkSize - Maximum number of characters allowed per chunk
-    # + maxOverlapSize - Maximum number of characters to reuse from the end of the previous chunk when creating the next one.
-    # This overlap is made of complete sentences taken in reverse from the previous chunk, without exceeding
-    # this limit. It helps maintain context between chunks during splitting.
-    # + stratergy - The recursive chunking strategy to use. Defaults to `PARAGRAPH`
-    public isolated function init(int maxChunkSize, int maxOverlapSize, RecursiveChunkStrategy stratergy = PARAGRAPH) {
-        self.maxChunkSize = maxChunkSize;
-        self.maxOverlapSize = maxOverlapSize;
-        self.stratergy = stratergy;
+#
+# + document - The input document to be chunked
+# + maxChunkSize - Maximum number of characters allowed per chunk
+# + maxOverlapSize - Maximum number of characters to reuse from the end of the previous chunk when creating the next one.
+# This overlap is made of complete sentences taken in reverse from the previous chunk, without exceeding
+# this limit. It helps maintain context between chunks during splitting.
+# + strategy - The recursive chunking strategy to use. Defaults to `PARAGRAPH`
+# + return - An array of chunks, or an `ai:Error` if the chunking fails.
+public isolated function chunkDocumentRecursively(Document document, int maxChunkSize = 200, int maxOverlapSize = 40,
+        RecursiveChunkStrategy strategy = PARAGRAPH) returns Chunk[]|Error {
+    if document !is TextDocument {
+        return error Error("Only text documents are supported for chunking");
     }
-
-    # Chunks the given text document using the configured recursive strategy.
-    #
-    # + document - The input document to be chunked.
-    # + return - An array of chunks, or an `ai:Error` if the chunking fails.
-    public isolated function chunk(Document document) returns Chunk[]|Error {
-        if document !is TextDocument {
-            return error Error("Only text documents are supported for chunking");
-        }
-        return chunkTextDocument(document, self.maxChunkSize, self.maxOverlapSize, self.stratergy);
-    }
+    return chunkTextDocument(document, maxChunkSize, maxOverlapSize, strategy);
 }
 
 isolated function chunkTextDocument(TextDocument document, int chunkSize, int overlapSize, RecursiveChunkStrategy chunkStrategy)
