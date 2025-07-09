@@ -120,17 +120,6 @@ public type QueryMatch record {|
     float similarityScore;
 |};
 
-# Represents a prompt.
-#
-# + strings - Read-only array of string literals from the template
-# + insertions - Array of values to be inserted into the template, can be anydata, Document, or Chunk types
-public type Prompt isolated object {
-    *object:RawTemplate;
-
-    public string[] & readonly strings;
-    public (anydata|Document|Document[]|Chunk|Chunk[])[] insertions;
-};
-
 # Represents the similarity metrics used for comparing vectors.
 # Defines how the similarity between vectors is calculated during search operations.
 public enum SimilarityMetric {
