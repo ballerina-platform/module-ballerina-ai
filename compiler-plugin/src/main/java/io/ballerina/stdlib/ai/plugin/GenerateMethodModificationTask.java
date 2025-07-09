@@ -80,7 +80,7 @@ import static io.ballerina.projects.util.ProjectConstants.EMPTY_STRING;
 public class GenerateMethodModificationTask implements ModifierTask<SourceModifierContext> {
     private static final String AI_MODULE_NAME = "ai";
     private static final String BALLERINA_ORG_NAME = "ballerina";
-    private static final String AI_MODULE_VERSION = "1";
+    private static final String AI_MODULE_MAJOR_VERSION = "1";
     private final AiCodeModifier.AnalysisData analysisData;
     private final ModifierData modifierData;
 
@@ -130,7 +130,7 @@ public class GenerateMethodModificationTask implements ModifierTask<SourceModifi
             return;
         }
 
-        evaluateGenerateMethod(document, semanticModel, modulePartNode, this.analysisData);
+        analyzeGenerateMethod(document, semanticModel, modulePartNode, this.analysisData);
     }
 
     private static TextDocument modifyDocument(Document document, ModifierData modifierData) {
@@ -157,8 +157,8 @@ public class GenerateMethodModificationTask implements ModifierTask<SourceModifi
         return NodeParser.parseImportDeclaration(String.format("import %s/%s;", BALLERINA_ORG_NAME, AI_MODULE_NAME));
     }
 
-    private void evaluateGenerateMethod(Document document, SemanticModel semanticModel,
-                                        ModulePartNode modulePartNode, AiCodeModifier.AnalysisData analysisData) {
+    private void analyzeGenerateMethod(Document document, SemanticModel semanticModel,
+                                       ModulePartNode modulePartNode, AiCodeModifier.AnalysisData analysisData) {
         new GenerateMethodJsonSchemaGenerator(semanticModel, document, analysisData)
                 .generate(modulePartNode);
     }
@@ -297,7 +297,7 @@ public class GenerateMethodModificationTask implements ModifierTask<SourceModifi
                 ModuleID id = moduleSymbol.id();
                 if (BALLERINA_ORG_NAME.equals(id.orgName())
                         && AI_MODULE_NAME.equals(id.moduleName())
-                        && id.version().startsWith(AI_MODULE_VERSION)) {
+                        && id.version().startsWith(AI_MODULE_MAJOR_VERSION)) {
                     return Optional.of(moduleSymbol);
                 }
             }
