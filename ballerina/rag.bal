@@ -61,11 +61,11 @@ public distinct isolated class VectorRetriever {
 
 # Represents a knowledge base for managing chunk indexing and retrieval operations.
 public type KnowledgeBase distinct isolated object {
-    # Indexes a collection of chunks.
+    # Ingests a collection of chunks.
     #
     # + chunks - The array of chunk to index
     # + return - An `ai:Error` if indexing fails; otherwise, `nil`
-    public isolated function index(Chunk[] chunks) returns Error?;
+    public isolated function ingest(Chunk[] chunks) returns Error?;
 
     # Retrieves relevant chunks for the given query.
     #
@@ -100,7 +100,7 @@ public distinct isolated class VectorKnowledgeBase {
     #
     # + chunks - The array of chunk to index
     # + return - An `ai:Error` if indexing fails; otherwise, `nil`
-    public isolated function index(Chunk[] chunks) returns Error? {
+    public isolated function ingest(Chunk[] chunks) returns Error? {
         VectorEntry[] entries = [];
         foreach Chunk chunk in chunks {
             Embedding embedding = check self.embeddingModel->embed(chunk);
