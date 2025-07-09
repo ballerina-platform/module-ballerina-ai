@@ -101,8 +101,8 @@ public type Prompt object {
     # The fixed string parts of the template.
     public string[] & readonly strings;
     # The insertions in the template. 
-    # Insertions of type `Document` and `Document[]` may be handled in specialized ways by implementations.
-    public (anydata|Document|Document[])[] insertions;
+    # Array of values to be inserted into the template, can be anydata, Document, or Chunk types
+    public (anydata|Document|Document[]|Chunk|Chunk[])[] insertions;
 };
 
 # Represents an extendable client for interacting with an AI model.
