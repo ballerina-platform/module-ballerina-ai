@@ -24,7 +24,7 @@ final KnowledgeBase knowledgeBase = new VectorKnowledgeBase(vectorStore, embeddi
 isolated function testKnowledgeBase() returns error? {
     Chunk[] chunks = words.'map(word => <TextChunk>{content: word});
 
-    check knowledgeBase.index(chunks);
+    check knowledgeBase.ingest(chunks);
 
     QueryMatch[] queryMatch = check knowledgeBase.retrieve("dog");
     test:assertEquals(queryMatch[0].chunk.content, "puppy");
