@@ -17,7 +17,7 @@
 import ballerina/time;
 
 # Represents additional metadata associated with documents or nodes.
-public type MetaData record {|
+public type Metadata record {|
     # MIME type specification for the file
     string mimeType?;
     # File name for the document
@@ -33,10 +33,10 @@ public type MetaData record {|
 
 # Represents the common structure for all document types
 public type Document record {|
-    # The type of the node (text, image, audio, or file)
+    # The type of the document or chunk
     string 'type;
-    # Metadata associated with the node
-    MetaData metadata?;
+    # Associated metadata
+    Metadata metadata?;
     # The actual content
     anydata content;
 |};
@@ -50,7 +50,7 @@ public type TextDocument record {|
     string content;
 |};
 
-# Represents a chunk of a document, which can be a text, image, audio, or file.
+# Represents a chunk of a document.
 public type Chunk record {|
     *Document;
 |};

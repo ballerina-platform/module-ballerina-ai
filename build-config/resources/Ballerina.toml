@@ -18,6 +18,13 @@ version = "@toml.version@"
 path = "../native/build/libs/ai-native-@project.version@.jar"
 
 [[platform.java21.dependency]]
+groupId = "io.ballerina.stdlib"
+artifactId = "ai-native"
+version = "@toml.version@"
+path = "../native/build/libs/ai-native-@project.version@-tests.jar"
+testOnly = true
+
+[[platform.java21.dependency]]
 groupId = "dev.langchain4j"
 artifactId = "langchain4j"
 version = "@langchain4j.version"
