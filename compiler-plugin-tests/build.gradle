@@ -103,9 +103,9 @@ def tomlVersion = stripBallerinaExtensionVersion("${project.version}")
 task updateTomlFiles {
     doLast {
         def updateTomlFile = { File file ->
-            def ballerinaTomlFilePlaceHolder = new File("${project.rootDir}/build-config/resources/BallerinaTest.toml")
+            def ballerinaTomlFilePlaceHolder = new File("${project.rootDir}/build-config/resources/CompilerPluginTest.toml")
             def newBallerinaTomlContent = ballerinaTomlFilePlaceHolder.text.replace("@project.version@", project.version)
-            newBallerinaTomlContent = ballerinaTomlFilePlaceHolder.text.replace("@toml.version@", tomlVersion)
+            newBallerinaTomlContent = newBallerinaTomlContent.replace("@toml.version@", tomlVersion)
             file.text = newBallerinaTomlContent
         }
         fileTree(testResources) { include '**/Ballerina.toml' }

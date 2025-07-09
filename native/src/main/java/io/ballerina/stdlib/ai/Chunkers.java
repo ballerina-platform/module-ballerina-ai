@@ -47,7 +47,7 @@ import java.util.UUID;
  */
 public class Chunkers {
     private static final String TEXT_CHUNK_RECORD_TYPE_NAME = "TextChunk";
-    private static final String META_DATA_RECORD_TYPE_NAME = "MetaData";
+    private static final String META_DATA_RECORD_TYPE_NAME = "Metadata";
     private static final String CONTENT_FIELD_NAME = "content";
     private static final String METADATA_FIELD_NAME = "metadata";
     private static final String INDEX_FIELD_NAME = "index";
