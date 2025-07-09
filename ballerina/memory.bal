@@ -72,7 +72,7 @@ public isolated class MessageWindowChatMemory {
     # + message - The `ChatMessage` to store or use as system prompt
     # + return - nil on success, or an `ai:Error` if the operation fails 
     public isolated function update(string sessionId, ChatMessage message) returns MemoryError? {
-        readonly & MemoryChatMessage newMessage = (check self.mapToMemoryChatMessage(message));
+        readonly & MemoryChatMessage newMessage = check self.mapToMemoryChatMessage(message);
         lock {
             self.createSessionIfNotExist(sessionId);
             MemoryChatMessage[] memory = self.sessions.get(sessionId);
@@ -133,9 +133,9 @@ public isolated class MessageWindowChatMemory {
     }
 }
 
-isolated function createPrompt(string[] & readonly strings, anydata[] & readonly insertions) returns readonly & Prompt {
-    return isolated object Prompt {
-        public final string[] & readonly strings = strings;
-        public final anydata[] & readonly insertions = insertions.cloneReadOnly();
-    };
-}
+isolated function createPrompt(string[] & readonly strings, anydata[] & readonly insertions)
+returns readonly & Prompt =>
+    isolated object Prompt {
+    public final string[] & readonly strings = strings;
+    public final anydata[] & readonly insertions = insertions.cloneReadOnly();
+};
