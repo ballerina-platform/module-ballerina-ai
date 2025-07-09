@@ -244,7 +244,8 @@ public isolated distinct client class Wso2ModelProvider {
     private isolated function mapToFunctionCall(intelligence:ChatCompletionFunctionCall functionCall)
     returns FunctionCall|LlmError {
         do {
-            map<json>? arguments = check functionCall.arguments.fromJsonWithType();
+            json jsonArgs = check functionCall.arguments.fromJsonString();
+            map<json>? arguments = check jsonArgs.cloneWithType();
             return {name: functionCall.name, arguments};
         } on fail error e {
             return error LlmError("Invalid or malformed arguments received in function call response.", e);
