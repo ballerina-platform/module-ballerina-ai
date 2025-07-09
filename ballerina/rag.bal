@@ -51,11 +51,11 @@ public distinct isolated class VectorRetriever {
         Embedding queryEmbedding = check self.embeddingModel->embed(queryChunk);
         VectorStoreQuery vectorStoreQuery = {
             embedding: queryEmbedding,
-            filters: filters
+            filters
         };
         VectorMatch[] matches = check self.vectorStore.query(vectorStoreQuery);
-        return from VectorMatch 'match in matches
-            select {chunk: 'match.chunk, similarityScore: 'match.similarityScore};
+        return from VectorMatch {chunk, similarityScore} in matches
+            select {chunk, similarityScore};
     }
 }
 
@@ -101,11 +101,9 @@ public distinct isolated class VectorKnowledgeBase {
     # + chunks - The array of chunk to index
     # + return - An `ai:Error` if indexing fails; otherwise, `nil`
     public isolated function ingest(Chunk[] chunks) returns Error? {
-        VectorEntry[] entries = [];
-        foreach Chunk chunk in chunks {
-            Embedding embedding = check self.embeddingModel->embed(chunk);
-            entries.push({embedding, chunk});
-        }
+        VectorEntry[] entries = from Chunk chunk in chunks
+            let Embedding embedding = check self.embeddingModel->embed(chunk)
+            select {embedding, chunk};
         check self.vectorStore.add(entries);
     }
 
@@ -140,9 +138,9 @@ isolated function getDefaultKnowledgeBase() returns VectorKnowledgeBase|Error {
     if wso2EmbeddingProvider is Error {
         return error Error("Error creating default vector knowledge base");
     }
-    InMemoryVectorStore|Error inMemoryVectorStore = check new InMemoryVectorStore();
+    InMemoryVectorStore|Error inMemoryVectorStore = check new;
     if inMemoryVectorStore is Error {
-        return error Error("Error creatign default inMemoryVector store", inMemoryVectorStore);
+        return error Error("Error creating default in-memory vector store", inMemoryVectorStore);
     }
     return new VectorKnowledgeBase(inMemoryVectorStore, wso2EmbeddingProvider);
 }

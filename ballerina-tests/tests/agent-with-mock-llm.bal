@@ -78,8 +78,8 @@ isolated client distinct class MockLlm {
         if lastMessage !is ai:ChatUserMessage|ai:ChatFunctionMessage {
             return error ai:LlmError("I can't understand");
         }
-        ai:Prompt|string? lasMessageContent = lastMessage.content;
-        string query = getChatMessageStringContent(lasMessageContent ?: "");
+        ai:Prompt|string? lastMessageContent = lastMessage.content;
+        string query = getChatMessageStringContent(lastMessageContent ?: "");
         if query.includes("Greet") {
             return {role: ai:ASSISTANT, content: "Hey John! Welcome to Ballerina!"};
         }

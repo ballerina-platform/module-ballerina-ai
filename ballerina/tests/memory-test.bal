@@ -72,30 +72,38 @@ isolated function assertChatMessageEquals(ChatMessage actual, ChatMessage expect
         test:assertEquals(actual.role, expected.role);
         assertContentEquals(actual.content, expected.content);
         test:assertEquals(actual.name, expected.name);
-    } else if actual is ChatSystemMessage && expected is ChatSystemMessage {
+        return;
+    }
+    if actual is ChatSystemMessage && expected is ChatSystemMessage {
         test:assertEquals(actual.role, expected.role);
         assertContentEquals(actual.content, expected.content);
         test:assertEquals(actual.name, expected.name);
-    } else if actual is ChatFunctionMessage && expected is ChatFunctionMessage {
+        return;
+    }
+    if actual is ChatFunctionMessage && expected is ChatFunctionMessage {
         test:assertEquals(actual.role, expected.role);
         test:assertEquals(actual.name, expected.name);
         test:assertEquals(actual.id, expected.id);
-    } else if actual is ChatAssistantMessage && expected is ChatAssistantMessage {
+        return;
+    }
+    if actual is ChatAssistantMessage && expected is ChatAssistantMessage {
         test:assertEquals(actual.role, expected.role);
         test:assertEquals(actual.name, expected.name);
         test:assertEquals(actual.toolCalls, expected.toolCalls);
-    } else {
-        test:assertFail("Actual and expected ChatMessage types do not match");
+        return;
     }
+    test:assertFail("Actual and expected ChatMessage types do not match");
 }
 
 isolated function assertContentEquals(Prompt|string actual, Prompt|string expected) {
     if actual is string && expected is string {
         test:assertEquals(actual, expected);
-    } else if actual is Prompt && expected is Prompt {
+        return;
+    }
+    if actual is Prompt && expected is Prompt {
         test:assertEquals(actual.strings, expected.strings);
         test:assertEquals(actual.insertions, expected.insertions);
-    } else {
-        test:assertFail("Actual and expected content do not match");
+        return;
     }
+    test:assertFail("Actual and expected content do not match");
 }

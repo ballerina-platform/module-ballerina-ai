@@ -29,12 +29,13 @@ import dev.langchain4j.data.document.splitter.DocumentByWordSplitter;
 import dev.langchain4j.data.segment.TextSegment;
 import io.ballerina.runtime.api.creators.TypeCreator;
 import io.ballerina.runtime.api.creators.ValueCreator;
-import io.ballerina.runtime.api.types.RecordType;
+import io.ballerina.runtime.api.types.Type;
 import io.ballerina.runtime.api.utils.StringUtils;
 import io.ballerina.runtime.api.values.BArray;
 import io.ballerina.runtime.api.values.BError;
 import io.ballerina.runtime.api.values.BMap;
 import io.ballerina.runtime.api.values.BString;
+import io.ballerina.runtime.api.values.BTypedesc;
 
 import java.util.HashMap;
 import java.util.List;
@@ -53,7 +54,7 @@ public class Chunkers {
     private static final String INDEX_FIELD_NAME = "index";
 
     public static Object chunkTextDocument(BMap<BString, Object> document, int chunkSize, int maxOverlapSize,
-                                       BString chunkStrategy) {
+                                           BString chunkStrategy, BTypedesc textChunkType) {
         try {
             String content = document.getStringValue(StringUtils.fromString(CONTENT_FIELD_NAME)).getValue();
             Document inputDocument = Document.from(content);
@@ -61,7 +62,7 @@ public class Chunkers {
             DocumentSplitter splitter = getDocumentSplitter(chunkStrategy, chunkSize, maxOverlapSize);
             List<TextSegment> textSegments = splitter.split(inputDocument);
 
-            return createTextChunkRecordArray(document, textSegments);
+            return createTextChunkRecordArray(document, textSegments, textChunkType.getDescribingType());
         } catch (RuntimeException e) {
             return handleChunkingErrors(e);
         }
@@ -77,12 +78,11 @@ public class Chunkers {
         };
     }
 
-    private static BArray createTextChunkRecordArray(BMap<BString, Object> document, List<TextSegment> textSegments) {
+    private static BArray createTextChunkRecordArray(BMap<BString, Object> document, List<TextSegment> textSegments,
+                                                     Type textChunkType) {
         Object[] chunkArray = textSegments.stream()
                 .map(textSegment -> createTextChunkRecord(document, textSegment)).toArray();
-        RecordType chunkRecordType = TypeCreator.createRecordType(TEXT_CHUNK_RECORD_TYPE_NAME, ModuleUtils.getModule(),
-                0, true, 0);
-        return ValueCreator.createArrayValue(chunkArray, TypeCreator.createArrayType(chunkRecordType));
+        return ValueCreator.createArrayValue(chunkArray, TypeCreator.createArrayType(textChunkType));
     }
 
     private static BMap<BString, Object> createTextChunkRecord(BMap<BString, Object> document,
