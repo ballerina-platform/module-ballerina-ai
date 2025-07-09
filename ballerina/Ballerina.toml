@@ -2,7 +2,7 @@
 distribution = "2201.12.0"
 org = "ballerina"
 name = "ai"
-version = "1.0.1"
+version = "0.9.0"
 license = ["Apache-2.0"]
 authors = ["Ballerina"]
 keywords = ["AI/Agent", "Cost/Freemium", "Agent", "AI"]
@@ -14,5 +14,23 @@ graalvmCompatible = true
 [[platform.java21.dependency]]
 groupId = "io.ballerina.stdlib"
 artifactId = "ai-native"
-version = "1.0.1"
-path = "../native/build/libs/ai-native-1.0.1-SNAPSHOT.jar"
+version = "0.9.0"
+path = "../native/build/libs/ai-native-0.9.0-SNAPSHOT.jar"
+
+[[platform.java21.dependency]]
+groupId = "dev.langchain4j"
+artifactId = "langchain4j"
+version = "1.1.0"
+path="./lib/langchain4j-1.1.0.jar"
+
+[[platform.java21.dependency]]
+groupId = "dev.langchain4j"
+artifactId = "langchain4j-core"
+version = "1.1.0"
+path="./lib/langchain4j-core-1.1.0.jar"
+
+[[platform.java21.dependency]]
+groupId = "org.apache.opennlp"
+artifactId = "opennlp-tools"
+version = "2.5.4"
+path="./lib/opennlp-tools-2.5.4.jar"

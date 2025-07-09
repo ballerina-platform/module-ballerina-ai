@@ -26,6 +26,10 @@ description = 'Ballerina - AI package Java Utils'
 dependencies {
     implementation group: 'org.ballerinalang', name: 'ballerina-lang', version: "${ballerinaLangVersion}"
     implementation group: 'org.ballerinalang', name: 'ballerina-runtime', version: "${ballerinaLangVersion}"
+    implementation group: 'dev.langchain4j', name: 'langchain4j', version: "${langchain4jVersion}"
+    implementation group: 'dev.langchain4j', name: 'langchain4j-core', version: "${langchain4jVersion}"
+    implementation group: 'org.apache.opennlp', name: 'opennlp-tools', version: "${openNlpToolsVersion}"
+    
     checkstyle project(":checkstyle")
     checkstyle "com.puppycrawl.tools:checkstyle:${checkstylePluginVersion}"
 }
