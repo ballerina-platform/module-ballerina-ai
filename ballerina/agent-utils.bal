@@ -91,7 +91,7 @@ type BaseAgent distinct isolated object {
     # + progress - Execution progress with the current query and execution history
     # + sessionId - The ID associated with the agent memory
     # + return - LLM response containing the tool or chat response (or an error if the call fails)
-    isolated function selectNextTool(ExecutionProgress progress, string sessionId = DEFAULT_SESSION_ID) returns json|LlmError;
+    isolated function selectNextTool(ExecutionProgress progress, string sessionId = DEFAULT_SESSION_ID) returns json|Error;
 
     isolated function run(string query, int maxIter = 5, string|map<json> context = {}, boolean verbose = true,
             string sessionId = DEFAULT_SESSION_ID) returns ExecutionTrace;
@@ -151,7 +151,7 @@ class Executor {
     # Reason the next step of the agent.
     #
     # + return - generated LLM response during the reasoning or an error if the reasoning fails
-    public isolated function reason() returns json|TaskCompletedError|LlmError {
+    public isolated function reason() returns json|Error {
         if self.isCompleted {
             return error TaskCompletedError("Task is already completed. No more reasoning is needed.");
         }
@@ -223,8 +223,8 @@ class Executor {
         if self.isCompleted {
             return ();
         }
-        json|TaskCompletedError|LlmError llmResponse = self.reason();
-        if llmResponse is error {
+        json|Error llmResponse = self.reason();
+        if llmResponse is Error {
             return {value: llmResponse};
         }
         return {value: self.act(llmResponse)};

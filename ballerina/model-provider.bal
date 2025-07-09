@@ -103,7 +103,7 @@ public type ModelProvider distinct isolated client object {
     # + stop - Stop sequence to stop the completion
     # + return - Function to be called, chat response or an error in-case of failures
     isolated remote function chat(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [], string? stop = ())
-        returns ChatAssistantMessage|LlmError;
+        returns ChatAssistantMessage|Error;
 };
 
 # Represents configuratations of WSO2 provider.
@@ -171,7 +171,7 @@ public isolated distinct client class Wso2ModelProvider {
     # + stop - Stop sequence to stop the completion
     # + return - Function to be called, chat response or an error in-case of failures
     isolated remote function chat(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools, string? stop = ())
-    returns ChatAssistantMessage|LlmError {
+    returns ChatAssistantMessage|Error {
         intelligence:CreateChatCompletionRequest request = {
             stop,
             messages: self.mapToChatCompletionRequestMessage(messages),
