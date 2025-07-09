@@ -15,6 +15,7 @@
 // under the License.
 
 import ai.intelligence;
+import ballerina/jballerina.java;
 
 # Roles for the chat messages.
 public enum ROLE {
@@ -114,6 +115,14 @@ public type ModelProvider distinct isolated client object {
     # + return - Function to be called, chat response or an error in-case of failures
     isolated remote function chat(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [], string? stop = ())
         returns ChatAssistantMessage|Error;
+    
+    # Sends a chat request to the model and generates a value that belongs to the type
+    # corresponding to the type descriptor argument.
+    #
+    # + prompt - The prompt to use in the chat request
+    # + td - Type descriptor specifying the expected return type format
+    # + return - Generates a value that belongs to the type, or an error if generation fails
+    isolated remote function generate(Prompt prompt, typedesc<anydata> td = <>) returns td|Error;
 };
 
 # Represents configuratations of WSO2 provider.
@@ -205,6 +214,17 @@ public isolated distinct client class Wso2ModelProvider {
         }
         return chatAssistantMessage;
     }
+
+
+    # Sends a chat request to the model and generates a value that belongs to the type
+    # corresponding to the type descriptor argument.
+    # 
+    # + prompt - The prompt to use in the chat messages
+    # + td - Type descriptor specifying the expected return type format
+    # + return - Generates a value that belongs to the type, or an error if generation fails
+    isolated remote function generate(Prompt prompt, typedesc<anydata> td = <>) returns td|Error = @java:Method {
+        'class: "io.ballerina.stdlib.ai.wso2.Generator"
+    } external;
 
     private isolated function mapToChatCompletionRequestMessage(ChatMessage[]|ChatUserMessage messages)
     returns intelligence:ChatCompletionRequestMessage[] {
