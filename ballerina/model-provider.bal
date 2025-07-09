@@ -226,15 +226,17 @@ public isolated distinct client class Wso2ModelProvider {
                     assistantMessage["content"] = message?.content;
                 }
                 chatCompletionRequestMessages.push(assistantMessage);
-            } else if message is ChatUserMessage|ChatSystemMessage {
-                intelligence:ChatCompletionRequestMessage trasnformedMessage = self.mapUserOrSystemMessage(message);
-                if message.name is string {
-                    trasnformedMessage["name"] = message.name;
-                }
-                chatCompletionRequestMessages.push(trasnformedMessage);
-            } else {
-                chatCompletionRequestMessages.push(message);
+                continue;
             }
+            if message is ChatUserMessage|ChatSystemMessage {
+                intelligence:ChatCompletionRequestMessage transformedMessage = self.mapUserOrSystemMessage(message);
+                if message.name is string {
+                    transformedMessage["name"] = message.name;
+                }
+                chatCompletionRequestMessages.push(transformedMessage);
+                continue;
+            }
+            chatCompletionRequestMessages.push(message);
         }
         return chatCompletionRequestMessages;
     }
@@ -242,8 +244,7 @@ public isolated distinct client class Wso2ModelProvider {
     private isolated function mapToFunctionCall(intelligence:ChatCompletionFunctionCall functionCall)
     returns FunctionCall|LlmError {
         do {
-            json jsonArgs = check functionCall.arguments.fromJsonString();
-            map<json>? arguments = check jsonArgs.cloneWithType();
+            map<json>? arguments = check functionCall.arguments.fromJsonWithType();
             return {name: functionCall.name, arguments};
         } on fail error e {
             return error LlmError("Invalid or malformed arguments received in function call response.", e);
@@ -251,12 +252,8 @@ public isolated distinct client class Wso2ModelProvider {
     }
 
     private isolated function mapUserOrSystemMessage(ChatUserMessage|ChatSystemMessage message)
-    returns intelligence:ChatCompletionRequestMessage {
-        Prompt|string content = message.content;
-        intelligence:ChatCompletionRequestMessage trasnformedMessage = {
-            role: message.role,
-            "content": getChatMessageStringContent(content)
-        };
-        return trasnformedMessage;
-    }
+    returns intelligence:ChatCompletionRequestMessage => {
+        role: message.role,
+        "content": getChatMessageStringContent(message.content)
+    };
 }
