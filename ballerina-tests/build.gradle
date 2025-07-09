@@ -49,6 +49,7 @@ def stripBallerinaExtensionVersion(String extVersion) {
 task updateTomlFiles {
     doLast {
         def newBallerinaToml = ballerinaTomlFilePlaceHolder.text.replace("@toml.version@", tomlVersion)
+        newBallerinaToml = newBallerinaToml.replace("@project.version@", project.version)
         ballerinaTomlFile.text = newBallerinaToml
     }
 }

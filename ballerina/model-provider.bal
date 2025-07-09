@@ -95,6 +95,16 @@ public type FunctionCall record {|
     string id?;
 |};
 
+# Raw template type for prompts.
+public type Prompt object {
+    *object:RawTemplate;
+    # The fixed string parts of the template.
+    public string[] & readonly strings;
+    # The insertions in the template. 
+    # Insertions of type `Document` and `Document[]` may be handled in specialized ways by implementations.
+    public (anydata|Document|Document[])[] insertions;
+};
+
 # Represents an extendable client for interacting with an AI model.
 public type ModelProvider distinct isolated client object {
     # Sends a chat request to the model with the given messages and tools.
