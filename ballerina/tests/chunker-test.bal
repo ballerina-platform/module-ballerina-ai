@@ -19,8 +19,7 @@ import ballerina/test;
 @test:Config {}
 function testCharacterChunking() returns error? {
     TextDocument doc = {content: "abcde"};
-    RecursiveChunkder chunker = new (2, 0, CHARACTER);
-    Chunk[] chunks = check chunker.chunk(doc);
+    Chunk[] chunks = check chunkDocumentRecursively(doc, 2, 0, CHARACTER);
 
     test:assertEquals(chunks.length(), 3);
     test:assertEquals(chunks[0].content, "ab");
@@ -31,8 +30,7 @@ function testCharacterChunking() returns error? {
 @test:Config {}
 function testWordChunking() returns error? {
     TextDocument doc = {content: "hello world ballerina test"};
-    RecursiveChunkder chunker = new (11, 0, WORD);
-    Chunk[] chunks = check chunker.chunk(doc);
+    Chunk[] chunks = check chunkDocumentRecursively(doc, 11, 0, WORD);
 
     test:assertEquals(chunks.length(), 3);
     test:assertEquals(chunks[0].content, "hello world");
@@ -43,8 +41,7 @@ function testWordChunking() returns error? {
 @test:Config {}
 function testLineChunking() returns error? {
     TextDocument doc = {content: "line1\nline2\nline3\nline4"};
-    RecursiveChunkder chunker = new (12, 0, LINE);
-    Chunk[] chunks = check chunker.chunk(doc);
+    Chunk[] chunks = check chunkDocumentRecursively(doc, 12, 0, LINE);
 
     test:assertEquals(chunks.length(), 2);
     test:assertEquals(chunks[0].content, "line1\nline2");
@@ -54,8 +51,7 @@ function testLineChunking() returns error? {
 @test:Config {}
 function testSentenceChunking() returns error? {
     TextDocument doc = {content: "This is sentence one. This is sentence two. This is three."};
-    RecursiveChunkder chunker = new (40, 0, SENTENCE);
-    Chunk[] chunks = check chunker.chunk(doc);
+    Chunk[] chunks = check chunkDocumentRecursively(doc, 40, 0, SENTENCE);
 
     test:assertEquals(chunks.length(), 2);
     test:assertEquals(chunks[0].content, "This is sentence one.");
@@ -65,8 +61,7 @@ function testSentenceChunking() returns error? {
 @test:Config {}
 function testParagraphChunking() returns error? {
     TextDocument doc = {content: "Paragraph one.\n\nParagraph two is here.\n\nAnd three."};
-    RecursiveChunkder chunker = new (40, 0, PARAGRAPH);
-    Chunk[] chunks = check chunker.chunk(doc);
+    Chunk[] chunks = check chunkDocumentRecursively(doc, 40, 0, PARAGRAPH);
 
     test:assertEquals(chunks.length(), 2);
     test:assertEquals(chunks[0].content, "Paragraph one.\n\nParagraph two is here.");
@@ -80,8 +75,7 @@ function testRecursiveChunking() returns error? {
                 + "It contains multiple sentences. Here is another sentence."
     };
     int maxChunkSize = 50;
-    RecursiveChunkder chunker = new (maxChunkSize, 0);
-    Chunk[] chunks = check chunker.chunk(doc);
+    Chunk[] chunks = check chunkDocumentRecursively(doc, maxChunkSize, 0);
 
     test:assertTrue(chunks.length() > 1, msg = "Should produce multiple chunks using recursive fallback");
     foreach Chunk chunk in chunks {
@@ -97,8 +91,7 @@ function testRecursiveChunkingWithOverlap() returns error? {
         "Recursive chunking helps process long documents efficiently. " +
         "Overlapping chunks retain context across boundaries."
     };
-    RecursiveChunkder chunker = new (100, 40);
-    Chunk[] chunks = check chunker.chunk(doc);
+    Chunk[] chunks = check chunkDocumentRecursively(doc, 100, 40);
 
     test:assertEquals(chunks.length(), 3);
     test:assertEquals(chunks[0].content,
@@ -111,8 +104,7 @@ function testRecursiveChunkingWithOverlap() returns error? {
 @test:Config {}
 function testRecursiveChunkingWithUnsupportedDocumentType() returns error? {
     Document doc = {content: "test", 'type: "unknown"};
-    RecursiveChunkder chunker = new (100, 40);
-    Chunk[]|Error chunks = chunker.chunk(doc);
+    Chunk[]|Error chunks = chunkDocumentRecursively(doc, 100, 40);
     if chunks is Error {
         test:assertEquals(chunks.message(), "Only text documents are supported for chunking");
     } else {
