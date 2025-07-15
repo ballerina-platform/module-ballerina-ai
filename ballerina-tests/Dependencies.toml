@@ -12,6 +12,7 @@ org = "ballerina"
 name = "ai"
 version = "1.0.1"
 dependencies = [
+	{org = "ballerina", name = "constraint"},
 	{org = "ballerina", name = "data.jsondata"},
 	{org = "ballerina", name = "data.xmldata"},
 	{org = "ballerina", name = "file"},
