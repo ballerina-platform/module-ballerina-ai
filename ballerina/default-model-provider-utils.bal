@@ -18,6 +18,7 @@ import ai.intelligence;
 
 import ballerina/data.jsondata;
 import ballerina/constraint;
+import ballerina/lang.array;
 
 type ResponseSchema record {|
     map<json> schema;
@@ -180,7 +181,7 @@ isolated function getBase64EncodedString(byte[] content) returns string|Error {
     if content.length() == 0 {
         return error("Image content is empty.");
     }
-    string|error binaryContent = string:fromCodePointInts(content);
+    string|error binaryContent = array:toBase64(content);
     if binaryContent is error {
         return error("Failed to convert byte array to string: " + binaryContent.message() + ", " +
                         binaryContent.detail().toBalString());
