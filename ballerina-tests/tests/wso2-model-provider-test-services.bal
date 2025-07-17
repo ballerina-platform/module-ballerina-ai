@@ -24,12 +24,12 @@ service /llm on new http:Listener(8080) {
         ChatCompletionRequestMessage[] messages = check payload.messages.ensureType();
         ChatCompletionRequestMessage message = messages[0];
 
-        json[]? content = check message["content"].ensureType();
+        (TextContentPart|ImageContentPart)[]? content = check message["content"].ensureType();
         if content is () {
             test:assertFail("Expected content in the payload");
         }
 
-        string initialContent = (check content[0].text).toString();
+        string initialContent = (<TextContentPart>content[0]).text.toString();
         test:assertEquals(content, getExpectedContentParts(initialContent),
                 string `Test failed for prompt with initial content, ${initialContent}`);
         test:assertEquals(message.role, "user");
