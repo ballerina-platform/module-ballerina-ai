@@ -31,7 +31,7 @@ service /llm on new http:Listener(8080) {
 
         string initialContent = (check content[0].text).toString();
         test:assertEquals(content, getExpectedContentParts(initialContent),
-                string `Test failed for prompt:- ${initialContent}`);
+                string `Test failed for prompt with initial content, ${initialContent}`);
         test:assertEquals(message.role, "user");
         ChatCompletionTool[]? tools = payload.tools;
         if tools is () || tools.length() == 0 {
@@ -44,7 +44,7 @@ service /llm on new http:Listener(8080) {
         }
 
         test:assertEquals(parameters, getExpectedParameterSchema(initialContent),
-                string `Test failed for prompt:- ${initialContent}`);
+                string `Test failed for prompt with initial content, ${initialContent}`);
         return getTestServiceResponse(initialContent);
     }
 }
