@@ -188,7 +188,6 @@ isolated function generateChatCreationMultimodalContent(Prompt prompt)
 
 isolated function createImageContentPart(ImageDocument doc) returns ImageContentPart|Error {
     return {
-        "type": "image_url",
         "image_url": {
             "url": check constructImageUrl(doc.content)
         }
