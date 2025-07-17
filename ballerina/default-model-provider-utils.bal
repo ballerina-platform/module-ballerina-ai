@@ -106,37 +106,6 @@ isolated function getGetResultsTool(map<json> parameters) returns intelligence:C
     }
 ];
 
-isolated function generateChatCreationContent(Prompt prompt) returns string|Error {
-    string[] & readonly strings = prompt.strings;
-    anydata[] insertions = prompt.insertions;
-    string promptStr = strings[0];
-    foreach int i in 0 ..< insertions.length() {
-        string str = strings[i + 1];
-        anydata insertion = insertions[i];
-
-        if insertion is TextDocument {
-            promptStr += insertion.content + " " + str;
-            continue;
-        }
-
-        if insertion is TextDocument[] {
-            foreach TextDocument doc in insertion {
-                promptStr += doc.content + " ";
-
-            }
-            promptStr += str;
-            continue;
-        }
-
-        if insertion is Document {
-            return error Error("Only Text Documents are currently supported.");
-        }
-
-        promptStr += insertion.toString() + str;
-    }
-    return promptStr.trim();
-}
-
 isolated function generateChatCreationMultimodalContent(Prompt prompt) 
                         returns (TextContentPart|ImageContentPart)[]|Error {
     string[] & readonly strings = prompt.strings;
