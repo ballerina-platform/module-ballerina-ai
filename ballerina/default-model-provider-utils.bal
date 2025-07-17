@@ -15,11 +15,22 @@
 // under the License.
 
 import ai.intelligence;
+
 import ballerina/data.jsondata;
 
 type ResponseSchema record {|
     map<json> schema;
     boolean isOriginallyJsonObject = true;
+|};
+
+type TextContentPart record {|
+    readonly string 'type = "text";
+    string text;
+|};
+
+type ImageContentPart record {|
+    readonly string 'type = "image_url";
+    record {|string url;|} image_url;
 |};
 
 const JSON_CONVERSION_ERROR = "FromJsonStringError";
@@ -85,15 +96,15 @@ isolated function getGetResultsToolChoice() returns intelligence:ChatCompletionN
 
 isolated function getGetResultsTool(map<json> parameters) returns intelligence:ChatCompletionTool[]|error =>
     [
-        {
-            'type: FUNCTION,
-            'function: {
-                name: GET_RESULTS_TOOL,
-                parameters: check parameters.cloneWithType(),
-                description: "Tool to call with the response from a large language model (LLM) for a user prompt."
-            }
+    {
+        'type: FUNCTION,
+        'function: {
+            name: GET_RESULTS_TOOL,
+            parameters: check parameters.cloneWithType(),
+            description: "Tool to call with the response from a large language model (LLM) for a user prompt."
         }
-    ];
+    }
+];
 
 isolated function generateChatCreationContent(Prompt prompt) returns string|Error {
     string[] & readonly strings = prompt.strings;
@@ -110,8 +121,8 @@ isolated function generateChatCreationContent(Prompt prompt) returns string|Erro
 
         if insertion is TextDocument[] {
             foreach TextDocument doc in insertion {
-                promptStr += doc.content  + " ";
-                
+                promptStr += doc.content + " ";
+
             }
             promptStr += str;
             continue;
@@ -126,6 +137,83 @@ isolated function generateChatCreationContent(Prompt prompt) returns string|Erro
     return promptStr.trim();
 }
 
+isolated function generateChatCreationMultimodalContent(Prompt prompt) 
+                        returns (TextContentPart|ImageContentPart)[]|Error {
+    string[] & readonly strings = prompt.strings;
+    anydata[] insertions = prompt.insertions;
+    (TextContentPart|ImageContentPart)[] contentParts = [];
+
+    if strings.length() > 0 {
+        contentParts.push({
+            text: strings[0]
+        });
+    }
+
+    foreach int i in 0 ..< insertions.length() {
+        anydata insertion = insertions[i];
+        string str = strings[i + 1];
+
+        if insertion is TextDocument {
+            contentParts.push({
+                text: insertion.content
+            });
+        } else if insertion is TextDocument[] {
+            foreach TextDocument doc in insertion {
+                contentParts.push({
+                    text: doc.content
+                });
+            }
+        } else if insertion is ImageDocument {
+            contentParts.push(check createImageContentPart(insertion));
+        } else if insertion is ImageDocument[] {
+            foreach ImageDocument doc in insertion {
+                contentParts.push(check createImageContentPart(doc));
+            }
+        } else if insertion is Document {
+            return error Error("Only text, image, audio, and file documents are supported.");
+        } else {
+            contentParts.push({
+                text: insertion.toString()
+            });
+        }
+
+        if str.trim().length() > 0 {
+            contentParts.push({
+                text: str
+            });
+        }
+    }
+    return contentParts;
+}
+
+isolated function createImageContentPart(ImageDocument doc) returns ImageContentPart|Error {
+    return {
+        "type": "image_url",
+        "image_url": {
+            "url": check constructImageUrl(doc.content)
+        }
+    };
+}
+
+isolated function constructImageUrl(Url|byte[] content) returns string|Error {
+    if content is Url {
+        return content;
+    }
+    return string `data:image/*;base64,${check getBase64EncodedString(content)}`;
+}
+
+isolated function getBase64EncodedString(byte[] content) returns string|Error {
+    if content.length() == 0 {
+        return error("Image content is empty.");
+    }
+    string|error binaryContent = string:fromCodePointInts(content);
+    if binaryContent is error {
+        return error("Failed to convert byte array to string: " + binaryContent.message() + ", " +
+                        binaryContent.detail().toBalString());
+    }
+    return binaryContent;
+}
+
 isolated function handleParseResponseError(error chatResponseError) returns error {
     string message = chatResponseError.message();
     if message.includes(JSON_CONVERSION_ERROR) || message.includes(CONVERSION_ERROR) {
@@ -136,7 +224,7 @@ isolated function handleParseResponseError(error chatResponseError) returns erro
 
 isolated function generateLlmResponse(intelligence:Client llmClient, decimal temperature,
         Prompt prompt, typedesc<json> expectedResponseTypedesc) returns anydata|Error {
-    string content = check generateChatCreationContent(prompt);
+    map<anydata>[] content = check generateChatCreationMultimodalContent(prompt);
     ResponseSchema ResponseSchema = check getExpectedResponseSchema(expectedResponseTypedesc);
     intelligence:ChatCompletionTool[]|error tools = getGetResultsTool(ResponseSchema.schema);
     if tools is error {
@@ -157,13 +245,13 @@ isolated function generateLlmResponse(intelligence:Client llmClient, decimal tem
 
     intelligence:CreateChatCompletionResponse|error response = llmClient->/chat/completions.post(request);
     if response is error {
-        return error("LLM call failed: " + response.message());
+        return error("LLM call failed: " + response.message(), detail = response.detail(), cause = response.cause());
     }
 
     record {
-        *intelligence:ChatCompletionChoiceCommon; 
+        *intelligence:ChatCompletionChoiceCommon;
         @jsondata:Name {value: "content_filter_results"}
-        intelligence:ContentFilterChoiceResults contentFilterResults?; 
+        intelligence:ContentFilterChoiceResults contentFilterResults?;
         intelligence:ChatCompletionResponseMessage message?;
     }[] choices = response.choices;
 
