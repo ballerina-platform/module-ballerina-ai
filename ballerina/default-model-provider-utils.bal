@@ -200,7 +200,7 @@ isolated function handleParseResponseError(error chatResponseError) returns erro
 
 isolated function generateLlmResponse(intelligence:Client llmClient, decimal temperature,
         Prompt prompt, typedesc<json> expectedResponseTypedesc) returns anydata|Error {
-    map<anydata>[] content = check generateChatCreationMultimodalContent(prompt);
+    (TextContentPart|ImageContentPart)[] content = check generateChatCreationMultimodalContent(prompt);
     ResponseSchema ResponseSchema = check getExpectedResponseSchema(expectedResponseTypedesc);
     intelligence:ChatCompletionTool[]|error tools = getGetResultsTool(ResponseSchema.schema);
     if tools is error {

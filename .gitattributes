@@ -12,3 +12,6 @@
 
 # Java source files should always use LF
 *.java          text eol=lf
+
+# Ballerina source files should always use LF
+*.bal          text eol=lf
