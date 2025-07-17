@@ -13,6 +13,7 @@
 // KIND, either express or implied.  See the License for the
 // specific language governing permissions and limitations
 // under the License.
+import ballerina/lang.array;
 
 type Blog record {
     string title;
@@ -42,8 +43,8 @@ const blog2 = {
         Don't forget to maintain proper hydration and nutrition for optimal performance.`
 };
 
-const imageBinaryData = [137, 80, 78, 71, 13, 10, 26, 10];
-final string imageStr = check string:fromCodePointInts(imageBinaryData);
+final byte[] imageBinaryData = [137, 80, 78, 71, 13, 10, 26, 10];
+final string imageStr = array:toBase64(imageBinaryData);
 const sampleImageUrl = "https://example.com/image.jpg";
 
 const review = "{\"rating\": 8, \"comment\": \"Talks about essential aspects of sports performance " +
