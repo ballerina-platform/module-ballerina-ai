@@ -31,3 +31,14 @@ type Data string|int|float|decimal|boolean|byte|Status|User|json|map<json>|table
 type Mail record {
     string body;
 };
+
+type TextContentPart record {|
+    readonly string 'type = "text";
+    string text;
+|};
+
+type ImageContentPart record {|
+    readonly string 'type = "image_url";
+    record {|string url;|} image_url;
+|};
+
