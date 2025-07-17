@@ -67,6 +67,10 @@ isolated function getExpectedParameterSchema(string message) returns map<json> {
         return expectedParameterSchemaStringForRateBlog8;
     }
 
+     if message.startsWith("Please describe the image") {
+        return expectedParameterSchemaStringForRateBlog8;
+    }
+
     if message.startsWith("Who is a popular sportsperson") {
         return {
             "type": "object",
@@ -149,6 +153,10 @@ isolated function getTheMockLLMResult(string message) returns string {
     }
 
     if message.startsWith("Describe the image") {
+        return "{\"result\": \"This is a sample image description.\"}";
+    }
+
+    if message.startsWith("Please describe the image") {
         return "{\"result\": \"This is a sample image description.\"}";
     }
 
@@ -270,6 +278,19 @@ isolated function getExpectedContentParts(string message) returns map<anydata>[]
                 "type": "image_url",
                 "image_url": {
                     "url": sampleImageUrl
+                }
+            },
+            {"type": "text", "text": "."}
+        ];
+    }
+
+    if message.startsWith("Please describe the image") {
+        return [
+            {"type": "text", "text": "Please describe the image. "},
+            {
+                "type": "image_url",
+                "image_url": {
+                    "url": "This-is-not-a-valid-url"
                 }
             },
             {"type": "text", "text": "."}
