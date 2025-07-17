@@ -17,6 +17,7 @@
 import ai.intelligence;
 
 import ballerina/data.jsondata;
+import ballerina/constraint;
 
 type ResponseSchema record {|
     map<json> schema;
@@ -133,10 +134,10 @@ isolated function generateChatCreationMultimodalContent(Prompt prompt)
                 });
             }
         } else if insertion is ImageDocument {
-            contentParts.push(check createImageContentPart(insertion));
+            contentParts.push(check buildImageContentPart(insertion));
         } else if insertion is ImageDocument[] {
             foreach ImageDocument doc in insertion {
-                contentParts.push(check createImageContentPart(doc));
+                contentParts.push(check buildImageContentPart(doc));
             }
         } else if insertion is Document {
             return error Error("Only text, image, audio, and file documents are supported.");
@@ -155,7 +156,12 @@ isolated function generateChatCreationMultimodalContent(Prompt prompt)
     return contentParts;
 }
 
-isolated function createImageContentPart(ImageDocument doc) returns ImageContentPart|Error {
+isolated function buildImageContentPart(ImageDocument doc) returns ImageContentPart|Error {
+    ImageDocument|constraint:Error validatedImageDoc = constraint:validate(doc);
+    if validatedImageDoc is error {
+        return error("Invalid image document: " + validatedImageDoc.message());
+    }
+
     return {
         "image_url": {
             "url": check constructImageUrl(doc.content)
