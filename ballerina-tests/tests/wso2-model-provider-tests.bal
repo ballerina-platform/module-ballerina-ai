@@ -110,6 +110,49 @@ function testGenerateMethodWithTextDocumentArray() returns error? {
 }
 
 @test:Config
+function testGenerateMethodWithImageDocumentWithBinaryData() returns ai:Error? {
+    ai:ImageDocument img = {
+        content: imageBinaryData
+    };
+
+    string|error description = defaultModelProvider->generate(`Describe the following image. ${img}.`);
+    if description is error {
+        test:assertFail(description.message());
+    }
+    test:assertEquals(description, "This is a sample image description.");
+}
+
+@test:Config
+function testGenerateMethodWithImageDocumentWithUrl() returns ai:Error? {
+    ai:ImageDocument img = {
+        content: "https://example.com/image.jpg"
+    };
+
+    string|error description = defaultModelProvider->generate(`Describe the image. ${img}.`);
+    if description is error {
+        test:assertFail(description.message());
+    }
+    test:assertEquals(description, "This is a sample image description.");
+}
+
+@test:Config
+function testGenerateMethodWithImageDocumentArray() returns ai:Error? {
+    ai:ImageDocument img = {
+        content: imageBinaryData
+    };
+    ai:ImageDocument img2 = {
+        content: "https://example.com/image.jpg"
+    };
+
+    string[]|error descriptions = defaultModelProvider->generate(
+        `Describe the following images. ${<ai:ImageDocument[]>[img, img2]}.`);
+    if descriptions is error {
+        test:assertFail(descriptions.message());
+    }
+    test:assertEquals(descriptions, ["This is a sample image description.", "This is a sample image description."]);
+}
+
+@test:Config
 function testGenerateMethodWithRecordArrayReturnType() returns error? {
     int maxScore = 10;
     Review r = check review.fromJsonStringWithType(Review);

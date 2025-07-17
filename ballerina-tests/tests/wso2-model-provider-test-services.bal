@@ -24,12 +24,14 @@ service /llm on new http:Listener(8080) {
         ChatCompletionRequestMessage[] messages = check payload.messages.ensureType();
         ChatCompletionRequestMessage message = messages[0];
 
-        string? content = check message["content"].ensureType();
+        json[]? content = check message["content"].ensureType();
         if content is () {
             test:assertFail("Expected content in the payload");
         }
 
-        test:assertEquals(content, getExpectedPrompt(content));
+        string initialContent = (check content[0].text).toString();
+        test:assertEquals(content, getExpectedContentParts(initialContent),
+                string `Test failed for prompt:- ${initialContent}`);
         test:assertEquals(message.role, "user");
         ChatCompletionTool[]? tools = payload.tools;
         if tools is () || tools.length() == 0 {
@@ -41,7 +43,8 @@ service /llm on new http:Listener(8080) {
             test:assertFail("No parameters in the expected tool");
         }
 
-        test:assertEquals(parameters, getExpectedParameterSchema(content), string `Test failed for prompt:- ${content}`);
-        return getTestServiceResponse(content);
+        test:assertEquals(parameters, getExpectedParameterSchema(initialContent),
+                string `Test failed for prompt:- ${initialContent}`);
+        return getTestServiceResponse(initialContent);
     }
 }
