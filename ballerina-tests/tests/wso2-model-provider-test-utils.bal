@@ -245,7 +245,7 @@ isolated function getExpectedContentParts(string message) returns map<anydata>[]
             {
                 "type": "image_url",
                 "image_url": {
-                    "url": string `data:image/*;base64,${imageStr}`
+                    "url": string `data:image/png;base64,${imageStr}`
                 }
             },
             {

@@ -101,7 +101,10 @@ function testGenerateMethodWithImageDocumentWithBinaryData() returns ai:Error? {
 @test:Config
 function testGenerateMethodWithImageDocumentWithUrl() returns ai:Error? {
     ai:ImageDocument img = {
-        content: "https://example.com/image.jpg"
+        content: "https://example.com/image.jpg",
+        metadata: {
+            mimeType: "image/jpg"
+        }
     };
 
     string|error description = defaultModelProvider->generate(`Describe the image. ${img}.`);
@@ -123,7 +126,10 @@ function testGenerateMethodWithImageDocumentWithInvalidUrl() returns ai:Error? {
 @test:Config
 function testGenerateMethodWithImageDocumentArray() returns ai:Error? {
     ai:ImageDocument img = {
-        content: imageBinaryData
+        content: imageBinaryData,
+        metadata: {
+            mimeType: "image/png"
+        }
     };
     ai:ImageDocument img2 = {
         content: "https://example.com/image.jpg"

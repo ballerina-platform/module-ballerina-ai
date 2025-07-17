@@ -16,8 +16,8 @@
 
 import ai.intelligence;
 
-import ballerina/data.jsondata;
 import ballerina/constraint;
+import ballerina/data.jsondata;
 import ballerina/lang.array;
 
 type ResponseSchema record {|
@@ -108,7 +108,7 @@ isolated function getGetResultsTool(map<json> parameters) returns intelligence:C
     }
 ];
 
-isolated function generateChatCreationMultimodalContent(Prompt prompt) 
+isolated function generateChatCreationMultimodalContent(Prompt prompt)
                         returns (TextContentPart|ImageContentPart)[]|Error {
     string[] & readonly strings = prompt.strings;
     anydata[] insertions = prompt.insertions;
@@ -165,16 +165,17 @@ isolated function buildImageContentPart(ImageDocument doc) returns ImageContentP
 
     return {
         "image_url": {
-            "url": check constructImageUrl(doc.content)
+            "url": check constructImageUrl(doc.content, doc.metadata?.mimeType)
         }
     };
 }
 
-isolated function constructImageUrl(Url|byte[] content) returns string|Error {
+isolated function constructImageUrl(Url|byte[] content, string? mimeType) returns string|Error {
     if content is Url {
         return content;
     }
-    return string `data:image/*;base64,${check getBase64EncodedString(content)}`;
+
+    return string `data:${mimeType ?: "image/*"};base64,${check getBase64EncodedString(content)}`;
 }
 
 isolated function getBase64EncodedString(byte[] content) returns string|Error {
