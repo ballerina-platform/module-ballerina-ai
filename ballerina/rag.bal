@@ -14,6 +14,9 @@
 // specific language governing permissions and limitations
 // under the License.
 
+isolated Wso2ModelProvider? defaultModelProvider = ();
+isolated Wso2EmbeddingProvider? defaultEmbeddingProvider = ();
+
 # Represents chunk retriever that finds relevant chunks based on query similarity.
 public type Retriever distinct isolated object {
     # Retrieves relevant chunks for the given query.
@@ -120,12 +123,35 @@ public distinct isolated class VectorKnowledgeBase {
 # Creates a default model provider based on the provided `wso2ProviderConfig`.
 # + return - A `Wso2ModelProvider` instance if the configuration is valid; otherwise, an `ai:Error`.
 public isolated function getDefaultModelProvider() returns Wso2ModelProvider|Error {
+    if defaultModelProvider is Wso2ModelProvider {
+        return <Wso2ModelProvider>defaultModelProvider;
+    }
+
     Wso2ProviderConfig? config = wso2ProviderConfig;
     if config is () {
         return error Error("The `wso2ProviderConfig` is not configured correctly."
         + " Ensure that the WSO2 model provider configuration is defined in your TOML file.");
     }
-    return new Wso2ModelProvider(config.serviceUrl, config.accessToken);
+
+    defaultModelProvider = check new Wso2ModelProvider(config.serviceUrl, config.accessToken);
+    return <Wso2ModelProvider>defaultModelProvider;
+}
+
+# Creates a default embedding provider based on the provided `wso2ProviderConfig`.
+# + return - A `Wso2EmbeddingProvider` instance if the configuration is valid; otherwise, an `ai:Error`.
+public isolated function getDefaultEmbeddingProvider() returns Wso2EmbeddingProvider|Error {
+    if defaultEmbeddingProvider is Wso2EmbeddingProvider {
+        return <Wso2EmbeddingProvider>defaultEmbeddingProvider;
+    }
+
+    Wso2ProviderConfig? config = wso2ProviderConfig;
+    if config is () {
+        return error Error("The `wso2ProviderConfig` is not configured correctly."
+        + " Ensure that the WSO2 embedding provider configuration is defined in your TOML file.");
+    }
+
+    defaultEmbeddingProvider = check new Wso2EmbeddingProvider(config.serviceUrl, config.accessToken);
+    return <Wso2EmbeddingProvider>defaultEmbeddingProvider;
 }
 
 isolated function getDefaultKnowledgeBase() returns VectorKnowledgeBase|Error {
