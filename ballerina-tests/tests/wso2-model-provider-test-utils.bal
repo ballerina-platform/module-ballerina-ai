@@ -59,6 +59,10 @@ isolated function getExpectedParameterSchema(string message) returns map<json> {
         return expectedParameterSchemaStringForRateBlog7;
     }
 
+    if message.startsWith("What is the content in this document") {
+        return expectedParameterSchemaStringForRateBlog7;
+    }
+
     if message.startsWith("Describe the following image") {
         return expectedParameterSchemaStringForRateBlog8;
     }
@@ -146,6 +150,10 @@ isolated function getTheMockLLMResult(string message) returns string {
 
     if message.startsWith("Describe the following images") {
         return "{\"result\": [\"This is a sample image description.\", \"This is a sample image description.\"]}";
+    }
+
+    if message.startsWith("What is the content in this document") {
+        return "{\"result\": [\"This is a sample image description.\"]}";
     }
 
     if message.startsWith("Describe the following image") {

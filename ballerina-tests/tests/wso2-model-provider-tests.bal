@@ -141,6 +141,18 @@ function testGenerateMethodWithImageDocumentArray() returns ai:Error? {
 }
 
 @test:Config
+function testGenerateMethodWithUnsupportedDocument() returns ai:Error? {
+    ai:Document doc = {
+        'type: "audio",
+        content: "dummy-data"
+    };
+
+    string[]|error descriptions = defaultModelProvider->generate(`What is the content in this document. ${doc}.`);
+    test:assertTrue(descriptions is error);
+    test:assertTrue((<error>descriptions).message().includes("Only text and image documents are supported."));
+}
+
+@test:Config
 function testGenerateMethodWithRecordArrayReturnType() returns error? {
     int maxScore = 10;
     Review r = check review.fromJsonStringWithType(Review);
