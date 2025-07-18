@@ -25,6 +25,8 @@ type ResponseSchema record {|
     boolean isOriginallyJsonObject = true;
 |};
 
+type DocumentContentPart TextContentPart|ImageContentPart;
+
 type TextContentPart record {|
     readonly string 'type = "text";
     string text;
@@ -109,52 +111,59 @@ isolated function getGetResultsTool(map<json> parameters) returns intelligence:C
 ];
 
 isolated function generateChatCreationContent(Prompt prompt)
-                        returns (TextContentPart|ImageContentPart)[]|Error {
+                        returns DocumentContentPart[]|Error {
     string[] & readonly strings = prompt.strings;
     anydata[] insertions = prompt.insertions;
-    (TextContentPart|ImageContentPart)[] contentParts = [];
+    DocumentContentPart[] contentParts = [];
 
     if strings.length() > 0 {
-        contentParts.push({
-            text: strings[0]
-        });
+        addTextContentpart(buildTextContentPart(strings[0]), contentParts);
     }
 
     foreach int i in 0 ..< insertions.length() {
         anydata insertion = insertions[i];
         string str = strings[i + 1];
 
-        if insertion is TextDocument {
-            contentParts.push({
-                text: insertion.content
-            });
-        } else if insertion is TextDocument[] {
-            foreach TextDocument doc in insertion {
-                contentParts.push({
-                    text: doc.content
-                });
-            }
-        } else if insertion is ImageDocument {
-            contentParts.push(check buildImageContentPart(insertion));
-        } else if insertion is ImageDocument[] {
-            foreach ImageDocument doc in insertion {
-                contentParts.push(check buildImageContentPart(doc));
+        if insertion is Document {
+            check addDocumentContentpart(insertion, contentParts);
+        } else if insertion is Document[] {
+            foreach Document doc in insertion {
+                check addDocumentContentpart(doc, contentParts);
             }
         } else if insertion is Document {
             return error Error("Only text and image documents are supported.");
         } else {
-            contentParts.push({
-                text: insertion.toString()
-            });
+            addTextContentpart(buildTextContentPart(insertion.toString()), contentParts);
         }
-
-        if str.trim().length() > 0 {
-            contentParts.push({
-                text: str
-            });
-        }
+        addTextContentpart(buildTextContentPart(str), contentParts);
     }
     return contentParts;
+}
+
+isolated function addDocumentContentpart(Document? doc, DocumentContentPart[] contentParts) returns Error? {
+    if doc is TextDocument {
+        return addTextContentpart(buildTextContentPart(doc.content), contentParts);
+    } else if doc is ImageDocument {
+        return contentParts.push(check buildImageContentPart(doc));
+    }
+    return error Error("Only text and image documents are supported.");
+}
+
+isolated function addTextContentpart(TextContentPart? contentPart, DocumentContentPart[] contentParts) {
+    if contentPart is TextContentPart {
+        return contentParts.push(contentPart);
+    }
+}
+
+isolated function buildTextContentPart(string content) returns TextContentPart? {
+    if content.length() == 0 {
+        return;
+    }
+
+    return {
+        'type: "text",
+        text: content
+    };
 }
 
 isolated function buildImageContentPart(ImageDocument doc) returns ImageContentPart|Error {
@@ -200,7 +209,7 @@ isolated function handleParseResponseError(error chatResponseError) returns erro
 
 isolated function generateLlmResponse(intelligence:Client llmClient, decimal temperature,
         Prompt prompt, typedesc<json> expectedResponseTypedesc) returns anydata|Error {
-    (TextContentPart|ImageContentPart)[] content = check generateChatCreationContent(prompt);
+    DocumentContentPart[] content = check generateChatCreationContent(prompt);
     ResponseSchema ResponseSchema = check getExpectedResponseSchema(expectedResponseTypedesc);
     intelligence:ChatCompletionTool[]|error tools = getGetResultsTool(ResponseSchema.schema);
     if tools is error {
