@@ -130,8 +130,6 @@ isolated function generateChatCreationContent(Prompt prompt)
             foreach Document doc in insertion {
                 check addDocumentContentpart(doc, contentParts);
             }
-        } else if insertion is Document {
-            return error Error("Only text and image documents are supported.");
         } else {
             addTextContentpart(buildTextContentPart(insertion.toString()), contentParts);
         }
