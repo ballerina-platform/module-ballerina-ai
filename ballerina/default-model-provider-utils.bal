@@ -117,7 +117,7 @@ isolated function generateChatCreationContent(Prompt prompt)
     DocumentContentPart[] contentParts = [];
 
     if strings.length() > 0 {
-        addTextContentpart(buildTextContentPart(strings[0]), contentParts);
+        addTextContentPart(buildTextContentPart(strings[0]), contentParts);
     }
 
     foreach int i in 0 ..< insertions.length() {
@@ -125,29 +125,29 @@ isolated function generateChatCreationContent(Prompt prompt)
         string str = strings[i + 1];
 
         if insertion is Document {
-            check addDocumentContentpart(insertion, contentParts);
+            check addDocumentContentPart(insertion, contentParts);
         } else if insertion is Document[] {
             foreach Document doc in insertion {
-                check addDocumentContentpart(doc, contentParts);
+                check addDocumentContentPart(doc, contentParts);
             }
         } else {
-            addTextContentpart(buildTextContentPart(insertion.toString()), contentParts);
+            addTextContentPart(buildTextContentPart(insertion.toString()), contentParts);
         }
-        addTextContentpart(buildTextContentPart(str), contentParts);
+        addTextContentPart(buildTextContentPart(str), contentParts);
     }
     return contentParts;
 }
 
-isolated function addDocumentContentpart(Document? doc, DocumentContentPart[] contentParts) returns Error? {
+isolated function addDocumentContentPart(Document? doc, DocumentContentPart[] contentParts) returns Error? {
     if doc is TextDocument {
-        return addTextContentpart(buildTextContentPart(doc.content), contentParts);
+        return addTextContentPart(buildTextContentPart(doc.content), contentParts);
     } else if doc is ImageDocument {
         return contentParts.push(check buildImageContentPart(doc));
     }
     return error Error("Only text and image documents are supported.");
 }
 
-isolated function addTextContentpart(TextContentPart? contentPart, DocumentContentPart[] contentParts) {
+isolated function addTextContentPart(TextContentPart? contentPart, DocumentContentPart[] contentParts) {
     if contentPart is TextContentPart {
         return contentParts.push(contentPart);
     }

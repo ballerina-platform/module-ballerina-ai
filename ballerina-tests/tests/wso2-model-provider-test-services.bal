@@ -30,7 +30,7 @@ service /llm on new http:Listener(8080) {
         }
 
         TextContentPart initialTextContent = check content[0].fromJsonWithType();
-        string initialText = initialTextContent.text.toString();
+        string initialText = initialTextContent.text;
         test:assertEquals(content, getExpectedContentParts(initialText),
                 string `Test failed for prompt with initial content, ${initialText}`);
         test:assertEquals(message.role, "user");
