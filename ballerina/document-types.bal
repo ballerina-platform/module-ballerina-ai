@@ -67,7 +67,7 @@ public type TextChunk record {|
     string content;
 |};
 
-# Represents a URL pointing to the document.
+# Represents a URL.
 @constraint:String {
     pattern: {
         value: urlRegExpr,
@@ -76,7 +76,7 @@ public type TextChunk record {|
 }
 public type Url string;
 
-# Represents documents containing image data.
+# Represents an image document.
 public type ImageDocument record {|
     *Document;
     # Fixed type identifier for image documents

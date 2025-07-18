@@ -146,7 +146,7 @@ final readonly & map<anydata>[] expectedContentPartsForRateBlog8 = [
 ];
 
 final readonly & map<anydata>[] expectedContentPartsForRateBlog9 = [
-    {"type": "text", "text": "How would you rate this text blogs out of "},
+    {"type": "text", "text": "How would you rate these text blogs out of "},
     {"type": "text", "text": "10"},
     {"type": "text", "text": ". "},
     {
