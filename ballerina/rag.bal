@@ -130,7 +130,7 @@ public isolated function getDefaultModelProvider() returns Wso2ModelProvider|Err
     Wso2ProviderConfig? config = wso2ProviderConfig;
     if config is () {
         return error Error("The `wso2ProviderConfig` is not configured correctly."
-        + " Ensure that the WSO2 model provider configuration is defined in your TOML file.");
+        + " Ensure that the WSO2 model provider configuration is defined in your Config.toml file.");
     }
 
     defaultModelProvider = check new Wso2ModelProvider(config.serviceUrl, config.accessToken);
@@ -147,7 +147,7 @@ public isolated function getDefaultEmbeddingProvider() returns Wso2EmbeddingProv
     Wso2ProviderConfig? config = wso2ProviderConfig;
     if config is () {
         return error Error("The `wso2ProviderConfig` is not configured correctly."
-        + " Ensure that the WSO2 embedding provider configuration is defined in your TOML file.");
+        + " Ensure that the WSO2 embedding provider configuration is defined in your Config.toml file.");
     }
 
     defaultEmbeddingProvider = check new Wso2EmbeddingProvider(config.serviceUrl, config.accessToken);
