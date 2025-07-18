@@ -14,7 +14,10 @@
 // specific language governing permissions and limitations
 // under the License.
 
+import ballerina/constraint;
 import ballerina/time;
+
+final string:RegExp urlRegExpr = re `[a-zA-Z][a-zA-Z0-9+.-]*://(?:[^@\s"']+@)?[^\s"']+`;
 
 # Represents additional metadata associated with documents or nodes.
 public type Metadata record {|
@@ -62,4 +65,22 @@ public type TextChunk record {|
     readonly "text-chunk" 'type = "text-chunk";
     # The text content of the chunk
     string content;
+|};
+
+# Represents a URL.
+@constraint:String {
+    pattern: {
+        value: urlRegExpr,
+        message: "Must be a valid URL"
+    }
+}
+public type Url string;
+
+# Represents an image document.
+public type ImageDocument record {|
+    *Document;
+    # Fixed type identifier for image documents
+    readonly "image" 'type = "image";
+    # Image content, either a URL or binary data
+    Url|byte[] content;
 |};
