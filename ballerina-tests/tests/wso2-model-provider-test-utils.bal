@@ -71,7 +71,7 @@ isolated function getExpectedParameterSchema(string message) returns map<json> {
         return expectedParameterSchemaStringForRateBlog8;
     }
 
-     if message.startsWith("Please describe the image") {
+    if message.startsWith("Please describe the image") {
         return expectedParameterSchemaStringForRateBlog8;
     }
 
