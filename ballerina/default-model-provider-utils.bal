@@ -186,9 +186,6 @@ isolated function buildImageUrl(Url|byte[] content, string? mimeType) returns st
 }
 
 isolated function getBase64EncodedString(byte[] content) returns string|Error {
-    if content.length() == 0 {
-        return error("Image content is empty.");
-    }
     string|error binaryContent = array:toBase64(content);
     if binaryContent is error {
         return error("Failed to convert byte array to string: " + binaryContent.message() + ", " +
