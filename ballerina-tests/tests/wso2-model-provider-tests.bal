@@ -84,7 +84,7 @@ function testGenerateMethodWithTextDocumentArray() returns error? {
     int maxScore = 10;
     Review r = check review.fromJsonStringWithType(Review);
 
-    ReviewArray|error result = defaultModelProvider->generate(`How would you rate this text blogs out of ${maxScore}. ${blogs}. Thank you!`);
+    ReviewArray|error result = defaultModelProvider->generate(`How would you rate these text blogs out of ${maxScore}. ${blogs}. Thank you!`);
     test:assertEquals(result, [r, r]);
 }
 

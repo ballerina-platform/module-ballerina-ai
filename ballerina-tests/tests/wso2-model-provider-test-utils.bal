@@ -39,7 +39,7 @@ isolated function getExpectedParameterSchema(string message) returns map<json> {
         return expectedParameterSchemaStringForRateBlog4;
     }
 
-    if message.startsWith("How would you rate this text blogs") {
+    if message.startsWith("How would you rate these text blogs") {
         return expectedParameterSchemaStringForRateBlog5;
     }
 
@@ -132,7 +132,7 @@ isolated function getTheMockLLMResult(string message) returns string {
             "\"lastName\": \"Biles\", \"yearOfBirth\": 1997, \"sport\": \"Gymnastics\"}}";
     }
 
-    if message.startsWith("How would you rate this text blogs") {
+    if message.startsWith("How would you rate these text blogs") {
         return string `{"result": [${review}, ${review}]}`;
     }
 
@@ -187,7 +187,7 @@ isolated function getTestServiceResponse(string content) returns CreateChatCompl
     ]
 };
 
-isolated function getExpectedContentParts(string message) returns map<anydata>[] {
+isolated function getExpectedContentParts(string message) returns (map<anydata>)[] {
     if message.startsWith("Rate this blog") {
         return expectedContentPartsForRateBlog;
     }
@@ -212,7 +212,7 @@ isolated function getExpectedContentParts(string message) returns map<anydata>[]
         return expectedContentPartsForRateBlog4;
     }
 
-    if message.startsWith("How would you rate this text blogs") {
+    if message.startsWith("How would you rate these text blogs") {
         return expectedContentPartsForRateBlog9;
     }
 

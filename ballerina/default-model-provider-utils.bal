@@ -108,7 +108,7 @@ isolated function getGetResultsTool(map<json> parameters) returns intelligence:C
     }
 ];
 
-isolated function generateChatCreationMultimodalContent(Prompt prompt)
+isolated function generateChatCreationContent(Prompt prompt)
                         returns (TextContentPart|ImageContentPart)[]|Error {
     string[] & readonly strings = prompt.strings;
     anydata[] insertions = prompt.insertions;
@@ -141,7 +141,7 @@ isolated function generateChatCreationMultimodalContent(Prompt prompt)
                 contentParts.push(check buildImageContentPart(doc));
             }
         } else if insertion is Document {
-            return error Error("Only text, image, audio, and file documents are supported.");
+            return error Error("Only text and image documents are supported.");
         } else {
             contentParts.push({
                 text: insertion.toString()
@@ -164,13 +164,13 @@ isolated function buildImageContentPart(ImageDocument doc) returns ImageContentP
     }
 
     return {
-        "image_url": {
-            "url": check constructImageUrl(doc.content, doc.metadata?.mimeType)
+        image_url: {
+            url: check buildImageUrl(doc.content, doc.metadata?.mimeType)
         }
     };
 }
 
-isolated function constructImageUrl(Url|byte[] content, string? mimeType) returns string|Error {
+isolated function buildImageUrl(Url|byte[] content, string? mimeType) returns string|Error {
     if content is Url {
         return content;
     }
@@ -200,7 +200,7 @@ isolated function handleParseResponseError(error chatResponseError) returns erro
 
 isolated function generateLlmResponse(intelligence:Client llmClient, decimal temperature,
         Prompt prompt, typedesc<json> expectedResponseTypedesc) returns anydata|Error {
-    (TextContentPart|ImageContentPart)[] content = check generateChatCreationMultimodalContent(prompt);
+    (TextContentPart|ImageContentPart)[] content = check generateChatCreationContent(prompt);
     ResponseSchema ResponseSchema = check getExpectedResponseSchema(expectedResponseTypedesc);
     intelligence:ChatCompletionTool[]|error tools = getGetResultsTool(ResponseSchema.schema);
     if tools is error {
