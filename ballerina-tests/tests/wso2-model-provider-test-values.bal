@@ -51,37 +51,25 @@ const review = "{\"rating\": 8, \"comment\": \"Talks about essential aspects of 
         "including warm-up, form, equipment, and nutrition.\"}";
 
 final readonly & map<anydata>[] expectedContentPartsForRateBlog = [
-    {"type": "text", "text": "Rate this blog out of 10.\n        Title: "},
-    {"type": "text", "text": "Tips for Growing a Beautiful Garden"},
-    {"type": "text", "text": "\n        Content: "},
     {
         "type": "text",
-        "text": "Spring is the perfect time to start your garden. \n        " +
-        "Begin by preparing your soil with organic compost and ensure proper drainage. \n        " +
-        "Choose plants suitable for your climate zone, and remember to water them regularly. \n        " +
-        "Don't forget to mulch to retain moisture and prevent weeds."
+        "text": string `Rate this blog out of 10.
+        Title: ${blog1.title}
+        Content: ${blog1.content}`
     }
 ];
 
 final readonly & map<anydata>[] expectedContentPartsForRateBlog2 = [
-    {"type": "text", "text": "Please rate this blog out of 10.\n        Title: "},
-    {"type": "text", "text": "Essential Tips for Sports Performance"},
-    {"type": "text", "text": "\n        Content: "},
     {
         "type": "text",
-        "text": "Success in sports requires dedicated preparation and training.\n        " +
-        "Begin by establishing a proper warm-up routine and maintaining good form.\n        " +
-        "Choose the right equipment for your sport, and stay consistent with training.\n        " +
-        "Don't forget to maintain proper hydration and nutrition for optimal performance."
+        "text": string `Please rate this blog out of 10.
+        Title: ${blog2.title}
+        Content: ${blog2.content}`
     }
 ];
 
 const map<anydata>[] expectedContentPartsForRateBlog3 = [
-    {"type": "text", "text": "What is "},
-    {"type": "text", "text": "1"},
-    {"type": "text", "text": " + "},
-    {"type": "text", "text": "1"},
-    {"type": "text", "text": "?"}
+    {"type": "text", "text": "What is 1 + 1?"}
 ];
 
 const map<anydata>[] expectedContentPartsForRateBlog4 = [
@@ -89,11 +77,7 @@ const map<anydata>[] expectedContentPartsForRateBlog4 = [
 ];
 
 final readonly & map<anydata>[] expectedContentPartsForRateBlog5 = [
-    {"type": "text", "text": "How would you rate this "},
-    {"type": "text", "text": "blog"},
-    {"type": "text", "text": " content out of "},
-    {"type": "text", "text": "10"},
-    {"type": "text", "text": ". "},
+    {"type": "text", "text": "How would you rate this blog content out of 10. "},
     {
         "type": "text",
         "text": "Title: Tips for Growing a Beautiful Garden Content: " +
@@ -106,35 +90,15 @@ final readonly & map<anydata>[] expectedContentPartsForRateBlog5 = [
 ];
 
 final readonly & map<anydata>[] expectedContentPartsForRateBlog7 = [
-    {"type": "text", "text": "Please rate this blogs out of "},
-    {"type": "text", "text": "10"},
-    {"type": "text", "text": ".\n        [{Title: "},
-    {"type": "text", "text": "Tips for Growing a Beautiful Garden"},
-    {"type": "text", "text": ", Content: "},
     {
         "type": "text",
-        "text": "Spring is the perfect time to start your garden. \n        " +
-        "Begin by preparing your soil with organic compost and ensure proper drainage. \n        " +
-        "Choose plants suitable for your climate zone, and remember to water them regularly. \n        " +
-        "Don't forget to mulch to retain moisture and prevent weeds."
-    },
-    {"type": "text", "text": "}, {Title: "},
-    {"type": "text", "text": "Essential Tips for Sports Performance"},
-    {"type": "text", "text": ", Content: "},
-    {
-        "type": "text",
-        "text": "Success in sports requires dedicated preparation and training.\n        " +
-        "Begin by establishing a proper warm-up routine and maintaining good form.\n        " +
-        "Choose the right equipment for your sport, and stay consistent with training.\n        " +
-        "Don't forget to maintain proper hydration and nutrition for optimal performance."
-    },
-    {"type": "text", "text": "}]"}
+        "text": string `Please rate this blogs out of 10.
+        [{Title: ${blog1.title}, Content: ${blog1.content}}, {Title: ${blog2.title}, Content: ${blog2.content}}]`
+    }
 ];
 
 final readonly & map<anydata>[] expectedContentPartsForRateBlog8 = [
-    {"type": "text", "text": "How would you rate this text blog out of "},
-    {"type": "text", "text": "10"},
-    {"type": "text", "text": ", "},
+    {"type": "text", "text": "How would you rate this text blog out of 10, "},
     {
         "type": "text",
         "text": "Title: Tips for Growing a Beautiful Garden Content: " +
@@ -146,9 +110,7 @@ final readonly & map<anydata>[] expectedContentPartsForRateBlog8 = [
 ];
 
 final readonly & map<anydata>[] expectedContentPartsForRateBlog9 = [
-    {"type": "text", "text": "How would you rate these text blogs out of "},
-    {"type": "text", "text": "10"},
-    {"type": "text", "text": ". "},
+    {"type": "text", "text": "How would you rate these text blogs out of 10. "},
     {
         "type": "text",
         "text": "Title: Tips for Growing a Beautiful Garden Content: " +
@@ -170,26 +132,12 @@ final readonly & map<anydata>[] expectedContentPartsForRateBlog9 = [
 final readonly & map<anydata>[] expectedContentPartsForRateBlog10 = [
     {
         "type": "text",
-        "text": "Evaluate this blogs out of 10.\n        Title: "
-    },
-    {"type": "text", "text": "Tips for Growing a Beautiful Garden"},
-    {"type": "text", "text": "\n        Content: "},
-    {
-        "type": "text",
-        "text": "Spring is the perfect time to start your garden. \n        " +
-        "Begin by preparing your soil with organic compost and ensure proper drainage. \n        " +
-        "Choose plants suitable for your climate zone, and remember to water them regularly. \n        " +
-        "Don't forget to mulch to retain moisture and prevent weeds."
-    },
-    {"type": "text", "text": "\n\n        Title: "},
-    {"type": "text", "text": "Tips for Growing a Beautiful Garden"},
-    {"type": "text", "text": "\n        Content: "},
-    {
-        "type": "text",
-        "text": "Spring is the perfect time to start your garden. \n        " +
-        "Begin by preparing your soil with organic compost and ensure proper drainage. \n        " +
-        "Choose plants suitable for your climate zone, and remember to water them regularly. \n        " +
-        "Don't forget to mulch to retain moisture and prevent weeds."
+        "text": string `Evaluate this blogs out of 10.
+        Title: ${blog1.title}
+        Content: ${blog1.content}
+
+        Title: ${blog1.title}
+        Content: ${blog1.content}`
     }
 ];
 

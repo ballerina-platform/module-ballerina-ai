@@ -45,7 +45,7 @@ function testGenerateMethodWithBasicArrayReturnType() returns ai:Error? {
 
 @test:Config
 function testGenerateMethodWithRecordReturnType() returns error? {
-    Review|error result = defaultModelProvider->generate(`Please rate this blog out of 10.
+    Review|error result = defaultModelProvider->generate(`Please rate this blog out of ${"10"}.
         Title: ${blog2.title}
         Content: ${blog2.content}`);
     test:assertEquals(result, check review.fromJsonStringWithType(Review));
@@ -60,17 +60,6 @@ function testGenerateMethodWithTextDocument() returns ai:Error? {
 
     int|error rating = defaultModelProvider->generate(`How would you rate this ${"blog"} content out of ${maxScore}. ${blog}.`);
     test:assertEquals(rating, 4);
-}
-
-@test:Config
-function testGenerateMethodWithTextDocument2() returns error? {
-    ai:TextDocument blog = {
-        content: string `Title: ${blog1.title} Content: ${blog1.content}`
-    };
-    int maxScore = 10;
-
-    Review|error result = defaultModelProvider->generate(`How would you rate this text blog out of ${maxScore}, ${blog}.`);
-    test:assertEquals(result, check review.fromJsonStringWithType(Review));
 }
 
 type ReviewArray Review[];
@@ -111,8 +100,7 @@ function testGenerateMethodWithImageDocumentWithUrl() returns ai:Error? {
     test:assertEquals(description, "This is a sample image description.");
 }
 
-// Disabled due to https://github.com/ballerina-platform/ballerina-library/issues/8102.
-@test:Config {enable: false}
+@test:Config
 function testGenerateMethodWithImageDocumentWithInvalidUrl() returns ai:Error? {
     ai:ImageDocument img = {
         content: "This-is-not-a-valid-url"
@@ -120,7 +108,11 @@ function testGenerateMethodWithImageDocumentWithInvalidUrl() returns ai:Error? {
 
     string|ai:Error description = defaultModelProvider->generate(`Please describe the image. ${img}.`);
     test:assertTrue(description is ai:Error);
-    test:assertTrue((<ai:Error>description).message().includes("Must be a valid URL"));
+
+    string actualErrorMessage = (<ai:Error>description).message();
+    string expectedErrorMessage = "Must be a valid URL";
+    test:assertTrue((<ai:Error>description).message().includes("Must be a valid URL"),
+            string `expected '${expectedErrorMessage}', found ${actualErrorMessage}`);
 }
 
 @test:Config
@@ -136,8 +128,42 @@ function testGenerateMethodWithImageDocumentArray() returns ai:Error? {
     };
 
     string[]|error descriptions = defaultModelProvider->generate(
-        `Describe the following images. ${<ai:ImageDocument[]>[img, img2]}.`);
+        `Describe the following ${"2"} images. ${<ai:ImageDocument[]>[img, img2]}.`);
     test:assertEquals(descriptions, ["This is a sample image description.", "This is a sample image description."]);
+}
+
+@test:Config
+function testGenerateMethodWithTextAndImageDocumentArray() returns ai:Error? {
+    ai:ImageDocument img = {
+        content: imageBinaryData,
+        metadata: {
+            mimeType: "image/png"
+        }
+    };
+    ai:TextDocument blog = {
+        content: string `Title: ${blog1.title} Content: ${blog1.content}`
+    };
+
+    string[]|error descriptions = defaultModelProvider->generate(
+        `Please describe the following image and the doc. ${<ai:Document[]>[img, blog]}.`);
+    test:assertEquals(descriptions, ["This is a sample image description.", "This is a sample doc description."]);
+}
+
+@test:Config
+function testGenerateMethodWithImageDocumentsandTextDocuments() returns ai:Error? {
+    ai:ImageDocument img = {
+        content: imageBinaryData,
+        metadata: {
+            mimeType: "image/png"
+        }
+    };
+    ai:TextDocument blog = {
+        content: string `Title: ${blog1.title} Content: ${blog1.content}`
+    };
+
+    string[]|error descriptions = defaultModelProvider->generate(
+        `${"Describe"} the following ${"text"} ${"document"} and image document. ${img}${blog}`);
+    test:assertEquals(descriptions, ["This is a sample image description.", "This is a sample doc description."]);
 }
 
 @test:Config
