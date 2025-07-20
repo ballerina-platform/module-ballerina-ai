@@ -145,7 +145,7 @@ isolated function generateChatCreationContent(Prompt prompt)
     return contentParts;
 }
 
-isolated function addDocumentContentPart(Document? doc, DocumentContentPart[] contentParts) returns Error? {
+isolated function addDocumentContentPart(Document doc, DocumentContentPart[] contentParts) returns Error? {
     if doc is TextDocument {
         return addTextContentPart(buildTextContentPart(doc.content), contentParts);
     } else if doc is ImageDocument {
