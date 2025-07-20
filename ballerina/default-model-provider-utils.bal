@@ -115,9 +115,10 @@ isolated function generateChatCreationContent(Prompt prompt)
     string[] & readonly strings = prompt.strings;
     anydata[] insertions = prompt.insertions;
     DocumentContentPart[] contentParts = [];
+    string accumulatedTextContent = "";
 
     if strings.length() > 0 {
-        addTextContentPart(buildTextContentPart(strings[0]), contentParts);
+        accumulatedTextContent += strings[0];
     }
 
     foreach int i in 0 ..< insertions.length() {
@@ -125,16 +126,22 @@ isolated function generateChatCreationContent(Prompt prompt)
         string str = strings[i + 1];
 
         if insertion is Document {
+            addTextContentPart(buildTextContentPart(accumulatedTextContent), contentParts);
             check addDocumentContentPart(insertion, contentParts);
+            accumulatedTextContent = "";
         } else if insertion is Document[] {
+            addTextContentPart(buildTextContentPart(accumulatedTextContent), contentParts);
             foreach Document doc in insertion {
                 check addDocumentContentPart(doc, contentParts);
             }
+            accumulatedTextContent = "";
         } else {
-            addTextContentPart(buildTextContentPart(insertion.toString()), contentParts);
+            accumulatedTextContent += insertion.toString();
         }
-        addTextContentPart(buildTextContentPart(str), contentParts);
+        accumulatedTextContent += str;
     }
+
+    addTextContentPart(buildTextContentPart(accumulatedTextContent), contentParts);
     return contentParts;
 }
 
@@ -165,11 +172,6 @@ isolated function buildTextContentPart(string content) returns TextContentPart? 
 }
 
 isolated function buildImageContentPart(ImageDocument doc) returns ImageContentPart|Error {
-    ImageDocument|constraint:Error validatedImageDoc = constraint:validate(doc);
-    if validatedImageDoc is error {
-        return error("Invalid image document: " + validatedImageDoc.message());
-    }
-
     return {
         image_url: {
             url: check buildImageUrl(doc.content, doc.metadata?.mimeType)
@@ -179,6 +181,10 @@ isolated function buildImageContentPart(ImageDocument doc) returns ImageContentP
 
 isolated function buildImageUrl(Url|byte[] content, string? mimeType) returns string|Error {
     if content is Url {
+        Url|constraint:Error validationRes = constraint:validate(content);
+        if validationRes is error {
+            return error(validationRes.message(), validationRes.cause());
+        }
         return content;
     }
 

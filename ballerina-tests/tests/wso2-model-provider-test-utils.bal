@@ -55,7 +55,15 @@ isolated function getExpectedParameterSchema(string message) returns map<json> {
         return expectedParamterSchemaStringForCountry;
     }
 
-    if message.startsWith("Describe the following images") {
+    if message.startsWith("Describe the following 2 images") {
+        return expectedParameterSchemaStringForRateBlog7;
+    }
+
+    if message.startsWith("Please describe the following image and the doc") {
+        return expectedParameterSchemaStringForRateBlog7;
+    }
+
+    if message.startsWith("Describe the following text document and image document") {
         return expectedParameterSchemaStringForRateBlog7;
     }
 
@@ -148,8 +156,16 @@ isolated function getTheMockLLMResult(string message) returns string {
         return "{\"result\": 4}";
     }
 
-    if message.startsWith("Describe the following images") {
+    if message.startsWith("Describe the following 2 images") {
         return "{\"result\": [\"This is a sample image description.\", \"This is a sample image description.\"]}";
+    }
+
+    if message.startsWith("Please describe the following image and the doc") {
+        return "{\"result\": [\"This is a sample image description.\", \"This is a sample doc description.\"]}";
+    }
+
+    if message.startsWith("Describe the following text document and image document") {
+        return "{\"result\": [\"This is a sample image description.\", \"This is a sample doc description.\"]}";
     }
 
     if message.startsWith("What is the content in this document") {
@@ -247,9 +263,9 @@ isolated function getExpectedContentParts(string message) returns (map<anydata>)
         ];
     }
 
-    if message.startsWith("Describe the following images") {
+    if message.startsWith("Describe the following 2 images") {
         return [
-            {"type": "text", "text": "Describe the following images. "},
+            {"type": "text", "text": "Describe the following 2 images. "},
             {
                 "type": "image_url",
                 "image_url": {
@@ -263,6 +279,39 @@ isolated function getExpectedContentParts(string message) returns (map<anydata>)
                 }
             },
             {"type": "text", "text": "."}
+        ];
+    }
+
+    if message.startsWith("Please describe the following image and the doc") {
+        return [
+            {"type": "text", "text": "Please describe the following image and the doc. "},
+            {
+                "type": "image_url",
+                "image_url": {
+                    "url": string `data:image/png;base64,${imageStr}`
+                }
+            },
+            {
+                "type": "text",
+                "text": string `Title: ${blog1.title} Content: ${blog1.content}`
+            },
+            {"type": "text", "text": "."}
+        ];
+    }
+
+    if message.startsWith("Describe the following text document and image document") {
+        return [
+            {"type": "text", "text": "Describe the following text document and image document. "},
+            {
+                "type": "image_url",
+                "image_url": {
+                    "url": string `data:image/png;base64,${imageStr}`
+                }
+            },
+            {
+                "type": "text",
+                "text": string `Title: ${blog1.title} Content: ${blog1.content}`
+            }
         ];
     }
 
