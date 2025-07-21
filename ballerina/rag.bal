@@ -104,9 +104,12 @@ public distinct isolated class VectorKnowledgeBase {
     # + chunks - The array of chunk to index
     # + return - An `ai:Error` if indexing fails; otherwise, `nil`
     public isolated function ingest(Chunk[] chunks) returns Error? {
-        VectorEntry[] entries = from Chunk chunk in chunks
-            let Embedding embedding = check self.embeddingModel->embed(chunk)
-            select {embedding, chunk};
+        Embedding[] embeddings = check self.embeddingModel->batchEmbed(chunks);
+        if chunks.length() != embeddings.length() {
+            return error Error("Mismatch between number of chunks and embeddings generated");
+        }
+        VectorEntry[] entries = from [int, Chunk] [i, chunk] in chunks.enumerate()
+            select {chunk, embedding: embeddings[i]};
         check self.vectorStore.add(entries);
     }
 
