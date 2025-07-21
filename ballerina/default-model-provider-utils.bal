@@ -125,14 +125,14 @@ isolated function generateChatCreationContent(Prompt prompt)
         anydata insertion = insertions[i];
         string str = strings[i + 1];
 
-        if insertion is Document {
+        if insertion is Document|Chunk {
             addTextContentPart(buildTextContentPart(accumulatedTextContent), contentParts);
             accumulatedTextContent = "";
             check addDocumentContentPart(insertion, contentParts);
-        } else if insertion is Document[] {
+        } else if insertion is (Document|Chunk)[] {
             addTextContentPart(buildTextContentPart(accumulatedTextContent), contentParts);
             accumulatedTextContent = "";
-            foreach Document doc in insertion {
+            foreach Document|Chunk doc in insertion {
                 check addDocumentContentPart(doc, contentParts);
             }
         } else {
@@ -145,8 +145,8 @@ isolated function generateChatCreationContent(Prompt prompt)
     return contentParts;
 }
 
-isolated function addDocumentContentPart(Document doc, DocumentContentPart[] contentParts) returns Error? {
-    if doc is TextDocument {
+isolated function addDocumentContentPart(Document|Chunk doc, DocumentContentPart[] contentParts) returns Error? {
+    if doc is TextDocument|TextChunk {
         return addTextContentPart(buildTextContentPart(doc.content), contentParts);
     } else if doc is ImageDocument {
         return contentParts.push(check buildImageContentPart(doc));
