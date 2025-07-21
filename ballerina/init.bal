@@ -16,7 +16,20 @@
 
 import ballerina/jballerina.java;
 
-isolated function init() {
+# Configurable for WSO2 provider.
+configurable Wso2ProviderConfig? wso2ProviderConfig = ();
+
+isolated function init() returns Error? {
+    Wso2ProviderConfig? config = wso2ProviderConfig;
+    if config is () {
+        defaultModelProvider = ();
+        defaultEmbeddingProvider = ();
+    } else {
+        Wso2ProviderConfig {serviceUrl, accessToken} = config;
+        defaultModelProvider = check new (serviceUrl, accessToken);
+        defaultEmbeddingProvider = check new (serviceUrl, accessToken);
+    }
+
     setModule();
 }
 

@@ -14,6 +14,9 @@
 // specific language governing permissions and limitations
 // under the License.
 
+final Wso2ModelProvider? defaultModelProvider;
+final Wso2EmbeddingProvider? defaultEmbeddingProvider;
+
 # Represents chunk retriever that finds relevant chunks based on query similarity.
 public type Retriever distinct isolated object {
     # Retrieves relevant chunks for the given query.
@@ -120,29 +123,23 @@ public distinct isolated class VectorKnowledgeBase {
 # Creates a default model provider based on the provided `wso2ProviderConfig`.
 # + return - A `Wso2ModelProvider` instance if the configuration is valid; otherwise, an `ai:Error`.
 public isolated function getDefaultModelProvider() returns Wso2ModelProvider|Error {
-    Wso2ProviderConfig? config = wso2ProviderConfig;
-    if config is () {
-        return error Error("The `wso2ProviderConfig` is not configured correctly."
-        + " Ensure that the WSO2 model provider configuration is defined in your TOML file.");
+    if defaultModelProvider is () {
+        return error Error("The `ballerina.ai.wso2ProviderConfig` is not configured correctly."
+            + " Ensure values are configured for the WSO2 model provider configurable variable");
     }
-    return new Wso2ModelProvider(config.serviceUrl, config.accessToken);
+
+    return <Wso2ModelProvider>defaultModelProvider;
 }
 
-isolated function getDefaultKnowledgeBase() returns VectorKnowledgeBase|Error {
-    Wso2ProviderConfig? config = wso2ProviderConfig;
-    if config is () {
-        return error Error("The `wso2ProviderConfig` is not configured correctly."
-        + " Ensure that the WSO2 model provider configuration is defined in your TOML file.");
+# Creates a default embedding provider based on the provided `wso2ProviderConfig`.
+# + return - A `Wso2EmbeddingProvider` instance if the configuration is valid; otherwise, an `ai:Error`.
+public isolated function getDefaultEmbeddingProvider() returns Wso2EmbeddingProvider|Error {
+    if defaultEmbeddingProvider is () {
+        return error Error("The `ballerina.ai.wso2ProviderConfig` is not configured correctly."
+            + " Ensure values are configured for the WSO2 embedding provider configurable variable");
     }
-    EmbeddingProvider|Error wso2EmbeddingProvider = new Wso2EmbeddingProvider(config.serviceUrl, config.accessToken);
-    if wso2EmbeddingProvider is Error {
-        return error Error("Error creating default vector knowledge base");
-    }
-    InMemoryVectorStore|Error inMemoryVectorStore = check new;
-    if inMemoryVectorStore is Error {
-        return error Error("Error creating default in-memory vector store", inMemoryVectorStore);
-    }
-    return new VectorKnowledgeBase(inMemoryVectorStore, wso2EmbeddingProvider);
+
+    return <Wso2EmbeddingProvider>defaultEmbeddingProvider;
 }
 
 # Augments the user's query with relevant context.
