@@ -20,15 +20,14 @@ import ballerina/jballerina.java;
 configurable Wso2ProviderConfig? wso2ProviderConfig = ();
 
 isolated function init() returns Error? {
-    lock {
-        Wso2ProviderConfig? config = wso2ProviderConfig;
-        if config is () {
-            defaultModelProvider = ();
-            defaultEmbeddingProvider = ();
-        } else {
-            defaultModelProvider = check new Wso2ModelProvider(config.serviceUrl, config.accessToken);
-            defaultEmbeddingProvider = check new Wso2EmbeddingProvider(config.serviceUrl, config.accessToken);
-        }
+    Wso2ProviderConfig? config = wso2ProviderConfig;
+    if config is () {
+        defaultModelProvider = ();
+        defaultEmbeddingProvider = ();
+    } else {
+        Wso2ProviderConfig {serviceUrl, accessToken} = config;
+        defaultModelProvider = check new (serviceUrl, accessToken);
+        defaultEmbeddingProvider = check new (serviceUrl, accessToken);
     }
 
     setModule();
