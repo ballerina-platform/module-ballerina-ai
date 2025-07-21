@@ -19,16 +19,12 @@ import io.ballerina.runtime.api.Module;
 import io.ballerina.runtime.api.creators.ErrorCreator;
 import io.ballerina.runtime.api.creators.TypeCreator;
 import io.ballerina.runtime.api.creators.ValueCreator;
-import io.ballerina.runtime.api.types.ArrayType;
-import io.ballerina.runtime.api.types.JsonType;
-import io.ballerina.runtime.api.types.PredefinedTypes;
-import io.ballerina.runtime.api.types.Type;
+import io.ballerina.runtime.api.types.*;
 import io.ballerina.runtime.api.utils.StringUtils;
 import io.ballerina.runtime.api.utils.TypeUtils;
-import io.ballerina.runtime.api.values.BError;
-import io.ballerina.runtime.api.values.BMap;
-import io.ballerina.runtime.api.values.BString;
-import io.ballerina.runtime.api.values.BTypedesc;
+import io.ballerina.runtime.api.values.*;
+
+import java.util.List;
 
 import static io.ballerina.runtime.api.creators.ValueCreator.createMapValue;
 
@@ -58,9 +54,68 @@ public class Native {
         return switch (impliedType) {
             case JsonType ignored -> generateJsonSchemaForJson();
             case ArrayType arrayType -> generateJsonSchemaForArrayType(arrayType, schemaGenerationContext);
+            case UnionType unionType -> generateUnionTypeSchema(unionType, schemaGenerationContext);
+            case AnnotatableType annotatableType -> getJsonSchemaFromAnnotatableType(annotatableType,
+                    schemaGenerationContext);
+            case MapType mapType  ->  generateMapTypeSchema(mapType, schemaGenerationContext);
             default -> throw ErrorCreator.createError(StringUtils.fromString(
                     "Runtime schema generation is not yet supported for type: " + impliedType.getName()));
         };
+    }
+
+    private static Object generateMapTypeSchema(MapType mapType, SchemaGenerationContext schemaGenerationContext) {
+        BMap<BString, Object> schemaMap = createMapValue(TypeCreator.createMapType(PredefinedTypes.TYPE_JSON));
+        schemaMap.put(StringUtils.fromString("type"), StringUtils.fromString("object"));
+//        schemaMap.put(StringUtils.fromString("properties"),createMapValue(TypeCreator.createMapType(PredefinedTypes.TYPE_JSON)));
+        BMap<BString, Object> additionalProps = createMapValue(TypeCreator.createMapType(PredefinedTypes.TYPE_JSON));
+        additionalProps.put(StringUtils.fromString("type"), StringUtils.fromString("string"));
+        schemaMap.put(StringUtils.fromString("additionalProperties"), additionalProps);
+        return schemaMap;
+    }
+
+    private static Object generateUnionTypeSchema(UnionType unionType,
+                                                  SchemaGenerationContext schemaGenerationContext) {
+        BMap<BString, Object> schemaMap = createMapValue(TypeCreator.createMapType(PredefinedTypes.TYPE_JSON));
+        List<Type> memberTypes = unionType.getMemberTypes();
+        boolean isNullableTypeExist = false;
+        BArray schemas= ValueCreator.createArrayValue(
+                TypeCreator.createArrayType(PredefinedTypes.TYPE_JSON));
+        for (Type memberType : memberTypes) {
+            if (memberType.getTag() == TypeTags.NULL_TAG) {
+                isNullableTypeExist = true;
+                continue;
+            }
+            Object schema = generateJsonSchemaForType(memberType, schemaGenerationContext);
+            schemas.append(schema);
+        }
+        if (schemas.size() == 1) {
+            if (!isNullableTypeExist) {
+                return schemas.get(0);
+            }
+            BMap<BString, Object> schema = (BMap) (schemas.get(0));
+            schema.put(StringUtils.fromString("nullable"), isNullableTypeExist);
+            return schema;
+        }
+        schemaMap.put(StringUtils.fromString("oneOf"), schemas);
+        if (isNullableTypeExist) {
+            schemaMap.put(StringUtils.fromString("nullable"), isNullableTypeExist);
+        }
+        return schemaMap;
+    }
+
+    private static Object getJsonSchemaFromAnnotatableType(AnnotatableType annotatableType,
+                                                           SchemaGenerationContext schemaGenerationContext) {
+        BMap<BString, Object> annotations = annotatableType.getAnnotations();
+        for (BString key : annotations.getKeys()) {
+            if (key.getValue().startsWith("ballerina/ai:") && key.getValue().endsWith("JsonSchema")) {
+                Object schema = annotations.get(key);
+                if (schema instanceof BMap) {
+                    return schema;
+                }
+            }
+        }
+        throw ErrorCreator.createError(StringUtils.fromString(
+                "Runtime schema generation is not yet supported for type: " + annotatableType.getName()));
     }
 
     private static BError createAIError(BString message) {

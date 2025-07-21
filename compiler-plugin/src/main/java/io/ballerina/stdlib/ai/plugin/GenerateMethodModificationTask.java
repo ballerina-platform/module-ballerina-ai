@@ -20,13 +20,7 @@ package io.ballerina.stdlib.ai.plugin;
 
 import io.ballerina.compiler.api.ModuleID;
 import io.ballerina.compiler.api.SemanticModel;
-import io.ballerina.compiler.api.symbols.ErrorTypeSymbol;
-import io.ballerina.compiler.api.symbols.ModuleSymbol;
-import io.ballerina.compiler.api.symbols.Symbol;
-import io.ballerina.compiler.api.symbols.TypeDefinitionSymbol;
-import io.ballerina.compiler.api.symbols.TypeReferenceTypeSymbol;
-import io.ballerina.compiler.api.symbols.TypeSymbol;
-import io.ballerina.compiler.api.symbols.UnionTypeSymbol;
+import io.ballerina.compiler.api.symbols.*;
 import io.ballerina.compiler.syntax.tree.AnnotationNode;
 import io.ballerina.compiler.syntax.tree.ExpressionNode;
 import io.ballerina.compiler.syntax.tree.IdentifierToken;
@@ -61,13 +55,7 @@ import io.swagger.v3.core.util.Json;
 import io.swagger.v3.core.util.OpenAPISchema2JsonSchema;
 import io.swagger.v3.oas.models.media.Schema;
 
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
+import java.util.*;
 
 import static io.ballerina.projects.util.ProjectConstants.EMPTY_STRING;
 
@@ -242,27 +230,37 @@ public class GenerateMethodModificationTask implements ModifierTask<SourceModifi
         }
 
         private void updateTypeSchema(TypeSymbol expTypeSymbol) {
-            if (!(expTypeSymbol instanceof UnionTypeSymbol expTypeUnionSymbol)) {
-                return;
-            }
-
-            TypeSymbol nonErrorTypeSymbol = null;
-            TypeSymbol typeRefTypeSymbol = null;
-            List<TypeSymbol> memberTypeSymbols = expTypeUnionSymbol.memberTypeDescriptors();
-            for (TypeSymbol memberTypeSymbol: memberTypeSymbols) {
-                if (memberTypeSymbol instanceof TypeReferenceTypeSymbol typeReferenceTypeSymbol) {
-                    typeRefTypeSymbol = typeReferenceTypeSymbol.typeDescriptor();
+            //TODO: Need to find-out other complex types that can be made from Simple TypeReferenceType(Eg: intersection)
+            ArrayList<TypeSymbol> typeSymbolsContainer = new ArrayList<>();
+            ArrayList<TypeSymbol> processedTypeSymbolContainer  = new ArrayList<>();
+            typeSymbolsContainer.add(expTypeSymbol);
+            while (!typeSymbolsContainer.isEmpty()) {
+                TypeSymbol currentTypeSymbol = typeSymbolsContainer.removeFirst();
+                TypeSymbol memberTypeSymbol = null;
+                if (currentTypeSymbol instanceof UnionTypeSymbol expTypeUnionSymbol) {
+                    typeSymbolsContainer.addAll(expTypeUnionSymbol.memberTypeDescriptors());
+                    continue;
                 }
-
-                if (!(typeRefTypeSymbol instanceof ErrorTypeSymbol)) {
-                    nonErrorTypeSymbol = memberTypeSymbol;
+                if (currentTypeSymbol instanceof ArrayTypeSymbol expTypeArraySymbol) {
+                    typeSymbolsContainer.add(expTypeArraySymbol.memberTypeDescriptor());
+                    continue;
                 }
+                if (currentTypeSymbol instanceof MapTypeSymbol expTypeMapSymbol) {
+                    typeSymbolsContainer.add(expTypeMapSymbol.typeParam());
+                    continue;
+                }
+                if (!(currentTypeSymbol instanceof TypeReferenceTypeSymbol typeReferenceTypeSymbol)) {
+                    continue;
+                }
+                memberTypeSymbol = typeReferenceTypeSymbol.typeDescriptor();
+                if (memberTypeSymbol instanceof ErrorTypeSymbol) {
+                    continue;
+                }
+                processedTypeSymbolContainer.add(currentTypeSymbol);
             }
-
-            if (!(nonErrorTypeSymbol instanceof TypeReferenceTypeSymbol)) {
-                return;
+            for (TypeSymbol memberTypeSymbol : processedTypeSymbolContainer) {
+                populateTypeSchema(memberTypeSymbol, typeMapper, modifierData.typeSchemas);
             }
-            populateTypeSchema(nonErrorTypeSymbol, typeMapper, modifierData.typeSchemas);
         }
 
         private static void populateTypeSchema(TypeSymbol memberType, TypeMapper typeMapper,
