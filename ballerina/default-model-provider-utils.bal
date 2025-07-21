@@ -28,7 +28,7 @@ type ResponseSchema record {|
 type DocumentContentPart TextContentPart|ImageContentPart;
 
 type TextContentPart record {|
-    readonly string 'type = "text";
+    readonly "text" 'type = "text";
     string text;
 |};
 
