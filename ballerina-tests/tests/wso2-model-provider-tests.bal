@@ -202,8 +202,8 @@ type ProductName record {|
 |};
 
 @test:Config
-function testGenerateMethodWithInvalidRecordType() returns ai:Error? {
-    ProductName[]|error rating = trap defaultModelProvider->generate(
+function testGenerateMethodWithInvalidMapType() returns ai:Error? {
+    map<string>|error rating = trap defaultModelProvider->generate(
                 `Tell me name and the age of the top 10 world class cricketers`);
     string msg = (<error>rating).message();
     test:assertTrue(rating is error);
@@ -219,4 +219,30 @@ function testGenerateMethodWithInvalidRecordArrayType2() returns ai:Error? {
                 `Tell me name and the age of the top 10 world class cricketers`);
     test:assertTrue(rating is error);
     test:assertTrue((<error>rating).message().includes(ERROR_MESSAGE));
+}
+
+type Cricketers record {|
+    string name;
+|};
+
+
+@test:Config
+function testGenerateMethodWithArray() returns ai:Error? {
+    Cricketers[]|error? rating = defaultModelProvider->generate(
+                `Name 10 world class cricketers`);
+    test:assertTrue(rating is Cricketers[]);
+}
+
+@test:Config
+function testGenerateMethodWithArrayUnionRecord() returns ai:Error? {
+    Cricketers[]|Cricketers|error rating = defaultModelProvider->generate(
+                `Name top 10 world class cricketers`);
+    test:assertTrue(rating is Cricketers[]);
+}
+
+@test:Config
+function testGenerateMethodWithArrayUnionRecord2() returns ai:Error? {
+    Cricketers[]|Cricketers|error rating = defaultModelProvider->generate(
+                `Name a random world class cricketer`);
+    test:assertTrue(rating is Cricketers);
 }
