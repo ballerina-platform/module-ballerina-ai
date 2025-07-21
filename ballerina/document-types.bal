@@ -84,3 +84,29 @@ public type ImageDocument record {|
     # Image content, either a URL or binary data
     Url|byte[] content;
 |};
+
+# Represents an audio document.
+public type AudioDocument record{|
+    *Document;
+    # Fixed type identifier for audio documents
+    readonly "audio" 'type = "audio";
+    # Audio format specification (defaults to WAV)
+    string format = "wav";
+    # Audio content - can be either a URL or binary data
+    Url|byte[] content;
+|};
+
+# Represents an ID referring to a file.
+public type FileId record {|
+    # Unique identifier for the file
+    string fileId;
+|};
+
+# Represents a generic file document.
+public type FileDocument record {|
+    *Document;
+    # Fixed type identifier for file documents
+    readonly "file" 'type = "file";
+    # File content, a URL, binary data, or a file ID reference
+    byte[]|Url|FileId content;
+|};
