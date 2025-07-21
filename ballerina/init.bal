@@ -18,6 +18,14 @@ import ballerina/jballerina.java;
 
 isolated function init() {
     setModule();
+
+    Wso2ProviderConfig? config = wso2ProviderConfig;
+    if config is () {
+        return;
+    }
+
+    defaultModelProvider = check new Wso2ModelProvider(config.serviceUrl, config.accessToken);
+    defaultEmbeddingProvider = check new Wso2EmbeddingProvider(config.serviceUrl, config.accessToken);
 }
 
 isolated function setModule() = @java:Method {
