@@ -177,7 +177,7 @@ function testGenerateMethodWithUnsupportedDocument() returns ai:Error? {
 
     string[]|error descriptions = defaultModelProvider->generate(`What is the content in this document. ${doc}.`);
     test:assertTrue(descriptions is error);
-    test:assertTrue((<error>descriptions).message().includes("Only text and image documents are supported."));
+    test:assertTrue((<error>descriptions).message().includes("Only text and image documents/chunks are supported."));
 }
 
 @test:Config
