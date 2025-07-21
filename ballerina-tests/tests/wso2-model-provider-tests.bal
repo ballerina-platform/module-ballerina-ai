@@ -170,14 +170,49 @@ function testGenerateMethodWithImageDocumentsandTextDocuments() returns ai:Error
 
 @test:Config
 function testGenerateMethodWithUnsupportedDocument() returns ai:Error? {
+    string expectedErrorMessage = "Only text and image documents are supported.";
+
     ai:Document doc = {
         'type: "audio",
         content: "dummy-data"
     };
 
-    string[]|error descriptions = defaultModelProvider->generate(`What is the content in this document. ${doc}.`);
-    test:assertTrue(descriptions is error);
-    test:assertTrue((<error>descriptions).message().includes("Only text and image documents are supported."));
+    ai:FileDocument fileDoc = {
+        'type: "file",
+        content: "dummy-url"
+    };
+
+    ai:AudioDocument audioDoc = {
+        'type: "audio",
+        content: "dummy-url"
+    };
+
+    string|ai:Error description = defaultModelProvider->generate(`What is the content in this document. ${doc}.`);
+    if description is string {  
+        test:assertFail("Expected an error, but got a string: " + description);  
+    } 
+
+    string actualErrorMessage = description.message();
+    test:assertTrue(actualErrorMessage == expectedErrorMessage, 
+        string `expected '${expectedErrorMessage}', found ${actualErrorMessage}`);
+
+    description = defaultModelProvider->generate(`What is the content in this document. ${fileDoc}.`);
+    if description is string {  
+        test:assertFail("Expected an error, but got a string: " + description);  
+    } 
+
+    actualErrorMessage = description.message();
+    test:assertTrue(actualErrorMessage == expectedErrorMessage, 
+        string `expected '${expectedErrorMessage}', found ${actualErrorMessage}`);
+
+    description = defaultModelProvider->generate(`What is the content in this document. ${audioDoc}.`);
+    if description is string {  
+        test:assertFail("Expected an error, but got a string: " + description);  
+    } 
+
+    actualErrorMessage = description.message();
+    test:assertTrue(actualErrorMessage == expectedErrorMessage, 
+        string `expected '${expectedErrorMessage}', found ${actualErrorMessage}`);
 }
 
 @test:Config
