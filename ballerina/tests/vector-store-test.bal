@@ -34,6 +34,18 @@ isolated client class MockEmbeddingProvider {
             return error Error("Failed to generate embding for the provided chunk", err);
         }
     }
+
+    isolated remote function batchEmbed(Chunk[] chunks) returns Embedding[]|Error {
+        Embedding[] embeddings = [];
+        foreach Chunk chunk in chunks {
+            Embedding|Error embedding = check self->embed(chunk);
+            if embedding is Error {
+                return error Error("Failed to generate embeddings for the provided chunks", embedding);
+            }
+            embeddings.push(embedding);
+        }
+        return embeddings;
+    }
 }
 
 final MockEmbeddingProvider mockEmbeddingProvider = new;
