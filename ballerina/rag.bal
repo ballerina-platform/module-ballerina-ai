@@ -125,7 +125,7 @@ public distinct isolated class VectorKnowledgeBase {
 public isolated function getDefaultModelProvider() returns Wso2ModelProvider|Error {
     if defaultModelProvider is () {
         return error Error("The `ballerina.ai.wso2ProviderConfig` is not configured correctly."
-            + " Ensure that the WSO2 model provider configuration is defined in your Config.toml file.");
+            + " Ensure values are configured for the WSO2 model provider configurable variable");
     }
 
     return <Wso2ModelProvider>defaultModelProvider;
@@ -136,7 +136,7 @@ public isolated function getDefaultModelProvider() returns Wso2ModelProvider|Err
 public isolated function getDefaultEmbeddingProvider() returns Wso2EmbeddingProvider|Error {
     if defaultEmbeddingProvider is () {
         return error Error("The `ballerina.ai.wso2ProviderConfig` is not configured correctly."
-            + " Ensure that the WSO2 embedding provider configuration is defined in your Config.toml file.");
+            + " Ensure values are configured for the WSO2 embedding provider configurable variable");
     }
 
     return <Wso2EmbeddingProvider>defaultEmbeddingProvider;

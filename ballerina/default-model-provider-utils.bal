@@ -15,11 +15,26 @@
 // under the License.
 
 import ai.intelligence;
+
+import ballerina/constraint;
 import ballerina/data.jsondata;
+import ballerina/lang.array;
 
 type ResponseSchema record {|
     map<json> schema;
     boolean isOriginallyJsonObject = true;
+|};
+
+type DocumentContentPart TextContentPart|ImageContentPart;
+
+type TextContentPart record {|
+    readonly "text" 'type = "text";
+    string text;
+|};
+
+type ImageContentPart record {|
+    readonly "image_url" 'type = "image_url";
+    record {|string url;|} image_url;
 |};
 
 const JSON_CONVERSION_ERROR = "FromJsonStringError";
@@ -85,45 +100,103 @@ isolated function getGetResultsToolChoice() returns intelligence:ChatCompletionN
 
 isolated function getGetResultsTool(map<json> parameters) returns intelligence:ChatCompletionTool[]|error =>
     [
-        {
-            'type: FUNCTION,
-            'function: {
-                name: GET_RESULTS_TOOL,
-                parameters: check parameters.cloneWithType(),
-                description: "Tool to call with the response from a large language model (LLM) for a user prompt."
-            }
+    {
+        'type: FUNCTION,
+        'function: {
+            name: GET_RESULTS_TOOL,
+            parameters: check parameters.cloneWithType(),
+            description: "Tool to call with the response from a large language model (LLM) for a user prompt."
         }
-    ];
+    }
+];
 
-isolated function generateChatCreationContent(Prompt prompt) returns string|Error {
+isolated function generateChatCreationContent(Prompt prompt)
+                        returns DocumentContentPart[]|Error {
     string[] & readonly strings = prompt.strings;
     anydata[] insertions = prompt.insertions;
-    string promptStr = strings[0];
+    DocumentContentPart[] contentParts = [];
+    string accumulatedTextContent = "";
+
+    if strings.length() > 0 {
+        accumulatedTextContent += strings[0];
+    }
+
     foreach int i in 0 ..< insertions.length() {
-        string str = strings[i + 1];
         anydata insertion = insertions[i];
-
-        if insertion is TextDocument {
-            promptStr += insertion.content + " " + str;
-            continue;
-        }
-
-        if insertion is TextDocument[] {
-            foreach TextDocument doc in insertion {
-                promptStr += doc.content  + " ";
-                
-            }
-            promptStr += str;
-            continue;
-        }
+        string str = strings[i + 1];
 
         if insertion is Document {
-            return error Error("Only Text Documents are currently supported.");
+            addTextContentPart(buildTextContentPart(accumulatedTextContent), contentParts);
+            accumulatedTextContent = "";
+            check addDocumentContentPart(insertion, contentParts);
+        } else if insertion is Document[] {
+            addTextContentPart(buildTextContentPart(accumulatedTextContent), contentParts);
+            accumulatedTextContent = "";
+            foreach Document doc in insertion {
+                check addDocumentContentPart(doc, contentParts);
+            }
+        } else {
+            accumulatedTextContent += insertion.toString();
         }
-
-        promptStr += insertion.toString() + str;
+        accumulatedTextContent += str;
     }
-    return promptStr.trim();
+
+    addTextContentPart(buildTextContentPart(accumulatedTextContent), contentParts);
+    return contentParts;
+}
+
+isolated function addDocumentContentPart(Document doc, DocumentContentPart[] contentParts) returns Error? {
+    if doc is TextDocument {
+        return addTextContentPart(buildTextContentPart(doc.content), contentParts);
+    } else if doc is ImageDocument {
+        return contentParts.push(check buildImageContentPart(doc));
+    }
+    return error("Only text and image documents are supported.");
+}
+
+isolated function addTextContentPart(TextContentPart? contentPart, DocumentContentPart[] contentParts) {
+    if contentPart is TextContentPart {
+        return contentParts.push(contentPart);
+    }
+}
+
+isolated function buildTextContentPart(string content) returns TextContentPart? {
+    if content.length() == 0 {
+        return;
+    }
+
+    return {
+        'type: "text",
+        text: content
+    };
+}
+
+isolated function buildImageContentPart(ImageDocument doc) returns ImageContentPart|Error =>
+    {
+        image_url: {
+            url: check buildImageUrl(doc.content, doc.metadata?.mimeType)
+        }
+    };
+
+isolated function buildImageUrl(Url|byte[] content, string? mimeType) returns string|Error {
+    if content is Url {
+        Url|constraint:Error validationRes = constraint:validate(content);
+        if validationRes is error {
+            return error(validationRes.message(), validationRes.cause());
+        }
+        return content;
+    }
+
+    return string `data:${mimeType ?: "image/*"};base64,${check getBase64EncodedString(content)}`;
+}
+
+isolated function getBase64EncodedString(byte[] content) returns string|Error {
+    string|error binaryContent = array:toBase64(content);
+    if binaryContent is error {
+        return error("Failed to convert byte array to string: " + binaryContent.message() + ", " +
+                        binaryContent.detail().toBalString());
+    }
+    return binaryContent;
 }
 
 isolated function handleParseResponseError(error chatResponseError) returns error {
@@ -136,7 +209,7 @@ isolated function handleParseResponseError(error chatResponseError) returns erro
 
 isolated function generateLlmResponse(intelligence:Client llmClient, decimal temperature,
         Prompt prompt, typedesc<json> expectedResponseTypedesc) returns anydata|Error {
-    string content = check generateChatCreationContent(prompt);
+    DocumentContentPart[] content = check generateChatCreationContent(prompt);
     ResponseSchema ResponseSchema = check getExpectedResponseSchema(expectedResponseTypedesc);
     intelligence:ChatCompletionTool[]|error tools = getGetResultsTool(ResponseSchema.schema);
     if tools is error {
@@ -157,13 +230,13 @@ isolated function generateLlmResponse(intelligence:Client llmClient, decimal tem
 
     intelligence:CreateChatCompletionResponse|error response = llmClient->/chat/completions.post(request);
     if response is error {
-        return error("LLM call failed: " + response.message());
+        return error("LLM call failed: " + response.message(), detail = response.detail(), cause = response.cause());
     }
 
     record {
-        *intelligence:ChatCompletionChoiceCommon; 
+        *intelligence:ChatCompletionChoiceCommon;
         @jsondata:Name {value: "content_filter_results"}
-        intelligence:ContentFilterChoiceResults contentFilterResults?; 
+        intelligence:ContentFilterChoiceResults contentFilterResults?;
         intelligence:ChatCompletionResponseMessage message?;
     }[] choices = response.choices;
 
