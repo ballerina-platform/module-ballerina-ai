@@ -151,7 +151,7 @@ isolated function addDocumentContentPart(Document|Chunk doc, DocumentContentPart
     } else if doc is ImageDocument {
         return contentParts.push(check buildImageContentPart(doc));
     }
-    return error("Only text and image documents/chunks are supported.");
+    return error("Only text and image documents are supported.");
 }
 
 isolated function addTextContentPart(TextContentPart? contentPart, DocumentContentPart[] contentParts) {
