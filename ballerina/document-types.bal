@@ -84,3 +84,12 @@ public type ImageDocument record {|
     # Image content, either a URL or binary data
     Url|byte[] content;
 |};
+
+# Represents a chunk of image within a image document.
+public type ImageChunk record {|
+    *Chunk;
+    # Fixed type for the image chunk
+    readonly "image-chunk" 'type = "image-chunk";
+    # The image content of the chunk
+    Url|byte[] content;
+|};
