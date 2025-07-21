@@ -125,7 +125,7 @@ isolated function generateChatCreationContent(Prompt prompt)
         anydata insertion = insertions[i];
         string str = strings[i + 1];
 
-        if insertion is Document || insertion is Chunk {
+        if insertion is Document|Chunk {
             addTextContentPart(buildTextContentPart(accumulatedTextContent), contentParts);
             accumulatedTextContent = "";
             check addDocumentContentPart(insertion, contentParts);
@@ -146,9 +146,9 @@ isolated function generateChatCreationContent(Prompt prompt)
 }
 
 isolated function addDocumentContentPart(Document|Chunk doc, DocumentContentPart[] contentParts) returns Error? {
-    if doc is TextDocument || doc is TextChunk {
+    if doc is TextDocument|TextChunk {
         return addTextContentPart(buildTextContentPart(doc.content), contentParts);
-    } else if doc is ImageDocument || doc is ImageChunk {
+    } else if doc is ImageDocument {
         return contentParts.push(check buildImageContentPart(doc));
     }
     return error("Only text and image documents/chunks are supported.");
@@ -171,7 +171,7 @@ isolated function buildTextContentPart(string content) returns TextContentPart? 
     };
 }
 
-isolated function buildImageContentPart(ImageDocument|ImageChunk doc) returns ImageContentPart|Error =>
+isolated function buildImageContentPart(ImageDocument doc) returns ImageContentPart|Error =>
     {
         image_url: {
             url: check buildImageUrl(doc.content, doc.metadata?.mimeType)
