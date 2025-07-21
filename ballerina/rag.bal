@@ -14,8 +14,8 @@
 // specific language governing permissions and limitations
 // under the License.
 
-isolated Wso2ModelProvider? defaultModelProvider = ();
-isolated Wso2EmbeddingProvider? defaultEmbeddingProvider = ();
+final Wso2ModelProvider? defaultModelProvider;
+final Wso2EmbeddingProvider? defaultEmbeddingProvider;
 
 # Represents chunk retriever that finds relevant chunks based on query similarity.
 public type Retriever distinct isolated object {
@@ -146,7 +146,7 @@ isolated function getDefaultKnowledgeBase() returns VectorKnowledgeBase|Error {
     Wso2ProviderConfig? config = wso2ProviderConfig;
     if config is () {
         return error Error("The `wso2ProviderConfig` is not configured correctly."
-        + " Ensure that the WSO2 model provider configuration is defined in your TOML file.");
+        + " Ensure that the WSO2 model provider configuration is defined in your Config TOML file.");
     }
     EmbeddingProvider|Error wso2EmbeddingProvider = new Wso2EmbeddingProvider(config.serviceUrl, config.accessToken);
     if wso2EmbeddingProvider is Error {

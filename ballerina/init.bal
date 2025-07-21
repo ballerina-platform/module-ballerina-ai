@@ -16,16 +16,22 @@
 
 import ballerina/jballerina.java;
 
-isolated function init() {
-    setModule();
+# Configurable for WSO2 provider.
+configurable Wso2ProviderConfig? wso2ProviderConfig = ();
 
-    Wso2ProviderConfig? config = wso2ProviderConfig;
-    if config is () {
-        return;
+isolated function init() returns Error? {
+    lock {
+        Wso2ProviderConfig? config = wso2ProviderConfig;
+        if config is () {
+            defaultModelProvider = ();
+            defaultEmbeddingProvider = ();
+        } else {
+            defaultModelProvider = check new Wso2ModelProvider(config.serviceUrl, config.accessToken);
+            defaultEmbeddingProvider = check new Wso2EmbeddingProvider(config.serviceUrl, config.accessToken);
+        }
     }
 
-    defaultModelProvider = check new Wso2ModelProvider(config.serviceUrl, config.accessToken);
-    defaultEmbeddingProvider = check new Wso2EmbeddingProvider(config.serviceUrl, config.accessToken);
+    setModule();
 }
 
 isolated function setModule() = @java:Method {
