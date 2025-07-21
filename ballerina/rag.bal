@@ -108,10 +108,8 @@ public distinct isolated class VectorKnowledgeBase {
         if chunks.length() != embeddings.length() {
             return error Error("Mismatch between number of chunks and embeddings generated");
         }
-        VectorEntry[] entries = [];
-        foreach int i in 0 ..< chunks.length() {
-            entries.push({chunk: chunks[i], embedding: embeddings[i]});
-        }
+        VectorEntry[] entries = from [int, Chunk] [i, chunk] in chunks.enumerate()
+            select {chunk, embedding: embeddings[i]};
         check self.vectorStore.add(entries);
     }
 
