@@ -110,8 +110,7 @@ isolated function getGetResultsTool(map<json> parameters) returns intelligence:C
     }
 ];
 
-isolated function generateChatCreationContent(Prompt prompt)
-                        returns DocumentContentPart[]|Error {
+isolated function generateChatCreationContent(Prompt prompt) returns DocumentContentPart[]|Error {
     string[] & readonly strings = prompt.strings;
     anydata[] insertions = prompt.insertions;
     DocumentContentPart[] contentParts = [];
