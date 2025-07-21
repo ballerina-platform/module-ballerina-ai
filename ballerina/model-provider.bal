@@ -134,9 +134,6 @@ public type Wso2ProviderConfig record {|
     string accessToken;
 |};
 
-# Configurable for WSO2 provider.
-configurable Wso2ProviderConfig? wso2ProviderConfig = ();
-
 const DEFAULT_TEMPERATURE = 0.7d;
 
 # WSO2 model provider implementation that provides chat completion capabilities using WSO2's AI services.
