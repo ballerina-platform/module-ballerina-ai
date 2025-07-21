@@ -113,7 +113,7 @@ function testGenerateMethodWithImageDocumentWithInvalidUrl() returns ai:Error? {
 
     string actualErrorMessage = description.message();
     string expectedErrorMessage = "Must be a valid URL.";
-    test:assertTrue(actualErrorMessage == expectedErrorMessage, 
+    test:assertEquals(actualErrorMessage, expectedErrorMessage, 
         string `expected '${expectedErrorMessage}', found ${actualErrorMessage}`);
 }
 
@@ -193,7 +193,7 @@ function testGenerateMethodWithUnsupportedDocument() returns ai:Error? {
     } 
 
     string actualErrorMessage = description.message();
-    test:assertTrue(actualErrorMessage == expectedErrorMessage, 
+    test:assertEquals(actualErrorMessage, expectedErrorMessage,
         string `expected '${expectedErrorMessage}', found ${actualErrorMessage}`);
 
     description = defaultModelProvider->generate(`What is the content in this document. ${fileDoc}.`);
@@ -202,7 +202,7 @@ function testGenerateMethodWithUnsupportedDocument() returns ai:Error? {
     } 
 
     actualErrorMessage = description.message();
-    test:assertTrue(actualErrorMessage == expectedErrorMessage, 
+    test:assertEquals(actualErrorMessage, expectedErrorMessage,
         string `expected '${expectedErrorMessage}', found ${actualErrorMessage}`);
 
     description = defaultModelProvider->generate(`What is the content in this document. ${audioDoc}.`);
@@ -211,7 +211,7 @@ function testGenerateMethodWithUnsupportedDocument() returns ai:Error? {
     } 
 
     actualErrorMessage = description.message();
-    test:assertTrue(actualErrorMessage == expectedErrorMessage, 
+    test:assertEquals(actualErrorMessage, expectedErrorMessage,
         string `expected '${expectedErrorMessage}', found ${actualErrorMessage}`);
 }
 
