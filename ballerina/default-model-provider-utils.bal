@@ -33,7 +33,7 @@ type TextContentPart record {|
 |};
 
 type ImageContentPart record {|
-    readonly string 'type = "image_url";
+    readonly "image_url" 'type = "image_url";
     record {|string url;|} image_url;
 |};
 
@@ -127,14 +127,14 @@ isolated function generateChatCreationContent(Prompt prompt)
 
         if insertion is Document {
             addTextContentPart(buildTextContentPart(accumulatedTextContent), contentParts);
-            check addDocumentContentPart(insertion, contentParts);
             accumulatedTextContent = "";
+            check addDocumentContentPart(insertion, contentParts);
         } else if insertion is Document[] {
             addTextContentPart(buildTextContentPart(accumulatedTextContent), contentParts);
+            accumulatedTextContent = "";
             foreach Document doc in insertion {
                 check addDocumentContentPart(doc, contentParts);
             }
-            accumulatedTextContent = "";
         } else {
             accumulatedTextContent += insertion.toString();
         }
@@ -151,7 +151,7 @@ isolated function addDocumentContentPart(Document doc, DocumentContentPart[] con
     } else if doc is ImageDocument {
         return contentParts.push(check buildImageContentPart(doc));
     }
-    return error Error("Only text and image documents are supported.");
+    return error("Only text and image documents are supported.");
 }
 
 isolated function addTextContentPart(TextContentPart? contentPart, DocumentContentPart[] contentParts) {
@@ -171,13 +171,12 @@ isolated function buildTextContentPart(string content) returns TextContentPart? 
     };
 }
 
-isolated function buildImageContentPart(ImageDocument doc) returns ImageContentPart|Error {
-    return {
+isolated function buildImageContentPart(ImageDocument doc) returns ImageContentPart|Error =>
+    {
         image_url: {
             url: check buildImageUrl(doc.content, doc.metadata?.mimeType)
         }
     };
-}
 
 isolated function buildImageUrl(Url|byte[] content, string? mimeType) returns string|Error {
     if content is Url {

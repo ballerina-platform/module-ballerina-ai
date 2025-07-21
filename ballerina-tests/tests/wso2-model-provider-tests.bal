@@ -107,12 +107,14 @@ function testGenerateMethodWithImageDocumentWithInvalidUrl() returns ai:Error? {
     };
 
     string|ai:Error description = defaultModelProvider->generate(`Please describe the image. ${img}.`);
-    test:assertTrue(description is ai:Error);
+    if description is string {  
+        test:assertFail("Expected an error, but got a string: " + description);  
+    }  
 
-    string actualErrorMessage = (<ai:Error>description).message();
-    string expectedErrorMessage = "Must be a valid URL";
-    test:assertTrue((<ai:Error>description).message().includes("Must be a valid URL"),
-            string `expected '${expectedErrorMessage}', found ${actualErrorMessage}`);
+    string actualErrorMessage = description.message();
+    string expectedErrorMessage = "Must be a valid URL.";
+    test:assertTrue(actualErrorMessage == expectedErrorMessage, 
+        string `expected '${expectedErrorMessage}', found ${actualErrorMessage}`);
 }
 
 @test:Config
