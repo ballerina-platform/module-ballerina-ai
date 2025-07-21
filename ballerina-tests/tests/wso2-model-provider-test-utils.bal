@@ -107,6 +107,19 @@ isolated function getExpectedParameterSchema(string message) returns map<json> {
         };
     }
 
+    if message.startsWith("Name top 10 world class cricketers") {
+        return expectedParameterSchemaStringForRate7;
+    }
+
+    if message.startsWith("Name a random world class cricketer") {
+        return expectedParameterSchemaStringForRate7;
+    }
+
+    if message.startsWith("Name 10 world class cricketers") {
+        return expectedParameterSchemaStringForRateRip;
+    }
+
+
     return {};
 }
 
@@ -182,6 +195,18 @@ isolated function getTheMockLLMResult(string message) returns string {
 
     if message.startsWith("Please describe the image") {
         return "{\"result\": \"This is a sample image description.\"}";
+    }
+
+    if message.startsWith("Name a random world class cricketer") {
+        return "{\"result\": {\"name\": \"Sanga\"}}";
+    }
+
+    if message.startsWith("Name 10 world class cricketers") {
+        return "{\"result\": [{\"name\": \"Virat Kohli\"}, {\"name\": \"Joe Root\"}, {\"name\": \"Steve Smith\"}, {\"name\": \"Kane Williamson\"}, {\"name\": \"Babar Azam\"}, {\"name\": \"Ben Stokes\"}, {\"name\": \"Jasprit Bumrah\"}, {\"name\": \"Pat Cummins\"}, {\"name\": \"Shaheen Afridi\"}, {\"name\": \"Rashid Khan\"}]}";
+    }
+
+    if message.startsWith("Name top 10 world class cricketers") {
+        return "{\"result\": [{\"name\": \"Virat Kohli\"}, {\"name\": \"Joe Root\"}, {\"name\": \"Steve Smith\"}, {\"name\": \"Kane Williamson\"}, {\"name\": \"Babar Azam\"}, {\"name\": \"Ben Stokes\"}, {\"name\": \"Jasprit Bumrah\"}, {\"name\": \"Pat Cummins\"}, {\"name\": \"Shaheen Afridi\"}, {\"name\": \"Rashid Khan\"}]}";
     }
 
     return "INVALID";
@@ -351,6 +376,33 @@ isolated function getExpectedContentParts(string message) returns (map<anydata>)
                 }
             },
             {"type": "text", "text": "."}
+        ];
+    }
+
+    if message.startsWith("Name 10 world class cricketers") {
+        return [
+            {
+                "type": "text",
+                "text": string `Name 10 world class cricketers`
+            }
+        ];
+    }
+
+    if message.startsWith("Name top 10 world class cricketers") {
+        return [
+            {
+                "type": "text",
+                "text": string `Name top 10 world class cricketers`
+            }
+        ];
+    }
+
+    if message.startsWith("Name a random world class cricketer") {
+        return [
+            {
+                "type": "text",
+                "text": string `Name a random world class cricketer`
+            }
         ];
     }
 

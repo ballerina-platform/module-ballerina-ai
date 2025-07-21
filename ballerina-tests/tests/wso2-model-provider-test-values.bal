@@ -225,3 +225,67 @@ const expectedParameterSchemaStringForRateBlog8 =
 
 const expectedParamterSchemaStringForCountry =
     {"type": "object", "properties": {"result": {"type": "string"}}};
+
+const expectedParameterSchemaStringForRateRip =
+    {
+        "type": "object",
+        "properties": {
+            "result": {
+                "anyOf": [
+                    {
+                        "type": "array",
+                        "items": {
+                            "required": [
+                                "name"
+                            ],
+                            "type": "object",
+                            "properties": {
+                                "name": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    {
+                        "type": null
+                    }
+                ]
+            }
+        }
+    };
+
+const expectedParameterSchemaStringForRate7 =
+    {
+        "type": "object",
+        "properties": {
+            "result": {
+                "anyOf": [
+                    {
+                        "type": "array",
+                        "items": {
+                            "required": [
+                                "name"
+                            ],
+                            "type": "object",
+                            "properties": {
+                                "name": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    {
+                        "required": [
+                            "name"
+                        ],
+                        "type": "object",
+                        "properties": {
+                            "name": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                ]
+            }
+        }
+    };
