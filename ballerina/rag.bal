@@ -124,7 +124,7 @@ public distinct isolated class VectorKnowledgeBase {
 # + return - A `Wso2ModelProvider` instance if the configuration is valid; otherwise, an `ai:Error`.
 public isolated function getDefaultModelProvider() returns Wso2ModelProvider|Error {
     if defaultModelProvider is () {
-        return error Error("The `wso2ProviderConfig` is not configured correctly."
+        return error Error("The `ballerina.ai.wso2ProviderConfig` is not configured correctly."
             + " Ensure that the WSO2 model provider configuration is defined in your Config.toml file.");
     }
 
@@ -135,28 +135,11 @@ public isolated function getDefaultModelProvider() returns Wso2ModelProvider|Err
 # + return - A `Wso2EmbeddingProvider` instance if the configuration is valid; otherwise, an `ai:Error`.
 public isolated function getDefaultEmbeddingProvider() returns Wso2EmbeddingProvider|Error {
     if defaultEmbeddingProvider is () {
-        return error Error("The `wso2ProviderConfig` is not configured correctly."
+        return error Error("The `ballerina.ai.wso2ProviderConfig` is not configured correctly."
             + " Ensure that the WSO2 embedding provider configuration is defined in your Config.toml file.");
     }
 
     return <Wso2EmbeddingProvider>defaultEmbeddingProvider;
-}
-
-isolated function getDefaultKnowledgeBase() returns VectorKnowledgeBase|Error {
-    Wso2ProviderConfig? config = wso2ProviderConfig;
-    if config is () {
-        return error Error("The `wso2ProviderConfig` is not configured correctly."
-        + " Ensure that the WSO2 model provider configuration is defined in your Config TOML file.");
-    }
-    EmbeddingProvider|Error wso2EmbeddingProvider = new Wso2EmbeddingProvider(config.serviceUrl, config.accessToken);
-    if wso2EmbeddingProvider is Error {
-        return error Error("Error creating default vector knowledge base");
-    }
-    InMemoryVectorStore|Error inMemoryVectorStore = check new;
-    if inMemoryVectorStore is Error {
-        return error Error("Error creating default in-memory vector store", inMemoryVectorStore);
-    }
-    return new VectorKnowledgeBase(inMemoryVectorStore, wso2EmbeddingProvider);
 }
 
 # Augments the user's query with relevant context.
