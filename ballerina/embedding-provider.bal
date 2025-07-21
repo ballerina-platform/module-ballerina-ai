@@ -72,7 +72,7 @@ public distinct isolated client class Wso2EmbeddingProvider {
 
     # Converts chunk to embedding.
     #
-    # + cunk - The data to embed
+    # + chunk - The data to embed
     # + return - Embedding representation of the chunk content or an `ai:Error` if the embedding service fails
     isolated remote function embed(Chunk chunk) returns Embedding|Error {
         if chunk !is TextChunk|TextDocument {
