@@ -90,9 +90,7 @@ public type AudioDocument record{|
     *Document;
     # Fixed type identifier for audio documents
     readonly "audio" 'type = "audio";
-    # Audio format specification (defaults to WAV)
-    string format = "wav";
-    # Audio content - can be either a URL or binary data
+    # Audio content, either a URL or binary data
     Url|byte[] content;
 |};
 
