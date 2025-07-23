@@ -260,24 +260,82 @@ type Cricketers record {|
     string name;
 |};
 
+type Cricketers1 record {|
+    string name;
+|};
+
+type Cricketers2 record {|
+    string name;
+|};
+
+type Cricketers3 record {|
+    string name;
+|};
+
+type Cricketers4 record {|
+    string name;
+|};
+
+type Cricketers5 record {|
+    string name;
+|};
+
+type Cricketers6 record {|
+    string name;
+|};
+
+type Cricketers7 record {|
+    string name;
+|};
+
+type Cricketers8 record {|
+    string name;
+|};
 
 @test:Config
-function testGenerateMethodWithArray() returns ai:Error? {
-    Cricketers[]|error? rating = defaultModelProvider->generate(
-                `Name 10 world class cricketers`);
-    test:assertTrue(rating is Cricketers[]);
+function testGenerateMethodWithStringUnionNull() returns error? {
+    string? result = check defaultModelProvider->generate(`Give me a random joke`);
+    test:assertTrue(result is string);
+}
+
+@test:Config
+function testGenerateMethodWithRecUnionBasicType() returns error? {
+    Cricketers|string result = check defaultModelProvider->generate(`Give me a random joke about cricketers`);
+    test:assertTrue(result is string);
+}
+
+@test:Config
+function testGenerateMethodWithRecUnionNull() returns error? {
+    Cricketers1? result = check defaultModelProvider->generate(`Name a random world class cricketer in India`);
+    test:assertTrue(result is Cricketers1);
+}
+
+@test:Config
+function testGenerateMethodWithArrayOnly() returns error? {
+    Cricketers2[] result = check defaultModelProvider->generate(`Name 10 world class cricketers in India`);
+    test:assertTrue(result is Cricketers2[]);
+}
+
+@test:Config
+function testGenerateMethodWithArrayUnionBasicType() returns error? {
+    Cricketers3[]|string result = check defaultModelProvider->generate(`Name 10 world class cricketers as string`);
+    test:assertTrue(result is Cricketers3[]);
+}
+
+@test:Config
+function testGenerateMethodWithArrayUnionNull() returns error? {
+    Cricketers4[]? result = check defaultModelProvider->generate(`Name 10 world class cricketers`);
+    test:assertTrue(result is Cricketers4[]);
 }
 
 @test:Config
 function testGenerateMethodWithArrayUnionRecord() returns ai:Error? {
-    Cricketers[]|Cricketers|error rating = defaultModelProvider->generate(
-                `Name top 10 world class cricketers`);
-    test:assertTrue(rating is Cricketers[]);
+    Cricketers5[]|Cricketers6|error result = defaultModelProvider->generate(`Name top 10 world class cricketers`);
+    test:assertTrue(result is Cricketers5[]);
 }
 
 @test:Config
 function testGenerateMethodWithArrayUnionRecord2() returns ai:Error? {
-    Cricketers[]|Cricketers|error rating = defaultModelProvider->generate(
-                `Name a random world class cricketer`);
-    test:assertTrue(rating is Cricketers);
+    Cricketers7[]|Cricketers8|error result = defaultModelProvider->generate(`Name a random world class cricketer`);
+    test:assertTrue(result is Cricketers8);
 }
