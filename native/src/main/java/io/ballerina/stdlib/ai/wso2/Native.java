@@ -48,7 +48,6 @@ public class Native {
     public static final String ANY_OF = "anyOf";
     public static final String BALLERINA_AI = "ballerina/ai";
     public static final String JSON_SCHEMA = "JsonSchema";
-    public static final String NULLABLE = "nullable";
 
     public static Object generateJsonSchemaForTypedescNative(BTypedesc td) {
         SchemaGenerationContext schemaGenerationContext = new SchemaGenerationContext();
