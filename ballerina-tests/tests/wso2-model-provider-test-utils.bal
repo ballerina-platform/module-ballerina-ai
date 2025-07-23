@@ -83,6 +83,27 @@ isolated function getExpectedParameterSchema(string message) returns map<json> {
         return expectedParameterSchemaStringForRateBlog8;
     }
 
+    if message.startsWith("Give me a random joke about cricketers") {
+        return expectedParameterSchemaForRecUnionBasicType;
+    }
+
+    if message.startsWith("Give me a random joke") {
+        return {"type":"object","properties":{"result":{"anyOf":[{"type":"string"},{"type":"null"}]}}};
+    }
+
+
+    if message.startsWith("Name a random world class cricketer in India") {
+        return expectedParameterSchemaForRecUnionNull;
+    }
+
+    if message.startsWith("Name 10 world class cricketers in India") {
+        return expectedParameterSchemaForArrayOnly;
+    }
+
+    if message.startsWith("Name 10 world class cricketers as string") {
+        return expectedParameterSchemaForArrayUnionBasicType;
+    }
+
     if message.startsWith("Who is a popular sportsperson") {
         return {
             "type": "object",
@@ -108,17 +129,16 @@ isolated function getExpectedParameterSchema(string message) returns map<json> {
     }
 
     if message.startsWith("Name top 10 world class cricketers") {
-        return expectedParameterSchemaStringForRate7;
+        return expectedParameterSchemaForArrayUnionRec;
     }
 
     if message.startsWith("Name a random world class cricketer") {
-        return expectedParameterSchemaStringForRate7;
+        return expectedParameterSchemaForArrayUnionRec;
     }
 
     if message.startsWith("Name 10 world class cricketers") {
-        return expectedParameterSchemaStringForRateRip;
+        return expectedParamSchemaForArrayUnionNull;
     }
-
 
     return {};
 }
@@ -197,6 +217,10 @@ isolated function getTheMockLLMResult(string message) returns string {
         return "{\"result\": \"This is a sample image description.\"}";
     }
 
+    if message.startsWith("Name a random world class cricketer in India") {
+        return "{\"result\": {\"name\": \"Sanga\"}}";
+    }
+
     if message.startsWith("Name a random world class cricketer") {
         return "{\"result\": {\"name\": \"Sanga\"}}";
     }
@@ -207,6 +231,10 @@ isolated function getTheMockLLMResult(string message) returns string {
 
     if message.startsWith("Name top 10 world class cricketers") {
         return "{\"result\": [{\"name\": \"Virat Kohli\"}, {\"name\": \"Joe Root\"}, {\"name\": \"Steve Smith\"}, {\"name\": \"Kane Williamson\"}, {\"name\": \"Babar Azam\"}, {\"name\": \"Ben Stokes\"}, {\"name\": \"Jasprit Bumrah\"}, {\"name\": \"Pat Cummins\"}, {\"name\": \"Shaheen Afridi\"}, {\"name\": \"Rashid Khan\"}]}";
+    }
+
+    if message.startsWith("Give me a random joke") {
+        return "{\"result\": \"This is a random joke\"}";
     }
 
     return "INVALID";
@@ -379,11 +407,29 @@ isolated function getExpectedContentParts(string message) returns (map<anydata>)
         ];
     }
 
+    if message.startsWith("Name 10 world class cricketers in India") {
+        return [
+            {
+                "type": "text",
+                "text": "Name 10 world class cricketers in India"
+            }
+        ];
+    }
+
+    if message.startsWith("Name 10 world class cricketers as string") {
+        return [
+            {
+                "type": "text",
+                "text": "Name 10 world class cricketers as string"
+            }
+        ];
+    }
+
     if message.startsWith("Name 10 world class cricketers") {
         return [
             {
                 "type": "text",
-                "text": string `Name 10 world class cricketers`
+                "text": "Name 10 world class cricketers"
             }
         ];
     }
@@ -392,7 +438,16 @@ isolated function getExpectedContentParts(string message) returns (map<anydata>)
         return [
             {
                 "type": "text",
-                "text": string `Name top 10 world class cricketers`
+                "text": "Name top 10 world class cricketers"
+            }
+        ];
+    }
+
+    if message.startsWith("Name a random world class cricketer in India") {
+        return [
+            {
+                "type": "text",
+                "text": "Name a random world class cricketer in India"
             }
         ];
     }
@@ -401,7 +456,25 @@ isolated function getExpectedContentParts(string message) returns (map<anydata>)
         return [
             {
                 "type": "text",
-                "text": string `Name a random world class cricketer`
+                "text": "Name a random world class cricketer"
+            }
+        ];
+    }
+
+    if message.startsWith("Give me a random joke about cricketers") {
+        return [
+            {
+                "type": "text",
+                "text": "Give me a random joke about cricketers"
+            }
+        ];
+    }
+
+    if message.startsWith("Give me a random joke") {
+        return [
+            {
+                "type": "text",
+                "text": "Give me a random joke"
             }
         ];
     }
