@@ -25,6 +25,7 @@ import io.ballerina.runtime.api.types.JsonType;
 import io.ballerina.runtime.api.types.PredefinedTypes;
 import io.ballerina.runtime.api.types.ReferenceType;
 import io.ballerina.runtime.api.types.Type;
+import io.ballerina.runtime.api.types.TypeTags;
 import io.ballerina.runtime.api.types.UnionType;
 import io.ballerina.runtime.api.utils.StringUtils;
 import io.ballerina.runtime.api.utils.TypeUtils;
@@ -45,8 +46,9 @@ import static io.ballerina.runtime.api.creators.ValueCreator.createMapValue;
  */
 public class Native {
     public static final String ANY_OF = "anyOf";
-    public static final String BALLERINA_AI = "ballerina/ai:";
+    public static final String BALLERINA_AI = "ballerina/ai";
     public static final String JSON_SCHEMA = "JsonSchema";
+    public static final String NULLABLE = "nullable";
 
     public static Object generateJsonSchemaForTypedescNative(BTypedesc td) {
         SchemaGenerationContext schemaGenerationContext = new SchemaGenerationContext();
@@ -140,6 +142,9 @@ public class Native {
     }
 
     private static String getStringRepresentation(Type type) {
+        if (type.getTag() == TypeTags.NULL_TAG) {
+            return "null";
+        }
         return switch (type.getBasicType().all()) {
             case 0b000000 -> "null";
             case 0b000010 -> "boolean";
