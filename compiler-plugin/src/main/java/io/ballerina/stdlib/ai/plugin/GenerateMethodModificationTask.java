@@ -18,10 +18,9 @@
 
 package io.ballerina.stdlib.ai.plugin;
 
-import io.ballerina.compiler.api.ModuleID;
 import io.ballerina.compiler.api.SemanticModel;
+import io.ballerina.compiler.api.Types;
 import io.ballerina.compiler.api.symbols.ArrayTypeSymbol;
-import io.ballerina.compiler.api.symbols.ModuleSymbol;
 import io.ballerina.compiler.api.symbols.RecordTypeSymbol;
 import io.ballerina.compiler.api.symbols.Symbol;
 import io.ballerina.compiler.api.symbols.TupleTypeSymbol;
@@ -82,6 +81,7 @@ public class GenerateMethodModificationTask implements ModifierTask<SourceModifi
     private static final String AI_MODULE_NAME = "ai";
     private static final String BALLERINA_ORG_NAME = "ballerina";
     private static final String AI_MODULE_MAJOR_VERSION = "1";
+    private static final String MODEL_PROVIDER_NAME = "ModelProvider";
     private final AiCodeModifier.AnalysisData analysisData;
     private final ModifierData modifierData;
 
@@ -104,15 +104,16 @@ public class GenerateMethodModificationTask implements ModifierTask<SourceModifi
             Collection<DocumentId> documentIds = module.documentIds();
             Collection<DocumentId> testDocumentIds = module.testDocumentIds();
 
-            Optional<ModuleSymbol> aiModuleSymbol = getAiModuleSymbolFromProjectDocuments(
-                    module, semanticModel, documentIds, testDocumentIds);
+            Types types = semanticModel.types();
+            Optional<Symbol> aiModelProviderSymbol =
+                types.getTypeByName(BALLERINA_ORG_NAME, AI_MODULE_NAME, AI_MODULE_MAJOR_VERSION, MODEL_PROVIDER_NAME);
 
             for (DocumentId documentId : documentIds) {
-                analyzeDocument(module, documentId, semanticModel, aiModuleSymbol);
+                analyzeDocument(module, documentId, semanticModel, aiModelProviderSymbol);
             }
 
             for (DocumentId documentId : testDocumentIds) {
-                analyzeDocument(module, documentId, semanticModel, aiModuleSymbol);
+                analyzeDocument(module, documentId, semanticModel, aiModelProviderSymbol);
             }
 
             for (DocumentId documentId : documentIds) {
@@ -127,57 +128,15 @@ public class GenerateMethodModificationTask implements ModifierTask<SourceModifi
         }
     }
 
-    private Optional<ModuleSymbol> getAiModuleSymbolFromProjectDocuments(Module module, SemanticModel semanticModel,
-                                          Collection<DocumentId> documentIds, Collection<DocumentId> testDocumentIds) {
-        Optional<ModuleSymbol> aiModuleSymbol = getAiModuleSymbolFromDocuments(module, semanticModel, documentIds);
-        if (aiModuleSymbol.isPresent()) {
-            return aiModuleSymbol;
-        }
-
-        return getAiModuleSymbolFromDocuments(module, semanticModel, testDocumentIds);
-    }
-
-    private Optional<ModuleSymbol> getAiModuleSymbolFromDocuments(Module module, SemanticModel semanticModel,
-                                        Collection<DocumentId> documentIds) {
-        Optional<ModuleSymbol> aiModuleSymbol;
-        for (DocumentId documentId : documentIds) {
-            Document document = module.document(documentId);
-            Node rootNode = document.syntaxTree().rootNode();
-            aiModuleSymbol = checkAndReturnAiModelProviderSymbol(
-                    semanticModel.visibleSymbols(document, rootNode.lineRange().startLine()));
-
-            if (aiModuleSymbol.isPresent()) {
-                return aiModuleSymbol;
-            }
-        }
-        return Optional.empty();
-    }
-
-    private Optional<ModuleSymbol> checkAndReturnAiModelProviderSymbol(List<Symbol> symbols) {
-        for (Symbol symbol : symbols) {
-            if (!(symbol instanceof ModuleSymbol moduleSymbol)) {
-                continue;
-            }
-
-            ModuleID id = moduleSymbol.id();
-            if (BALLERINA_ORG_NAME.equals(id.orgName())
-                    && AI_MODULE_NAME.equals(id.moduleName())
-                    && id.version().startsWith(AI_MODULE_MAJOR_VERSION)) {
-                return Optional.of(moduleSymbol);
-            }
-        }
-        return Optional.empty();
-    }
-
     private void analyzeDocument(Module module, DocumentId documentId,
-                                 SemanticModel semanticModel, Optional<ModuleSymbol> aiModuleSymbol) {
+                                 SemanticModel semanticModel, Optional<Symbol> aiModelProviderSymbol) {
         Document document = module.document(documentId);
         Node rootNode = document.syntaxTree().rootNode();
         if (!(rootNode instanceof ModulePartNode modulePartNode)) {
             return;
         }
 
-        analyzeGenerateMethod(semanticModel, modulePartNode, aiModuleSymbol, this.analysisData);
+        analyzeGenerateMethod(semanticModel, modulePartNode, aiModelProviderSymbol, this.analysisData);
     }
 
     private static TextDocument modifyDocument(Document document, ModifierData modifierData) {
@@ -205,9 +164,9 @@ public class GenerateMethodModificationTask implements ModifierTask<SourceModifi
     }
 
     private void analyzeGenerateMethod(SemanticModel semanticModel,
-                                       ModulePartNode modulePartNode, Optional<ModuleSymbol> aiModuleSymbol,
+                                       ModulePartNode modulePartNode, Optional<Symbol> aiModelProviderSymbol,
                                        AiCodeModifier.AnalysisData analysisData) {
-        new GenerateMethodJsonSchemaGenerator(semanticModel, aiModuleSymbol, analysisData)
+        new GenerateMethodJsonSchemaGenerator(semanticModel, aiModelProviderSymbol, analysisData)
                 .generate(modulePartNode);
     }
 
@@ -246,19 +205,22 @@ public class GenerateMethodModificationTask implements ModifierTask<SourceModifi
 
     private class GenerateMethodJsonSchemaGenerator extends NodeVisitor {
         private static final String GENERATE_METHOD_NAME = "generate";
-        private static final String MODEL_PROVIDER_NAME = "ModelProvider";
         private static final String STRING = "string";
         private static final String BYTE = "byte";
         private static final String NUMBER = "number";
         private final SemanticModel semanticModel;
         private final TypeMapper typeMapper;
-        private final TypeDefinitionSymbol modelProviderSymbol;
+        private TypeDefinitionSymbol modelProviderSymbol = null;
 
-        public GenerateMethodJsonSchemaGenerator(SemanticModel semanticModel, Optional<ModuleSymbol> aiModuleSymbol,
+        public GenerateMethodJsonSchemaGenerator(SemanticModel semanticModel, Optional<Symbol> aiModelProviderSymbol,
                                                  AiCodeModifier.AnalysisData analyserData) {
             this.semanticModel = semanticModel;
             this.typeMapper = analyserData.typeMapper;
-            this.modelProviderSymbol = getAiModelProviderSymbol(aiModuleSymbol).orElse(null);
+            aiModelProviderSymbol.ifPresent(symbol -> {
+                if (symbol instanceof TypeDefinitionSymbol typeDefSymbol) {
+                    this.modelProviderSymbol = typeDefSymbol;
+                }
+            });
         }
 
         void generate(ModulePartNode modulePartNode) {
@@ -310,20 +272,6 @@ public class GenerateMethodModificationTask implements ModifierTask<SourceModifi
                         populateTypeSchema(member, typeMapper, typeSchemas, anydataType));
                 default -> { }
             }
-        }
-
-        private Optional<TypeDefinitionSymbol> getAiModelProviderSymbol(Optional<ModuleSymbol> aiModuleSymbol) {
-            if (aiModuleSymbol.isEmpty()) {
-                return Optional.empty();
-            }
-
-            for (TypeDefinitionSymbol typeDefSymbol: aiModuleSymbol.get().typeDefinitions()) {
-                if (typeDefSymbol.nameEquals(MODEL_PROVIDER_NAME)) {
-                    return Optional.of(typeDefSymbol);
-                }
-            }
-
-            return Optional.empty();
         }
 
         private static String getJsonSchema(Schema schema) {
