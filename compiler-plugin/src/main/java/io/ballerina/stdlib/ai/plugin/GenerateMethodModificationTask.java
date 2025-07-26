@@ -222,10 +222,10 @@ public class GenerateMethodModificationTask implements ModifierTask<SourceModifi
             }
 
             Symbol aiModelProviderSymbol = aiModelProviderSymbolOpt.get();
-            if (!(aiModelProviderSymbol instanceof TypeDefinitionSymbol typeDefSymbol)) {
-                this.modelProviderSymbol = null;
-            } else {
+            if (aiModelProviderSymbol instanceof TypeDefinitionSymbol typeDefSymbol) {
                 this.modelProviderSymbol = typeDefSymbol;
+            } else {
+                this.modelProviderSymbol = null;
             }
         }
 
