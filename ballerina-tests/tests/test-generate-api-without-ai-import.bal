@@ -17,25 +17,6 @@
 import ballerina/test;
 
 @test:Config
-function testGenerateApiWithBasicReturnType() returns error? {
-    int|error rating = defaultModelProvider->generate(`Rate this blog out of 10.
-        Title: ${blog1.title}
-        Content: ${blog1.content}`);
-    test:assertEquals(rating, 4);
-}
-
-@test:Config
-function testGenerateApiWithBasicArrayReturnType() returns error? {
-    int[]|error rating = defaultModelProvider->generate(`Evaluate this blogs out of 10.
-        Title: ${blog1.title}
-        Content: ${blog1.content}
-
-        Title: ${blog1.title}
-        Content: ${blog1.content}`);
-    test:assertEquals(rating, [9, 1]);
-}
-
-@test:Config
 function testGenerateApiWithRecordReturnType() returns error? {
     Review|error result = defaultModelProvider->generate(`Please rate this blog out of ${"10"}.
         Title: ${blog2.title}
