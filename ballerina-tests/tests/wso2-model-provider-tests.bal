@@ -48,7 +48,7 @@ function testGenerateMethodWithRecordReturnType() returns error? {
     Review|error result = defaultModelProvider->generate(`Please rate this blog out of ${"10"}.
         Title: ${blog2.title}
         Content: ${blog2.content}`);
-    test:assertEquals(result, check review.fromJsonStringWithType(Review));
+    test:assertEquals(result, reviewRecord);
 }
 
 @test:Config
@@ -71,10 +71,9 @@ function testGenerateMethodWithTextDocumentArray() returns error? {
     };
     ai:TextDocument[] blogs = [blog, blog];
     int maxScore = 10;
-    Review r = check review.fromJsonStringWithType(Review);
 
     ReviewArray|error result = defaultModelProvider->generate(`How would you rate these text blogs out of ${maxScore}. ${blogs}. Thank you!`);
-    test:assertEquals(result, [r, r]);
+    test:assertEquals(result, [reviewRecord, reviewRecord]);
 }
 
 @test:Config
@@ -218,11 +217,10 @@ function testGenerateMethodWithUnsupportedDocument() returns ai:Error? {
 @test:Config
 function testGenerateMethodWithRecordArrayReturnType() returns error? {
     int maxScore = 10;
-    Review r = check review.fromJsonStringWithType(Review);
 
     ReviewArray|error result = defaultModelProvider->generate(`Please rate this blogs out of ${maxScore}.
         [{Title: ${blog1.title}, Content: ${blog1.content}}, {Title: ${blog2.title}, Content: ${blog2.content}}]`);
-    test:assertEquals(result, [r, r]);
+    test:assertEquals(result, [reviewRecord, reviewRecord]);
 }
 
 @test:Config
