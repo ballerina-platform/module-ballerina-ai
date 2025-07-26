@@ -134,11 +134,7 @@ public class GenerateMethodModificationTask implements ModifierTask<SourceModifi
             return aiModuleSymbol;
         }
 
-        aiModuleSymbol = getAiModuleSymbolFromDocuments(module, semanticModel, testDocumentIds);
-        if (aiModuleSymbol.isPresent()) {
-            return aiModuleSymbol;
-        }
-        return Optional.empty();
+        return getAiModuleSymbolFromDocuments(module, semanticModel, testDocumentIds);
     }
 
     private Optional<ModuleSymbol> getAiModuleSymbolFromDocuments(Module module, SemanticModel semanticModel,
@@ -146,14 +142,10 @@ public class GenerateMethodModificationTask implements ModifierTask<SourceModifi
         Optional<ModuleSymbol> aiModuleSymbol;
         for (DocumentId documentId : documentIds) {
             Document document = module.document(documentId);
-            aiModuleSymbol = checkAndReturnAiModelProviderSymbol(semanticModel.moduleSymbols());
-            if (aiModuleSymbol.isPresent()) {
-                return aiModuleSymbol;
-            }
-
             Node rootNode = document.syntaxTree().rootNode();
             aiModuleSymbol = checkAndReturnAiModelProviderSymbol(
                     semanticModel.visibleSymbols(document, rootNode.lineRange().startLine()));
+
             if (aiModuleSymbol.isPresent()) {
                 return aiModuleSymbol;
             }
@@ -185,7 +177,7 @@ public class GenerateMethodModificationTask implements ModifierTask<SourceModifi
             return;
         }
 
-        analyzeGenerateMethod(document, semanticModel, modulePartNode, aiModuleSymbol, this.analysisData);
+        analyzeGenerateMethod(semanticModel, modulePartNode, aiModuleSymbol, this.analysisData);
     }
 
     private static TextDocument modifyDocument(Document document, ModifierData modifierData) {
@@ -212,10 +204,10 @@ public class GenerateMethodModificationTask implements ModifierTask<SourceModifi
         return NodeParser.parseImportDeclaration(String.format("import %s/%s;", BALLERINA_ORG_NAME, AI_MODULE_NAME));
     }
 
-    private void analyzeGenerateMethod(Document document, SemanticModel semanticModel,
+    private void analyzeGenerateMethod(SemanticModel semanticModel,
                                        ModulePartNode modulePartNode, Optional<ModuleSymbol> aiModuleSymbol,
                                        AiCodeModifier.AnalysisData analysisData) {
-        new GenerateMethodJsonSchemaGenerator(semanticModel, document, aiModuleSymbol, analysisData)
+        new GenerateMethodJsonSchemaGenerator(semanticModel, aiModuleSymbol, analysisData)
                 .generate(modulePartNode);
     }
 
@@ -262,8 +254,7 @@ public class GenerateMethodModificationTask implements ModifierTask<SourceModifi
         private final TypeMapper typeMapper;
         private final TypeDefinitionSymbol modelProviderSymbol;
 
-        public GenerateMethodJsonSchemaGenerator(SemanticModel semanticModel,
-                                                 Document document, Optional<ModuleSymbol> aiModuleSymbol,
+        public GenerateMethodJsonSchemaGenerator(SemanticModel semanticModel, Optional<ModuleSymbol> aiModuleSymbol,
                                                  AiCodeModifier.AnalysisData analyserData) {
             this.semanticModel = semanticModel;
             this.typeMapper = analyserData.typeMapper;
