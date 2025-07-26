@@ -160,7 +160,7 @@ public class GenerateMethodModificationTask implements ModifierTask<SourceModifi
 
     private void analyzeGenerateMethod(Document document, SemanticModel semanticModel,
                                        ModulePartNode modulePartNode, AiCodeModifier.AnalysisData analysisData) {
-        new GenerateMethodJsonSchemaGenerator(semanticModel, document, analysisData)
+        new GenerateMethodJsonSchemaGenerator(semanticModel, analysisData)
                 .generate(modulePartNode);
     }
 
@@ -204,16 +204,14 @@ public class GenerateMethodModificationTask implements ModifierTask<SourceModifi
         private static final String BYTE = "byte";
         private static final String NUMBER = "number";
         private final SemanticModel semanticModel;
-        private final Document document;
         private final TypeMapper typeMapper;
         private final TypeDefinitionSymbol modelProviderSymbol;
 
-        public GenerateMethodJsonSchemaGenerator(SemanticModel semanticModel, Document document,
+        public GenerateMethodJsonSchemaGenerator(SemanticModel semanticModel,
                                                  AiCodeModifier.AnalysisData analyserData) {
             this.semanticModel = semanticModel;
-            this.document = document;
             this.typeMapper = analyserData.typeMapper;
-            this.modelProviderSymbol = getAiModelProviderSymbol(document.syntaxTree().rootNode()).orElse(null);
+            this.modelProviderSymbol = getAiModelProviderSymbol().orElse(null);
         }
 
         void generate(ModulePartNode modulePartNode) {
@@ -267,8 +265,8 @@ public class GenerateMethodModificationTask implements ModifierTask<SourceModifi
             }
         }
 
-        private Optional<TypeDefinitionSymbol> getAiModelProviderSymbol(Node node) {
-            Optional<ModuleSymbol> aiModuleSymbol = getAiModuleSymbol(node);
+        private Optional<TypeDefinitionSymbol> getAiModelProviderSymbol() {
+            Optional<ModuleSymbol> aiModuleSymbol = getAiModuleSymbol();
             if (aiModuleSymbol.isEmpty()) {
                 return Optional.empty();
             }
@@ -282,8 +280,8 @@ public class GenerateMethodModificationTask implements ModifierTask<SourceModifi
             return Optional.empty();
         }
 
-        private Optional<ModuleSymbol> getAiModuleSymbol(Node node) {
-            for (Symbol symbol : semanticModel.visibleSymbols(this.document, node.lineRange().startLine())) {
+        private Optional<ModuleSymbol> getAiModuleSymbol() {
+            for (Symbol symbol : semanticModel.moduleSymbols()) {
                 if (!(symbol instanceof ModuleSymbol moduleSymbol)) {
                     continue;
                 }
