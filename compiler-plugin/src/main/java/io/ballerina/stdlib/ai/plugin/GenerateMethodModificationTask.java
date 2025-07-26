@@ -210,17 +210,23 @@ public class GenerateMethodModificationTask implements ModifierTask<SourceModifi
         private static final String NUMBER = "number";
         private final SemanticModel semanticModel;
         private final TypeMapper typeMapper;
-        private TypeDefinitionSymbol modelProviderSymbol = null;
+        private final TypeDefinitionSymbol modelProviderSymbol;
 
-        public GenerateMethodJsonSchemaGenerator(SemanticModel semanticModel, Optional<Symbol> aiModelProviderSymbol,
+        public GenerateMethodJsonSchemaGenerator(SemanticModel semanticModel, Optional<Symbol> aiModelProviderSymbolOpt,
                                                  AiCodeModifier.AnalysisData analyserData) {
             this.semanticModel = semanticModel;
             this.typeMapper = analyserData.typeMapper;
-            aiModelProviderSymbol.ifPresent(symbol -> {
-                if (symbol instanceof TypeDefinitionSymbol typeDefSymbol) {
-                    this.modelProviderSymbol = typeDefSymbol;
-                }
-            });
+            if (aiModelProviderSymbolOpt.isEmpty()) {
+                this.modelProviderSymbol = null;
+                return;
+            }
+
+            Symbol aiModelProviderSymbol = aiModelProviderSymbolOpt.get();
+            if (!(aiModelProviderSymbol instanceof TypeDefinitionSymbol typeDefSymbol)) {
+                this.modelProviderSymbol = null;
+            } else {
+                this.modelProviderSymbol = typeDefSymbol;
+            }
         }
 
         void generate(ModulePartNode modulePartNode) {
