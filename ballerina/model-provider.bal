@@ -122,7 +122,7 @@ public type ModelProvider distinct isolated client object {
     # + prompt - The prompt to use in the chat request
     # + td - Type descriptor specifying the expected return type format
     # + return - Generates a value that belongs to the type, or an error if generation fails
-    isolated remote function generate(Prompt prompt, typedesc<anydata> td = <>) returns td|Error;
+    isolated remote function generate(Prompt prompt, @display {label: "Expected type"} typedesc<anydata> td = <>) returns td|Error;
 };
 
 # Represents configuratations of WSO2 provider.
