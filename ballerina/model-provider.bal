@@ -219,7 +219,7 @@ public isolated distinct client class Wso2ModelProvider {
     # + prompt - The prompt to use in the chat messages
     # + td - Type descriptor specifying the expected return type format
     # + return - Generates a value that belongs to the type, or an error if generation fails
-    isolated remote function generate(Prompt prompt, typedesc<anydata> td = <>) returns td|Error = @java:Method {
+    isolated remote function generate(Prompt prompt, @display {label: "Expected type"} typedesc<anydata> td = <>) returns td|Error = @java:Method {
         'class: "io.ballerina.stdlib.ai.wso2.Generator"
     } external;
 
