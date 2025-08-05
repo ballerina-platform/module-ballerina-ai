@@ -114,7 +114,11 @@ task stopMcpServer(type: Exec) {
     commandLine 'sh', '-c', 'docker stop $(docker ps -q --filter ancestor=mcp-server)'
 }
 
-if (!project.gradle.startParameter.excludedTaskNames.contains('test') && !Os.isFamily(Os.FAMILY_WINDOWS)) {
+boolean isMcpDisabled(String feature) {
+    return project.findProperty('disable')?.split(',')?.contains("mcp")
+}
+
+if (!project.gradle.startParameter.excludedTaskNames.contains('test') && !Os.isFamily(Os.FAMILY_WINDOWS) && !isMcpDisabled('mcp')) {
     build.dependsOn buildMcpServer
     build.dependsOn startMcpServer
     test.dependsOn buildMcpServer
