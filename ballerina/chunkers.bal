@@ -22,19 +22,20 @@ import ballerina/jballerina.java;
 # finer-grained strategies if the content exceeds the configured `maxChunkSize`. Overlapping content 
 # between chunks can be controlled using `maxOverlapSize`.
 #
-# + document - The input document to be chunked
+# + document - The input document or string to be chunked
 # + maxChunkSize - Maximum number of characters allowed per chunk
 # + maxOverlapSize - Maximum number of characters to reuse from the end of the previous chunk when creating the next one.
 # This overlap is made of complete sentences taken in reverse from the previous chunk, without exceeding
 # this limit. It helps maintain context between chunks during splitting.
 # + strategy - The recursive chunking strategy to use. Defaults to `PARAGRAPH`
 # + return - An array of chunks, or an `ai:Error` if the chunking fails.
-public isolated function chunkDocumentRecursively(Document document, int maxChunkSize = 200, int maxOverlapSize = 40,
+public isolated function chunkDocumentRecursively(Document|string document, int maxChunkSize = 200, int maxOverlapSize = 40,
         RecursiveChunkStrategy strategy = PARAGRAPH) returns Chunk[]|Error {
-    if document !is TextDocument {
+    if document !is TextDocument && document !is string {
         return error Error("Only text documents are supported for chunking");
     }
-    return chunkTextDocument(document, maxChunkSize, maxOverlapSize, strategy);
+    TextDocument textDocument = document is string ? {content: document} : document;
+    return chunkTextDocument(textDocument, maxChunkSize, maxOverlapSize, strategy);
 }
 
 isolated function chunkTextDocument(TextDocument document, int chunkSize, int overlapSize,
