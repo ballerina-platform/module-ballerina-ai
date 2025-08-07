@@ -4,6 +4,11 @@ This file documents all significant changes made to the Ballerina AI package acr
 
 ## [Un-released]
 
+### Updated
+- [Update the `chunkDocumentRecursively` function to support a union of string and Document as input](https://github.com/ballerina-platform/ballerina-library/issues/8143)
+
+## [1.1.0] - 2025-07-22
+
 ### Added
 - [Add `batchEmbed` API in `EmbeddingProvider`](https://github.com/ballerina-platform/ballerina-library/issues/8110).
 - [Update the `ingest` method in `VectorKnowledgeBase` to utilize `EmbeddingProvider`'s `batchEmbed` API](https://github.com/ballerina-platform/ballerina-library/issues/8110).

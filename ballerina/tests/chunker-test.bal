@@ -17,9 +17,19 @@
 import ballerina/test;
 
 @test:Config {}
-function testCharacterChunking() returns error? {
+function testCharacterChunkingWithDocument() returns error? {
     TextDocument doc = {content: "abcde"};
     Chunk[] chunks = check chunkDocumentRecursively(doc, 2, 0, CHARACTER);
+
+    test:assertEquals(chunks.length(), 3);
+    test:assertEquals(chunks[0].content, "ab");
+    test:assertEquals(chunks[1].content, "cd");
+    test:assertEquals(chunks[2].content, "e");
+}
+
+@test:Config {}
+function testCharacterChunkingWithString() returns error? {
+    Chunk[] chunks = check chunkDocumentRecursively("abcde", 2, 0, CHARACTER);
 
     test:assertEquals(chunks.length(), 3);
     test:assertEquals(chunks[0].content, "ab");
