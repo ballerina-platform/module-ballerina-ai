@@ -12,7 +12,7 @@
 // under the License.
 
 import ballerina/ai;
-import ballerinax/ai.model.provider.openai;
+import ballerinax/ai.openai;
 import ballerinax/googleapis.calendar;
 import ballerinax/googleapis.gmail;
 
@@ -77,7 +77,7 @@ Guidelines:
 - Prioritize clarity, efficiency, and user convenience in all tasks.`
 };
 
-final ai:ModelProvider openAiModel = check new openai:Provider(openAiApiKey, modelType = openai:GPT_4O);
+final ai:ModelProvider openAiModel = check new openai:ModelProvider(openAiApiKey, modelType = openai:GPT_4O);
 final ai:Agent personalAiAssistantAgent = check new (
     systemPrompt = systemPrompt,
     model = openAiModel,
