@@ -14,6 +14,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
+import ballerina/ai;
 import ballerina/test;
 
 @test:Config
@@ -32,6 +33,21 @@ function testAgentToolExecution() returns error? {
 
     result = check agent.run("I'm John. Greet me once");
     test:assertEquals(result, "Hey John! Welcome to Ballerina!");
+}
+
+@test:Config
+function testAgentToolExecutionWithContext() returns error? {
+    string imageUrl = "https://ballerina.io/images/ballerina.png";
+    
+    ai:Context ctx = new;
+    ctx.set("imageUrl", imageUrl);
+    ctx.set("isImageSearchToolExecuted", false);
+
+    string result = check agent.run("Search for a 'ballerina' image", context = ctx);
+    test:assertEquals(result, string `Answer is: ${imageUrl}`);
+
+    boolean isImageSearchToolExecuted = check ctx.getWithType("isImageSearchToolExecuted");
+    test:assertTrue(isImageSearchToolExecuted);
 }
 
 @test:Config {

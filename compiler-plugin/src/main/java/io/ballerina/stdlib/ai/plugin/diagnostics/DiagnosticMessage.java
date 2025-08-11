@@ -31,7 +31,9 @@ public enum DiagnosticMessage {
     ERROR_104("the return type of the function ''{0}'' is not a subtype of " +
             "`anydata|http:Response|stream<anydata, error?>|error`." +
             " The tool must return a value of type `anydata`."),
-    ERROR_105("Agent must be marked as 'final'.");
+    ERROR_105("Agent must be marked as 'final'."),
+    ERROR_106("the function ''{0}'' has a parameter ''{1}'' of type `ai:Context`." +
+            "`ai:Context` is only allowed as the first parameter in the tool.");
 
     private final String message;
 

@@ -18,13 +18,15 @@ import ballerina/io;
 import ballerina/log;
 
 # Execution progress record
-public type ExecutionProgress record {|
+type ExecutionProgress record {|
     # Question to the agent
     string query;
+    # Instruction used by the agent during the execution
+    string instruction;
     # Execution history up to the current action
     ExecutionStep[] history = [];
-    # Contextual instruction that can be used by the agent during the execution
-    map<json>|string? context = ();
+    # Contextual information to be used by the agent during the execution
+    Context context;
 |};
 
 # Execution step information
@@ -93,8 +95,8 @@ type BaseAgent distinct isolated object {
     # + return - LLM response containing the tool or chat response (or an error if the call fails)
     isolated function selectNextTool(ExecutionProgress progress, string sessionId = DEFAULT_SESSION_ID) returns json|Error;
 
-    isolated function run(string query, int maxIter = 5, string|map<json> context = {}, boolean verbose = true,
-            string sessionId = DEFAULT_SESSION_ID) returns ExecutionTrace;
+    isolated function run(string query, string instruction, int maxIter = 5, boolean verbose = true,
+            string sessionId = DEFAULT_SESSION_ID, Context context = new) returns ExecutionTrace;
 };
 
 # An iterator to iterate over agent's execution
@@ -163,16 +165,17 @@ class Executor {
     # + llmResponse - LLM response containing the tool to be executed and the raw LLM output
     # + return - Observations from the tool can be any|error|null
     public isolated function act(json llmResponse) returns ExecutionResult|LlmChatResponse|ExecutionError {
-        LlmToolResponse|LlmChatResponse|LlmInvalidGenerationError parseLlmResponse = self.agent.parseLlmResponse(llmResponse);
-        if parseLlmResponse is LlmChatResponse {
+        LlmToolResponse|LlmChatResponse|LlmInvalidGenerationError parsedOutput = self.agent.parseLlmResponse(llmResponse);
+        if parsedOutput is LlmChatResponse {
             self.isCompleted = true;
-            return parseLlmResponse;
+            return parsedOutput;
         }
 
         anydata observation;
         ExecutionResult|ExecutionError executionResult;
-        if parseLlmResponse is LlmToolResponse {
-            ToolOutput|ToolExecutionError|LlmInvalidGenerationError output = self.agent.toolStore.execute(parseLlmResponse);
+        if parsedOutput is LlmToolResponse {
+            ToolOutput|ToolExecutionError|LlmInvalidGenerationError output = self.agent.toolStore.execute(parsedOutput,
+                self.progress.context);
             if output is Error {
                 if output is ToolNotFoundError {
                     observation = "Tool is not found. Please check the tool name and retry.";
@@ -190,7 +193,7 @@ class Executor {
                 anydata|error value = output.value;
                 observation = value is error ? value.toString() : value;
                 executionResult = {
-                    tool: parseLlmResponse,
+                    tool: parsedOutput,
                     observation: value
                 };
             }
@@ -198,7 +201,7 @@ class Executor {
             observation = "Tool extraction failed due to invalid JSON_BLOB. Retry with correct JSON_BLOB.";
             executionResult = {
                 llmResponse,
-                'error: parseLlmResponse,
+                'error: parsedOutput,
                 observation: observation.toString()
             };
         }
@@ -234,21 +237,22 @@ class Executor {
 # Execute the agent for a given user's query.
 #
 # + agent - Agent to be executed
+# + instruction - Instruction that the agent uses to execute the task
 # + query - Natural langauge commands to the agent  
 # + maxIter - No. of max iterations that agent will run to execute the task (default: 5)
 # + context - Context values to be used by the agent to execute the task
 # + verbose - If true, then print the reasoning steps (default: true)
 # + sessionId - The ID associated with the memory
 # + return - Returns the execution steps tracing the agent's reasoning and outputs from the tools
-isolated function run(BaseAgent agent, string query, int maxIter, string|map<json> context, boolean verbose,
-        string sessionId = DEFAULT_SESSION_ID) returns ExecutionTrace {
+isolated function run(BaseAgent agent, string instruction, string query, int maxIter, boolean verbose,
+        string sessionId = DEFAULT_SESSION_ID, Context context = new) returns ExecutionTrace {
     lock {
         (ExecutionResult|ExecutionError)[] steps = [];
 
         string? content = ();
-        Iterator iterator = new (agent, sessionId, query = query, context = context);
+        Iterator iterator = new (agent, sessionId, instruction = instruction, query = query, context = context);
         int iter = 0;
-        ChatSystemMessage systemMessage = {role: SYSTEM, content: context.toString()};
+        ChatSystemMessage systemMessage = {role: SYSTEM, content: instruction};
         updateMemory(agent.memory, sessionId, systemMessage);
 
         ChatUserMessage userMessage = {role: USER, content: query};
