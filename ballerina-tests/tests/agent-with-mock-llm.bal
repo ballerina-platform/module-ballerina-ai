@@ -94,6 +94,12 @@ isolated client distinct class MockLlm {
             ai:FunctionCall functionCall = {name: "getEmails"};
             return {role: ai:ASSISTANT, toolCalls: [functionCall]};
         }
+        if query.toLowerAscii().includes("image") {
+            regexp:Span? span = re `'.*'`.find(query);
+            string searchQuery = span is () ? "No search query" : span.substring();
+            ai:FunctionCall functionCall = {name: "searchImage", arguments: {searchQuery}};
+            return {role: ai:ASSISTANT, toolCalls: [functionCall]};
+        }
         if query.toLowerAscii().includes("search") {
             regexp:Span? span = re `'.*'`.find(query);
             string searchQuery = span is () ? "No search query" : span.substring();
@@ -148,11 +154,21 @@ isolated class SearchToolKit {
     *ai:BaseToolKit;
 
     public isolated function getTools() returns ai:ToolConfig[] {
-        return ai:getToolConfigs([self.searchDoc]);
+        return ai:getToolConfigs([self.searchDoc, self.searchImage]);
     }
 
     @ai:AgentTool
     public isolated function searchDoc(string searchQuery) returns string {
         return string `Answer is: No result found on doc for ${searchQuery}`;
+    }
+
+    @ai:AgentTool
+    public isolated function searchImage(ai:Context ctx, string searchQuery) returns string|error {
+        ctx.set("isImageSearchToolExecuted", true);
+        if ctx.hasKey("imageUrl") {
+            string imageUrl = check ctx.getWithType("imageUrl");
+            return string `Answer is: ${imageUrl}`;
+        }
+        return string `Answer is: No image found for query ${searchQuery}`;
     }
 }

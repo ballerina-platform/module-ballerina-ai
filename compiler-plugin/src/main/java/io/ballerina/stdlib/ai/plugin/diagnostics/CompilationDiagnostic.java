@@ -34,7 +34,8 @@ public enum CompilationDiagnostic {
     PARAMETER_IS_NOT_A_SUBTYPE_OF_ANYDATA(DiagnosticMessage.ERROR_102, DiagnosticCode.AI_102, ERROR),
     XML_PARAMETER_NOT_SUPPORTED_BY_TOOL(DiagnosticMessage.ERROR_103, DiagnosticCode.AI_103, ERROR),
     INVALID_RETURN_TYPE_IN_TOOL(DiagnosticMessage.ERROR_104, DiagnosticCode.AI_104, ERROR),
-    AGENT_MUST_BE_FINAL(DiagnosticMessage.ERROR_105, DiagnosticCode.AI_105, ERROR);
+    AGENT_MUST_BE_FINAL(DiagnosticMessage.ERROR_105, DiagnosticCode.AI_105, ERROR),
+    CONTEXT_PARAM_MUST_BE_FIRST(DiagnosticMessage.ERROR_106, DiagnosticCode.AI_106, ERROR);
 
     private final String diagnostic;
     private final String diagnosticCode;
