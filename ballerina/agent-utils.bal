@@ -25,7 +25,7 @@ type ExecutionProgress record {|
     string instruction;
     # Execution history up to the current action
     ExecutionStep[] history = [];
-    # Contextual information to be used by the agent during the execution
+    # Contextual information to be used by the tools during the execution
     Context context;
 |};
 
@@ -109,7 +109,7 @@ class Iterator {
     # + agent - Agent instance to be executed
     # + sessionId - The ID associated with the agent memory
     # + query - Natural language query to be executed by the agent
-    # + context - Contextual information to be used by the agent during the execution
+    # + context - Contextual information to be used by the tools during the execution
     isolated function init(BaseAgent agent, string sessionId, *ExecutionProgress progress) {
         self.executor = new (agent, sessionId, progress);
     }
@@ -136,7 +136,7 @@ class Executor {
     # + agent - Agent instance to be executed
     # + query - Natural language query to be executed by the agent
     # + history - Execution history of the agent (This is used to continue an execution paused without completing)
-    # + context - Contextual information to be used by the agent during the execution
+    # + context - Contextual information to be used by the tools during the execution
     isolated function init(BaseAgent agent, string sessionId, *ExecutionProgress progress) {
         self.sessionId = sessionId;
         self.agent = agent;
