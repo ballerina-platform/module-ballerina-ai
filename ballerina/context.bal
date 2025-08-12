@@ -50,12 +50,10 @@ public isolated class Context {
     public isolated function get(string key) returns ContextEntry {
         lock {
             Cloneable|isolated object {} value = self.entries.get(key);
-
             if value is Cloneable {
                 return value.clone();
-            } else {
-                return value;
             }
+            return value;
         }
     }
 
