@@ -36,6 +36,7 @@ import java.text.MessageFormat;
 import java.util.Iterator;
 
 import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.AGENT_MUST_BE_FINAL;
+import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.CONTEXT_PARAM_MUST_BE_FIRST;
 import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.INVALID_RETURN_TYPE_IN_TOOL;
 import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.PARAMETER_IS_NOT_A_SUBTYPE_OF_ANYDATA;
 import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.UNABLE_TO_GENERATE_SCHEMA_FOR_FUNCTION;
@@ -104,6 +105,7 @@ public class AiToolValidationTest {
         message = getErrorMessage(XML_PARAMETER_NOT_SUPPORTED_BY_TOOL, "toolWithXml", "two");
         assertErrorMessage(diagnostic, message, 26, 44);
 
+
         diagnostic = diagnosticIterator.next();
         message = getErrorMessage(XML_PARAMETER_NOT_SUPPORTED_BY_TOOL, "toolWithXml", "three");
         assertErrorMessage(diagnostic, message, 26, 58);
@@ -135,6 +137,18 @@ public class AiToolValidationTest {
         Diagnostic diagnostic = diagnosticIterator.next();
         String message = getErrorMessage(UNABLE_TO_GENERATE_SCHEMA_FOR_FUNCTION, "toolCyclicInput");
         assertErrorMessage(diagnostic, message, 26, 19);
+    }
+
+    @Test
+    public void testToolWithContextInInvalidPosition() {
+        String packagePath = "07_tool_with_context_in_invalid_position";
+        DiagnosticResult diagnosticResult = getDiagnosticResult(packagePath);
+        Assert.assertEquals(diagnosticResult.errorCount(), 1);
+
+        Iterator<Diagnostic> diagnosticIterator = diagnosticResult.errors().iterator();
+        Diagnostic diagnostic = diagnosticIterator.next();
+        String message = getErrorMessage(CONTEXT_PARAM_MUST_BE_FIRST, "toolWithContext", "ctx");
+        assertErrorMessage(diagnostic, message, 20, 53);
     }
 
     @Test(description = "Verify that modifying the source code and generating a schema" +

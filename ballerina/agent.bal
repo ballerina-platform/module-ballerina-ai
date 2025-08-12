@@ -90,9 +90,13 @@ public isolated distinct class Agent {
     #
     # + query - The natural language input provided to the agent
     # + sessionId - The ID associated with the agent memory
+    # + context - The additional context that can be used during agent tool execution
     # + return - The agent's response or an error
-    public isolated function run(@display {label: "Query"} string query, @display {label: "Session ID"} string sessionId = DEFAULT_SESSION_ID) returns string|Error {
-        var result = self.functionCallAgent.run(query, self.maxIter, getFomatedSystemPrompt(self.systemPrompt), self.verbose, sessionId);
+    public isolated function run(@display {label: "Query"} string query,
+            @display {label: "Session ID"} string sessionId = DEFAULT_SESSION_ID,
+            Context context = new) returns string|Error {
+        ExecutionTrace result = self.functionCallAgent.run(query, getFomatedSystemPrompt(self.systemPrompt),
+            self.maxIter, self.verbose, sessionId, context);
         string? answer = result.answer;
         if answer is string {
             return answer;

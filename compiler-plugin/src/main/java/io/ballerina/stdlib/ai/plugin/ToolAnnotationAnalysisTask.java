@@ -42,6 +42,7 @@ import io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic;
 import io.ballerina.tools.diagnostics.Diagnostic;
 import io.ballerina.tools.diagnostics.Location;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -51,6 +52,7 @@ import java.util.stream.Collectors;
 import static io.ballerina.stdlib.ai.plugin.ToolAnnotationConfig.DESCRIPTION_FIELD_NAME;
 import static io.ballerina.stdlib.ai.plugin.ToolAnnotationConfig.NAME_FIELD_NAME;
 import static io.ballerina.stdlib.ai.plugin.ToolAnnotationConfig.PARAMETERS_FIELD_NAME;
+import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.CONTEXT_PARAM_MUST_BE_FIRST;
 import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.INVALID_RETURN_TYPE_IN_TOOL;
 import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.PARAMETER_IS_NOT_A_SUBTYPE_OF_ANYDATA;
 import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.UNABLE_TO_GENERATE_SCHEMA_FOR_FUNCTION;
@@ -62,6 +64,7 @@ import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.XM
 class ToolAnnotationAnalysisTask implements AnalysisTask<SyntaxNodeAnalysisContext> {
     public static final String EMPTY_STRING = "";
     public static final String NIL_EXPRESSION = "()";
+    private static final String UNKNOWN_SYMBOL = "<unknown>";
 
     private final Map<DocumentId, ModifierContext> modifierContextMap;
     private SyntaxNodeAnalysisContext context;
@@ -122,34 +125,50 @@ class ToolAnnotationAnalysisTask implements AnalysisTask<SyntaxNodeAnalysisConte
 
     private boolean hasValidParameterTypes(FunctionSymbol functionSymbol, Location alternativeLocation) {
         FunctionTypeSymbol functionTypeSymbol = functionSymbol.typeDescriptor();
-        List<ParameterSymbol> parameterSymbolList = functionTypeSymbol.params().get();
+        List<ParameterSymbol> parameterSymbolList = new ArrayList<>(functionTypeSymbol.params().get());
         if (functionTypeSymbol.params().isEmpty() || parameterSymbolList.isEmpty()) {
             return true;
         }
 
-        boolean isAnydata = true;
-        boolean isXml = false;
+        ParameterSymbol firstParam = parameterSymbolList.getFirst();
+        // Check and remove ai:Context if it's the first parameter
+        if (Utils.isAiContextType(firstParam.typeDescriptor(), this.context)) {
+            parameterSymbolList.removeFirst();
+        }
+
+        boolean allAnydata = true;
+        boolean hasXml = false;
         String functionName = functionSymbol.getName().orElse("unknownFunction");
         for (ParameterSymbol parameterSymbol : parameterSymbolList) {
             TypeSymbol paramTypeSymbol = parameterSymbol.typeDescriptor();
-            if (!Utils.isAnydataType(paramTypeSymbol, this.context)) {
-                isAnydata = false;
-                Diagnostic diagnostic = CompilationDiagnostic.getDiagnostic(PARAMETER_IS_NOT_A_SUBTYPE_OF_ANYDATA,
+            // ai:Context is only allowed as the first parameter
+            if (Utils.isAiContextType(paramTypeSymbol, this.context)) {
+                Diagnostic diagnostic = CompilationDiagnostic.getDiagnostic(CONTEXT_PARAM_MUST_BE_FIRST,
                         parameterSymbol.getLocation().orElse(alternativeLocation),
-                        functionName, parameterSymbol.getName().orElse("<unknown>"));
+                        functionName, parameterSymbol.getName().orElse(UNKNOWN_SYMBOL));
                 reportDiagnostic(diagnostic);
+                allAnydata = false;
+                continue;
             }
             XmlTypeInspector xmlTypeInspector = new XmlTypeInspector(context);
             if (xmlTypeInspector.includesXmlType(paramTypeSymbol)) {
                 Diagnostic diagnostic = CompilationDiagnostic.getDiagnostic(XML_PARAMETER_NOT_SUPPORTED_BY_TOOL,
                         parameterSymbol.getLocation().orElse(alternativeLocation),
-                        functionName, parameterSymbol.getName().orElse("<unknown>"));
+                        functionName, parameterSymbol.getName().orElse(UNKNOWN_SYMBOL));
                 reportDiagnostic(diagnostic);
-                isXml = true;
+                hasXml = true;
+                continue;
+            }
+            if (!Utils.isAnydataType(paramTypeSymbol, this.context)) {
+                allAnydata = false;
+                Diagnostic diagnostic = CompilationDiagnostic.getDiagnostic(PARAMETER_IS_NOT_A_SUBTYPE_OF_ANYDATA,
+                        parameterSymbol.getLocation().orElse(alternativeLocation),
+                        functionName, parameterSymbol.getName().orElse(UNKNOWN_SYMBOL));
+                reportDiagnostic(diagnostic);
             }
         }
         // Tool functions can take anydata type parameter except xml
-        return isAnydata && !isXml;
+        return allAnydata && !hasXml;
     }
 
     private void reportDiagnostic(Diagnostic diagnostic) {
