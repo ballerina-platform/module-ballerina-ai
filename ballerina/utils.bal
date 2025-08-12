@@ -16,15 +16,15 @@
 
 import ballerina/jballerina.java;
 
-isolated function getToolParameterTypes(FunctionTool functionPointer) returns map<typedesc<anydata>> {
+isolated function getToolParameterTypes(FunctionTool functionPointer) returns map<typedesc<anydata|Context>> {
     map<any> typedescriptors = getParameterTypes(functionPointer);
-    map<typedesc<anydata>> anydataTypeDesc = {};
+    map<typedesc<anydata|Context>> allowedInputTypes = {};
     foreach [string, any] [parmeterName, typedescriptor] in typedescriptors.entries() {
-        if typedescriptor is typedesc<anydata> {
-            anydataTypeDesc[parmeterName] = typedescriptor;
+        if typedescriptor is typedesc<anydata|Context> {
+            allowedInputTypes[parmeterName] = typedescriptor;
         }
     }
-    return anydataTypeDesc;
+    return allowedInputTypes;
 }
 
 isolated function getParameterTypes(FunctionTool functionPointer) returns map<any> = @java:Method {
@@ -35,11 +35,16 @@ isolated function isMapType(typedesc<anydata> typedescVal) returns boolean = @ja
     'class: "io.ballerina.stdlib.ai.Utils"
 } external;
 
+isolated function isContextType(typedesc<anydata|Context> targetTypedesc, typedesc<Context> contextTypedesc = Context)
+returns boolean = @java:Method {
+    'class: "io.ballerina.stdlib.ai.Utils"
+} external;
+
 isolated function getFunctionName(FunctionTool toolFunction) returns string = @java:Method {
     'class: "io.ballerina.stdlib.ai.Utils"
 } external;
 
-isolated function getArgsWithDefaultValues(FunctionTool toolFunction, map<anydata> value)
+isolated function getArgsWithDefaultsExcludingContext(FunctionTool toolFunction, map<anydata> value)
 returns map<anydata> = @java:Method {
     'class: "io.ballerina.stdlib.ai.Utils"
 } external;

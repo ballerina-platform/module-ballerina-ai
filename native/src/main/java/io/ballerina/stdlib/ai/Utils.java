@@ -30,6 +30,7 @@ import io.ballerina.runtime.api.types.RecordType;
 import io.ballerina.runtime.api.types.ReferenceType;
 import io.ballerina.runtime.api.types.Type;
 import io.ballerina.runtime.api.utils.StringUtils;
+import io.ballerina.runtime.api.utils.TypeUtils;
 import io.ballerina.runtime.api.values.BError;
 import io.ballerina.runtime.api.values.BFunctionPointer;
 import io.ballerina.runtime.api.values.BMap;
@@ -54,6 +55,11 @@ public class Utils {
     }
 
     @SuppressWarnings("unused")
+    public static boolean isContextType(BTypedesc targetTypedesc, BTypedesc contextTypedesc) {
+        return TypeUtils.isSameType(contextTypedesc.getDescribingType(), targetTypedesc.getDescribingType());
+    }
+
+    @SuppressWarnings("unused")
     public static boolean isMapType(BTypedesc typedesc) {
         if (typedesc.getDescribingType() instanceof ReferenceType referenceType) {
             return isMapType(referenceType.getReferredType());
@@ -71,13 +77,18 @@ public class Utils {
     }
 
     @SuppressWarnings("unused")
-    public static BMap<BString, Object> getArgsWithDefaultValues(Environment env,
+    public static BMap<BString, Object> getArgsWithDefaultsExcludingContext(Environment env,
                                                                  BFunctionPointer functionPointer,
                                                                  BMap<BString, Object> args) {
         FunctionType functionType = (FunctionType) functionPointer.getType();
         Parameter[] parameters = functionType.getParameters();
         LinkedHashMap<String, Object> argsWithDefaultValues = new LinkedHashMap<>();
         for (Parameter parameter : parameters) {
+            // Tool parameters must be either anydata or ai:Context.
+            // Skip setting default values if parameter is ai:Context.
+            if (!parameter.type.isAnydata()) {
+                continue;
+            }
             BString parameterName = StringUtils.fromString(parameter.name);
             Object value = args.containsKey(parameterName) ? args.get(parameterName) :
                     getDefaultParameterValue(env, functionPointer, parameter, argsWithDefaultValues.values().toArray());

@@ -95,15 +95,15 @@ isolated distinct class FunctionCallAgent {
     # Execute the agent for a given user's query.
     #
     # + query - Natural langauge commands to the agent  
+    # + instruction - Instruction to the agent on how to process the query
     # + maxIter - No. of max iterations that agent will run to execute the task (default: 5)
     # + context - Context values to be used by the agent to execute the task
     # + verbose - If true, then print the reasoning steps (default: true)
     # + sessionId - The ID associated with the agent memory
     # + return - Returns the execution steps tracing the agent's reasoning and outputs from the tools
-    isolated function run(string query, int maxIter = 5, string|map<json> context = {}, boolean verbose = true,
-            string sessionId = DEFAULT_SESSION_ID)
-        returns record {|(ExecutionResult|ExecutionError)[] steps; string answer?;|} {
-        return run(self, query, maxIter, context, verbose, sessionId);
+    isolated function run(string query, string instruction, int maxIter = 5, boolean verbose = true,
+            string sessionId = DEFAULT_SESSION_ID, Context context = new) returns ExecutionTrace {
+        return run(self, instruction, query, maxIter, verbose, sessionId, context);
     }
 }
 

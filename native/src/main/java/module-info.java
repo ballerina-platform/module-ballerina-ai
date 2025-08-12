@@ -19,6 +19,7 @@
 module io.ballerina.stdlib.ai {
     requires io.ballerina.runtime;
     requires io.ballerina.lang;
+    requires io.ballerina.lang.value;
     requires langchain4j;
     requires langchain4j.core;
     exports io.ballerina.stdlib.ai;

@@ -18,6 +18,8 @@
 
 package io.ballerina.stdlib.ai.plugin;
 
+import io.ballerina.compiler.api.SemanticModel;
+import io.ballerina.compiler.api.Types;
 import io.ballerina.compiler.api.symbols.AnnotationSymbol;
 import io.ballerina.compiler.api.symbols.Documentable;
 import io.ballerina.compiler.api.symbols.FunctionSymbol;
@@ -38,6 +40,9 @@ public class Utils {
     private static final String AI_PACKAGE_NAME = "ai";
     private static final String HTTP_PACKAGE_NAME = "http";
     private static final String HTTP_RESPONSE_OBJECT_NAME = "Response";
+    private static final String CONTEXT_OBJECT_TYPE_NAME = "Context";
+    private static final String AI_PACKAGE_MAJOR_VERSION = "1";
+
 
     private Utils() {
     }
@@ -63,6 +68,17 @@ public class Utils {
 
     public static boolean isAnydataType(TypeSymbol typeSymbol, SyntaxNodeAnalysisContext context) {
         return typeSymbol.subtypeOf(context.semanticModel().types().ANYDATA);
+    }
+
+    public static boolean isAiContextType(TypeSymbol typeSymbol, SyntaxNodeAnalysisContext context) {
+        SemanticModel semanticModel = context.semanticModel();
+        Types types = semanticModel.types();
+        var contextSymbol = types.getTypeByName(BALLERINA_ORG, AI_PACKAGE_NAME, AI_PACKAGE_MAJOR_VERSION,
+                CONTEXT_OBJECT_TYPE_NAME);
+        if (contextSymbol.isEmpty() || !(contextSymbol.get() instanceof TypeSymbol ctxTypeSymbol)) {
+            return false;
+        }
+        return typeSymbol.subtypeOf(ctxTypeSymbol);
     }
 
     public static boolean isErrorType(TypeSymbol typeSymbol, SyntaxNodeAnalysisContext context) {

@@ -62,6 +62,9 @@ public class SchemaUtils {
         TypeMapper typeMapper = new TypeMapperImpl(context);
         for (ParameterSymbol parameterSymbol : parameterSymbolList) {
             try {
+                if (Utils.isAiContextType(parameterSymbol.typeDescriptor(), context)) {
+                    continue;
+                }
                 String parameterName = parameterSymbol.getName().orElseThrow();
                 if (parameterSymbol.paramKind() != ParameterKind.DEFAULTABLE) {
                     requiredParams.add(parameterName);
