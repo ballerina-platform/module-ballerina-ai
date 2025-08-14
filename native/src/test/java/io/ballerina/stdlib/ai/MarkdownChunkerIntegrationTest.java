@@ -4,12 +4,15 @@ import org.testng.annotations.Test;
 import org.testng.annotations.DataProvider;
 import static org.testng.Assert.*;
 
+import dev.langchain4j.data.segment.TextSegment;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.stream.Collectors;
+import java.util.Map;
 
 public class MarkdownChunkerIntegrationTest {
 
@@ -23,8 +26,16 @@ public class MarkdownChunkerIntegrationTest {
         return new Object[][]{
             {"sample1.md"},
             {"sample2.md"},
-            {"sample3.md"}
+            {"sample3.md"},
+            {"sample4.md"}
         };
+    }
+
+    @Test
+    public void test() throws IOException {
+       String fileName = "sample4.md";
+        String inputContent = loadFileContent(INPUT_DIR + "/" + fileName);
+        List<TextSegment> chunks = MarkdownChunker.chunk(inputContent, CHUNK_SIZE, MAX_OVERLAP_SIZE);
     }
 
     @Test(dataProvider = "markdownFiles")
@@ -33,7 +44,7 @@ public class MarkdownChunkerIntegrationTest {
         String inputContent = loadFileContent(INPUT_DIR + "/" + fileName);
         
         // Chunk the content using MarkdownChunker
-        List<String> chunks = MarkdownChunker.chunk(inputContent, CHUNK_SIZE, MAX_OVERLAP_SIZE);
+        List<TextSegment> chunks = MarkdownChunker.chunk(inputContent, CHUNK_SIZE, MAX_OVERLAP_SIZE);
         
         // Format output as specified: "500 50" followed by chunks
         String actualOutput = formatChunksOutput(chunks, CHUNK_SIZE, MAX_OVERLAP_SIZE);
@@ -53,8 +64,8 @@ public class MarkdownChunkerIntegrationTest {
         String inputContent = loadFileContent(INPUT_DIR + "/" + fileName);
 
         // Chunk the content using MarkdownChunker
-        List<String> chunks = MarkdownChunker.chunk(inputContent, CHUNK_SIZE, 0);
-        String combinedChunks = String.join("", chunks);
+        List<TextSegment> chunks = MarkdownChunker.chunk(inputContent, CHUNK_SIZE, 0);
+        String combinedChunks = chunks.stream().map(TextSegment::text).collect(Collectors.joining());
         assertEquals(combinedChunks, inputContent,
                 "Chunking without overlap should return the original content for " + fileName);
 
@@ -69,6 +80,7 @@ public class MarkdownChunkerIntegrationTest {
                 "Chunking output for " + fileName + " does not match expected result");
     }
 
+
     private String loadFileContent(String relativePath) throws IOException {
         Path resourcePath = getResourcePath(relativePath);
         return Files.readString(resourcePath);
@@ -80,13 +92,20 @@ public class MarkdownChunkerIntegrationTest {
                 .resolve(relativePath);
     }
 
-    private String formatChunksOutput(List<String> chunks, int chunkSize, int maxOverlapSize) {
+    private String formatChunksOutput(List<TextSegment> chunks, int chunkSize, int maxOverlapSize) {
         StringBuilder sb = new StringBuilder();
         sb.append(chunkSize).append(" ").append(maxOverlapSize).append("\n\n");
         
         for (int i = 0; i < chunks.size(); i++) {
             sb.append("--- Chunk ").append(i + 1).append(" ---\n");
-            sb.append(chunks.get(i));
+            
+            // Add metadata if present
+            Map<String, Object> metadata = chunks.get(i).metadata().toMap();
+            if (!metadata.isEmpty()) {
+                sb.append("Metadata: ").append(metadata).append("\n");
+            }
+            
+            sb.append(chunks.get(i).text());
             if (i < chunks.size() - 1) {
                 sb.append("\n\n");
             }

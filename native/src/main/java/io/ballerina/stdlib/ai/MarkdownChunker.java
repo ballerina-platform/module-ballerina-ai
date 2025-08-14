@@ -1,6 +1,8 @@
 package io.ballerina.stdlib.ai;
 
 import dev.langchain4j.data.document.Document;
+import dev.langchain4j.data.document.Metadata;
+import dev.langchain4j.data.segment.TextSegment;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -8,6 +10,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -21,7 +24,7 @@ class MarkdownChunker {
         return null;
     }
 
-    static List<String> chunk(String content, int chunkSize, int maxOverlapSize) {
+    static List<TextSegment> chunk(String content, int chunkSize, int maxOverlapSize) {
         return chunkUsingDelimiters(content, List.of(
                 new HeaderSplitter(2),
                 new HeaderSplitter(3),
@@ -31,17 +34,19 @@ class MarkdownChunker {
                 new SimpleDelimiterSplitter("\n\n"),
                 new SimpleDelimiterSplitter("\n"),
                 new SimpleDelimiterSplitter(" "),
-                new SimpleDelimiterSplitter("")), chunkSize, maxOverlapSize).stream().map(Chunk::piece).toList();
+                new SimpleDelimiterSplitter("")), chunkSize, maxOverlapSize).stream()
+                .map(chunk -> new TextSegment(chunk.piece, new Metadata(chunk.metadata))).toList();
     }
 
     private static List<Chunk> chunkUsingDelimiters(String content, List<Splitter> delimiters, int maxChunkSize,
-                    int maxOverlapSize) {
+                                                    int maxOverlapSize) {
         return chunkUsingDelimitersInner(content, delimiters, maxChunkSize, maxOverlapSize, Integer.MAX_VALUE,
                 Collections.emptyMap());
     }
 
     private static List<Chunk> chunkUsingDelimitersInner(String content, List<Splitter> delimiters, int maxChunkSize,
-            int maxOverlapSize, int maxChunkCount, Map<String, String> parentMetadata) {
+                                                         int maxOverlapSize, int maxChunkCount,
+                                                         Map<String, String> parentMetadata) {
         List<Splitter> rest = delimiters.subList(1, delimiters.size());
         Iterator<Chunk> pieces = delimiters.getFirst().split(content);
         List<Chunk> chunks = new ArrayList<>();
@@ -56,21 +61,20 @@ class MarkdownChunker {
             }
 
             nextChunkPieceBuffer.stream().reduce(Chunk::merge).ifPresent(chunks::add);
-            Chunk lastPiece = nextChunkPieceBuffer.isEmpty() ? Chunk.EMPTY : nextChunkPieceBuffer.getLast();
             nextChunkPieceBuffer.clear();
             nextChunkSize = 0;
 
-            // get the overlap part
-            if (maxOverlapSize != 0) {
-                if (lastPiece.length() < maxOverlapSize) {
-                    piece = Chunk.merge(lastPiece, piece);
-                } else {
-                    // Break the last piece to small chunks
-                    var lastPieceChunks = chunkUsingDelimitersInner(lastPiece.piece, rest, maxOverlapSize, 0, 1,
-                            lastPiece.metadata);
-                    piece = Chunk.merge(lastPieceChunks.getLast(), piece);
-                }
-            }
+//            // get the overlap part
+//            if (maxOverlapSize != 0) {
+//                if (lastPiece.length() < maxOverlapSize) {
+//                    piece = Chunk.merge(lastPiece, piece);
+//                } else {
+//                    // Break the last piece to small chunks
+//                    var lastPieceChunks = chunkUsingDelimitersInner(lastPiece.piece, rest, maxOverlapSize, 0, 1,
+//                            lastPiece.metadata);
+//                    piece = Chunk.merge(lastPieceChunks.getLast(), piece);
+//                }
+//            }
 
             // If the piece is smaller than the max chunk size, just add it to the next chunk
             if (piece.length() <= maxChunkSize) {
@@ -88,21 +92,59 @@ class MarkdownChunker {
             nextChunkSize += lastPieceChunk.length();
         }
         nextChunkPieceBuffer.stream().reduce(Chunk::merge).ifPresent(chunks::add);
+        chunks = mergeChunksWithOverlap(chunks, maxChunkSize, maxOverlapSize);
         if (parentMetadata.isEmpty()) {
             return chunks;
         }
-        return chunks.stream().map(chunk -> {
+        return chunks.stream().filter(Predicate.not(Chunk::isEmpty)).map(chunk -> {
             HashMap<String, String> metadata = new HashMap<>(parentMetadata);
             metadata.putAll(chunk.metadata);
             return new Chunk(chunk.piece(), Collections.unmodifiableMap(metadata));
         }).toList();
     }
 
+    private static List<Chunk> mergeChunksWithOverlap(List<Chunk> pieces, int maxChunkSize, int maxOverlapSize) {
+        List<Chunk> chunks = new ArrayList<>();
+        List<Chunk> mergeBuffer = new ArrayList<>();
+        int mergeBufferSize = 0;
+        Chunk lastChunk = Chunk.EMPTY;
+        for (Chunk piece : pieces) {
+            assert piece.length() < maxChunkSize;
+            if (mergeBuffer.isEmpty()) {
+                // First chunk, see if we can overlap with the last piece
+                if (lastChunk.length() < maxOverlapSize && lastChunk.length() + piece.length() <= maxChunkSize) {
+                    // Merge with the last chunk
+                    piece = Chunk.merge(lastChunk, piece);
+                }
+                mergeBuffer.add(piece);
+                mergeBufferSize += piece.length();
+            } else if (mergeBufferSize + piece.length() <= maxChunkSize) {
+                // Add to the merge buffer
+                mergeBuffer.add(piece);
+                mergeBufferSize += piece.length();
+            } else {
+                // First flush the merge buffer
+                mergeBuffer.stream().reduce(Chunk::merge).ifPresent(chunks::add);
+                mergeBuffer.clear();
+
+                mergeBuffer.add(piece);
+                mergeBufferSize = piece.length();
+            }
+        }
+        mergeBuffer.stream().reduce(Chunk::merge).ifPresent(chunks::add);
+        return chunks;
+    }
+
     record Chunk(String piece, Map<String, String> metadata) {
+
         public static final Chunk EMPTY = new Chunk("", Collections.emptyMap());
 
         public int length() {
             return piece.length();
+        }
+
+        public boolean isEmpty() {
+            return piece.isEmpty();
         }
 
         public static Chunk merge(Chunk first, Chunk second) {
@@ -118,10 +160,12 @@ class MarkdownChunker {
     }
 
     interface Splitter {
+
         Iterator<Chunk> split(String content);
     }
 
     static class SimpleDelimiterSplitter implements Splitter {
+
         private final Pattern pattern;
 
         SimpleDelimiterSplitter(String delimiter) {
@@ -199,6 +243,7 @@ class MarkdownChunker {
     }
 
     static class HeaderSplitter implements Splitter {
+
         private final Pattern headerPattern;
 
         HeaderSplitter(int level) {
@@ -237,7 +282,7 @@ class MarkdownChunker {
                         }
                         // Next piece is the delimiter itself
                         nextPiece = content.substring(delimiterStart, delimiterEnd);
-                        lastHeader = nextPiece;
+                        lastHeader = matcher.group(1);
                         nextPieceMetadata = Map.of("header", lastHeader);
                         lastIndex = delimiterEnd;
                         hasNextPiece = true;
@@ -280,6 +325,6 @@ class MarkdownChunker {
         }
     }
 
-    // FIXME: remove ## from header metadata
+// FIXME: remove ## from header metadata
 
 }

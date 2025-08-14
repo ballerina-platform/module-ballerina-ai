@@ -20,6 +20,7 @@ Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu 
 
 
 --- Chunk 3 ---
+Metadata: {header=Main Content}
 
 ### Section 1: Getting Started
 
@@ -31,6 +32,7 @@ Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed 
 
 
 --- Chunk 4 ---
+Metadata: {header=Section 2: Advanced Topics}
 
 Neque porro quisquam est, qui dolorem ipsum quia dolor sit amet, consectetur, adipisci velit, sed quia non numquam eius modi tempora incidunt ut labore et dolore magnam aliquam quaerat voluptatem.
 
@@ -47,15 +49,13 @@ Quis autem vel eum iure reprehenderit qui in ea voluptate velit esse quam nihil 
 
 ## Conclusion
 
-
---- Chunk 6 ---
-
 At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praesentium voluptatum deleniti atque corrupti quos dolores et quas molestias excepturi sint occaecati cupiditate non provident.
 
 ### Final Thoughts
 
 
---- Chunk 7 ---
+--- Chunk 6 ---
+Metadata: {header=Final Thoughts}
 
 Similique sunt in culpa qui officia deserunt mollitia animi, id est laborum et dolorum fuga. Et harum quidem rerum facilis est et expedita distinctio.
 

@@ -5,11 +5,6 @@
 
 ## Overview
 
-
---- Chunk 2 ---
-
-## Overview
-
 This document provides comprehensive technical documentation for testing markdown chunking functionality.
 
 ### System Requirements
@@ -21,9 +16,8 @@ This document provides comprehensive technical documentation for testing markdow
 ### Installation Guide
 
 
---- Chunk 3 ---
-
-### Installation Guide
+--- Chunk 2 ---
+Metadata: {header=Installation Guide}
 
 #### Prerequisites
 
@@ -40,20 +34,13 @@ Extract the downloaded archive to your preferred installation directory.
 #### Step 3: Configuration
 
 
---- Chunk 4 ---
-
-#### Step 3: Configuration
+--- Chunk 3 ---
 
 Edit the configuration file located in the config directory. Set the following parameters:
 
 - server.port=8080
 - database.url=jdbc:mysql://localhost:3306/testdb
 - logging.level=INFO
-
-## Usage Examples
-
-
---- Chunk 5 ---
 
 ## Usage Examples
 
@@ -74,9 +61,8 @@ For advanced users, additional configuration options are available in the advanc
 ## Troubleshooting
 
 
---- Chunk 6 ---
-
-## Troubleshooting
+--- Chunk 4 ---
+Metadata: {header=Troubleshooting}
 
 ### Common Issues
 

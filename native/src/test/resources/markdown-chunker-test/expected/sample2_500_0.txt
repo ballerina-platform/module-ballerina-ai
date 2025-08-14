@@ -5,9 +5,6 @@
 
 ## Overview
 
-
---- Chunk 2 ---
-
 This document provides comprehensive technical documentation for testing markdown chunking functionality.
 
 ### System Requirements
@@ -19,7 +16,8 @@ This document provides comprehensive technical documentation for testing markdow
 ### Installation Guide
 
 
---- Chunk 3 ---
+--- Chunk 2 ---
+Metadata: {header=Installation Guide}
 
 #### Prerequisites
 
@@ -36,7 +34,7 @@ Extract the downloaded archive to your preferred installation directory.
 #### Step 3: Configuration
 
 
---- Chunk 4 ---
+--- Chunk 3 ---
 
 Edit the configuration file located in the config directory. Set the following parameters:
 
@@ -63,7 +61,8 @@ For advanced users, additional configuration options are available in the advanc
 ## Troubleshooting
 
 
---- Chunk 5 ---
+--- Chunk 4 ---
+Metadata: {header=Troubleshooting}
 
 ### Common Issues
 
