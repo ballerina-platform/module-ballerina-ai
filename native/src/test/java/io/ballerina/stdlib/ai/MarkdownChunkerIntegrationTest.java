@@ -9,6 +9,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class MarkdownChunkerIntegrationTest {
 
@@ -53,6 +54,9 @@ public class MarkdownChunkerIntegrationTest {
 
         // Chunk the content using MarkdownChunker
         List<String> chunks = MarkdownChunker.chunk(inputContent, CHUNK_SIZE, 0);
+        String combinedChunks = String.join("", chunks);
+        assertEquals(combinedChunks, inputContent,
+                "Chunking without overlap should return the original content for " + fileName);
 
         String actualOutput = formatChunksOutput(chunks, CHUNK_SIZE, 0);
 

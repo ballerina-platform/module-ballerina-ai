@@ -3,8 +3,13 @@ package io.ballerina.stdlib.ai;
 import dev.langchain4j.data.document.Document;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 class MarkdownChunker {
 
@@ -17,39 +22,53 @@ class MarkdownChunker {
     }
 
     static List<String> chunk(String content, int chunkSize, int maxOverlapSize) {
-        return chunkUsingDelimiters(content, List.of("#{2,6} .*\n", "\n\n", "\n", " ", ""), chunkSize, maxOverlapSize);
+        return chunkUsingDelimiters(content, List.of(
+                new HeaderSplitter(2),
+                new HeaderSplitter(3),
+                new HeaderSplitter(4),
+                new HeaderSplitter(5),
+                new HeaderSplitter(6),
+                new SimpleDelimiterSplitter("\n\n"),
+                new SimpleDelimiterSplitter("\n"),
+                new SimpleDelimiterSplitter(" "),
+                new SimpleDelimiterSplitter("")), chunkSize, maxOverlapSize).stream().map(Chunk::piece).toList();
     }
 
-    static List<String> chunkUsingDelimiters(String content, List<String> delimiters, int maxChunkSize,
-            int maxOverlapSize) {
-        String delimiter = delimiters.getFirst();
-        List<String> rest = delimiters.subList(1, delimiters.size());
-        Iterator<String> pieces = pieces(content, delimiter);
-        List<String> chunks = new ArrayList<>();
-        List<String> nextChunkPieceBuffer = new ArrayList<>();
+    private static List<Chunk> chunkUsingDelimiters(String content, List<Splitter> delimiters, int maxChunkSize,
+                    int maxOverlapSize) {
+        return chunkUsingDelimitersInner(content, delimiters, maxChunkSize, maxOverlapSize, Integer.MAX_VALUE,
+                Collections.emptyMap());
+    }
+
+    private static List<Chunk> chunkUsingDelimitersInner(String content, List<Splitter> delimiters, int maxChunkSize,
+            int maxOverlapSize, int maxChunkCount, Map<String, String> parentMetadata) {
+        List<Splitter> rest = delimiters.subList(1, delimiters.size());
+        Iterator<Chunk> pieces = delimiters.getFirst().split(content);
+        List<Chunk> chunks = new ArrayList<>();
+        List<Chunk> nextChunkPieceBuffer = new ArrayList<>();
         int nextChunkSize = 0;
         while (pieces.hasNext()) {
-            String piece = pieces.next();
+            Chunk piece = pieces.next();
             if (nextChunkSize + piece.length() <= maxChunkSize) {
                 nextChunkPieceBuffer.add(piece);
                 nextChunkSize += piece.length();
                 continue;
             }
 
-            // Flush the piece buffer
-            chunks.add(String.join("", nextChunkPieceBuffer));
-            var lastPiece = nextChunkPieceBuffer.isEmpty() ? "" : nextChunkPieceBuffer.getLast();
+            nextChunkPieceBuffer.stream().reduce(Chunk::merge).ifPresent(chunks::add);
+            Chunk lastPiece = nextChunkPieceBuffer.isEmpty() ? Chunk.EMPTY : nextChunkPieceBuffer.getLast();
             nextChunkPieceBuffer.clear();
             nextChunkSize = 0;
 
             // get the overlap part
             if (maxOverlapSize != 0) {
                 if (lastPiece.length() < maxOverlapSize) {
-                    piece = lastPiece + piece;
+                    piece = Chunk.merge(lastPiece, piece);
                 } else {
                     // Break the last piece to small chunks
-                    var lastPieceChunks = chunkUsingDelimiters(lastPiece, rest, maxOverlapSize, 0);
-                    piece = lastPieceChunks.getLast() + piece;
+                    var lastPieceChunks = chunkUsingDelimitersInner(lastPiece.piece, rest, maxOverlapSize, 0, 1,
+                            lastPiece.metadata);
+                    piece = Chunk.merge(lastPieceChunks.getLast(), piece);
                 }
             }
 
@@ -61,45 +80,206 @@ class MarkdownChunker {
             }
 
             // Break up the current piece
-            var pieceChunks = chunkUsingDelimiters(piece, rest, maxChunkSize, maxOverlapSize);
+            List<Chunk> pieceChunks = chunkUsingDelimitersInner(piece.piece, rest, maxChunkSize, maxOverlapSize,
+                    Integer.MAX_VALUE, piece.metadata);
             chunks.addAll(pieceChunks.subList(0, pieceChunks.size() - 1));
-            String lastPieceChunk = pieceChunks.getLast();
+            Chunk lastPieceChunk = pieceChunks.getLast();
             nextChunkPieceBuffer.add(lastPieceChunk);
             nextChunkSize += lastPieceChunk.length();
         }
-        if (!nextChunkPieceBuffer.isEmpty()) {
-            // Flush the last piece buffer
-            chunks.add(String.join("", nextChunkPieceBuffer));
+        nextChunkPieceBuffer.stream().reduce(Chunk::merge).ifPresent(chunks::add);
+        if (parentMetadata.isEmpty()) {
+            return chunks;
         }
-        return chunks;
+        return chunks.stream().map(chunk -> {
+            HashMap<String, String> metadata = new HashMap<>(parentMetadata);
+            metadata.putAll(chunk.metadata);
+            return new Chunk(chunk.piece(), Collections.unmodifiableMap(metadata));
+        }).toList();
     }
 
-    // TODO: do better
-    static Iterator<String> pieces(String content, String delimiter) {
-        List<String> pieces = new ArrayList<>();
-        java.util.regex.Pattern pattern = java.util.regex.Pattern.compile(delimiter);
-        java.util.regex.Matcher matcher = pattern.matcher(content);
-        int lastIndex = 0;
+    record Chunk(String piece, Map<String, String> metadata) {
+        public static final Chunk EMPTY = new Chunk("", Collections.emptyMap());
 
-        while (matcher.find()) {
-            int delimiterStart = matcher.start();
-            int delimiterEnd = matcher.end();
+        public int length() {
+            return piece.length();
+        }
 
-            // Add the content before the delimiter (if any)
-            if (delimiterStart > lastIndex) {
-                pieces.add(content.substring(lastIndex, delimiterStart));
+        public static Chunk merge(Chunk first, Chunk second) {
+            String mergedPiece = first.piece + second.piece;
+            Map<String, String> mergedMetadata = new HashMap<>();
+            for (String key : first.metadata().keySet()) {
+                if (second.metadata.containsKey(key) && second.metadata.get(key).equals(first.metadata.get(key))) {
+                    mergedMetadata.put(key, first.metadata.get(key));
+                }
             }
-            // Add the delimiter itself
-            pieces.add(content.substring(delimiterStart, delimiterEnd));
-            lastIndex = delimiterEnd;
+            return new Chunk(mergedPiece, Collections.unmodifiableMap(mergedMetadata));
         }
-
-        // Add any remaining content after the last delimiter
-        if (lastIndex < content.length()) {
-            pieces.add(content.substring(lastIndex));
-        }
-
-        return pieces.iterator();
     }
+
+    interface Splitter {
+        Iterator<Chunk> split(String content);
+    }
+
+    static class SimpleDelimiterSplitter implements Splitter {
+        private final Pattern pattern;
+
+        SimpleDelimiterSplitter(String delimiter) {
+            pattern = Pattern.compile(Pattern.quote(delimiter));
+        }
+
+        @Override
+        public Iterator<Chunk> split(String content) {
+            return new Iterator<>() {
+                private final Matcher matcher = pattern.matcher(content);
+                private int lastIndex = 0;
+                private String nextPiece = null;
+                private boolean hasNextPiece = false;
+                private boolean finished = false;
+                private boolean nextIsDelimiter = false;
+
+                private void prepareNext() {
+                    if (finished) {
+                        return;
+                    }
+
+                    if (matcher.find()) {
+                        int delimiterStart = matcher.start();
+                        int delimiterEnd = matcher.end();
+
+                        if (delimiterStart > lastIndex) {
+                            // Next piece is the content before the delimiter
+                            nextPiece = content.substring(lastIndex, delimiterStart);
+                            nextIsDelimiter = false;
+                            lastIndex = delimiterStart;
+                            hasNextPiece = true;
+                            return;
+                        }
+
+                        // Next piece is the delimiter itself
+                        nextPiece = content.substring(delimiterStart, delimiterEnd);
+                        nextIsDelimiter = true;
+                        lastIndex = delimiterEnd;
+                        hasNextPiece = true;
+                        return;
+                    }
+
+                    if (lastIndex < content.length()) {
+                        // Remaining content after last delimiter
+                        nextPiece = content.substring(lastIndex);
+                        nextIsDelimiter = false;
+                        lastIndex = content.length();
+                        hasNextPiece = true;
+                        finished = true;
+                    } else {
+                        hasNextPiece = false;
+                        finished = true;
+                    }
+                }
+
+                @Override
+                public boolean hasNext() {
+                    if (!hasNextPiece && !finished) {
+                        prepareNext();
+                    }
+                    return hasNextPiece;
+                }
+
+                @Override
+                public Chunk next() {
+                    if (!hasNext()) {
+                        throw new java.util.NoSuchElementException();
+                    }
+                    hasNextPiece = false;
+
+                    return new Chunk(nextPiece, Map.of());
+                }
+            };
+        }
+    }
+
+    static class HeaderSplitter implements Splitter {
+        private final Pattern headerPattern;
+
+        HeaderSplitter(int level) {
+            this.headerPattern = Pattern.compile(String.format("\n#{%d} (.*)\n", level));
+        }
+
+        @Override
+        public Iterator<Chunk> split(String content) {
+            return new Iterator<>() {
+                private int lastIndex = 0;
+                private String nextPiece = null;
+                private Map<String, String> nextPieceMetadata = Map.of();
+                private boolean hasNextPiece = false;
+                private boolean finished = false;
+                private String lastHeader = null;
+
+                private void prepareNext() {
+                    if (finished) {
+                        return;
+                    }
+                    Matcher matcher = headerPattern.matcher(content.substring(lastIndex));
+                    if (matcher.find()) {
+                        int delimiterStart = matcher.start() + lastIndex;
+                        int delimiterEnd = matcher.end() + lastIndex;
+                        if (delimiterStart > lastIndex) {
+                            // Next piece is the content before the delimiter
+                            nextPiece = content.substring(lastIndex, delimiterStart);
+                            lastIndex = delimiterStart;
+                            hasNextPiece = true;
+                            if (lastHeader != null) {
+                                nextPieceMetadata = Map.of("header", lastHeader);
+                            } else {
+                                nextPieceMetadata = Map.of();
+                            }
+                            return;
+                        }
+                        // Next piece is the delimiter itself
+                        nextPiece = content.substring(delimiterStart, delimiterEnd);
+                        lastHeader = nextPiece;
+                        nextPieceMetadata = Map.of("header", lastHeader);
+                        lastIndex = delimiterEnd;
+                        hasNextPiece = true;
+                        return;
+                    }
+                    if (lastIndex < content.length()) {
+                        // TODO: set metadata for rest
+                        nextPiece = content.substring(lastIndex);
+                        lastIndex = content.length();
+                        hasNextPiece = true;
+                        if (lastHeader != null) {
+                            nextPieceMetadata = Map.of("header", lastHeader);
+                        } else {
+                            nextPieceMetadata = Map.of();
+                        }
+                        finished = true;
+                    } else {
+                        hasNextPiece = false;
+                        finished = true;
+                    }
+                }
+
+                @Override
+                public boolean hasNext() {
+                    if (!hasNextPiece && !finished) {
+                        prepareNext();
+                    }
+                    return hasNextPiece;
+                }
+
+                @Override
+                public Chunk next() {
+                    if (!hasNext()) {
+                        throw new java.util.NoSuchElementException();
+                    }
+                    hasNextPiece = false;
+                    return new Chunk(nextPiece, nextPieceMetadata);
+                }
+            };
+        }
+    }
+
+    // FIXME: remove ## from header metadata
 
 }
