@@ -16,6 +16,48 @@
 
 import ballerina/jballerina.java;
 
+# Represents a chunker that can process documents and return chunks.
+public type Chunker isolated object {
+    # Chunks the provided document.
+    # + document - The input document to be chunked
+    # + return - An array of chunks, or an `ai:Error` if the chunking fails
+    public isolated function chunk(Document document) returns Chunk[]|Error;
+};
+
+# Represents a Genereric document chunker.
+# Provides functionality to recursively chunk a text document using a configurable strategy.
+#
+# The chunking process begins with the specified strategy and recursively falls back to 
+# finer-grained strategies if the content exceeds the configured `maxChunkSize`. Overlapping content 
+# between chunks can be controlled using `maxOverlapSize`.
+public isolated class GenericRecursiveChunker {
+    *Chunker;
+    private final int maxChunkSize;
+    private final int maxOverlapSize;
+    private final RecursiveChunkStrategy strategy;
+
+    # Initializes a new instance of the `GenericRecursiveChunker`.
+    #
+    # + maxChunkSize - Maximum number of characters allowed per chunk
+    # + maxOverlapSize - Maximum number of characters to reuse from the end of the previous chunk when creating the next one.
+    # This overlap is made of complete sentences taken in reverse from the previous chunk, without exceeding
+    # this limit. It helps maintain context between chunks during splitting.
+    # + strategy - The recursive chunking strategy to use. Defaults to `PARAGRAPH`
+    public isolated function init(int maxChunkSize = 200, int maxOverlapSize = 40,
+            RecursiveChunkStrategy strategy = PARAGRAPH) {
+        self.maxChunkSize = maxChunkSize;
+        self.maxOverlapSize = maxOverlapSize;
+        self.strategy = strategy;
+    }
+
+    # Chunks the provided document.
+    # + document - The input document to be chunked
+    # + return - An array of chunks, or an `ai:Error` if the chunking fails
+    public isolated function chunk(Document document) returns Chunk[]|Error {
+        return chunkDocumentRecursively(document, self.maxChunkSize, self.maxOverlapSize, self.strategy);
+    }
+}
+
 # Provides functionality to recursively chunk a text document using a configurable strategy.
 #
 # The chunking process begins with the specified strategy and recursively falls back to 
@@ -31,14 +73,14 @@ import ballerina/jballerina.java;
 # + return - An array of chunks, or an `ai:Error` if the chunking fails.
 public isolated function chunkDocumentRecursively(Document|string document, int maxChunkSize = 200, int maxOverlapSize = 40,
         RecursiveChunkStrategy strategy = PARAGRAPH) returns Chunk[]|Error {
-    if document !is TextDocument && document !is string {
+    if document !is TextDocument|TextChunk && document !is string {
         return error Error("Only text documents are supported for chunking");
     }
-    TextDocument textDocument = document is string ? {content: document} : document;
+    TextDocument|TextChunk textDocument = document is string ? <TextDocument>{content: document} : document;
     return chunkTextDocument(textDocument, maxChunkSize, maxOverlapSize, strategy);
 }
 
-isolated function chunkTextDocument(TextDocument document, int chunkSize, int overlapSize,
+isolated function chunkTextDocument(TextDocument|TextChunk document, int chunkSize, int overlapSize,
         RecursiveChunkStrategy chunkStrategy, typedesc<TextChunk> textChunkType = TextChunk)
         returns TextChunk[]|Error = @java:Method {
     'class: "io.ballerina.stdlib.ai.Chunkers"
