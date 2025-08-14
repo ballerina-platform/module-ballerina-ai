@@ -121,3 +121,15 @@ function testRecursiveChunkingWithUnsupportedDocumentType() returns error? {
         test:assertFail("Expected an 'Error' but got 'Chunk[]'");
     }
 }
+
+@test:Config {}
+function testGenericRecursiveChunker() returns error? {
+    TextDocument doc = {content: "abcde"};
+    GenericRecursiveChunker chunker = new (2, 0, CHARACTER);
+    Chunk[] chunks = check chunker.chunk(doc);
+
+    test:assertEquals(chunks.length(), 3);
+    test:assertEquals(chunks[0].content, "ab");
+    test:assertEquals(chunks[1].content, "cd");
+    test:assertEquals(chunks[2].content, "e");
+}
