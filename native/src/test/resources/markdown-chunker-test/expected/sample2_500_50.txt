@@ -23,6 +23,7 @@ Before starting the installation process, ensure that all system requirements ar
 
 
 --- Chunk 2 ---
+#### Step 1: Download
 
 Navigate to the download section and select the appropriate package for your operating system.
 
@@ -44,6 +45,7 @@ Edit the configuration file located in the config directory. Set the following p
 
 
 --- Chunk 3 ---
+### Basic Usage
 
 ```java
 public class Example {
@@ -69,6 +71,7 @@ If you encounter connection failures, check your network settings and firewall c
 
 
 --- Chunk 4 ---
+#### Issue 2: Memory Errors
 
 Increase the heap size by adding -Xmx4g to your JVM arguments.
 
