@@ -16,25 +16,12 @@ class MarkdownChunker {
         return null;
     }
 
-    @FunctionalInterface
-    interface ChunkBoundaryChecker {
-
-        // Match the content until the boundary and return the matched part and the rest.
-        ChunkBoundaryCheckResult match(String content);
-    }
-
-    record ChunkBoundaryCheckResult(String prefix, String match, String suffix) {
-
-    }
-
     static List<String> chunk(String content, int chunkSize, int maxOverlapSize) {
-        return chunkUsingDelimiters(content, List.of("#{2,6} .*\n", "\n\n", "\n", " ", ""),
-                chunkSize, maxOverlapSize);
+        return chunkUsingDelimiters(content, List.of("#{2,6} .*\n", "\n\n", "\n", " ", ""), chunkSize, maxOverlapSize);
     }
 
     static List<String> chunkUsingDelimiters(String content, List<String> delimiters, int maxChunkSize,
             int maxOverlapSize) {
-        // TODO: think about overlap
         String delimiter = delimiters.getFirst();
         List<String> rest = delimiters.subList(1, delimiters.size());
         Iterator<String> pieces = pieces(content, delimiter);
@@ -51,8 +38,20 @@ class MarkdownChunker {
 
             // Flush the piece buffer
             chunks.add(String.join("", nextChunkPieceBuffer));
+            var lastPiece = nextChunkPieceBuffer.isEmpty() ? "" : nextChunkPieceBuffer.getLast();
             nextChunkPieceBuffer.clear();
             nextChunkSize = 0;
+
+            // get the overlap part
+            if (maxOverlapSize != 0) {
+                if (lastPiece.length() < maxOverlapSize) {
+                    piece = lastPiece + piece;
+                } else {
+                    // Break the last piece to small chunks
+                    var lastPieceChunks = chunkUsingDelimiters(lastPiece, rest, maxOverlapSize, 0);
+                    piece = lastPieceChunks.getLast() + piece;
+                }
+            }
 
             // If the piece is smaller than the max chunk size, just add it to the next chunk
             if (piece.length() <= maxChunkSize) {
