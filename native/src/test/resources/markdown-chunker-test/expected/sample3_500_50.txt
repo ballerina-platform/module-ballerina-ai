@@ -1,0 +1,22 @@
+500 50
+
+--- Chunk 1 ---
+# Short Document
+
+This is a simple markdown document with minimal content for testing edge cases.
+
+## Section A
+
+Content for section A.
+
+## Section B
+
+Content for section B with some additional text to make it slightly longer.
+
+### Subsection B.1
+
+Small subsection content.
+
+## Conclusion
+
+Brief conclusion.
