@@ -86,7 +86,7 @@ public type ImageDocument record {|
 |};
 
 # Represents an audio document.
-public type AudioDocument record{|
+public type AudioDocument record {|
     *Document;
     # Fixed type identifier for audio documents
     readonly "audio" 'type = "audio";
@@ -107,4 +107,13 @@ public type FileDocument record {|
     readonly "file" 'type = "file";
     # File content, a URL, binary data, or a file ID reference
     byte[]|Url|FileId content;
+|};
+
+# Represents a binary document.
+public type BinaryDocument record {|
+    *Document;
+    # Fixed type identifier for binary documents
+    readonly "binary" 'type = "binary";
+    # Document content as binary data
+    byte[] content;
 |};
