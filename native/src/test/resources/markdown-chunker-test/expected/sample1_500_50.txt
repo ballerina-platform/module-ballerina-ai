@@ -1,6 +1,7 @@
 500 50
 
 --- Chunk 1 ---
+Metadata: {id=148}
 # Sample Markdown Document
 
 This is a test markdown file to demonstrate the chunking functionality.
@@ -9,6 +10,7 @@ This is a test markdown file to demonstrate the chunking functionality.
 
 
 --- Chunk 2 ---
+Metadata: {id=116}
 
 Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
 
@@ -20,7 +22,7 @@ Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu 
 
 
 --- Chunk 3 ---
-Metadata: {header=Main Content}
+Metadata: {header=Main Content, id=135}
 
 ### Section 1: Getting Started
 
@@ -32,7 +34,7 @@ Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed 
 
 
 --- Chunk 4 ---
-Metadata: {header=Section 2: Advanced Topics}
+Metadata: {header=Section 2: Advanced Topics, id=136}
 
 Neque porro quisquam est, qui dolorem ipsum quia dolor sit amet, consectetur, adipisci velit, sed quia non numquam eius modi tempora incidunt ut labore et dolore magnam aliquam quaerat voluptatem.
 
@@ -44,6 +46,7 @@ Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis suscipit la
 
 
 --- Chunk 5 ---
+Metadata: {id=149}
 
 Quis autem vel eum iure reprehenderit qui in ea voluptate velit esse quam nihil molestiae consequatur, vel illum qui dolorem eum fugiat quo voluptas nulla pariatur?
 
@@ -55,7 +58,7 @@ At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praese
 
 
 --- Chunk 6 ---
-Metadata: {header=Final Thoughts}
+Metadata: {header=Final Thoughts, id=147}
 
 Similique sunt in culpa qui officia deserunt mollitia animi, id est laborum et dolorum fuga. Et harum quidem rerum facilis est et expedita distinctio.
 

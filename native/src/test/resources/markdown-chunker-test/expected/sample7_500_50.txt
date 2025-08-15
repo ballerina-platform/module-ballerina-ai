@@ -1,6 +1,7 @@
 500 50
 
 --- Chunk 1 ---
+Metadata: {id=725}
 # Code Block Test Document
 
 This document contains various code blocks to test the chunking functionality.
@@ -16,7 +17,7 @@ Here's a Java class with some methods:
 
 
 --- Chunk 2 ---
-Metadata: {type=code_block, header=Java Code Example, language=java}
+Metadata: {header=Java Code Example, language=java, id=694, type=code_block}
 ```java
 public class ExampleClass {
     private String name;
@@ -44,7 +45,7 @@ public class ExampleClass {
         return "ExampleClass{name='" + name + "', value=" + value + "}"
 
 --- Chunk 3 ---
-Metadata: {type=code_block, header=Java Code Example, language=java}
+Metadata: {header=Java Code Example, language=java, id=695, type=code_block}
 ;
     }
 }
@@ -52,6 +53,7 @@ Metadata: {type=code_block, header=Java Code Example, language=java}
 
 
 --- Chunk 4 ---
+Metadata: {id=726}
 
 ## Python Code Example
 
@@ -79,6 +81,7 @@ if __name__ == "__main__":
 
 
 --- Chunk 5 ---
+Metadata: {id=727}
 
 Some code blocks don't specify a language:
 
@@ -95,7 +98,7 @@ Here's some JavaScript code:
 
 
 --- Chunk 6 ---
-Metadata: {type=code_block, header=JavaScript Example, language=javascript}
+Metadata: {header=JavaScript Example, language=javascript, id=719, type=code_block}
 ```javascript
 class Calculator {
     constructor() {
@@ -124,13 +127,14 @@ console.log(calc.add(5, 3));
 console.log(calc.subtract(10, 4
 
 --- Chunk 7 ---
-Metadata: {type=code_block, header=JavaScript Example, language=javascript}
+Metadata: {header=JavaScript Example, language=javascript, id=720, type=code_block}
 ));
 console.log(calc.getHistory());
 ```
 
 
 --- Chunk 8 ---
+Metadata: {id=728}
 
 ## Conclusion
 

@@ -1,6 +1,7 @@
 500 50
 
 --- Chunk 1 ---
+Metadata: {id=761}
 This is a simple document without headers to test code block chunking.
 
 Here's a Java code block:
@@ -8,7 +9,7 @@ Here's a Java code block:
 
 
 --- Chunk 2 ---
-Metadata: {type=code_block, language=java}
+Metadata: {type=code_block, language=java, id=735}
 ```java
 public class SimpleClass {
     private String name;
@@ -29,13 +30,14 @@ public class SimpleClass {
 
 
 --- Chunk 3 ---
+Metadata: {id=762}
 
 And here's a Python code block:
 
 
 
 --- Chunk 4 ---
-Metadata: {type=code_block, language=python}
+Metadata: {type=code_block, language=python, id=737}
 ```python
 def hello_world():
     print("Hello, World!")
@@ -50,13 +52,14 @@ if __name__ == "__main__":
 
 
 --- Chunk 5 ---
+Metadata: {id=763}
 
 And a code block without language:
 
 
 
 --- Chunk 6 ---
-Metadata: {type=code_block, language=unknown}
+Metadata: {type=code_block, language=unknown, id=739}
 ```
 This is a code block without language specification.
 It should still be treated as a code block.
@@ -64,5 +67,6 @@ It should still be treated as a code block.
 
 
 --- Chunk 7 ---
+Metadata: {id=764}
 
 This is the end of the document.

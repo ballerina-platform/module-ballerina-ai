@@ -10,6 +10,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -64,14 +65,15 @@ class MarkdownChunker {
             throw new IllegalArgumentException("Max overlap size must be less than or equal to chunk size");
         }
         return chunkUsingDelimiters(content, strategy.getSplitters(), maxChunkSize, maxOverlapSize).stream()
-                .map(chunk -> new TextSegment(chunk.piece, new Metadata(chunk.metadata)))
+                .map(Chunk::toTextSegment)
                 .toList();
     }
 
     static List<TextSegment> chunk(String content, int chunkSize, int maxOverlapSize) {
         return chunkUsingDelimiters(content,
                 MarkdownChunkStrategy.BY_HEADER.getSplitters(), chunkSize,
-                maxOverlapSize).stream().map(chunk -> new TextSegment(chunk.piece, new Metadata(chunk.metadata)))
+                maxOverlapSize).stream()
+                .map(Chunk::toTextSegment)
                 .toList();
     }
 
@@ -221,7 +223,12 @@ class MarkdownChunker {
         return chunks;
     }
 
-    record Chunk(String piece, Map<String, String> metadata) {
+    record Chunk(long id, String piece, Map<String, String> metadata) {
+        private static final AtomicLong nextId = new AtomicLong(0);
+
+        Chunk(String piece, Map<String, String> metadata) {
+            this(nextId.getAndIncrement(), piece, metadata);
+        }
 
         public static final Chunk EMPTY = new Chunk("", Collections.emptyMap());
 
@@ -242,6 +249,12 @@ class MarkdownChunker {
                 }
             }
             return new Chunk(mergedPiece, Collections.unmodifiableMap(mergedMetadata));
+        }
+
+        public TextSegment toTextSegment() {
+            Map<String, Object> metadata = new HashMap<>(this.metadata);
+            metadata.put("id", id);
+            return new TextSegment(piece, new Metadata(metadata));
         }
     }
 

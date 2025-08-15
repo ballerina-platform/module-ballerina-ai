@@ -1,6 +1,7 @@
 500 50
 
 --- Chunk 1 ---
+Metadata: {id=205}
 # Short Document
 
 This is a simple markdown document with minimal content for testing edge cases.
