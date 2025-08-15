@@ -344,11 +344,6 @@ public class MarkdownChunkerIntegrationTest {
         }
     }
 
-    /**
-     * Validates that TextSegments have indices in the correct order (0, 1, 2, ...)
-     *
-     * @param chunks List of TextSegments to validate
-     */
     private void validateTextSegmentIndices(List<TextSegment> chunks) {
         for (int i = 0; i < chunks.size(); i++) {
             TextSegment chunk = chunks.get(i);
@@ -367,6 +362,80 @@ public class MarkdownChunkerIntegrationTest {
             Assert.assertEquals(index.intValue(), i,
                     "TextSegment at position " + i + " should have index " + i + ", but had " + index);
         }
+    }
+
+    @Test
+    public void testBreakUpChunkMetadataLinking() {
+        // Create a test chunk with some metadata
+        Map<String, String> originalMetadata = Map.of("type", "test", "source", "unit_test");
+        MarkdownChunker.Chunk originalChunk = new MarkdownChunker.Chunk(
+                "This is a very long text that needs to be broken up into smaller chunks", originalMetadata);
+
+        // Break up the chunk with a small max size to force multiple chunks
+        List<MarkdownChunker.Chunk> brokenChunks = MarkdownChunker.breakUpChunk(originalChunk, 10);
+
+        // Verify we got multiple chunks
+        Assert.assertTrue(brokenChunks.size() > 1, "Should create multiple chunks when breaking up large content");
+
+        // Verify the first chunk doesn't have a prev link (it's the first)
+        MarkdownChunker.Chunk firstChunk = brokenChunks.get(0);
+        Assert.assertFalse(firstChunk.metadata().containsKey("prev"),
+                "First chunk should not have a prev link");
+
+        // Verify subsequent chunks have prev links to the previous chunk
+        for (int i = 1; i < brokenChunks.size(); i++) {
+            MarkdownChunker.Chunk currentChunk = brokenChunks.get(i);
+            MarkdownChunker.Chunk previousChunk = brokenChunks.get(i - 1);
+
+            Assert.assertTrue(currentChunk.metadata().containsKey("prev"),
+                    "Chunk " + i + " should have a prev link");
+
+            String prevId = currentChunk.metadata().get("prev");
+            Assert.assertEquals(prevId, String.valueOf(previousChunk.id()),
+                    "Chunk " + i + " should link to previous chunk's ID");
+        }
+
+        // Verify original metadata is preserved in all chunks
+        for (MarkdownChunker.Chunk chunk : brokenChunks) {
+            Assert.assertEquals(chunk.metadata().get("type"), "test",
+                    "All chunks should preserve original type metadata");
+            Assert.assertEquals(chunk.metadata().get("source"), "unit_test",
+                    "All chunks should preserve original source metadata");
+        }
+
+        // Verify the combined text equals the original
+        String combinedText = brokenChunks.stream()
+                .map(MarkdownChunker.Chunk::piece)
+                .collect(Collectors.joining());
+        Assert.assertEquals(combinedText, originalChunk.piece(),
+                "Combined text from broken chunks should equal original text");
+    }
+
+    @Test
+    public void testBreakUpChunkEdgeCases() {
+        // Test with chunk smaller than max size
+        Map<String, String> metadata = Map.of("type", "small");
+        MarkdownChunker.Chunk smallChunk = new MarkdownChunker.Chunk("Small", metadata);
+
+        List<MarkdownChunker.Chunk> result = MarkdownChunker.breakUpChunk(smallChunk, 10);
+
+        Assert.assertEquals(result.size(), 1, "Should return single chunk when content is smaller than max size");
+        Assert.assertEquals(result.get(0).piece(), "Small", "Should preserve original content");
+        Assert.assertFalse(result.get(0).metadata().containsKey("prev"),
+                "Single chunk should not have prev link");
+
+        // Test with empty chunk
+        MarkdownChunker.Chunk emptyChunk = new MarkdownChunker.Chunk("", metadata);
+        List<MarkdownChunker.Chunk> emptyResult = MarkdownChunker.breakUpChunk(emptyChunk, 10);
+
+        Assert.assertEquals(emptyResult.size(), 0, "Should return empty list for empty chunk");
+
+        // Test with chunk exactly at max size
+        MarkdownChunker.Chunk exactChunk = new MarkdownChunker.Chunk("Exactly10!", metadata);
+        List<MarkdownChunker.Chunk> exactResult = MarkdownChunker.breakUpChunk(exactChunk, 10);
+
+        Assert.assertEquals(exactResult.size(), 1, "Should return single chunk when content is exactly max size");
+        Assert.assertEquals(exactResult.get(0).piece(), "Exactly10!", "Should preserve original content");
     }
 
     private String getExpectedOutput(String expectedFileName, String actualOutput) throws IOException {

@@ -161,18 +161,34 @@ class MarkdownChunker {
         return NON_MERGEABLE_TYPES.contains(type);
     }
 
-    private static List<Chunk> breakUpChunk(Chunk chunk, int maxChunkSize) {
+    static List<Chunk> breakUpChunk(Chunk chunk, int maxChunkSize) {
         List<Chunk> chunks = new ArrayList<>();
         Chunk remainder = chunk;
+        Chunk previousChunk = null;
+
         while (remainder.length() > maxChunkSize) {
-            // TODO: need to figure out a way to properly link these pieces
-            Chunk part = new Chunk(remainder.piece().substring(0, maxChunkSize), remainder.metadata);
+            // Create metadata with link to previous chunk
+            Map<String, String> chunkMetadata = new HashMap<>(remainder.metadata);
+            if (previousChunk != null) {
+                chunkMetadata.put("prev", String.valueOf(previousChunk.id()));
+            }
+
+            Chunk part = new Chunk(remainder.piece().substring(0, maxChunkSize), chunkMetadata);
             chunks.add(part);
+            previousChunk = part;
+
             remainder = new Chunk(remainder.piece().substring(maxChunkSize, remainder.length()), remainder.metadata);
         }
+
         if (!remainder.isEmpty()) {
-            chunks.add(remainder);
+            // Add metadata with link to previous chunk for the remainder
+            Map<String, String> remainderMetadata = new HashMap<>(remainder.metadata);
+            if (previousChunk != null) {
+                remainderMetadata.put("prev", String.valueOf(previousChunk.id()));
+            }
+            chunks.add(new Chunk(remainder.piece(), remainderMetadata));
         }
+
         return chunks;
     }
 
