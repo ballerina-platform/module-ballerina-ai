@@ -2,6 +2,7 @@ package io.ballerina.stdlib.ai;
 
 import org.testng.annotations.Test;
 import org.testng.annotations.DataProvider;
+
 import static org.testng.Assert.*;
 
 import dev.langchain4j.data.segment.TextSegment;
@@ -22,24 +23,20 @@ public class MarkdownChunkerIntegrationTest {
     private static final String EXPECTED_DIR = "markdown-chunker-test/expected";
 
     @DataProvider(name = "markdownFiles")
-    public Object[][] markdownFiles() {
-        return new Object[][]{
-            {"sample1.md"},
-            {"sample2.md"},
-            {"sample3.md"},
-            {"sample4.md"},
-            {"sample5.md"},
-                { "sample6.md" },
-                { "sample7.md" },
-                { "sample8.md" }
-        };
-    }
+    public Object[][] markdownFiles() throws IOException {
+        Path inputDir = getResourcePath(INPUT_DIR);
+        if (!Files.exists(inputDir)) {
+            return new Object[0][0];
+        }
 
-    @Test
-    public void test() throws IOException {
-       String fileName = "sample4.md";
-        String inputContent = loadFileContent(INPUT_DIR + "/" + fileName);
-        List<TextSegment> chunks = MarkdownChunker.chunk(inputContent, CHUNK_SIZE, MAX_OVERLAP_SIZE);
+        try (var stream = Files.list(inputDir)) {
+            return stream
+                    .filter(path -> path.toString().endsWith(".md"))
+                    .map(path -> path.getFileName().toString())
+                    .sorted()
+                    .map(fileName -> new Object[]{fileName})
+                    .toArray(Object[][]::new);
+        }
     }
 
     @Test(dataProvider = "markdownFiles")
@@ -83,8 +80,6 @@ public class MarkdownChunkerIntegrationTest {
         assertEquals(actualOutput, expectedOutput,
                 "Chunking output for " + fileName + " does not match expected result");
     }
-
-
 
     private String loadFileContent(String relativePath) throws IOException {
         Path resourcePath = getResourcePath(relativePath);

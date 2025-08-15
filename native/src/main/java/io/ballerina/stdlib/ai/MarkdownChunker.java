@@ -70,18 +70,6 @@ class MarkdownChunker {
             nextChunkPieceBuffer.clear();
             nextChunkSize = 0;
 
-//            // get the overlap part
-//            if (maxOverlapSize != 0) {
-//                if (lastPiece.length() < maxOverlapSize) {
-//                    piece = Chunk.merge(lastPiece, piece);
-//                } else {
-//                    // Break the last piece to small chunks
-//                    var lastPieceChunks = chunkUsingDelimitersInner(lastPiece.piece, rest, maxOverlapSize, 0, 1,
-//                            lastPiece.metadata);
-//                    piece = Chunk.merge(lastPieceChunks.getLast(), piece);
-//                }
-//            }
-
             // If the piece is smaller than the max chunk size, just add it to the next chunk
             if (piece.length() <= maxChunkSize) {
                 nextChunkPieceBuffer.add(piece);
