@@ -68,6 +68,28 @@ public class Chunkers {
         }
     }
 
+    public static Object chunkMarkdownDocument(BMap<BString, Object> document, int chunkSize, int maxOverlapSize,
+                                              BString chunkStrategy, BTypedesc textChunkType) {
+        try {
+            String content = document.getStringValue(StringUtils.fromString(CONTENT_FIELD_NAME)).getValue();
+            MarkdownChunker.MarkdownChunkStrategy strategy = switch (chunkStrategy.getValue()) {
+                case "MARKDOWN_HEADER" -> MarkdownChunker.MarkdownChunkStrategy.BY_HEADER;
+                case "CODE_BLOCK" -> MarkdownChunker.MarkdownChunkStrategy.BY_CODE_BLOCK;
+                case "HORIZONTAL_LINE" -> MarkdownChunker.MarkdownChunkStrategy.BY_HORIZONTAL_LINE;
+                case "PARAGRAPH" -> MarkdownChunker.MarkdownChunkStrategy.BY_PARAGRAPH;
+                case "LINE" -> MarkdownChunker.MarkdownChunkStrategy.BY_LINE;
+                case "SENTENCE" -> MarkdownChunker.MarkdownChunkStrategy.BY_SENTENCE;
+                case "WORD" -> MarkdownChunker.MarkdownChunkStrategy.BY_WORD;
+                case "CHARACTER" -> MarkdownChunker.MarkdownChunkStrategy.BY_CHARACTER;
+                default -> throw new IllegalArgumentException("unknown chunking strategy " + chunkStrategy.getValue());
+            };
+            List<TextSegment> textSegments = MarkdownChunker.chunk(content, strategy, chunkSize, maxOverlapSize);
+            return createTextChunkRecordArray(document, textSegments, textChunkType.getDescribingType());
+        } catch (RuntimeException e) {
+            return handleChunkingErrors(e);
+        }
+    }
+
     private static DocumentSplitter getDocumentSplitter(BString chunkStrategy, int maxChunkSize, int overlapSize) {
         return switch (ChunkStrategy.fromString(chunkStrategy.getValue())) {
             case LINE -> new DocumentByLineSplitter(maxChunkSize, overlapSize);

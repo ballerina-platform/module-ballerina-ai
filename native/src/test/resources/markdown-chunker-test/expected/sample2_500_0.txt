@@ -1,0 +1,81 @@
+500 0
+
+--- Chunk 1 ---
+Metadata: {index=0, id=862}
+# Technical Documentation
+
+## Overview
+
+This document provides comprehensive technical documentation for testing markdown chunking functionality.
+
+### System Requirements
+
+- Java 21 or higher
+- Gradle 7.x or later
+- Memory: Minimum 2GB RAM
+
+### Installation Guide
+
+
+--- Chunk 2 ---
+Metadata: {header=Installation Guide, index=1, id=853}
+
+#### Prerequisites
+
+Before starting the installation process, ensure that all system requirements are met. Download the latest version from the official repository.
+
+#### Step 1: Download
+
+Navigate to the download section and select the appropriate package for your operating system.
+
+#### Step 2: Extract
+
+Extract the downloaded archive to your preferred installation directory.
+
+#### Step 3: Configuration
+
+
+--- Chunk 3 ---
+Metadata: {index=2, id=861}
+
+Edit the configuration file located in the config directory. Set the following parameters:
+
+- server.port=8080
+- database.url=jdbc:mysql://localhost:3306/testdb
+- logging.level=INFO
+
+## Usage Examples
+
+### Basic Usage
+
+```java
+public class Example {
+    public static void main(String[] args) {
+        System.out.println("Hello World");
+    }
+}
+```
+
+### Advanced Configuration
+
+For advanced users, additional configuration options are available in the advanced settings panel.
+
+## Troubleshooting
+
+
+--- Chunk 4 ---
+Metadata: {header=Troubleshooting, index=3, id=858}
+
+### Common Issues
+
+#### Issue 1: Connection Failed
+
+If you encounter connection failures, check your network settings and firewall configuration.
+
+#### Issue 2: Memory Errors
+
+Increase the heap size by adding -Xmx4g to your JVM arguments.
+
+### Support
+
+For additional support, contact our technical team at support@example.com.

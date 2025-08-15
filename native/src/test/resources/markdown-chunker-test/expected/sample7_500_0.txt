@@ -1,0 +1,141 @@
+500 0
+
+--- Chunk 1 ---
+Metadata: {index=0, id=1368}
+# Code Block Test Document
+
+This document contains various code blocks to test the chunking functionality.
+
+## Introduction
+
+This is a test markdown file that includes code blocks with different languages and some without language specification.
+
+## Java Code Example
+
+Here's a Java class with some methods:
+
+
+
+--- Chunk 2 ---
+Metadata: {header=Java Code Example, index=1, language=java, id=1342, type=code_block}
+```java
+public class ExampleClass {
+    private String name;
+    private int value;
+
+    public ExampleClass(String name, int value) {
+        this.name = name;
+        this.value = value;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public int getValue() {
+        return value;
+    }
+
+    public void setValue(int value) {
+        this.value = value;
+    }
+
+    @Override
+    public String toString() {
+        return "ExampleClass{name='" + name + "', value=" + value + "}"
+
+--- Chunk 3 ---
+Metadata: {header=Java Code Example, index=2, language=java, id=1343, type=code_block, prev=1338}
+;
+    }
+}
+```
+
+
+--- Chunk 4 ---
+Metadata: {index=3, id=1349}
+
+## Python Code Example
+
+Here's a Python function:
+
+```python
+def calculate_fibonacci(n):
+    """Calculate the nth Fibonacci number."""
+    if n <= 1:
+        return n
+    a, b = 0, 1
+    for _ in range(2, n + 1):
+        a, b = b, a + b
+    return b
+
+def main():
+    for i in range(10):
+        print(f"Fibonacci({i}) = {calculate_fibonacci(i)}")
+
+if __name__ == "__main__":
+    main()
+```
+
+## Code Block Without Language
+
+
+--- Chunk 5 ---
+Metadata: {index=4, id=1369}
+
+Some code blocks don't specify a language:
+
+```
+This is a code block without language specification.
+It should still be treated as a code block.
+The language will be set to "unknown".
+```
+
+## JavaScript Example
+
+Here's some JavaScript code:
+
+
+
+--- Chunk 6 ---
+Metadata: {header=JavaScript Example, index=5, language=javascript, id=1363, type=code_block}
+```javascript
+class Calculator {
+    constructor() {
+        this.history = [];
+    }
+
+    add(a, b) {
+        const result = a + b;
+        this.history.push(`${a} + ${b} = ${result}`);
+        return result;
+    }
+
+    subtract(a, b) {
+        const result = a - b;
+        this.history.push(`${a} - ${b} = ${result}`);
+        return result;
+    }
+
+    getHistory() {
+        return this.history;
+    }
+}
+
+const calc = new Calculator();
+console.log(calc.add(5, 3));
+console.log(calc.subtract(10, 4
+
+--- Chunk 7 ---
+Metadata: {header=JavaScript Example, index=6, language=javascript, id=1364, type=code_block, prev=1359}
+));
+console.log(calc.getHistory());
+```
+
+
+--- Chunk 8 ---
+Metadata: {header=Conclusion, index=7, id=1367}
+
+## Conclusion
+
+This document demonstrates various code block scenarios that should be properly handled by the chunker.

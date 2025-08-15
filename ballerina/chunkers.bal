@@ -27,8 +27,8 @@ public type Chunker isolated object {
 # Represents a Genereric document chunker.
 # Provides functionality to recursively chunk a text document using a configurable strategy.
 #
-# The chunking process begins with the specified strategy and recursively falls back to 
-# finer-grained strategies if the content exceeds the configured `maxChunkSize`. Overlapping content 
+# The chunking process begins with the specified strategy and recursively falls back to
+# finer-grained strategies if the content exceeds the configured `maxChunkSize`. Overlapping content
 # between chunks can be controlled using `maxOverlapSize`.
 public isolated class GenericRecursiveChunker {
     *Chunker;
@@ -58,10 +58,43 @@ public isolated class GenericRecursiveChunker {
     }
 }
 
+# Represents a Markdown document chunker.
+# Provides functionality to recursively chunk a markdown document using a configurable strategy.
+#
+# The chunking process begins with the specified strategy and recursively falls back to
+# finer-grained strategies if the content exceeds the configured `maxChunkSize`. Overlapping content
+# between chunks can be controlled using `maxOverlapSize`.
+public isolated class MarkdownChunker {
+    *Chunker;
+    private final int maxChunkSize;
+    private final int maxOverlapSize;
+    private final MarkdownChunkStrategy strategy;
+
+    # Initializes a new instance of the `MarkdownChunker`.
+    #
+    # + maxChunkSize - Maximum number of characters allowed per chunk
+    # + maxOverlapSize - Maximum number of characters to reuse from the end of the previous chunk when creating
+    # the next one.
+    # + strategy - The markdown chunking strategy to use. Defaults to `MARKDOWN_HEADER`
+    public isolated function init(int maxChunkSize = 200, int maxOverlapSize = 40,
+            MarkdownChunkStrategy strategy = MARKDOWN_HEADER) {
+        self.maxChunkSize = maxChunkSize;
+        self.maxOverlapSize = maxOverlapSize;
+        self.strategy = strategy;
+    }
+
+    # Chunks the provided document.
+    # + document - The input document to be chunked
+    # + return - An array of chunks, or an `ai:Error` if the chunking fails
+    public isolated function chunk(Document document) returns Chunk[]|Error {
+        return chunkMarkdownDocument(document, self.maxChunkSize, self.maxOverlapSize, self.strategy);
+    }
+}
+
 # Provides functionality to recursively chunk a text document using a configurable strategy.
 #
-# The chunking process begins with the specified strategy and recursively falls back to 
-# finer-grained strategies if the content exceeds the configured `maxChunkSize`. Overlapping content 
+# The chunking process begins with the specified strategy and recursively falls back to
+# finer-grained strategies if the content exceeds the configured `maxChunkSize`. Overlapping content
 # between chunks can be controlled using `maxOverlapSize`.
 #
 # + document - The input document or string to be chunked
@@ -84,6 +117,28 @@ isolated function chunkTextDocument(TextDocument|TextChunk document, int chunkSi
         RecursiveChunkStrategy chunkStrategy, typedesc<TextChunk> textChunkType = TextChunk)
         returns TextChunk[]|Error = @java:Method {
     'class: "io.ballerina.stdlib.ai.Chunkers"
+} external;
+
+# Provides functionality to recursively chunk a markdown document using a configurable strategy.
+#
+# The chunking process begins with the specified strategy and recursively falls back to
+# finer-grained strategies if the content exceeds the configured `maxChunkSize`. Overlapping content
+# between chunks can be controlled using `maxOverlapSize`.
+#
+# + document - The input document to be chunked
+# + maxChunkSize - Maximum number of characters allowed per chunk
+# + maxOverlapSize - Maximum number of characters to reuse from the end of the previous chunk when creating the next one.
+# + strategy - The markdown chunking strategy to use. Defaults to `MARKDOWN_HEADER`
+# + return - An array of chunks, or an `ai:Error` if the chunking fails.
+public isolated function chunkMarkdownDocument(Document document, int maxChunkSize, int maxOverlapSize,
+        MarkdownChunkStrategy strategy = MARKDOWN_HEADER) returns TextChunk[]|Error {
+    return chunkMarkdownDocumentInner(document, maxChunkSize, maxOverlapSize, strategy);
+}
+
+isolated function chunkMarkdownDocumentInner(Document document, int chunkSize, int overlapSize,
+        MarkdownChunkStrategy chunkStrategy, typedesc<TextChunk> textChunkType = TextChunk) returns TextChunk[]|Error = @java:Method {
+    'class: "io.ballerina.stdlib.ai.Chunkers",
+    name: "chunkMarkdownDocument"
 } external;
 
 # Represents the available strategies for recursively chunking a document.
@@ -125,4 +180,36 @@ public enum RecursiveChunkStrategy {
     # Examples of valid paragraph separators include "\n\n", "\n\n\n", "\n \n", and " \n \n ".
     # When multiple paragraphs fit within the limit, they are joined together using a double newline ("\n\n").
     PARAGRAPH
+}
+
+# Represents the available strategies for chunking a markdown document.
+#
+# Each strategy attempts to include as much content as possible using a specific unit (such as paragraph or sentence).
+# If the content exceeds the defined `maxChunkSize` the strategy recursively falls back to a finer-grained unit until
+# the content fits within the limit.
+public enum MarkdownChunkStrategy {
+
+    # Split text by markdown headers. Starting with h2 recursively falls back to h3, h4, h5, and h6. If chunk is still
+    # too large, it falls back to the CODE_BLOCK, HORIZONTAL_LINE, PARAGRAPH, LINE, SENTENCE, WORD, and CHARACTER
+    # strategies in that order.
+    MARKDOWN_HEADER,
+
+    # Split text by code blocks. Chunks that containing the code blocks will have annotation type "code_block". If
+    # language is specified, will add "language" annotation to the chunk. Chunks produced by code blocks will not be
+    # merged with other chunks even if combined chunk size is less than `maxChunkSize`.
+    CODE_BLOCK,
+
+    # Split text by horizontal lines. Check for patterns (`***`, `---`, `___`). If chunk is still too large, it falls back to the
+    # PARAGRAPH strategy.
+    HORIZONTAL_LINE,
+
+    PARAGRAPH,
+
+    LINE,
+
+    SENTENCE,
+
+    WORD,
+
+    CHARACTER
 }
