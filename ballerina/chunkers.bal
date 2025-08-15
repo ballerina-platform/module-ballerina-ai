@@ -86,9 +86,22 @@ isolated function chunkTextDocument(TextDocument|TextChunk document, int chunkSi
     'class: "io.ballerina.stdlib.ai.Chunkers"
 } external;
 
-public isolated function chunkMarkdownDocument(MarkdownDocument document, int chunkSize, int overlapSize,
-        MarkdownChunkStrategy chunkStrategy) returns TextChunk[]|Error {
-    return chunkMarkdownDocumentInner(document, chunkSize, overlapSize, chunkStrategy);
+# Provides functionality to recursively chunk a markdown document using a configurable strategy.
+#
+# The chunking process begins with the specified strategy and recursively falls back to
+# finer-grained strategies if the content exceeds the configured `maxChunkSize`. Overlapping content
+# between chunks can be controlled using `maxOverlapSize`.
+#
+# + document - The input document to be chunked
+# + maxChunkSize - Maximum number of characters allowed per chunk
+# + maxOverlapSize - Maximum number of characters to reuse from the end of the previous chunk when creating the next one.
+# This overlap is made of complete sentences taken in reverse from the previous chunk, without exceeding
+# this limit. It helps maintain context between chunks during splitting.
+# + strategy - The markdown chunking strategy to use. Defaults to `MARKDOWN_HEADER`
+# + return - An array of chunks, or an `ai:Error` if the chunking fails.
+public isolated function chunkMarkdownDocument(MarkdownDocument document, int maxChunkSize, int maxOverlapSize,
+        MarkdownChunkStrategy strategy = MARKDOWN_HEADER) returns TextChunk[]|Error {
+    return chunkMarkdownDocumentInner(document, maxChunkSize, maxOverlapSize, strategy);
 }
 
 isolated function chunkMarkdownDocumentInner(MarkdownDocument document, int chunkSize, int overlapSize,
@@ -138,16 +151,25 @@ public enum RecursiveChunkStrategy {
     PARAGRAPH
 }
 
-# Represents the available strategies for chunking markdown documents.
+# Represents the available strategies for chunking a markdown document.
 #
-# Each strategy attempts to preserve markdown structural boundaries while keeping chunks within size limits.
-# Strategies are hierarchical - if content exceeds limits, the chunker falls back to finer-grained strategies.
+# Each strategy attempts to include as much content as possible using a specific unit (such as paragraph or sentence).
+# If the content exceeds the defined `maxChunkSize` the strategy recursively falls back to a finer-grained unit until
+# the content fits within the limit.
 public enum MarkdownChunkStrategy {
 
+    # Split text by markdown headers. Starting with h2 recursively falls back to h3, h4, h5, and h6. If chunk is still
+    # too large, it falls back to the CODE_BLOCK, HORIZONTAL_LINE, PARAGRAPH, LINE, SENTENCE, WORD, and CHARACTER
+    # strategies in that order.
     MARKDOWN_HEADER,
 
+    # Split text by code blocks. Chunks that containing the code blocks will have annotation type "code_block". If
+    # language is specified, will add "language" annotation to the chunk. Chunks produced by code blocks will not be
+    # merged with other chunks even if combined chunk size is less than `maxChunkSize`.
     CODE_BLOCK,
 
+    # Split text by horizontal lines. Check for patterns (`***`, `---`, `___`). If chunk is still too large, it falls back to the
+    # PARAGRAPH strategy.
     HORIZONTAL_LINE,
 
     PARAGRAPH,

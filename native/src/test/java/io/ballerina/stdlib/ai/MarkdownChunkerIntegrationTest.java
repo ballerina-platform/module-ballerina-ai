@@ -159,7 +159,7 @@ public class MarkdownChunkerIntegrationTest {
                 
                 ```java
                 public void example() {
-                    System.out.println("Hello");
+                    foo("Hello");
                 }
                 ```
                 
