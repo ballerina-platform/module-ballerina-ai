@@ -11,12 +11,12 @@ This is a test markdown file that includes code blocks with different languages 
 
 ## Java Code Example
 
-
---- Chunk 2 ---
-Metadata: {header=Java Code Example}
-
 Here's a Java class with some methods:
 
+
+
+--- Chunk 2 ---
+Metadata: {type=code_block, header=Java Code Example, language=java}
 ```java
 public class ExampleClass {
     private String name;
@@ -39,20 +39,21 @@ public class ExampleClass {
         this.value = value;
     }
 
---- Chunk 3 ---
-
-
     @Override
     public String toString() {
-        return "ExampleClass{name='" + name + "', value=" + value + "}";
+        return "ExampleClass{name='" + name + "', value=" + value + "}"
+
+--- Chunk 3 ---
+Metadata: {type=code_block, header=Java Code Example, language=java}
+;
     }
 }
 ```
 
-## Python Code Example
-
 
 --- Chunk 4 ---
+
+## Python Code Example
 
 Here's a Python function:
 
@@ -89,12 +90,12 @@ The language will be set to "unknown".
 
 ## JavaScript Example
 
-
---- Chunk 6 ---
-Metadata: {header=JavaScript Example}
-
 Here's some JavaScript code:
 
+
+
+--- Chunk 6 ---
+Metadata: {type=code_block, header=JavaScript Example, language=javascript}
 ```javascript
 class Calculator {
     constructor() {
@@ -118,14 +119,19 @@ class Calculator {
     }
 }
 
---- Chunk 7 ---
-
-
 const calc = new Calculator();
 console.log(calc.add(5, 3));
-console.log(calc.subtract(10, 4));
+console.log(calc.subtract(10, 4
+
+--- Chunk 7 ---
+Metadata: {type=code_block, header=JavaScript Example, language=javascript}
+));
 console.log(calc.getHistory());
 ```
+
+
+--- Chunk 8 ---
+Metadata: {header=Conclusion}
 
 ## Conclusion
 

@@ -5,6 +5,10 @@ This is a simple document without headers to test code block chunking.
 
 Here's a Java code block:
 
+
+
+--- Chunk 2 ---
+Metadata: {type=code_block, language=java}
 ```java
 public class SimpleClass {
     private String name;
@@ -23,11 +27,15 @@ public class SimpleClass {
 }
 ```
 
+
+--- Chunk 3 ---
+
 And here's a Python code block:
 
 
 
---- Chunk 2 ---
+--- Chunk 4 ---
+Metadata: {type=code_block, language=python}
 ```python
 def hello_world():
     print("Hello, World!")
@@ -40,11 +48,21 @@ if __name__ == "__main__":
     main()
 ```
 
+
+--- Chunk 5 ---
+
 And a code block without language:
 
+
+
+--- Chunk 6 ---
+Metadata: {type=code_block, language=unknown}
 ```
 This is a code block without language specification.
 It should still be treated as a code block.
 ```
+
+
+--- Chunk 7 ---
 
 This is the end of the document.

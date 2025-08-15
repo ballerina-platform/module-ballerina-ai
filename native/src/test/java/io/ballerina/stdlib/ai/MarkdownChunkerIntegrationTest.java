@@ -39,6 +39,14 @@ public class MarkdownChunkerIntegrationTest {
         }
     }
 
+    @Test
+    public void test() throws IOException {
+        String inputContent = loadFileContent(INPUT_DIR + "/" + "sample7.md");
+
+        // Chunk the content using MarkdownChunker
+        List<TextSegment> chunks = MarkdownChunker.chunk(inputContent, CHUNK_SIZE, MAX_OVERLAP_SIZE);
+    }
+
     @Test(dataProvider = "markdownFiles")
     public void testMarkdownChunking(String fileName) throws IOException {
         // Load input markdown file

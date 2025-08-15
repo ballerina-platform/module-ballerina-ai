@@ -10,11 +10,15 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 class MarkdownChunker {
+
+    // Types that should not be merged with other chunks
+    private static final Set<String> NON_MERGEABLE_TYPES = Set.of("code_block");
 
     static Object chunkMarkdownDocumentInner(Document document, int chunkSize, int maxOverlapSize,
                                              ChunkStrategy strategy) {
@@ -46,13 +50,12 @@ class MarkdownChunker {
 
     private static List<Chunk> chunkUsingDelimiters(String content, List<Splitter> delimiters, int maxChunkSize,
                                                     int maxOverlapSize) {
-        return chunkUsingDelimitersInner(content, delimiters, maxChunkSize, maxOverlapSize, Integer.MAX_VALUE,
+        return chunkUsingDelimitersInner(content, delimiters, maxChunkSize, maxOverlapSize,
                 Collections.emptyMap());
     }
 
     private static List<Chunk> chunkUsingDelimitersInner(String content, List<Splitter> delimiters, int maxChunkSize,
-                                                         int maxOverlapSize, int maxChunkCount,
-                                                         Map<String, String> parentMetadata) {
+                                                         int maxOverlapSize, Map<String, String> parentMetadata) {
         List<Splitter> rest = delimiters.subList(1, delimiters.size());
         Iterator<Chunk> pieces = delimiters.getFirst().split(content);
         List<Chunk> chunks = new ArrayList<>();
@@ -60,6 +63,23 @@ class MarkdownChunker {
         int nextChunkSize = 0;
         while (pieces.hasNext()) {
             Chunk piece = pieces.next();
+            
+            // If this piece is non-mergeable, flush buffer and add it directly
+            if (isNonMergeable(piece)) {
+                // Flush current buffer
+                nextChunkPieceBuffer.stream().reduce(Chunk::merge).ifPresent(chunks::add);
+                nextChunkPieceBuffer.clear();
+                nextChunkSize = 0;
+                
+                // Add non-mergeable piece directly
+                if (piece.length() > maxChunkSize) {
+                    chunks.addAll(breakUpChunk(piece, maxChunkSize));
+                } else {
+                    chunks.add(piece);
+                }
+                continue;
+            }
+            
             if (nextChunkSize + piece.length() <= maxChunkSize) {
                 nextChunkPieceBuffer.add(piece);
                 nextChunkSize += piece.length();
@@ -79,11 +99,16 @@ class MarkdownChunker {
 
             // Break up the current piece
             List<Chunk> pieceChunks = chunkUsingDelimitersInner(piece.piece, rest, maxChunkSize, maxOverlapSize,
-                    Integer.MAX_VALUE, piece.metadata);
+                    piece.metadata);
             chunks.addAll(pieceChunks.subList(0, pieceChunks.size() - 1));
             Chunk lastPieceChunk = pieceChunks.getLast();
-            nextChunkPieceBuffer.add(lastPieceChunk);
-            nextChunkSize += lastPieceChunk.length();
+            if (isNonMergeable(lastPieceChunk)) {
+                // If the last piece is non-mergeable, add it directly
+                chunks.add(lastPieceChunk);
+            } else {
+                nextChunkPieceBuffer.add(lastPieceChunk);
+                nextChunkSize += lastPieceChunk.length();
+            }
         }
         nextChunkPieceBuffer.stream().reduce(Chunk::merge).ifPresent(chunks::add);
         chunks = mergeChunksWithOverlap(chunks, maxChunkSize, maxOverlapSize);
@@ -97,21 +122,53 @@ class MarkdownChunker {
         }).toList();
     }
 
+    private static boolean isNonMergeable(Chunk chunk) {
+        if (!chunk.metadata().containsKey("type")) {
+            return false;
+        }
+        String type = chunk.metadata().get("type");
+        return NON_MERGEABLE_TYPES.contains(type);
+    }
+
+    private static List<Chunk> breakUpChunk(Chunk chunk, int maxChunkSize) {
+        List<Chunk> chunks = new ArrayList<>();
+        Chunk remainder = chunk;
+        while (remainder.length() > maxChunkSize) {
+            // TODO: need to figure out a way to properly link these pieces
+            Chunk part = new Chunk(remainder.piece().substring(0, maxChunkSize), remainder.metadata);
+            chunks.add(part);
+            remainder = new Chunk(remainder.piece().substring(maxChunkSize, remainder.length()), remainder.metadata);
+        }
+        if (!remainder.isEmpty()) {
+            chunks.add(remainder);
+        }
+        return chunks;
+    }
+
     private static List<Chunk> mergeChunksWithOverlap(List<Chunk> pieces, int maxChunkSize, int maxOverlapSize) {
         List<Chunk> chunks = new ArrayList<>();
         List<Chunk> mergeBuffer = new ArrayList<>();
         int mergeBufferSize = 0;
         Chunk lastChunk = Chunk.EMPTY;
         for (Chunk piece : pieces) {
+            // If this piece is non-mergeable, flush buffer and add it directly
+            if (isNonMergeable(piece)) {
+                assert piece.length() <= maxChunkSize;
+                // First flush the merge buffer
+                mergeBuffer.stream().reduce(Chunk::merge).ifPresent(chunks::add);
+                mergeBuffer.clear();
+                mergeBufferSize = 0;
+                
+                // Add non-mergeable piece directly
+                chunks.add(piece);
+                continue;
+            }
+            
             if (piece.length() > maxChunkSize) {
-                Chunk remainder = piece;
-                while (remainder.length() > maxChunkSize) {
-                    // TODO: need to figure out a way to properly link these pieces
-                    Chunk part = new Chunk(remainder.piece().substring(0, maxChunkSize), remainder.metadata);
-                    chunks.add(part);
-                    remainder = new Chunk(remainder.piece().substring(maxChunkSize, remainder.length()), remainder.metadata);
-                }
-                piece = remainder;
+                List<Chunk> p = breakUpChunk(piece, maxChunkSize);
+                assert p.size() > 1;
+                chunks.addAll(p.subList(0, p.size() - 2));
+                piece = p.getLast();
             }
             if (mergeBuffer.isEmpty()) {
                 // First chunk, see if we can overlap with the last piece
@@ -183,7 +240,6 @@ class MarkdownChunker {
                 private String nextPiece = null;
                 private boolean hasNextPiece = false;
                 private boolean finished = false;
-                private boolean nextIsDelimiter = false;
 
                 private void prepareNext() {
                     if (finished) {
@@ -197,7 +253,6 @@ class MarkdownChunker {
                         if (delimiterStart > lastIndex) {
                             // Next piece is the content before the delimiter
                             nextPiece = content.substring(lastIndex, delimiterStart);
-                            nextIsDelimiter = false;
                             lastIndex = delimiterStart;
                             hasNextPiece = true;
                             return;
@@ -205,7 +260,6 @@ class MarkdownChunker {
 
                         // Next piece is the delimiter itself
                         nextPiece = content.substring(delimiterStart, delimiterEnd);
-                        nextIsDelimiter = true;
                         lastIndex = delimiterEnd;
                         hasNextPiece = true;
                         return;
@@ -214,7 +268,6 @@ class MarkdownChunker {
                     if (lastIndex < content.length()) {
                         // Remaining content after last delimiter
                         nextPiece = content.substring(lastIndex);
-                        nextIsDelimiter = false;
                         lastIndex = content.length();
                         hasNextPiece = true;
                         finished = true;
@@ -290,8 +343,7 @@ class MarkdownChunker {
                         lastIndex = delimiterEnd;
                         hasNextPiece = true;
                         return;
-                    }
-                    if (lastIndex < content.length()) {
+                    } if (lastIndex < content.length()) {
                         // TODO: set metadata for rest
                         nextPiece = content.substring(lastIndex);
                         lastIndex = content.length();
@@ -301,11 +353,10 @@ class MarkdownChunker {
                         } else {
                             nextPieceMetadata = Map.of();
                         }
-                        finished = true;
                     } else {
                         hasNextPiece = false;
-                        finished = true;
                     }
+                    finished = true;
                 }
 
                 @Override
@@ -371,7 +422,6 @@ class MarkdownChunker {
                         // Find the end of this code block
                         Matcher endMatcher = codeBlockEndPattern.matcher(content.substring(startEndIndex));
                         if (endMatcher.find()) {
-                            int endIndex = endMatcher.start() + startEndIndex;
                             int endEndIndex = endMatcher.end() + startEndIndex;
 
                             // Extract the entire code block (including the start and end markers)
