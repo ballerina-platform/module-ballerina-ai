@@ -20,6 +20,10 @@ public class MarkdownChunkerIntegrationTest {
     private static final String INPUT_DIR = "markdown-chunker-test/input";
     private static final String EXPECTED_DIR = "markdown-chunker-test/expected";
 
+    static String normalizeNewLines(String content) {
+        return content.replaceAll("\r\n", "\n").replaceAll("\r", "\n");
+    }
+
     @DataProvider(name = "markdownFiles")
     public Object[][] markdownFiles() throws IOException {
         Path inputDir = getResourcePath(INPUT_DIR);
@@ -40,7 +44,7 @@ public class MarkdownChunkerIntegrationTest {
     @Test(dataProvider = "markdownFiles")
     public void testMarkdownChunking(String fileName) throws IOException {
         // Load input markdown file
-        String inputContent = loadFileContent(INPUT_DIR + "/" + fileName);
+        String inputContent = normalizeNewLines(loadFileContent(INPUT_DIR + "/" + fileName));
 
         // Chunk the content using MarkdownChunker
         List<TextSegment> chunks = MarkdownChunker.chunk(inputContent, CHUNK_SIZE, MAX_OVERLAP_SIZE);
@@ -50,7 +54,7 @@ public class MarkdownChunkerIntegrationTest {
 
         // Handle BLESS environment variable and expected file comparison
         String expectedFileName = fileName.replace(".md", "_" + CHUNK_SIZE + "_" + MAX_OVERLAP_SIZE + ".txt");
-        String expectedOutput = getExpectedOutput(expectedFileName, actualOutput);
+        String expectedOutput = normalizeNewLines(getExpectedOutput(expectedFileName, actualOutput));
 
         // Compare actual vs expected
         Assert.assertEquals(actualOutput, expectedOutput,
@@ -60,7 +64,7 @@ public class MarkdownChunkerIntegrationTest {
     @Test(dataProvider = "markdownFiles")
     public void testMarkdownChunkingWithoutOverlap(String fileName) throws IOException {
         // Load input markdown file
-        String inputContent = loadFileContent(INPUT_DIR + "/" + fileName);
+        String inputContent = normalizeNewLines(loadFileContent(INPUT_DIR + "/" + fileName));
 
         // Chunk the content using MarkdownChunker
         List<TextSegment> chunks = MarkdownChunker.chunk(inputContent, CHUNK_SIZE, 0);
@@ -72,7 +76,7 @@ public class MarkdownChunkerIntegrationTest {
 
         // Handle BLESS environment variable and expected file comparison
         String expectedFileName = fileName.replace(".md", "_" + CHUNK_SIZE + "_" + 0 + ".txt");
-        String expectedOutput = getExpectedOutput(expectedFileName, actualOutput);
+        String expectedOutput = normalizeNewLines(getExpectedOutput(expectedFileName, actualOutput));
 
         // Compare actual vs expected
         Assert.assertEquals(actualOutput, expectedOutput,
@@ -131,20 +135,20 @@ public class MarkdownChunkerIntegrationTest {
         String markdownWithHeaders = """
                 # Header 1
                 Content under header 1.
-                
+
                 ## Header 2
                 Content under header 2.
-                
+
                 ### Header 3
                 Content under header 3.
                 """;
-        
-        List<TextSegment> chunks = MarkdownChunker.chunk(markdownWithHeaders, 
+
+                List<TextSegment> chunks = MarkdownChunker.chunk(markdownWithHeaders,
                 MarkdownChunker.MarkdownChunkStrategy.BY_HEADER, 200, 20);
-        
+
         // BY_HEADER strategy uses fallthrough, so it will split by multiple criteria
         Assert.assertFalse(chunks.isEmpty(), "BY_HEADER should produce chunks");
-        
+
         // Check that header metadata is preserved for chunks that contain headers
         boolean hasHeaderMetadata = chunks.stream()
                 .anyMatch(chunk -> chunk.metadata().toMap().containsKey("header"));
@@ -156,32 +160,32 @@ public class MarkdownChunkerIntegrationTest {
     public void testByCodeBlockStrategy() {
         String markdownWithCode = """
                 Some text before code.
-                
+
                 ```java
                 public void example() {
                     foo("Hello");
                 }
                 ```
-                
+
                 Some text after code.
-                
+
                 ```python
                 print("Hello")
                 ```
-                
+
                 Final text.
                 """;
-        
+
         List<TextSegment> chunks = MarkdownChunker.chunk(markdownWithCode,
                 MarkdownChunker.MarkdownChunkStrategy.BY_CODE_BLOCK, 200, 20);
-        
+
         Assert.assertTrue(chunks.size() >= 3, "BY_CODE_BLOCK should separate code blocks");
-        
+
         // Check that code block metadata is preserved
         boolean hasCodeBlockMetadata = chunks.stream()
                 .anyMatch(chunk -> "code_block".equals(chunk.metadata().toMap().get("type")));
         Assert.assertTrue(hasCodeBlockMetadata, "Code blocks should have type metadata");
-        
+
         // Check language metadata
         boolean hasLanguageMetadata = chunks.stream()
                 .anyMatch(chunk -> chunk.metadata().toMap().containsKey("language"));
@@ -192,23 +196,23 @@ public class MarkdownChunkerIntegrationTest {
     public void testByHorizontalLineStrategy() {
         String markdownWithHorizontalLines = """
                 Section 1 content.
-                
+
                 ---
-                
+
                 Section 2 content.
-                
+
                 ***
-                
+
                 Section 3 content.
-                
+
                 ___
-                
+
                 Section 4 content.
                 """;
-        
+
         List<TextSegment> chunks = MarkdownChunker.chunk(markdownWithHorizontalLines,
                 MarkdownChunker.MarkdownChunkStrategy.BY_HORIZONTAL_LINE, 200, 20);
-        
+
         // BY_HORIZONTAL_LINE strategy includes fallthrough behavior
         Assert.assertFalse(chunks.isEmpty(), "BY_HORIZONTAL_LINE should produce chunks");
     }
@@ -217,15 +221,15 @@ public class MarkdownChunkerIntegrationTest {
     public void testByParagraphStrategy() {
         String markdownWithParagraphs = """
                 First paragraph with some content.
-                
+
                 Second paragraph with different content.
-                
+
                 Third paragraph here.
                 """;
-        
+
         List<TextSegment> chunks = MarkdownChunker.chunk(markdownWithParagraphs,
                 MarkdownChunker.MarkdownChunkStrategy.BY_PARAGRAPH, 100, 10);
-        
+
         // BY_PARAGRAPH strategy includes fallthrough to line, sentence, word, character splitters
         Assert.assertFalse(chunks.isEmpty(), "BY_PARAGRAPH should produce chunks");
     }
@@ -238,78 +242,78 @@ public class MarkdownChunkerIntegrationTest {
                 Line 3
                 Line 4
                 """;
-        
+
         List<TextSegment> chunks = MarkdownChunker.chunk(markdownWithLines,
                 MarkdownChunker.MarkdownChunkStrategy.BY_LINE, 20, 5);
-        
+
         Assert.assertTrue(chunks.size() >= 2, "BY_LINE should split at line breaks");
     }
 
     @Test
     public void testBySentenceStrategy() {
         String markdownWithSentences = "First sentence. Second sentence. Third sentence. Fourth sentence.";
-        
+
         List<TextSegment> chunks = MarkdownChunker.chunk(markdownWithSentences,
                 MarkdownChunker.MarkdownChunkStrategy.BY_SENTENCE, 30, 5);
-        
+
         Assert.assertTrue(chunks.size() >= 2, "BY_SENTENCE should split at sentence boundaries");
     }
 
     @Test
     public void testByWordStrategy() {
         String markdownWithWords = "word1 word2 word3 word4 word5 word6 word7 word8";
-        
+
         List<TextSegment> chunks = MarkdownChunker.chunk(markdownWithWords,
                 MarkdownChunker.MarkdownChunkStrategy.BY_WORD, 15, 3);
-        
+
         Assert.assertTrue(chunks.size() >= 3, "BY_WORD should split at word boundaries");
     }
 
     @Test
     public void testByCharacterStrategy() {
         String shortText = "abcdefghijklmnopqrstuvwxyz";
-        
+
         List<TextSegment> chunks = MarkdownChunker.chunk(shortText,
                 MarkdownChunker.MarkdownChunkStrategy.BY_CHARACTER, 5, 1);
-        
+
         Assert.assertTrue(chunks.size() >= 5, "BY_CHARACTER should split at character boundaries");
-        
+
         // Verify content is preserved
         String reconstructed = chunks.stream().map(TextSegment::text).collect(Collectors.joining());
-        Assert.assertTrue(reconstructed.contains(shortText.substring(0, Math.min(5, shortText.length()))), 
-                "Character chunking should preserve content");
+        Assert.assertTrue(reconstructed.contains(shortText.substring(0, Math.min(5, shortText.length()))),
+                        "Character chunking should preserve content");
     }
 
     @Test(dataProvider = "chunkStrategies")
     void testStrategyConsistency(MarkdownChunker.MarkdownChunkStrategy strategy) throws IOException {
         String inputContent = loadFileContent(INPUT_DIR + "/sample7.md");
-        
+
         // Test that each strategy produces consistent results
         List<TextSegment> chunks1 = MarkdownChunker.chunk(inputContent, strategy, CHUNK_SIZE, MAX_OVERLAP_SIZE);
         List<TextSegment> chunks2 = MarkdownChunker.chunk(inputContent, strategy, CHUNK_SIZE, MAX_OVERLAP_SIZE);
-        
-        Assert.assertEquals(chunks1.size(), chunks2.size(), 
+
+                Assert.assertEquals(chunks1.size(), chunks2.size(),
                 "Strategy " + strategy + " should be deterministic");
-        
+
         for (int i = 0; i < chunks1.size(); i++) {
-            Assert.assertEquals(chunks1.get(i).text(), chunks2.get(i).text(), 
-                    "Chunk " + i + " should be identical for strategy " + strategy);
+            Assert.assertEquals(chunks1.get(i).text(), chunks2.get(i).text(),
+                            "Chunk " + i + " should be identical for strategy " + strategy);
         }
     }
 
     @Test(dataProvider = "chunkStrategies")
     void testStrategyWithDifferentSizes(MarkdownChunker.MarkdownChunkStrategy strategy) throws IOException {
         String inputContent = loadFileContent(INPUT_DIR + "/sample7.md");
-        
+
         // Test different chunk sizes for each strategy
         int[] chunkSizes = {100, 500, 1000};
-        
+
         for (int chunkSize : chunkSizes) {
             List<TextSegment> chunks = MarkdownChunker.chunk(inputContent, strategy, chunkSize, 20);
-            
-            Assert.assertTrue(chunks.size() > 0, 
+
+                    Assert.assertTrue(chunks.size() > 0,
                     "Strategy " + strategy + " with chunk size " + chunkSize + " should produce chunks");
-            
+
             // Verify no chunk is excessively large (allowing some flexibility)
             for (TextSegment chunk : chunks) {
                 Assert.assertTrue(chunk.text().length() <= chunkSize + 200, // Allow flexibility for boundaries
@@ -321,12 +325,12 @@ public class MarkdownChunkerIntegrationTest {
     @Test
     public void testStrategyFallbackBehavior() {
         String singleWord = "word";
-        
+
         // Test that all strategies can handle minimal content
         for (MarkdownChunker.MarkdownChunkStrategy strategy : MarkdownChunker.MarkdownChunkStrategy.values()) {
             List<TextSegment> chunks = MarkdownChunker.chunk(singleWord, strategy, 100, 10);
-            
-            Assert.assertEquals(chunks.size(), 1, 
+
+                    Assert.assertEquals(chunks.size(), 1,
                     "Strategy " + strategy + " should produce one chunk for single word");
             Assert.assertEquals(chunks.getFirst().text(), singleWord,
                     "Strategy " + strategy + " should preserve single word content");
