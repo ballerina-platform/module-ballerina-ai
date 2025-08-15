@@ -19,6 +19,10 @@ class MarkdownChunker {
     // Types that should not be merged with other chunks
     private static final Set<String> NON_MERGEABLE_TYPES = Set.of("code_block");
 
+    static String normalizeNewLines(String content) {
+        return content.replaceAll("\r\n", "\n").replaceAll("\r", "\n");
+    }
+
     enum MarkdownChunkStrategy {
         BY_HEADER, BY_CODE_BLOCK, BY_HORIZONTAL_LINE, BY_PARAGRAPH, BY_LINE, BY_SENTENCE, BY_WORD, BY_CHARACTER;
 
