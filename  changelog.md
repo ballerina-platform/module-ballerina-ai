@@ -4,6 +4,8 @@ This file documents all significant changes made to the Ballerina AI package acr
 
 ## [Un-released]
 
+## [1.2.0] - 2025-08-15
+
 ### Added
 - [Add Support for Passing Additional Context to Agents](https://github.com/ballerina-platform/ballerina-library/issues/8154)
 
