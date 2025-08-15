@@ -1,0 +1,88 @@
+500 50
+
+--- Chunk 1 ---
+# Horizontal Line Variations Test
+
+This document specifically tests different horizontal line patterns to validate the splitter patterns.
+
+## Standard Content
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.
+
+****
+
+## After Four Asterisks
+
+This section comes after four asterisks. The pattern should match \n\*\*\*+\n which means three or more asterisks.
+
+*****
+
+## After Five Asterisks
+
+
+--- Chunk 2 ---
+
+Testing with five asterisks to ensure the + quantifier works correctly.
+
+***
+
+## After Three Asterisks (Minimum)
+
+This tests the minimum case of three asterisks.
+
+---
+
+## Standard Dash Line
+
+Testing the standard three-dash horizontal line.
+
+----
+
+## Four Dashes
+
+Testing with four dashes to validate the pattern.
+
+-----
+
+## Five Dashes
+
+Testing with five dashes.
+
+___
+
+## Standard Underscore Line
+
+Testing the standard three-underscore horizontal line.
+
+____
+
+## Four Underscores
+
+
+--- Chunk 3 ---
+
+Testing with four underscores.
+
+_____
+
+## Five Underscores
+
+Testing with five underscores.
+
+## Mixed Content Section
+
+This section contains mixed content to test how the chunker handles regular text flow.
+
+```text
+This is a simple text code block
+that spans multiple lines
+and should be treated as a delimiter.
+```
+
+Additional content after the code block.
+
+```
+Another code block without language specification.
+```
+
+Final paragraph of content to complete the test file.
