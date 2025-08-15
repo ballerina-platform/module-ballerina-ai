@@ -1,7 +1,7 @@
 500 0
 
 --- Chunk 1 ---
-Metadata: {id=839}
+Metadata: {index=0, id=839}
 # Technical Documentation
 
 ## Overview
@@ -18,7 +18,7 @@ This document provides comprehensive technical documentation for testing markdow
 
 
 --- Chunk 2 ---
-Metadata: {header=Installation Guide, id=830}
+Metadata: {header=Installation Guide, index=1, id=830}
 
 #### Prerequisites
 
@@ -36,7 +36,7 @@ Extract the downloaded archive to your preferred installation directory.
 
 
 --- Chunk 3 ---
-Metadata: {id=838}
+Metadata: {index=2, id=838}
 
 Edit the configuration file located in the config directory. Set the following parameters:
 
@@ -64,7 +64,7 @@ For advanced users, additional configuration options are available in the advanc
 
 
 --- Chunk 4 ---
-Metadata: {header=Troubleshooting, id=835}
+Metadata: {header=Troubleshooting, index=3, id=835}
 
 ### Common Issues
 

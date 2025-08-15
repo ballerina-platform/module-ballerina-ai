@@ -49,6 +49,9 @@ public class MarkdownChunkerIntegrationTest {
         // Chunk the content using MarkdownChunker
         List<TextSegment> chunks = MarkdownChunker.chunk(inputContent, CHUNK_SIZE, MAX_OVERLAP_SIZE);
 
+        // Sanity check: validate that TextSegments have indices in correct order
+        validateTextSegmentIndices(chunks);
+
         // Format output as specified: "500 50" followed by chunks
         String actualOutput = formatChunksOutput(chunks, CHUNK_SIZE, MAX_OVERLAP_SIZE);
 
@@ -68,6 +71,10 @@ public class MarkdownChunkerIntegrationTest {
 
         // Chunk the content using MarkdownChunker
         List<TextSegment> chunks = MarkdownChunker.chunk(inputContent, CHUNK_SIZE, 0);
+
+        // Sanity check: validate that TextSegments have indices in correct order
+        validateTextSegmentIndices(chunks);
+
         String combinedChunks = chunks.stream().map(TextSegment::text).collect(Collectors.joining());
         Assert.assertEquals(combinedChunks, inputContent,
                 "Chunking without overlap should return the original content for " + fileName);
@@ -334,6 +341,31 @@ public class MarkdownChunkerIntegrationTest {
                     "Strategy " + strategy + " should produce one chunk for single word");
             Assert.assertEquals(chunks.getFirst().text(), singleWord,
                     "Strategy " + strategy + " should preserve single word content");
+        }
+    }
+
+    /**
+     * Validates that TextSegments have indices in the correct order (0, 1, 2, ...)
+     *
+     * @param chunks List of TextSegments to validate
+     */
+    private void validateTextSegmentIndices(List<TextSegment> chunks) {
+        for (int i = 0; i < chunks.size(); i++) {
+            TextSegment chunk = chunks.get(i);
+            Map<String, Object> metadata = chunk.metadata().toMap();
+
+            // Check that index exists in metadata
+            Assert.assertTrue(metadata.containsKey("index"),
+                    "TextSegment at position " + i + " should have index in metadata");
+
+            // Check that index value matches the expected position
+            Object indexValue = metadata.get("index");
+            Assert.assertTrue(indexValue instanceof Integer,
+                    "Index should be an Integer, but was " + indexValue.getClass().getSimpleName());
+
+            Integer index = (Integer) indexValue;
+            Assert.assertEquals(index.intValue(), i,
+                    "TextSegment at position " + i + " should have index " + i + ", but had " + index);
         }
     }
 

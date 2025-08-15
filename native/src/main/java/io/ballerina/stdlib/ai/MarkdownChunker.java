@@ -14,6 +14,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.IntStream;
 
 class MarkdownChunker {
 
@@ -64,16 +65,18 @@ class MarkdownChunker {
         if (maxOverlapSize > maxChunkSize) {
             throw new IllegalArgumentException("Max overlap size must be less than or equal to chunk size");
         }
-        return chunkUsingDelimiters(content, strategy.getSplitters(), maxChunkSize, maxOverlapSize).stream()
-                .map(Chunk::toTextSegment)
+        List<Chunk> chunks = chunkUsingDelimiters(content, strategy.getSplitters(), maxChunkSize, maxOverlapSize);
+        return IntStream.range(0, chunks.size())
+                .mapToObj(i -> chunks.get(i).toTextSegment(i))
                 .toList();
     }
 
     static List<TextSegment> chunk(String content, int chunkSize, int maxOverlapSize) {
-        return chunkUsingDelimiters(content,
-                MarkdownChunkStrategy.BY_HEADER.getSplitters(), chunkSize,
-                maxOverlapSize).stream()
-                .map(Chunk::toTextSegment)
+        List<Chunk> chunks = chunkUsingDelimiters(content,
+                        MarkdownChunkStrategy.BY_HEADER.getSplitters(), chunkSize,
+                maxOverlapSize);
+        return IntStream.range(0, chunks.size())
+                .mapToObj(i -> chunks.get(i).toTextSegment(i))
                 .toList();
     }
 
@@ -251,9 +254,10 @@ class MarkdownChunker {
             return new Chunk(mergedPiece, Collections.unmodifiableMap(mergedMetadata));
         }
 
-        public TextSegment toTextSegment() {
+        public TextSegment toTextSegment(int index) {
             Map<String, Object> metadata = new HashMap<>(this.metadata);
             metadata.put("id", id);
+            metadata.put("index", index);
             return new TextSegment(piece, new Metadata(metadata));
         }
     }
