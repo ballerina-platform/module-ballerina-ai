@@ -27,7 +27,9 @@ public class MarkdownChunkerIntegrationTest {
             {"sample1.md"},
             {"sample2.md"},
             {"sample3.md"},
-            {"sample4.md"}
+            {"sample4.md"},
+            {"sample5.md"},
+            {"sample6.md"}
         };
     }
 

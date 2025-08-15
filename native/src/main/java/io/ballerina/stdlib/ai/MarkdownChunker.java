@@ -31,6 +31,11 @@ class MarkdownChunker {
                 new HeaderSplitter(4),
                 new HeaderSplitter(5),
                 new HeaderSplitter(6),
+                new SimpleDelimiterSplitter("```\n"), // End of code block
+                // Horizontal lines
+                new SimpleDelimiterSplitter("\n\\*\\*\\*+\n"),
+                new SimpleDelimiterSplitter("\\n---+\\n"),
+                new SimpleDelimiterSplitter("\n___+\n"),
                 new SimpleDelimiterSplitter("\n\n"),
                 new SimpleDelimiterSplitter("\n"),
                 new SimpleDelimiterSplitter(" "),
@@ -109,7 +114,16 @@ class MarkdownChunker {
         int mergeBufferSize = 0;
         Chunk lastChunk = Chunk.EMPTY;
         for (Chunk piece : pieces) {
-            assert piece.length() < maxChunkSize;
+            if (piece.length() > maxChunkSize) {
+                Chunk remainder = piece;
+                while (remainder.length() > maxChunkSize) {
+                    // TODO: need to figure out a way to properly link these pieces
+                    Chunk part = new Chunk(remainder.piece().substring(0, maxChunkSize), remainder.metadata);
+                    chunks.add(part);
+                    remainder = new Chunk(remainder.piece().substring(maxChunkSize, remainder.length()), remainder.metadata);
+                }
+                piece = remainder;
+            }
             if (mergeBuffer.isEmpty()) {
                 // First chunk, see if we can overlap with the last piece
                 if (lastChunk.length() < maxOverlapSize && lastChunk.length() + piece.length() <= maxChunkSize) {
