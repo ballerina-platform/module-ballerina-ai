@@ -18,7 +18,7 @@ import ballerina/test;
 
 final EmbeddingProvider embeddingModel = new MockEmbeddingProvider();
 final VectorStore vectorStore = check new InMemoryVectorStore();
-final KnowledgeBase knowledgeBase = new VectorKnowledgeBase(vectorStore, embeddingModel);
+final KnowledgeBase knowledgeBase = new VectorKnowledgeBase(vectorStore, embeddingModel, chunker = DISABLE);
 
 @test:Config
 isolated function testKnowledgeBase() returns error? {

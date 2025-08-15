@@ -66,9 +66,9 @@ public distinct isolated class VectorRetriever {
 public type KnowledgeBase distinct isolated object {
     # Ingests a collection of chunks.
     #
-    # + chunks - The array of chunk to index
+    # + documents - The documents or chunks to index
     # + return - An `ai:Error` if indexing fails; otherwise, `nil`
-    public isolated function ingest(Chunk[] chunks) returns Error?;
+    public isolated function ingest(Chunk[]|Document[]|Document documents) returns Error?;
 
     # Retrieves relevant chunks for the given query.
     #
@@ -86,24 +86,32 @@ public distinct isolated class VectorKnowledgeBase {
     private final VectorStore vectorStore;
     private final EmbeddingProvider embeddingModel;
     private final Retriever retriever;
+    private final Chunker|AUTO|DISABLE chunker;
 
     # Initializes a new `VectorKnowledgeBase` instance.
     #
     # + vectorStore - The vector store for embedding persistence
     # + embeddingModel - The embedding provider for generating vector representations
-    public isolated function init(VectorStore vectorStore, EmbeddingProvider embeddingModel) {
+    # + chunker - The chunker to chunk the documents. If set to `AUTO`, the chunker will be chosen automatically
+    # based on the document type. If set to `DISABLE`, no chunking will be performed. 
+    # Otherwise, the specified chunker will be used.
+    public isolated function init(VectorStore vectorStore, EmbeddingProvider embeddingModel,
+            Chunker|AUTO|DISABLE chunker = AUTO) {
         self.vectorStore = vectorStore;
         self.embeddingModel = embeddingModel;
         self.retriever = new VectorRetriever(vectorStore, embeddingModel);
+        self.chunker = chunker;
     }
 
     # Indexes a collection of chunks.
     # Converts each chunk to an embedding and stores it in the vector store,
     # making the chunk searchable through the retriever.
     #
-    # + chunks - The array of chunk to index
+    # + documents - The documents or chunks to be indexed.
+    # The configured chunker will further split any provided documents or chunks before indexing.
     # + return - An `ai:Error` if indexing fails; otherwise, `nil`
-    public isolated function ingest(Chunk[] chunks) returns Error? {
+    public isolated function ingest(Document|Document[]|Chunk[] documents) returns Error? {
+        Chunk[] chunks = check self.chunk(documents);
         Embedding[] embeddings = check self.embeddingModel->batchEmbed(chunks);
         if chunks.length() != embeddings.length() {
             return error Error("Mismatch between number of chunks and embeddings generated");
@@ -111,6 +119,20 @@ public distinct isolated class VectorKnowledgeBase {
         VectorEntry[] entries = from [int, Chunk] [i, chunk] in chunks.enumerate()
             select {chunk, embedding: embeddings[i]};
         check self.vectorStore.add(entries);
+    }
+
+    private isolated function chunk(Document|Document[]|Chunk[] input) returns Chunk[]|Error {
+        (Document|Chunk)[] inputs = input is Document[]|Chunk[] ? input : [input];
+        Chunker|AUTO|DISABLE chunker = self.chunker;
+        if chunker is DISABLE {
+            return inputs;
+        }
+        Chunk[] chunks = [];
+        foreach Document|Chunk item in inputs {
+            Chunker chunkerToUse = chunker is Chunker ? chunker : guessChunker(item);
+            chunks.push(...check chunkerToUse.chunk(item));
+        }
+        return chunks;
     }
 
     # Retrieves relevant chunk for the given query.
@@ -121,6 +143,11 @@ public distinct isolated class VectorKnowledgeBase {
     public isolated function retrieve(string query, MetadataFilters? filters = ()) returns QueryMatch[]|Error {
         return self.retriever.retrieve(query, filters);
     }
+}
+
+isolated function guessChunker(Document|Chunk doc) returns Chunker {
+    // Guess the chunker based on the document type or mimeType in metadata
+    return new GenericRecursiveChunker();
 }
 
 # Creates a default model provider based on the provided `wso2ProviderConfig`.
