@@ -31,6 +31,16 @@ public type Metadata record {|
     time:Utc createdAt?;
     # Modification timestamp of the file
     time:Utc modifiedAt?;
+    # Index of the chunk in the document
+    int index?;
+    # Unique identifier for the chunk
+    int id?;
+    # Previous chunk id if a semantically meaningful chunk was broken into multiple chunks
+    int prev?;
+    # Header of the chunk if the chunk belonged to a single header
+    string header?;
+    # Language of the chunk if the chunk is a code block
+    string language?;
     json...;
 |};
 

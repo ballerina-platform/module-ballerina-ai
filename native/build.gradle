@@ -36,6 +36,7 @@ dependencies {
 
     testImplementation group: 'org.ballerinalang', name: 'ballerina-lang', version: "${ballerinaLangVersion}"
     testImplementation group: 'org.ballerinalang', name: 'ballerina-runtime', version: "${ballerinaLangVersion}"
+    testImplementation group: 'org.testng', name: 'testng', version: "${testngVersion}"
 }
 
 spotbugsMain {
@@ -80,6 +81,7 @@ checkstyle {
 
 tasks.withType(Checkstyle) {
     exclude '**/module-info.java'
+    exclude '**/MarkdownChunker.java'
 }
 
 spotbugsMain.finalizedBy validateSpotbugs
@@ -96,11 +98,15 @@ compileJava {
 }
 
 compileTestJava {
-    doFirst {
-        options.compilerArgs = [
-            '--module-path', classpath.asPath,
-        ]
-        classpath = files()
+    // Disable module system for tests to allow same package access to package-private classes
+}
+
+test {
+    useTestNG()
+    testLogging {
+        exceptionFormat = "full"
+        showStandardStreams = true
+        events "passed", "skipped", "failed"
     }
 }
 

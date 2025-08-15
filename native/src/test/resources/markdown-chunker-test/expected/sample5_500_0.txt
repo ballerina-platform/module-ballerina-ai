@@ -1,0 +1,95 @@
+500 0
+
+--- Chunk 1 ---
+Metadata: {index=0, id=1268}
+# Code Blocks and Horizontal Lines Test
+
+This file tests the markdown chunker's ability to handle code blocks and horizontal lines as delimiters.
+
+## Introduction
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit. This section should be chunked normally.
+
+```javascript
+function example() {
+    console.log("This is a code block");
+    return "testing code block delimiter";
+}
+```
+
+After the code block, we continue with regular text. The chunker should split on the code block boundary.
+
+***
+
+
+--- Chunk 2 ---
+Metadata: {index=1, id=1273}
+
+## Section After Asterisk Horizontal Line
+
+This section comes after a horizontal line made with asterisks. The chunker should recognize this as a delimiter.
+
+```python
+def another_function():
+    print("Another code block")
+    for i in range(10):
+        print(f"Number: {i}")
+```
+
+More text after the Python code block.
+
+---
+
+## Section After Dash Horizontal Line  
+
+
+--- Chunk 3 ---
+Metadata: {index=2, id=1276}
+
+This section follows a horizontal line made with dashes. This tests the dash delimiter pattern.
+
+```java
+public class TestClass {
+    public void method() {
+        System.out.println("Java code block");
+    }
+}
+```
+
+Text continues here.
+
+___
+
+## Section After Underscore Horizontal Line
+
+
+--- Chunk 4 ---
+Metadata: {index=3, id=1280}
+
+This section follows a horizontal line made with underscores. Testing the underscore delimiter.
+
+```bash
+#!/bin/bash
+echo "Shell script example"
+ls -la
+```
+
+Final section with more content to ensure proper chunking behavior.
+
+## Multiple Code Blocks
+
+First code block:
+
+```sql
+SELECT * FROM users WHERE active = 1;
+```
+
+Some text between code blocks.
+
+```xml
+<configuration>
+    <setting name="example" value="test"/>
+</configuration>
+```
+
+End of document.
