@@ -28,30 +28,59 @@ class MarkdownChunker {
         return null;
     }
 
-    static List<TextSegment> chunk(String content, int chunkSize, int maxOverlapSize) {
-        return chunkUsingDelimiters(content, List.of(
-                new HeaderSplitter(2),
-                new HeaderSplitter(3),
-                new HeaderSplitter(4),
-                new HeaderSplitter(5),
-                new HeaderSplitter(6),
-                new CodeBlockSplitter(), // Code blocks
-                // Horizontal lines
-                new SimpleDelimiterSplitter("\n\\*\\*\\*+\n"),
-                new SimpleDelimiterSplitter("\\n---+\\n"),
-                new SimpleDelimiterSplitter("\n___+\n"),
+    enum MarkdownChunkStrategy {
+        BY_HEADER, BY_CODE_BLOCK, BY_HORIZONTAL_LINE, BY_PARAGRAPH, BY_LINE, BY_SENTENCE, BY_WORD, BY_CHARACTER;
 
-                new SimpleDelimiterSplitter("\n\n"),
-                new SimpleDelimiterSplitter("\n"),
-                new SimpleDelimiterSplitter(" "),
-                new SimpleDelimiterSplitter("")), chunkSize, maxOverlapSize).stream()
-                .map(chunk -> new TextSegment(chunk.piece, new Metadata(chunk.metadata))).toList();
+        public List<Splitter> getSplitters() {
+            List<Splitter> splitters = new ArrayList<>();
+            
+            switch (this) {
+                case BY_HEADER:
+                    splitters.addAll(List.of(
+                            new HeaderSplitter(2),
+                            new HeaderSplitter(3),
+                            new HeaderSplitter(4),
+                            new HeaderSplitter(5),
+                            new HeaderSplitter(6)));
+                case BY_CODE_BLOCK:
+                    splitters.add(new CodeBlockSplitter());
+                case BY_HORIZONTAL_LINE:
+                    splitters.addAll(List.of(
+                            new SimpleDelimiterSplitter("\n\\*\\*\\*+\n"),
+                            new SimpleDelimiterSplitter("\\n---+\\n"),
+                            new SimpleDelimiterSplitter("\n___+\n")));
+                case BY_PARAGRAPH:
+                    splitters.add(new SimpleDelimiterSplitter("\n\n"));
+                case BY_LINE:
+                    splitters.add(new SimpleDelimiterSplitter("\n"));
+                case BY_SENTENCE:
+                    splitters.add(new SimpleDelimiterSplitter("\\."));
+                case BY_WORD:
+                    splitters.add(new SimpleDelimiterSplitter(" "));
+                case BY_CHARACTER:
+                    splitters.add(new SimpleDelimiterSplitter(""));
+            }
+            
+            return splitters;
+        }
+    }
+
+    static List<TextSegment> chunk(String content, MarkdownChunkStrategy strategy, int chunkSize, int maxOverlapSize) {
+        return chunkUsingDelimiters(content, strategy.getSplitters(), chunkSize, maxOverlapSize).stream()
+                .map(chunk -> new TextSegment(chunk.piece, new Metadata(chunk.metadata)))
+                .toList();
+    }
+
+    static List<TextSegment> chunk(String content, int chunkSize, int maxOverlapSize) {
+        return chunkUsingDelimiters(content,
+                MarkdownChunkStrategy.BY_HEADER.getSplitters(), chunkSize,
+                maxOverlapSize).stream().map(chunk -> new TextSegment(chunk.piece, new Metadata(chunk.metadata)))
+                .toList();
     }
 
     private static List<Chunk> chunkUsingDelimiters(String content, List<Splitter> delimiters, int maxChunkSize,
                                                     int maxOverlapSize) {
-        return chunkUsingDelimitersInner(content, delimiters, maxChunkSize, maxOverlapSize,
-                Collections.emptyMap());
+        return chunkUsingDelimitersInner(content, delimiters, maxChunkSize, maxOverlapSize, Collections.emptyMap());
     }
 
     private static List<Chunk> chunkUsingDelimitersInner(String content, List<Splitter> delimiters, int maxChunkSize,
@@ -63,14 +92,14 @@ class MarkdownChunker {
         int nextChunkSize = 0;
         while (pieces.hasNext()) {
             Chunk piece = pieces.next();
-            
+
             // If this piece is non-mergeable, flush buffer and add it directly
             if (isNonMergeable(piece)) {
                 // Flush current buffer
                 nextChunkPieceBuffer.stream().reduce(Chunk::merge).ifPresent(chunks::add);
                 nextChunkPieceBuffer.clear();
                 nextChunkSize = 0;
-                
+
                 // Add non-mergeable piece directly
                 if (piece.length() > maxChunkSize) {
                     chunks.addAll(breakUpChunk(piece, maxChunkSize));
@@ -79,7 +108,7 @@ class MarkdownChunker {
                 }
                 continue;
             }
-            
+
             if (nextChunkSize + piece.length() <= maxChunkSize) {
                 nextChunkPieceBuffer.add(piece);
                 nextChunkSize += piece.length();
@@ -98,8 +127,8 @@ class MarkdownChunker {
             }
 
             // Break up the current piece
-            List<Chunk> pieceChunks = chunkUsingDelimitersInner(piece.piece, rest, maxChunkSize, maxOverlapSize,
-                    piece.metadata);
+            List<Chunk> pieceChunks =
+                    chunkUsingDelimitersInner(piece.piece, rest, maxChunkSize, maxOverlapSize, piece.metadata);
             chunks.addAll(pieceChunks.subList(0, pieceChunks.size() - 1));
             Chunk lastPieceChunk = pieceChunks.getLast();
             if (isNonMergeable(lastPieceChunk)) {
@@ -158,12 +187,12 @@ class MarkdownChunker {
                 mergeBuffer.stream().reduce(Chunk::merge).ifPresent(chunks::add);
                 mergeBuffer.clear();
                 mergeBufferSize = 0;
-                
+
                 // Add non-mergeable piece directly
                 chunks.add(piece);
                 continue;
             }
-            
+
             if (piece.length() > maxChunkSize) {
                 List<Chunk> p = breakUpChunk(piece, maxChunkSize);
                 assert p.size() > 1;
@@ -343,7 +372,8 @@ class MarkdownChunker {
                         lastIndex = delimiterEnd;
                         hasNextPiece = true;
                         return;
-                    } if (lastIndex < content.length()) {
+                    }
+                    if (lastIndex < content.length()) {
                         // TODO: set metadata for rest
                         nextPiece = content.substring(lastIndex);
                         lastIndex = content.length();
