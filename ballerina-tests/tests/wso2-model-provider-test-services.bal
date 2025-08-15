@@ -19,7 +19,7 @@ import ballerina/test;
 
 service /llm on new http:Listener(8080) {
     resource function post azureopenai/deployments/gpt4onew/chat/completions(
-            CreateChatCompletionRequest payload) returns CreateChatCompletionResponse|error {
+            @http:Payload CreateChatCompletionRequest payload) returns CreateChatCompletionResponse|error {
         test:assertEquals(payload?.temperature, 0.7d);
         ChatCompletionRequestMessage[] messages = check payload.messages.ensureType();
         ChatCompletionRequestMessage message = messages[0];
