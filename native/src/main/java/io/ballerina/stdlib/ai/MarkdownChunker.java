@@ -296,11 +296,10 @@ class MarkdownChunker {
                         nextPiece = content.substring(lastIndex);
                         lastIndex = content.length();
                         hasNextPiece = true;
-                        finished = true;
                     } else {
                         hasNextPiece = false;
-                        finished = true;
                     }
+                    finished = true;
                 }
 
                 @Override
@@ -335,6 +334,7 @@ class MarkdownChunker {
         @Override
         public Iterator<Chunk> split(String content) {
             return new Iterator<>() {
+                private final Matcher matcher = headerPattern.matcher(content);
                 private int lastIndex = 0;
                 private String nextPiece = null;
                 private Map<String, String> nextPieceMetadata = Map.of();
@@ -346,10 +346,10 @@ class MarkdownChunker {
                     if (finished) {
                         return;
                     }
-                    Matcher matcher = headerPattern.matcher(content.substring(lastIndex));
+                    matcher.region(lastIndex, content.length());
                     if (matcher.find()) {
-                        int delimiterStart = matcher.start() + lastIndex;
-                        int delimiterEnd = matcher.end() + lastIndex;
+                        int delimiterStart = matcher.start();
+                        int delimiterEnd = matcher.end();
                         if (delimiterStart > lastIndex) {
                             // Next piece is the content before the delimiter
                             nextPiece = content.substring(lastIndex, delimiterStart);
@@ -371,7 +371,6 @@ class MarkdownChunker {
                         return;
                     }
                     if (lastIndex < content.length()) {
-                        // TODO: set metadata for rest
                         nextPiece = content.substring(lastIndex);
                         lastIndex = content.length();
                         hasNextPiece = true;
@@ -414,6 +413,8 @@ class MarkdownChunker {
         @Override
         public Iterator<Chunk> split(String content) {
             return new Iterator<>() {
+                private final Matcher startMatcher = codeBlockStartPattern.matcher(content);
+                private final Matcher endMatcher = codeBlockEndPattern.matcher(content);
                 private int lastIndex = 0;
                 private String nextPiece = null;
                 private Map<String, String> nextPieceMetadata = Map.of();
@@ -426,10 +427,10 @@ class MarkdownChunker {
                     }
 
                     // Find the next code block start
-                    Matcher startMatcher = codeBlockStartPattern.matcher(content.substring(lastIndex));
+                    startMatcher.region(lastIndex, content.length());
                     if (startMatcher.find()) {
-                        int startIndex = startMatcher.start() + lastIndex;
-                        int startEndIndex = startMatcher.end() + lastIndex;
+                        int startIndex = startMatcher.start();
+                        int startEndIndex = startMatcher.end();
 
                         // If there's content before the code block, return it first
                         if (startIndex > lastIndex) {
@@ -447,16 +448,15 @@ class MarkdownChunker {
                         }
 
                         // Find the end of this code block
-                        Matcher endMatcher = codeBlockEndPattern.matcher(content.substring(startEndIndex));
+                        endMatcher.region(startEndIndex, content.length());
                         if (endMatcher.find()) {
-                            int endEndIndex = endMatcher.end() + startEndIndex;
+                            int endEndIndex = endMatcher.end();
 
                             // Extract the entire code block (including the start and end markers)
                             nextPiece = content.substring(startIndex, endEndIndex);
                             nextPieceMetadata = Map.of("language", language, "type", "code_block");
                             lastIndex = endEndIndex;
                             hasNextPiece = true;
-                            return;
                         } else {
                             // No end found, treat the rest as a code block
                             nextPiece = content.substring(startIndex);
@@ -464,8 +464,8 @@ class MarkdownChunker {
                             lastIndex = content.length();
                             hasNextPiece = true;
                             finished = true;
-                            return;
                         }
+                        return;
                     }
 
                     // No more code blocks, return remaining content
@@ -474,11 +474,10 @@ class MarkdownChunker {
                         nextPieceMetadata = Map.of();
                         lastIndex = content.length();
                         hasNextPiece = true;
-                        finished = true;
                     } else {
                         hasNextPiece = false;
-                        finished = true;
                     }
+                    finished = true;
                 }
 
                 @Override
