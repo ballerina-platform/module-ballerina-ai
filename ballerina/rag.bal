@@ -147,6 +147,11 @@ public distinct isolated class VectorKnowledgeBase {
 
 isolated function guessChunker(Document|Chunk doc) returns Chunker {
     // Guess the chunker based on the document type or mimeType in metadata
+    string? mimeType = doc.metadata?.mimeType;
+    if mimeType == "text/markdown" {
+        return new MarkdownChunker();
+    }
+    // Fallback to file name
     string? fileName = doc.metadata?.fileName;
     if fileName is string && fileName.endsWith(".md") {
         return new MarkdownChunker();
