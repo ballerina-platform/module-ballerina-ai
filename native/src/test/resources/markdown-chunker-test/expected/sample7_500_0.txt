@@ -1,0 +1,132 @@
+500 0
+
+--- Chunk 1 ---
+# Code Block Test Document
+
+This document contains various code blocks to test the chunking functionality.
+
+## Introduction
+
+This is a test markdown file that includes code blocks with different languages and some without language specification.
+
+## Java Code Example
+
+
+--- Chunk 2 ---
+Metadata: {header=Java Code Example}
+
+Here's a Java class with some methods:
+
+```java
+public class ExampleClass {
+    private String name;
+    private int value;
+
+    public ExampleClass(String name, int value) {
+        this.name = name;
+        this.value = value;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public int getValue() {
+        return value;
+    }
+
+    public void setValue(int value) {
+        this.value = value;
+    }
+
+--- Chunk 3 ---
+
+
+    @Override
+    public String toString() {
+        return "ExampleClass{name='" + name + "', value=" + value + "}";
+    }
+}
+```
+
+## Python Code Example
+
+
+--- Chunk 4 ---
+
+Here's a Python function:
+
+```python
+def calculate_fibonacci(n):
+    """Calculate the nth Fibonacci number."""
+    if n <= 1:
+        return n
+    a, b = 0, 1
+    for _ in range(2, n + 1):
+        a, b = b, a + b
+    return b
+
+def main():
+    for i in range(10):
+        print(f"Fibonacci({i}) = {calculate_fibonacci(i)}")
+
+if __name__ == "__main__":
+    main()
+```
+
+## Code Block Without Language
+
+
+--- Chunk 5 ---
+
+Some code blocks don't specify a language:
+
+```
+This is a code block without language specification.
+It should still be treated as a code block.
+The language will be set to "unknown".
+```
+
+## JavaScript Example
+
+
+--- Chunk 6 ---
+Metadata: {header=JavaScript Example}
+
+Here's some JavaScript code:
+
+```javascript
+class Calculator {
+    constructor() {
+        this.history = [];
+    }
+
+    add(a, b) {
+        const result = a + b;
+        this.history.push(`${a} + ${b} = ${result}`);
+        return result;
+    }
+
+    subtract(a, b) {
+        const result = a - b;
+        this.history.push(`${a} - ${b} = ${result}`);
+        return result;
+    }
+
+    getHistory() {
+        return this.history;
+    }
+}
+
+--- Chunk 7 ---
+
+
+const calc = new Calculator();
+console.log(calc.add(5, 3));
+console.log(calc.subtract(10, 4));
+console.log(calc.getHistory());
+```
+
+## Conclusion
+
+This document demonstrates various code block scenarios that should be properly handled by the chunker.
