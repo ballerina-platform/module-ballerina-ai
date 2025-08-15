@@ -58,6 +58,39 @@ public isolated class GenericRecursiveChunker {
     }
 }
 
+# Represents a Markdown document chunker.
+# Provides functionality to recursively chunk a markdown document using a configurable strategy.
+#
+# The chunking process begins with the specified strategy and recursively falls back to
+# finer-grained strategies if the content exceeds the configured `maxChunkSize`. Overlapping content
+# between chunks can be controlled using `maxOverlapSize`.
+public isolated class MarkdownChunker {
+    *Chunker;
+    private final int maxChunkSize;
+    private final int maxOverlapSize;
+    private final MarkdownChunkStrategy strategy;
+
+    # Initializes a new instance of the `MarkdownChunker`.
+    #
+    # + maxChunkSize - Maximum number of characters allowed per chunk
+    # + maxOverlapSize - Maximum number of characters to reuse from the end of the previous chunk when creating
+    # the next one.
+    # + strategy - The markdown chunking strategy to use. Defaults to `MARKDOWN_HEADER`
+    public isolated function init(int maxChunkSize = 200, int maxOverlapSize = 40,
+            MarkdownChunkStrategy strategy = MARKDOWN_HEADER) {
+        self.maxChunkSize = maxChunkSize;
+        self.maxOverlapSize = maxOverlapSize;
+        self.strategy = strategy;
+    }
+
+    # Chunks the provided document.
+    # + document - The input document to be chunked
+    # + return - An array of chunks, or an `ai:Error` if the chunking fails
+    public isolated function chunk(Document document) returns Chunk[]|Error {
+        return chunkMarkdownDocument(document, self.maxChunkSize, self.maxOverlapSize, self.strategy);
+    }
+}
+
 # Provides functionality to recursively chunk a text document using a configurable strategy.
 #
 # The chunking process begins with the specified strategy and recursively falls back to
@@ -95,16 +128,14 @@ isolated function chunkTextDocument(TextDocument|TextChunk document, int chunkSi
 # + document - The input document to be chunked
 # + maxChunkSize - Maximum number of characters allowed per chunk
 # + maxOverlapSize - Maximum number of characters to reuse from the end of the previous chunk when creating the next one.
-# This overlap is made of complete sentences taken in reverse from the previous chunk, without exceeding
-# this limit. It helps maintain context between chunks during splitting.
 # + strategy - The markdown chunking strategy to use. Defaults to `MARKDOWN_HEADER`
 # + return - An array of chunks, or an `ai:Error` if the chunking fails.
-public isolated function chunkMarkdownDocument(MarkdownDocument document, int maxChunkSize, int maxOverlapSize,
+public isolated function chunkMarkdownDocument(Document document, int maxChunkSize, int maxOverlapSize,
         MarkdownChunkStrategy strategy = MARKDOWN_HEADER) returns TextChunk[]|Error {
     return chunkMarkdownDocumentInner(document, maxChunkSize, maxOverlapSize, strategy);
 }
 
-isolated function chunkMarkdownDocumentInner(MarkdownDocument document, int chunkSize, int overlapSize,
+isolated function chunkMarkdownDocumentInner(Document document, int chunkSize, int overlapSize,
         MarkdownChunkStrategy chunkStrategy, typedesc<TextChunk> textChunkType = TextChunk) returns TextChunk[]|Error = @java:Method {
     'class: "io.ballerina.stdlib.ai.Chunkers",
     name: "chunkMarkdownDocument"
