@@ -53,15 +53,6 @@ public type TextDocument record {|
     string content;
 |};
 
-# Represents documents containing markdown content
-public type MarkdownDocument record {|
-    *Document;
-    # Fixed type for the markdown document
-    readonly "markdown" 'type = "markdown";
-    # The text content of the document
-    string content;
-|};
-
 # Represents a chunk of a document.
 public type Chunk record {|
     *Document;

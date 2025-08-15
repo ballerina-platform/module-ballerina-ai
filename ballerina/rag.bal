@@ -93,7 +93,7 @@ public distinct isolated class VectorKnowledgeBase {
     # + vectorStore - The vector store for embedding persistence
     # + embeddingModel - The embedding provider for generating vector representations
     # + chunker - The chunker to chunk the documents. If set to `AUTO`, the chunker will be chosen automatically
-    # based on the document type. If set to `DISABLE`, no chunking will be performed. 
+    # based on the document type. If set to `DISABLE`, no chunking will be performed.
     # Otherwise, the specified chunker will be used.
     public isolated function init(VectorStore vectorStore, EmbeddingProvider embeddingModel,
             Chunker|AUTO|DISABLE chunker = AUTO) {
@@ -147,6 +147,10 @@ public distinct isolated class VectorKnowledgeBase {
 
 isolated function guessChunker(Document|Chunk doc) returns Chunker {
     // Guess the chunker based on the document type or mimeType in metadata
+    string? fileName = doc.metadata?.fileName;
+    if fileName is string && fileName.endsWith(".md") {
+        return new MarkdownChunker();
+    }
     return new GenericRecursiveChunker();
 }
 
@@ -186,7 +190,7 @@ public isolated function augmentUserQuery(QueryMatch[]|Document[] context, strin
     }
     Prompt userPrompt = `Answer the question based on the following provided context:
     <CONTEXT>${relevantContext}</CONTEXT>
-    
+
     Question: ${query}`;
     return {role: USER, content: userPrompt};
 }
