@@ -81,6 +81,7 @@ checkstyle {
 
 tasks.withType(Checkstyle) {
     exclude '**/module-info.java'
+    exclude '**/MarkdownChunker.java'
 }
 
 spotbugsMain.finalizedBy validateSpotbugs

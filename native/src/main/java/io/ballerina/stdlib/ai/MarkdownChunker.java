@@ -1,6 +1,5 @@
 package io.ballerina.stdlib.ai;
 
-import dev.langchain4j.data.document.Document;
 import dev.langchain4j.data.document.Metadata;
 import dev.langchain4j.data.segment.TextSegment;
 
@@ -19,14 +18,6 @@ class MarkdownChunker {
 
     // Types that should not be merged with other chunks
     private static final Set<String> NON_MERGEABLE_TYPES = Set.of("code_block");
-
-    static Object chunkMarkdownDocumentInner(Document document, int chunkSize, int maxOverlapSize,
-                                             ChunkStrategy strategy) {
-        assert chunkSize > 0 : "chunkSize should be greater than 0";
-        assert maxOverlapSize >= 0 : "maxOverlapSize should be greater than or equal to 0";
-        assert chunkSize > maxOverlapSize;
-        return null;
-    }
 
     enum MarkdownChunkStrategy {
         BY_HEADER, BY_CODE_BLOCK, BY_HORIZONTAL_LINE, BY_PARAGRAPH, BY_LINE, BY_SENTENCE, BY_WORD, BY_CHARACTER;
@@ -65,8 +56,14 @@ class MarkdownChunker {
         }
     }
 
-    static List<TextSegment> chunk(String content, MarkdownChunkStrategy strategy, int chunkSize, int maxOverlapSize) {
-        return chunkUsingDelimiters(content, strategy.getSplitters(), chunkSize, maxOverlapSize).stream()
+    static List<TextSegment> chunk(String content, MarkdownChunkStrategy strategy, int maxChunkSize, int maxOverlapSize) {
+        if (maxChunkSize <= 0) {
+            throw new IllegalArgumentException("Chunk size must be greater than 0");
+        }
+        if (maxOverlapSize > maxChunkSize) {
+            throw new IllegalArgumentException("Max overlap size must be less than or equal to chunk size");
+        }
+        return chunkUsingDelimiters(content, strategy.getSplitters(), maxChunkSize, maxOverlapSize).stream()
                 .map(chunk -> new TextSegment(chunk.piece, new Metadata(chunk.metadata)))
                 .toList();
     }
