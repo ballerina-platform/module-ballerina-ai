@@ -29,7 +29,9 @@ public class MarkdownChunkerIntegrationTest {
             {"sample3.md"},
             {"sample4.md"},
             {"sample5.md"},
-            {"sample6.md"}
+                { "sample6.md" },
+                { "sample7.md" },
+                { "sample8.md" }
         };
     }
 
@@ -44,20 +46,20 @@ public class MarkdownChunkerIntegrationTest {
     public void testMarkdownChunking(String fileName) throws IOException {
         // Load input markdown file
         String inputContent = loadFileContent(INPUT_DIR + "/" + fileName);
-        
+
         // Chunk the content using MarkdownChunker
         List<TextSegment> chunks = MarkdownChunker.chunk(inputContent, CHUNK_SIZE, MAX_OVERLAP_SIZE);
-        
+
         // Format output as specified: "500 50" followed by chunks
         String actualOutput = formatChunksOutput(chunks, CHUNK_SIZE, MAX_OVERLAP_SIZE);
-        
+
         // Handle BLESS environment variable and expected file comparison
         String expectedFileName = fileName.replace(".md", "_" + CHUNK_SIZE + "_" + MAX_OVERLAP_SIZE + ".txt");
         String expectedOutput = getExpectedOutput(expectedFileName, actualOutput);
-        
+
         // Compare actual vs expected
-        assertEquals(actualOutput, expectedOutput, 
-            "Chunking output for " + fileName + " does not match expected result");
+        assertEquals(actualOutput, expectedOutput,
+                "Chunking output for " + fileName + " does not match expected result");
     }
 
     @Test(dataProvider = "markdownFiles")
@@ -83,6 +85,7 @@ public class MarkdownChunkerIntegrationTest {
     }
 
 
+
     private String loadFileContent(String relativePath) throws IOException {
         Path resourcePath = getResourcePath(relativePath);
         return Files.readString(resourcePath);
@@ -97,35 +100,35 @@ public class MarkdownChunkerIntegrationTest {
     private String formatChunksOutput(List<TextSegment> chunks, int chunkSize, int maxOverlapSize) {
         StringBuilder sb = new StringBuilder();
         sb.append(chunkSize).append(" ").append(maxOverlapSize).append("\n\n");
-        
+
         for (int i = 0; i < chunks.size(); i++) {
             sb.append("--- Chunk ").append(i + 1).append(" ---\n");
-            
+
             // Add metadata if present
             Map<String, Object> metadata = chunks.get(i).metadata().toMap();
             if (!metadata.isEmpty()) {
                 sb.append("Metadata: ").append(metadata).append("\n");
             }
-            
+
             sb.append(chunks.get(i).text());
             if (i < chunks.size() - 1) {
                 sb.append("\n\n");
             }
         }
-        
+
         return sb.toString();
     }
 
     private String getExpectedOutput(String expectedFileName, String actualOutput) throws IOException {
         String blessEnv = System.getenv("BLESS");
         boolean shouldBless = "true".equalsIgnoreCase(blessEnv);
-        
+
         Path expectedPath = getResourcePath(EXPECTED_DIR + "/" + expectedFileName);
-        
+
         if (shouldBless) {
             // Create directories if they don't exist
             Files.createDirectories(expectedPath.getParent());
-            
+
             // Write actual output as expected (BLESS mode)
             Files.writeString(expectedPath, actualOutput);
             return actualOutput;

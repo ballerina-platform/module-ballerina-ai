@@ -31,11 +31,12 @@ class MarkdownChunker {
                 new HeaderSplitter(4),
                 new HeaderSplitter(5),
                 new HeaderSplitter(6),
-                new SimpleDelimiterSplitter("```\n"), // End of code block
+                new CodeBlockSplitter(), // Code blocks
                 // Horizontal lines
                 new SimpleDelimiterSplitter("\n\\*\\*\\*+\n"),
                 new SimpleDelimiterSplitter("\\n---+\\n"),
                 new SimpleDelimiterSplitter("\n___+\n"),
+
                 new SimpleDelimiterSplitter("\n\n"),
                 new SimpleDelimiterSplitter("\n"),
                 new SimpleDelimiterSplitter(" "),
@@ -339,6 +340,100 @@ class MarkdownChunker {
         }
     }
 
-// FIXME: remove ## from header metadata
+    static class CodeBlockSplitter implements Splitter {
+
+        private final Pattern codeBlockStartPattern = Pattern.compile("```(\\w+)?\\n");
+        private final Pattern codeBlockEndPattern = Pattern.compile("```\\n");
+
+        @Override
+        public Iterator<Chunk> split(String content) {
+            return new Iterator<>() {
+                private int lastIndex = 0;
+                private String nextPiece = null;
+                private Map<String, String> nextPieceMetadata = Map.of();
+                private boolean hasNextPiece = false;
+                private boolean finished = false;
+
+                private void prepareNext() {
+                    if (finished) {
+                        return;
+                    }
+
+                    // Find the next code block start
+                    Matcher startMatcher = codeBlockStartPattern.matcher(content.substring(lastIndex));
+                    if (startMatcher.find()) {
+                        int startIndex = startMatcher.start() + lastIndex;
+                        int startEndIndex = startMatcher.end() + lastIndex;
+
+                        // If there's content before the code block, return it first
+                        if (startIndex > lastIndex) {
+                            nextPiece = content.substring(lastIndex, startIndex);
+                            nextPieceMetadata = Map.of();
+                            lastIndex = startIndex;
+                            hasNextPiece = true;
+                            return;
+                        }
+
+                        // Extract the language from the code block start
+                        String language = startMatcher.group(1);
+                        if (language == null) {
+                            language = "unknown";
+                        }
+
+                        // Find the end of this code block
+                        Matcher endMatcher = codeBlockEndPattern.matcher(content.substring(startEndIndex));
+                        if (endMatcher.find()) {
+                            int endIndex = endMatcher.start() + startEndIndex;
+                            int endEndIndex = endMatcher.end() + startEndIndex;
+
+                            // Extract the entire code block (including the start and end markers)
+                            nextPiece = content.substring(startIndex, endEndIndex);
+                            nextPieceMetadata = Map.of("language", language, "type", "code_block");
+                            lastIndex = endEndIndex;
+                            hasNextPiece = true;
+                            return;
+                        } else {
+                            // No end found, treat the rest as a code block
+                            nextPiece = content.substring(startIndex);
+                            nextPieceMetadata = Map.of("language", language, "type", "code_block");
+                            lastIndex = content.length();
+                            hasNextPiece = true;
+                            finished = true;
+                            return;
+                        }
+                    }
+
+                    // No more code blocks, return remaining content
+                    if (lastIndex < content.length()) {
+                        nextPiece = content.substring(lastIndex);
+                        nextPieceMetadata = Map.of();
+                        lastIndex = content.length();
+                        hasNextPiece = true;
+                        finished = true;
+                    } else {
+                        hasNextPiece = false;
+                        finished = true;
+                    }
+                }
+
+                @Override
+                public boolean hasNext() {
+                    if (!hasNextPiece && !finished) {
+                        prepareNext();
+                    }
+                    return hasNextPiece;
+                }
+
+                @Override
+                public Chunk next() {
+                    if (!hasNext()) {
+                        throw new java.util.NoSuchElementException();
+                    }
+                    hasNextPiece = false;
+                    return new Chunk(nextPiece, nextPieceMetadata);
+                }
+            };
+        }
+    }
 
 }

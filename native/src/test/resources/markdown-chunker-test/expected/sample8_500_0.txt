@@ -1,0 +1,50 @@
+500 0
+
+--- Chunk 1 ---
+This is a simple document without headers to test code block chunking.
+
+Here's a Java code block:
+
+```java
+public class SimpleClass {
+    private String name;
+
+    public SimpleClass(String name) {
+        this.name = name;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+}
+```
+
+And here's a Python code block:
+
+
+
+--- Chunk 2 ---
+```python
+def hello_world():
+    print("Hello, World!")
+    return True
+
+def main():
+    hello_world()
+
+if __name__ == "__main__":
+    main()
+```
+
+And a code block without language:
+
+```
+This is a code block without language specification.
+It should still be treated as a code block.
+```
+
+This is the end of the document.
