@@ -25,6 +25,7 @@ dependencies = [
 	{org = "ballerina", name = "math.vector"},
 	{org = "ballerina", name = "mcp"},
 	{org = "ballerina", name = "mime"},
+	{org = "ballerina", name = "test"},
 	{org = "ballerina", name = "time"},
 	{org = "ballerina", name = "url"},
 	{org = "ballerina", name = "uuid"},
@@ -33,25 +34,6 @@ dependencies = [
 modules = [
 	{org = "ballerina", packageName = "ai", moduleName = "ai"},
 	{org = "ballerina", packageName = "ai", moduleName = "ai.intelligence"}
-]
-
-[[package]]
-org = "ballerina"
-name = "ai_tests"
-version = "1.2.1"
-dependencies = [
-	{org = "ballerina", name = "ai"},
-	{org = "ballerina", name = "data.jsondata"},
-	{org = "ballerina", name = "http"},
-	{org = "ballerina", name = "io"},
-	{org = "ballerina", name = "jballerina.java"},
-	{org = "ballerina", name = "lang.array"},
-	{org = "ballerina", name = "lang.regexp"},
-	{org = "ballerina", name = "test"},
-	{org = "ballerinai", name = "observe"}
-]
-modules = [
-	{org = "ballerina", packageName = "ai_tests", moduleName = "ai_tests"}
 ]
 
 [[package]]
@@ -84,6 +66,9 @@ version = "1.7.0"
 dependencies = [
 	{org = "ballerina", name = "jballerina.java"}
 ]
+modules = [
+	{org = "ballerina", packageName = "constraint", moduleName = "constraint"}
+]
 
 [[package]]
 org = "ballerina"
@@ -114,6 +99,9 @@ dependencies = [
 	{org = "ballerina", name = "jballerina.java"},
 	{org = "ballerina", name = "lang.object"}
 ]
+modules = [
+	{org = "ballerina", packageName = "data.xmldata", moduleName = "data.xmldata"}
+]
 
 [[package]]
 org = "ballerina"
@@ -124,6 +112,9 @@ dependencies = [
 	{org = "ballerina", name = "jballerina.java"},
 	{org = "ballerina", name = "os"},
 	{org = "ballerina", name = "time"}
+]
+modules = [
+	{org = "ballerina", packageName = "file", moduleName = "file"}
 ]
 
 [[package]]
@@ -293,11 +284,17 @@ dependencies = [
 	{org = "ballerina", name = "lang.value"},
 	{org = "ballerina", name = "observe"}
 ]
+modules = [
+	{org = "ballerina", packageName = "log", moduleName = "log"}
+]
 
 [[package]]
 org = "ballerina"
 name = "math.vector"
 version = "1.2.0"
+modules = [
+	{org = "ballerina", packageName = "math.vector", moduleName = "math.vector"}
+]
 
 [[package]]
 org = "ballerina"
@@ -307,6 +304,9 @@ dependencies = [
 	{org = "ballerina", name = "http"},
 	{org = "ballerina", name = "jballerina.java"},
 	{org = "ballerina", name = "uuid"}
+]
+modules = [
+	{org = "ballerina", packageName = "mcp", moduleName = "mcp"}
 ]
 
 [[package]]
@@ -318,6 +318,9 @@ dependencies = [
 	{org = "ballerina", name = "jballerina.java"},
 	{org = "ballerina", name = "lang.int"},
 	{org = "ballerina", name = "log"}
+]
+modules = [
+	{org = "ballerina", packageName = "mime", moduleName = "mime"}
 ]
 
 [[package]]
@@ -381,6 +384,9 @@ version = "2.7.0"
 dependencies = [
 	{org = "ballerina", name = "jballerina.java"}
 ]
+modules = [
+	{org = "ballerina", packageName = "time", moduleName = "time"}
+]
 
 [[package]]
 org = "ballerina"
@@ -388,6 +394,9 @@ name = "url"
 version = "2.6.0"
 dependencies = [
 	{org = "ballerina", name = "jballerina.java"}
+]
+modules = [
+	{org = "ballerina", packageName = "url", moduleName = "url"}
 ]
 
 [[package]]
@@ -399,6 +408,9 @@ dependencies = [
 	{org = "ballerina", name = "jballerina.java"},
 	{org = "ballerina", name = "lang.int"},
 	{org = "ballerina", name = "time"}
+]
+modules = [
+	{org = "ballerina", packageName = "uuid", moduleName = "uuid"}
 ]
 
 [[package]]
@@ -412,16 +424,14 @@ dependencies = [
 	{org = "ballerina", name = "lang.regexp"},
 	{org = "ballerina", name = "log"}
 ]
-
-[[package]]
-org = "ballerinai"
-name = "observe"
-version = "0.0.0"
-dependencies = [
-	{org = "ballerina", name = "jballerina.java"},
-	{org = "ballerina", name = "observe"}
-]
 modules = [
-	{org = "ballerinai", packageName = "observe", moduleName = "observe"}
+	{org = "ballerina", packageName = "yaml", moduleName = "yaml"},
+	{org = "ballerina", packageName = "yaml", moduleName = "yaml.common"},
+	{org = "ballerina", packageName = "yaml", moduleName = "yaml.composer"},
+	{org = "ballerina", packageName = "yaml", moduleName = "yaml.emitter"},
+	{org = "ballerina", packageName = "yaml", moduleName = "yaml.lexer"},
+	{org = "ballerina", packageName = "yaml", moduleName = "yaml.parser"},
+	{org = "ballerina", packageName = "yaml", moduleName = "yaml.schema"},
+	{org = "ballerina", packageName = "yaml", moduleName = "yaml.serializer"}
 ]
 

@@ -108,3 +108,11 @@ public type ConnectionConfig record {|
     @display {label: "Payload Validation"}
     boolean validation = true;
 |};
+
+# Represent the automatic chunker configuration in the `VectorKnowledgeBase`.
+# This chunker will be chosen automatically based on the document type.
+public const AUTO = "AUTO";
+
+# Represents the disabled chunker configuration in the `VectorKnowledgeBase`.
+# This chunker will not perform any chunking and will treat the entire document as a single chunk.
+public const DISABLE = "DISABLE";
