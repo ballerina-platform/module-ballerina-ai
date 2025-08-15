@@ -27,8 +27,8 @@ public type Chunker isolated object {
 # Represents a Genereric document chunker.
 # Provides functionality to recursively chunk a text document using a configurable strategy.
 #
-# The chunking process begins with the specified strategy and recursively falls back to 
-# finer-grained strategies if the content exceeds the configured `maxChunkSize`. Overlapping content 
+# The chunking process begins with the specified strategy and recursively falls back to
+# finer-grained strategies if the content exceeds the configured `maxChunkSize`. Overlapping content
 # between chunks can be controlled using `maxOverlapSize`.
 public isolated class GenericRecursiveChunker {
     *Chunker;
@@ -60,8 +60,8 @@ public isolated class GenericRecursiveChunker {
 
 # Provides functionality to recursively chunk a text document using a configurable strategy.
 #
-# The chunking process begins with the specified strategy and recursively falls back to 
-# finer-grained strategies if the content exceeds the configured `maxChunkSize`. Overlapping content 
+# The chunking process begins with the specified strategy and recursively falls back to
+# finer-grained strategies if the content exceeds the configured `maxChunkSize`. Overlapping content
 # between chunks can be controlled using `maxOverlapSize`.
 #
 # + document - The input document or string to be chunked
@@ -84,6 +84,17 @@ isolated function chunkTextDocument(TextDocument|TextChunk document, int chunkSi
         RecursiveChunkStrategy chunkStrategy, typedesc<TextChunk> textChunkType = TextChunk)
         returns TextChunk[]|Error = @java:Method {
     'class: "io.ballerina.stdlib.ai.Chunkers"
+} external;
+
+public isolated function chunkMarkdownDocument(MarkdownDocument document, int chunkSize, int overlapSize,
+        MarkdownChunkStrategy chunkStrategy) returns TextChunk[]|Error {
+    return chunkMarkdownDocumentInner(document, chunkSize, overlapSize, chunkStrategy);
+}
+
+isolated function chunkMarkdownDocumentInner(MarkdownDocument document, int chunkSize, int overlapSize,
+        MarkdownChunkStrategy chunkStrategy, typedesc<TextChunk> textChunkType = TextChunk) returns TextChunk[]|Error = @java:Method {
+    'class: "io.ballerina.stdlib.ai.Chunkers",
+    name: "chunkMarkdownDocument"
 } external;
 
 # Represents the available strategies for recursively chunking a document.
@@ -125,4 +136,27 @@ public enum RecursiveChunkStrategy {
     # Examples of valid paragraph separators include "\n\n", "\n\n\n", "\n \n", and " \n \n ".
     # When multiple paragraphs fit within the limit, they are joined together using a double newline ("\n\n").
     PARAGRAPH
+}
+
+# Represents the available strategies for chunking markdown documents.
+#
+# Each strategy attempts to preserve markdown structural boundaries while keeping chunks within size limits.
+# Strategies are hierarchical - if content exceeds limits, the chunker falls back to finer-grained strategies.
+public enum MarkdownChunkStrategy {
+
+    MARKDOWN_HEADER,
+
+    CODE_BLOCK,
+
+    HORIZONTAL_LINE,
+
+    PARAGRAPH,
+
+    LINE,
+
+    SENTENCE,
+
+    WORD,
+
+    CHARACTER
 }

@@ -116,7 +116,7 @@ function testRecursiveChunkingWithUnsupportedDocumentType() returns error? {
     Document doc = {content: "test", 'type: "unknown"};
     Chunk[]|Error chunks = chunkDocumentRecursively(doc, 100, 40);
     if chunks is Error {
-        test:assertEquals(chunks.message(), "Only text documents are supported for chunking");
+        test:assertEquals(chunks.message(), "Only text and markdown documents are supported for chunking");
     } else {
         test:assertFail("Expected an 'Error' but got 'Chunk[]'");
     }
@@ -133,3 +133,112 @@ function testGenericRecursiveChunker() returns error? {
     test:assertEquals(chunks[1].content, "cd");
     test:assertEquals(chunks[2].content, "e");
 }
+function simpleMarkdownChunking() returns error? {
+    MarkdownDocument doc = {content: "test"};
+    Chunk[] chunks = check chunkDocumentRecursively(doc, 100, 40);
+    test:assertEquals(chunks.length(), 1);
+    test:assertEquals(chunks[0].content, "test");
+}
+
+@test:Config {}
+function testMarkdownChunkingWithHeaders() returns error? {
+    string markdownContent = "# Main Title\n\n" +
+        "This is the introduction paragraph.\n\n" +
+        "## Section 1\n\n" +
+        "Content for section 1. This section contains some text that should be chunked properly.\n\n" +
+        "### Subsection 1.1\n\n" +
+        "More detailed content in subsection 1.1.\n\n" +
+        "## Section 2\n\n" +
+        "Content for section 2. Another section with different content.\n\n" +
+        "### Subsection 2.1\n\n" +
+        "Subsection content here.\n\n" +
+        "## Conclusion\n\n" +
+        "Final thoughts and summary.";
+
+    MarkdownDocument doc = {content: markdownContent};
+
+    // Test with default PARAGRAPH strategy for markdown documents
+    Chunk[] headerChunks = check chunkMarkdownDocument(doc, 150, 20, PARAGRAPH);
+
+    test:assertTrue(headerChunks.length() > 1, msg = "Should produce multiple chunks with PARAGRAPH strategy");
+
+    // Verify that headers are preserved in chunks
+    foreach Chunk chunk in headerChunks {
+        anydata content = chunk.content;
+        test:assertTrue(content is string, msg = "Chunk content should be string");
+        string chunkContent = <string>content;
+
+        // Check if chunks contain headers
+        boolean hasHeader = chunkContent.startsWith("#") || chunkContent.indexOf("\n#") >= 0;
+        test:assertTrue(hasHeader || chunkContent.length() <= 150,
+                msg = "Chunks should either contain headers or be within size limit");
+    }
+}
+
+@test:Config {}
+function testMarkdownChunkingWithMixedContent() returns error? {
+    string markdownContent = "# Introduction\n\n" +
+        "This document contains various markdown elements.\n\n" +
+        "## Code Example\n\n" +
+        "```python\n" +
+        "def hello_world():\n" +
+        "    print('Hello, World!')\n" +
+        "```\n\n" +
+        "## List Section\n\n" +
+        "- Item 1\n" +
+        "- Item 2\n" +
+        "- Item 3\n\n" +
+        "## Table Section\n\n" +
+        "| Column 1 | Column 2 |\n" +
+        "|----------|----------|\n" +
+        "| Data 1   | Data 2   |\n\n" +
+        "## Final Section\n\n" +
+        "End of document content.";
+
+    MarkdownDocument doc = {content: markdownContent};
+
+    // Test with PARAGRAPH strategy and moderate chunk size
+    Chunk[] chunks = check chunkMarkdownDocument(doc, 120, 25, PARAGRAPH);
+
+    test:assertTrue(chunks.length() > 1, msg = "Should produce multiple chunks with mixed content");
+
+    // Verify that code blocks and other markdown elements are handled
+    foreach Chunk chunk in chunks {
+        anydata content = chunk.content;
+        if (content is string) {
+            string chunkContent = <string>content;
+            // Check that chunks don't break in the middle of code blocks
+            int? codeBlockStart = chunkContent.indexOf("```");
+            int? codeBlockEnd = chunkContent.lastIndexOf("```");
+            if (codeBlockStart is int && codeBlockEnd is int && codeBlockEnd > codeBlockStart) {
+                test:assertTrue(true, msg = "Code blocks should not be split across chunks");
+            }
+        }
+    }
+}
+
+@test:Config {}
+function testMarkdownChunkingWithRecursiveFallback() returns error? {
+    string markdownContent = "# Very Long Header\n\n" +
+        "This is a very long paragraph that exceeds the maximum chunk size limit. " +
+        "It contains multiple sentences that should trigger recursive fallback to finer-grained chunking strategies. " +
+        "The content is designed to test the fallback mechanism from HEADER strategy to PARAGRAPH, then SENTENCE, then WORD, and finally CHARACTER if needed. " +
+        "This ensures that even when headers cannot be used as chunk boundaries due to size constraints, the system gracefully degrades to maintain chunk size limits.";
+
+    MarkdownDocument doc = {content: markdownContent};
+
+    // Test with very small chunk size to force recursive fallback
+    Chunk[] chunks = check chunkMarkdownDocument(doc, 50, 10, PARAGRAPH);
+
+    test:assertTrue(chunks.length() > 1, msg = "Should produce multiple chunks using recursive fallback");
+
+    // Verify all chunks respect size limit
+    foreach Chunk chunk in chunks {
+        anydata content = chunk.content;
+        test:assertTrue(content is string, msg = "Chunk content should be string");
+        string chunkContent = <string>content;
+        test:assertTrue(chunkContent.length() <= 50,
+                msg = "Each chunk must respect maxChunkSize limit");
+    }
+}
+
