@@ -95,8 +95,8 @@ public distinct isolated client class Wso2EmbeddingProvider {
     # + chunks - The array of chunks to be converted into embeddings
     # + return - An array of embeddings on success, or an `ai:Error`
     isolated remote function batchEmbed(Chunk[] chunks) returns Embedding[]|Error {
-        if chunks !is TextChunk[]|TextDocument[] {
-            return error Error("Unsupported chunk type. only 'ai:TextChunk[]|ai:TextDocument[]' is supported");
+        if !isAllTextChunks(chunks) {
+            return error Error("Unsupported chunk type. Expected elements of type 'ai:TextChunk|ai:TextDocument'.");
         }
         intelligence:EmbeddingRequest request = {input: chunks.map(chunk => chunk.content.toString())};
         intelligence:EmbeddingResponse|error response = self.embeddingClient->/embeddings.post(request);
@@ -109,4 +109,8 @@ public distinct isolated client class Wso2EmbeddingProvider {
         }
         return responseData.map(data => data.embedding);
     }
+}
+
+isolated function isAllTextChunks(Chunk[] chunks) returns boolean {
+    return chunks.every(chunk => chunk is TextChunk|TextDocument);
 }
