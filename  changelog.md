@@ -4,6 +4,8 @@ This file documents all significant changes made to the Ballerina AI package acr
 
 ## [Un-released]
 
+## [1.3.0] - 2025-08-16
+
 ### Added
 - [Add Chunker Type and GenericRecursiveChunker Implementation](https://github.com/ballerina-platform/ballerina-library/issues/8166)
 - [Add DataLoader Type to Enable Loading Documents from Various Data Sources](https://github.com/ballerina-platform/ballerina-library/issues/8167)
