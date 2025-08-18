@@ -275,9 +275,9 @@ isolated function getLLMResponse(intelligence:Client llmClient,
         "content": arguments.toJsonString()
     });
 
-    anydata|Error result = handleResponseWithExpectedType(arguments, isOriginallyJsonObject, 
+    anydata|error result = handleResponseWithExpectedType(arguments, isOriginallyJsonObject, 
                             typeof response, expectedResponseTypedesc);
-    if result is Error && retryCount > 0 {
+    if result is error && retryCount > 0 {
         history.push({
             role: USER,
             "content": getRepairMessage(result)
@@ -291,27 +291,25 @@ isolated function getLLMResponse(intelligence:Client llmClient,
         return getLLMResponse(llmClient, request, expectedResponseTypedesc, isOriginallyJsonObject, 
             retryCount - 1, interval);
     }
+
+    if result is error {
+        return error LlmInvalidGenerationError(string `Invalid value returned from the LLM Client, expected: '${
+            expectedResponseTypedesc.toBalString()}', found '${result.toBalString()}'`);
+    }
     return result;
 }
 
 isolated function handleResponseWithExpectedType(map<json> arguments, boolean isOriginallyJsonObject, 
-        typedesc responseType, typedesc<anydata> expectedResponseTypedesc) returns anydata|Error {
+        typedesc responseType, typedesc<anydata> expectedResponseTypedesc) returns anydata|error {
     anydata|error res = parseResponseAsType(arguments.toJsonString(), 
         expectedResponseTypedesc, isOriginallyJsonObject);
     if res is error {
-        return error LlmInvalidGenerationError(string `Invalid value returned from the LLM Client, expected: '${
-            expectedResponseTypedesc.toBalString()}', found '${res.toBalString()}'`);
+        return res;
     }
 
-    anydata|error result = res.ensureType(expectedResponseTypedesc);
-
-    if result is error {
-        return error LlmInvalidGenerationError(string `Invalid value returned from the LLM Client, expected: '${
-            expectedResponseTypedesc.toBalString()}', found '${(responseType).toBalString()}'`);
-    }
-    return result;
+    return res.ensureType(expectedResponseTypedesc);
 }
 
-isolated function getRepairMessage(Error e) returns string => 
+isolated function getRepairMessage(error e) returns string => 
     string `The generated response is not in the expected format. Please check the prompt and retry. 
-            Error: ${e.message()}`;
+            Error: ${(<error>e.cause()).toString()}`;
