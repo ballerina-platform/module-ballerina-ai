@@ -61,4 +61,3 @@ docker.env
 
 build
 node_modules
-bin/
