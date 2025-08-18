@@ -14,6 +14,8 @@
 // specific language governing permissions and limitations
 // under the License.
 
+const INVALID = "Invalid content";
+
 isolated function getExpectedParameterSchema(string message) returns map<json> {
     if message.startsWith("Evaluate this") {
         return expectedParameterSchemaStringForRateBlog6;
@@ -29,6 +31,14 @@ isolated function getExpectedParameterSchema(string message) returns map<json> {
 
     if message.startsWith("Please rate this blog") {
         return expectedParameterSchemaStringForRateBlog2;
+    }
+
+    if message.startsWith("please rate this blog") {
+        return expectedParameterSchemaStringForRateBlog2;
+    }
+
+    if message.startsWith("What is the result of") {
+        return {"type": "object", "properties": {"result": {"type": "integer"}}};
     }
 
     if message.startsWith("What is") {
@@ -160,6 +170,22 @@ isolated function getTheMockLLMResult(string message) returns string {
         return review;
     }
 
+    if message.startsWith("please rate this blog") {
+        return review;
+    }
+
+    if message.startsWith("What is the result of 1 + 4?") {
+        return "{\"result\": 5}";
+    }
+
+    if message.startsWith("What is the result of 1 + 5?") {
+        return "{\"result\": 6}";
+    }
+
+    if message.startsWith("What is the result of") {
+        return "{\"result\": true}";
+    }
+
     if message.startsWith("What is") {
         return "{\"result\": 2}";
     }
@@ -237,10 +263,10 @@ isolated function getTheMockLLMResult(string message) returns string {
         return "{\"result\": \"This is a random joke\"}";
     }
 
-    return "INVALID";
+    return INVALID;
 }
 
-isolated function getTestServiceResponse(string content) returns CreateChatCompletionResponse =>
+isolated function getTestServiceResponse(string content, int retryCount) returns CreateChatCompletionResponse =>
     {
     id: "test-id",
     'object: "chat.completion",
@@ -255,7 +281,9 @@ isolated function getTestServiceResponse(string content) returns CreateChatCompl
                         'type: "function",
                         'function: {
                             name: "getResults",
-                            arguments: getTheMockLLMResult(content)
+                            arguments: retryCount == 0 ? 
+                                getTheMockLLMResult(content): retryCount == 1 ? getFirstRetryLLMResult(content) :
+                                getSecondRetryLLMResult(content)
                         }
                     }
                 ]
@@ -263,6 +291,38 @@ isolated function getTestServiceResponse(string content) returns CreateChatCompl
         }
     ]
 };
+
+isolated function getSecondRetryLLMResult(string message) returns string {
+    if message.startsWith("What is the result of 1 + 1?") {
+        return "{\"result\": 2}";
+    }
+
+    if message.startsWith("What is the result of 1 + 2?") {
+        return "{\"result\": 3}";
+    }
+
+    return "";
+}
+
+isolated function getFirstRetryLLMResult(string message) returns string {
+    if message.startsWith("What is the result of 1 + 1?") {
+        return "{\"result\": \"hi\"}";
+    }
+
+    if message.startsWith("What is the result of 1 + 2?") {
+        return "{\"result\": null}";
+    }
+
+    if message.startsWith("What is the result of 1 + 3?") {
+        return "{\"result\": 4}";
+    }
+
+    if message.startsWith("What is the result of 1 + 6?") {
+        return "{\"result\": 7}";
+    }
+
+    return "";
+}
 
 isolated function getExpectedContentParts(string message) returns (map<anydata>)[] {
     if message.startsWith("Rate this blog") {
@@ -279,6 +339,34 @@ isolated function getExpectedContentParts(string message) returns (map<anydata>)
 
     if message.startsWith("Please rate this blog") {
         return expectedContentPartsForRateBlog2;
+    }
+
+    if message.startsWith("please rate this blog") {
+        return expectedContentPartsForRateBlog11;
+    }
+
+    if message.startsWith("What is the result of 1 + 1?") {
+        return [{"type": "text", "text": "What is the result of 1 + 1?"}];
+    }
+
+    if message.startsWith("What is the result of 1 + 2?") {
+        return [{"type": "text", "text": "What is the result of 1 + 2?"}];
+    }
+
+    if message.startsWith("What is the result of 1 + 3?") {
+        return [{"type": "text", "text": "What is the result of 1 + 3?"}];
+    }
+
+    if message.startsWith("What is the result of 1 + 4?") {
+        return [{"type": "text", "text": "What is the result of 1 + 4?"}];
+    }
+
+    if message.startsWith("What is the result of 1 + 5?") {
+        return [{"type": "text", "text": "What is the result of 1 + 5?"}];
+    }
+    
+    if message.startsWith("What is the result of 1 + 6?") {
+        return [{"type": "text", "text": "What is the result of 1 + 6?"}];
     }
 
     if message.startsWith("What is") {
@@ -482,7 +570,15 @@ isolated function getExpectedContentParts(string message) returns (map<anydata>)
     return [
         {
             "type": "text",
-            "text": "INVALID"
+            "text": INVALID
         }
     ];
+}
+
+isolated function updateRetryCountMap(string initialText, map<int> retryCountMap) {
+    if retryCountMap.hasKey(initialText) {
+        retryCountMap[initialText] = retryCountMap.get(initialText) + 1;
+    } else {
+        retryCountMap[initialText] = 0;
+    }
 }

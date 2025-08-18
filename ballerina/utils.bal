@@ -144,3 +144,14 @@ isolated function compareValues(json left, MetadataFilterOperator operation, jso
         }
     }
 }
+
+isolated function getRetryConfigValues(GeneratorConfig generatorConfig) returns [int, decimal] {
+    ProviderRetryConfig? retryConfig = generatorConfig.retryConfig;
+    if retryConfig != () {
+        int count = retryConfig.count;
+        if count > 0 {
+            return [count, retryConfig.interval];
+        }
+    }
+    return [0, 0d];
+}
