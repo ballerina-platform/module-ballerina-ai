@@ -324,6 +324,44 @@ isolated function getFirstRetryLLMResult(string message) returns string {
     return "";
 }
 
+isolated function getExpectedContentPartsForFirstRetryCall(string message) returns string {
+    if message.startsWith("What is the result of 1 + 1?") {
+        return string `The generated response is not in the expected format. Please check the prompt and retry. 
+            Error: error("{ballerina/lang.value}ConversionError",message="'boolean' value cannot be converted to 'int'")`;
+    }
+
+    if message.startsWith("What is the result of 1 + 2?") {
+        return string `The generated response is not in the expected format. Please check the prompt and retry. 
+            Error: error("{ballerina/lang.value}ConversionError",message="'boolean' value cannot be converted to 'int'")`;
+    }
+
+    if message.startsWith("What is the result of 1 + 3?") {
+        return string `The generated response is not in the expected format. Please check the prompt and retry. 
+            Error: error("{ballerina/lang.value}ConversionError",message="'boolean' value cannot be converted to 'int'")`;
+    }
+
+    if message.startsWith("What is the result of 1 + 6?") {
+        return string `The generated response is not in the expected format. Please check the prompt and retry. 
+            Error: error("{ballerina/lang.value}ConversionError",message="'boolean' value cannot be converted to 'int'")`;
+    }
+
+    return "";
+}
+
+isolated function getExpectedContentPartsForSecondRetryCall(string message) returns string {
+    if message.startsWith("What is the result of 1 + 1?") {
+        return string `The generated response is not in the expected format. Please check the prompt and retry. 
+            Error: error("{ballerina/lang.value}ConversionError",message="'string' value cannot be converted to 'int'")`;
+    }
+
+    if message.startsWith("What is the result of 1 + 2?") {
+        return string `The generated response is not in the expected format. Please check the prompt and retry. 
+            Error: error("{ballerina/lang.value}ConversionError",message="cannot convert '()' to type 'int'")`;
+    }
+
+    return "";
+}
+
 isolated function getExpectedContentParts(string message) returns (map<anydata>)[] {
     if message.startsWith("Rate this blog") {
         return expectedContentPartsForRateBlog;
@@ -575,10 +613,13 @@ isolated function getExpectedContentParts(string message) returns (map<anydata>)
     ];
 }
 
-isolated function updateRetryCountMap(string initialText, map<int> retryCountMap) {
+isolated function updateRetryCountMap(string initialText, map<int> retryCountMap) returns int {
     if retryCountMap.hasKey(initialText) {
-        retryCountMap[initialText] = retryCountMap.get(initialText) + 1;
-    } else {
-        retryCountMap[initialText] = 0;
+        int index = retryCountMap.get(initialText) + 1;
+        retryCountMap[initialText] = index;
+        return index;
     }
+
+    retryCountMap[initialText] = 0;
+    return 0;
 }
