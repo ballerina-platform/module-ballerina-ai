@@ -135,12 +135,14 @@ public type Wso2ProviderConfig record {|
 |};
 
 const DEFAULT_TEMPERATURE = 0.7d;
+const DEFAULT_GENERATOR_CONFIG = {};
 
 # WSO2 model provider implementation that provides chat completion capabilities using WSO2's AI services.
 public isolated distinct client class Wso2ModelProvider {
     *ModelProvider;
     private final intelligence:Client llmClient;
     private final decimal temperature;
+    private final readonly & GeneratorConfig generatorConfig;
 
     # Initializes a new `WSO2ModelProvider` instance.
     #
@@ -152,6 +154,7 @@ public isolated distinct client class Wso2ModelProvider {
     public isolated function init(@display {label: "Service URL"} string serviceUrl,
             @display {label: "Access Token"} string accessToken,
             @display {label: "Temperature"} decimal temperature = DEFAULT_TEMPERATURE,
+            @display {label: "Generator Configuration"} readonly & GeneratorConfig generatorConfig = DEFAULT_GENERATOR_CONFIG,
             @display {label: "Connection Configuration"} *ConnectionConfig connectionConfig) returns Error? {
         intelligence:ConnectionConfig intelligenceConfig = {
             auth: {
@@ -178,6 +181,7 @@ public isolated distinct client class Wso2ModelProvider {
         }
         self.llmClient = llmClient;
         self.temperature = temperature;
+        self.generatorConfig = generatorConfig;
     }
 
     # Sends a chat request to the model with the given messages and tools.
