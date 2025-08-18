@@ -17,8 +17,10 @@
 import ballerina/http;
 import ballerina/test;
 
-service /llm on new http:Listener(8080) {
-    resource function post azureopenai/deployments/gpt4onew/chat/completions(
+isolated service /llm on new http:Listener(8080) {
+    private map<int> retryCountMap = {};
+
+    isolated resource function post azureopenai/deployments/gpt4onew/chat/completions(
             @http:Payload CreateChatCompletionRequest payload) returns CreateChatCompletionResponse|error {
         test:assertEquals(payload?.temperature, 0.7d);
         ChatCompletionRequestMessage[] messages = check payload.messages.ensureType();
@@ -31,6 +33,9 @@ service /llm on new http:Listener(8080) {
 
         TextContentPart initialTextContent = check content[0].fromJsonWithType();
         string initialText = initialTextContent.text;
+        lock {
+            updateRetryCountMap(initialText, self.retryCountMap);
+        }
         test:assertEquals(content, getExpectedContentParts(initialText),
             string `Prompt assertion failed for prompt starting with '${initialText}'`);
         test:assertEquals(message.role, "user");
@@ -46,6 +51,8 @@ service /llm on new http:Listener(8080) {
 
         test:assertEquals(parameters, getExpectedParameterSchema(initialText),
                 string `Parameter assertion failed for prompt starting with '${initialText}'`);
-        return getTestServiceResponse(initialText);
+        lock {
+            return getTestServiceResponse(initialText, self.retryCountMap.get(initialText));
+        }
     }
 }

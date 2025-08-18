@@ -23,6 +23,10 @@ const ERROR_MESSAGE = "Error occurred while attempting to parse the response fro
 const RUNTIME_SCHEMA_NOT_SUPPORTED_ERROR_MESSAGE = "Runtime schema generation is not yet supported";
 
 final ai:Wso2ModelProvider defaultModelProvider = check new (SERVICE_URL, API_KEY);
+final ai:Wso2ModelProvider defaultModelProviderWithRetryConfig = check new (SERVICE_URL, API_KEY, generatorConfig = {retryConfig: {count: 2, interval: 2}});
+final ai:Wso2ModelProvider defaultModelProviderWithRetryConfig2 = check new (SERVICE_URL, API_KEY, generatorConfig = {retryConfig: {count: 2}});
+final ai:Wso2ModelProvider defaultModelProviderWithRetryConfig3 = check new (SERVICE_URL, API_KEY, generatorConfig = {retryConfig: {count: 1}});
+final ai:Wso2ModelProvider defaultModelProviderWithRetryConfig4 = check new (SERVICE_URL, API_KEY, generatorConfig = {retryConfig: {}});
 
 @test:Config
 function testGenerateMethodWithBasicReturnType() returns ai:Error? {
@@ -224,8 +228,8 @@ function testGenerateMethodWithRecordArrayReturnType() returns error? {
 }
 
 @test:Config
-function testGenerateMethodWithInvalidBasicType() returns ai:Error? {
-    boolean|error rating = defaultModelProvider->generate(`What is ${1} + ${1}?`);
+function testGenerateMethodWithInvalidBasicType() returns error? {
+    boolean|ai:Error rating = defaultModelProvider->generate(`What is ${1} + ${1}?`);
     test:assertTrue(rating is error);
     test:assertTrue((<error>rating).message().includes(ERROR_MESSAGE));
 }
@@ -236,7 +240,7 @@ type ProductName record {|
 
 @test:Config
 function testGenerateMethodWithInvalidMapType() returns ai:Error? {
-    map<string>|error rating = trap defaultModelProvider->generate(
+    map<string>|error rating = defaultModelProvider->generate(
                 `Tell me name and the age of the top 10 world class cricketers`);
     string msg = (<error>rating).message();
     test:assertTrue(rating is error);
@@ -336,4 +340,25 @@ function testGenerateMethodWithArrayUnionRecord() returns ai:Error? {
 function testGenerateMethodWithArrayUnionRecord2() returns ai:Error? {
     Cricketers7[]|Cricketers8|error result = defaultModelProvider->generate(`Name a random world class cricketer`);
     test:assertTrue(result is Cricketers8);
+}
+
+@test:Config
+function testRetryImplementationInGenerateMethodWithInvalidBasicType() returns error? {
+    int|ai:Error rating = defaultModelProviderWithRetryConfig->generate(`What is the result of ${1} + ${1}?`);
+    test:assertEquals(rating, 2);
+
+    rating = defaultModelProviderWithRetryConfig2->generate(`What is the result of 1 + 2?`);
+    test:assertEquals(rating, 3);
+
+    rating = defaultModelProviderWithRetryConfig3->generate(`What is the result of 1 + 3?`);
+    test:assertEquals(rating, 4);
+
+    rating = defaultModelProviderWithRetryConfig4->generate(`What is the result of 1 + 4?`);
+    test:assertEquals(rating, 5);
+
+    rating = defaultModelProviderWithRetryConfig->generate(`What is the result of ${1} + ${5}?`);
+    test:assertEquals(rating, 6);
+
+    rating = defaultModelProviderWithRetryConfig->generate(`What is the result of ${1} + ${6}?`);
+    test:assertEquals(rating, 7);
 }
