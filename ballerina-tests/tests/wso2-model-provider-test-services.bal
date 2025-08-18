@@ -33,11 +33,13 @@ isolated service /llm on new http:Listener(8080) {
 
         TextContentPart initialTextContent = check content[0].fromJsonWithType();
         string initialText = initialTextContent.text;
+
+        int index;
         lock {
-            updateRetryCountMap(initialText, self.retryCountMap);
+            index = updateRetryCountMap(initialText, self.retryCountMap);
         }
-        test:assertEquals(content, getExpectedContentParts(initialText),
-            string `Prompt assertion failed for prompt starting with '${initialText}'`);
+
+        check assertContentParts(messages, initialText, index);
         test:assertEquals(message.role, "user");
         ChatCompletionTool[]? tools = payload.tools;
         if tools is () || tools.length() == 0 {
@@ -52,7 +54,40 @@ isolated service /llm on new http:Listener(8080) {
         test:assertEquals(parameters, getExpectedParameterSchema(initialText),
                 string `Parameter assertion failed for prompt starting with '${initialText}'`);
         lock {
-            return getTestServiceResponse(initialText, self.retryCountMap.get(initialText));
+            return getTestServiceResponse(initialText, index);
         }
     }
+}
+
+isolated function assertContentParts(ChatCompletionRequestMessage[] messages, 
+        string initialText, int index) returns error? {
+    if index >= messages.length() {
+        test:assertFail("Expected at least one message in the payload");
+    }
+
+    // We tests the user inputs only.
+    ChatCompletionRequestMessage message = messages[index * 2];
+
+    json|error? content = message["content"].ensureType();
+
+    if content is () {
+        test:assertFail("Expected content in the payload");
+    }
+
+    if index == 0 {
+        test:assertEquals(content, getExpectedContentParts(initialText),
+            string `Prompt assertion failed for prompt starting with '${initialText}'`);
+        return;
+    }
+
+    if index == 1 {
+        test:assertEquals(content, getExpectedContentPartsForFirstRetryCall(initialText),
+            string `Prompt assertion failed for prompt starting with '${initialText}' 
+                on first attempt of the retry`);
+        return;
+    }
+
+    test:assertEquals(content, getExpectedContentPartsForSecondRetryCall(initialText),
+            string `Prompt assertion failed for prompt starting with '${initialText}' on 
+                second attempt of the retry`);
 }
