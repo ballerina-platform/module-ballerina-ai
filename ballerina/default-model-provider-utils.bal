@@ -19,6 +19,7 @@ import ai.intelligence;
 import ballerina/constraint;
 import ballerina/data.jsondata;
 import ballerina/lang.array;
+import ballerina/lang.runtime;
 
 type ResponseSchema record {|
     map<json> schema;
@@ -206,27 +207,40 @@ isolated function handleParseResponseError(error chatResponseError) returns erro
     return chatResponseError;
 }
 
-isolated function generateLlmResponse(intelligence:Client llmClient, decimal temperature,
-        Prompt prompt, typedesc<json> expectedResponseTypedesc) returns anydata|Error {
+isolated function generateLlmResponse(intelligence:Client llmClient, decimal temperature, 
+        GeneratorConfig generatorConfig, Prompt prompt, 
+        typedesc<json> expectedResponseTypedesc) returns anydata|Error {
     DocumentContentPart[] content = check generateChatCreationContent(prompt);
-    ResponseSchema ResponseSchema = check getExpectedResponseSchema(expectedResponseTypedesc);
-    intelligence:ChatCompletionTool[]|error tools = getGetResultsTool(ResponseSchema.schema);
+    ResponseSchema responseSchema = check getExpectedResponseSchema(expectedResponseTypedesc);
+    intelligence:ChatCompletionTool[]|error tools = getGetResultsTool(responseSchema.schema);
     if tools is error {
         return error("Error in generated schema: " + tools.message());
     }
 
+    intelligence:ChatCompletionRequestMessage[] messages = [
+        {
+            role: USER,
+            "content": content
+        }
+    ];
+
     intelligence:CreateChatCompletionRequest request = {
-        messages: [
-            {
-                role: USER,
-                "content": content
-            }
-        ],
+        messages,
         tools,
         toolChoice: getGetResultsToolChoice(),
         temperature
     };
 
+    [int, decimal] [count, interval] = getRetryConfigValues(generatorConfig);
+
+    return getLLMResponse(llmClient, request, expectedResponseTypedesc, responseSchema.isOriginallyJsonObject,
+        count, interval);
+}
+
+isolated function getLLMResponse(intelligence:Client llmClient, 
+        intelligence:CreateChatCompletionRequest request, 
+        typedesc<anydata> expectedResponseTypedesc, 
+        boolean isOriginallyJsonObject, int retryCount, decimal interval) returns anydata|Error {
     intelligence:CreateChatCompletionResponse|error response = llmClient->/chat/completions.post(request);
     if response is error {
         return error("LLM call failed: " + response.message(), detail = response.detail(), cause = response.cause());
@@ -255,8 +269,35 @@ isolated function generateLlmResponse(intelligence:Client llmClient, decimal tem
         return error(NO_RELEVANT_RESPONSE_FROM_THE_LLM);
     }
 
-    anydata|error res = parseResponseAsType(arguments.toJsonString(), expectedResponseTypedesc,
-            ResponseSchema.isOriginallyJsonObject);
+    intelligence:ChatCompletionRequestMessage[] history = request.messages;
+    history.push({
+        role: ASSISTANT,
+        "content": arguments.toJsonString()
+    });
+
+    anydata|Error result = handleResponseWithExpectedType(arguments, isOriginallyJsonObject, 
+                            typeof response, expectedResponseTypedesc);
+    if result is Error && retryCount > 0 {
+        history.push({
+            role: USER,
+            "content": getRepairMessage(result)
+        });
+        
+        request.messages = history;
+        if interval > 0d {
+            runtime:sleep(interval);
+        }
+
+        return getLLMResponse(llmClient, request, expectedResponseTypedesc, isOriginallyJsonObject, 
+            retryCount - 1, interval);
+    }
+    return result;
+}
+
+isolated function handleResponseWithExpectedType(map<json> arguments, boolean isOriginallyJsonObject, 
+        typedesc responseType, typedesc<anydata> expectedResponseTypedesc) returns anydata|Error {
+    anydata|error res = parseResponseAsType(arguments.toJsonString(), 
+        expectedResponseTypedesc, isOriginallyJsonObject);
     if res is error {
         return error LlmInvalidGenerationError(string `Invalid value returned from the LLM Client, expected: '${
             expectedResponseTypedesc.toBalString()}', found '${res.toBalString()}'`);
@@ -266,7 +307,11 @@ isolated function generateLlmResponse(intelligence:Client llmClient, decimal tem
 
     if result is error {
         return error LlmInvalidGenerationError(string `Invalid value returned from the LLM Client, expected: '${
-            expectedResponseTypedesc.toBalString()}', found '${(typeof response).toBalString()}'`);
+            expectedResponseTypedesc.toBalString()}', found '${(responseType).toBalString()}'`);
     }
     return result;
 }
+
+isolated function getRepairMessage(Error e) returns string => 
+    string `The generated response is not in the expected format. Please check the prompt and retry. 
+            Error: ${e.message()}`;

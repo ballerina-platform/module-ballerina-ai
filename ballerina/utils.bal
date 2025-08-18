@@ -71,3 +71,14 @@ isolated function getChatMessageStringContent(Prompt|string prompt) returns stri
     }
     return str.trim();
 }
+
+isolated function getRetryConfigValues(GeneratorConfig generatorConfig) returns [int, decimal] {
+    ProviderRetryConfig? retryConfig = generatorConfig.retryConfig;
+    if retryConfig != () {
+        int count = retryConfig.count;
+        if count > 0 {
+            return [count, retryConfig.interval];
+        }
+    }
+    return [0, 0d];
+}
