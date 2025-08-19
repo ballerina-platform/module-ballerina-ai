@@ -34,8 +34,9 @@ abstract class AbstractTagSplitter implements RecursiveChunker.Splitter {
 
     AbstractTagSplitter(String tagName) {
         this.tagName = tagName;
-        this.openTagPattern = Pattern.compile("<" + tagName + ">");
-        this.closeTagPattern = Pattern.compile("</" + tagName + ">");
+        // Pattern to match opening tag with optional attributes: <tagName> or <tagName attr="value">
+        this.openTagPattern = Pattern.compile("<" + Pattern.quote(tagName) + "(?:\\s[^>]*)?>", Pattern.CASE_INSENSITIVE);
+        this.closeTagPattern = Pattern.compile("</" + Pattern.quote(tagName) + ">", Pattern.CASE_INSENSITIVE);
     }
 
     @Override
@@ -47,16 +48,22 @@ abstract class AbstractTagSplitter implements RecursiveChunker.Splitter {
         INIT, PREFIX, TAG, SUFFIX, END
     }
 
-    private class TagSplitterIterator implements Iterator<Chunk> {
+    void onBreakdown(TagSplitterIterator iterator) {
+
+    }
+
+    protected class TagSplitterIterator implements Iterator<Chunk> {
 
         private String content;
-        private SplitterState currentState;
+        SplitterState currentState;
         // Part before the tag
-        private String prefix;
+        String prefix;
         // Part between open and closing tags
-        private String tag;
+        String tag;
         // Part after closing tag but before the next opening tag
-        private String suffix;
+        Map<String, String> tagAttributes = Map.of();
+        String suffix;
+        Map<String, String> suffixAttributes = Map.of();
 
         TagSplitterIterator(String content) {
             assert content != null;
@@ -88,20 +95,20 @@ abstract class AbstractTagSplitter implements RecursiveChunker.Splitter {
                     yield new Chunk(prefix, Map.of());
                 case TAG:
                     currentState = SplitterState.SUFFIX;
-                    yield new Chunk(tag, Map.of());
+                    yield new Chunk(tag, tagAttributes);
                 case SUFFIX:
                     if (!content.isEmpty()) {
                         currentState = SplitterState.INIT;
                     } else {
                         currentState = SplitterState.END;
                     }
-                    yield new Chunk(suffix, Map.of());
+                    yield new Chunk(suffix, suffixAttributes);
                 case END:
                     yield new Chunk(content, Map.of());
             };
         }
 
-        private void breakdownContent() {
+        private void breakdownContentInner() {
             assert currentState == SplitterState.INIT;
             assert content != null;
             // Find the index to open tag
@@ -121,7 +128,7 @@ abstract class AbstractTagSplitter implements RecursiveChunker.Splitter {
             if (!closeTagMatcher.find()) {
                 throw new IndexOutOfBoundsException("Invalid HTML <%s> is not properly terminated".formatted(tagName));
             }
-            
+
             // Extract complete tag including opening and closing tags
             tag = content.substring(openTagIndex, closeTagMatcher.end());
 
@@ -138,6 +145,15 @@ abstract class AbstractTagSplitter implements RecursiveChunker.Splitter {
             int nextOpenTagIndex = nextOpenTagMatcher.start();
             suffix = content.substring(0, nextOpenTagIndex);
             content = content.substring(nextOpenTagIndex);
+        }
+
+        private void breakdownContent() {
+            breakdownContentInner();
+            breakdownContentCallback();
+        }
+
+        private void breakdownContentCallback() {
+            onBreakdown(this);
         }
     }
 }
