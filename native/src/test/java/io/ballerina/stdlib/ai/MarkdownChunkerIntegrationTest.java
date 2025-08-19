@@ -50,8 +50,10 @@ public class MarkdownChunkerIntegrationTest {
         // Chunk the content using MarkdownChunker
         List<TextSegment> chunks = MarkdownChunker.chunk(inputContent, CHUNK_SIZE, MAX_OVERLAP_SIZE);
 
-        // Sanity check: validate that TextSegments have indices in correct order
+        // Sanity checks
         validateTextSegmentIndices(chunks);
+        validateTextSegmentMaxSize(chunks, CHUNK_SIZE);
+        validateChunkContent(chunks, inputContent);
 
         // Format output as specified: "500 50" followed by chunks
         String actualOutput = formatChunksOutput(chunks, CHUNK_SIZE, MAX_OVERLAP_SIZE);
@@ -73,8 +75,9 @@ public class MarkdownChunkerIntegrationTest {
         // Chunk the content using MarkdownChunker
         List<TextSegment> chunks = MarkdownChunker.chunk(inputContent, CHUNK_SIZE, 0);
 
-        // Sanity check: validate that TextSegments have indices in correct order
+        // Sanity checks
         validateTextSegmentIndices(chunks);
+        validateTextSegmentMaxSize(chunks, CHUNK_SIZE);
 
         String combinedChunks = chunks.stream().map(TextSegment::text).collect(Collectors.joining());
         Assert.assertEquals(combinedChunks, inputContent,
@@ -342,6 +345,22 @@ public class MarkdownChunkerIntegrationTest {
                     "Strategy " + strategy + " should produce one chunk for single word");
             Assert.assertEquals(chunks.getFirst().text(), singleWord,
                     "Strategy " + strategy + " should preserve single word content");
+        }
+    }
+
+    private void validateTextSegmentMaxSize(List<TextSegment> chunks, int maxSize) {
+        for (TextSegment chunk : chunks) {
+            String text = chunk.text();
+            Assert.assertTrue(text.length() <= maxSize,
+                    "TextSegment exceeds max size of " + maxSize + ": " + text.length());
+        }
+    }
+
+    private void validateChunkContent(List<TextSegment> chunks, String originalContent) {
+        for (TextSegment chunk : chunks) {
+            String text = chunk.text();
+            Assert.assertTrue(originalContent.contains(text),
+                    "Chunk content should be part of the original content: " + text);
         }
     }
 

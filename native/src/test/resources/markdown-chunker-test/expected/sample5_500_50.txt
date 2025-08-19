@@ -1,7 +1,7 @@
 500 50
 
 --- Chunk 1 ---
-Metadata: {index=0, id=648}
+Metadata: {index=0, id=717}
 # Code Blocks and Horizontal Lines Test
 
 This file tests the markdown chunker's ability to handle code blocks and horizontal lines as delimiters.
@@ -23,7 +23,10 @@ After the code block, we continue with regular text. The chunker should split on
 
 
 --- Chunk 2 ---
-Metadata: {index=1, id=640}
+Metadata: {index=1, id=821}
+
+
+***
 
 ## Section After Asterisk Horizontal Line
 
@@ -44,7 +47,9 @@ More text after the Python code block.
 
 
 --- Chunk 3 ---
-Metadata: {index=2, id=643}
+Metadata: {index=2, id=824}
+
+## Section After Dash Horizontal Line  
 
 This section follows a horizontal line made with dashes. This tests the dash delimiter pattern.
 
@@ -64,7 +69,9 @@ ___
 
 
 --- Chunk 4 ---
-Metadata: {index=3, id=647}
+Metadata: {index=3, id=827}
+
+## Section After Underscore Horizontal Line
 
 This section follows a horizontal line made with underscores. Testing the underscore delimiter.
 
@@ -75,6 +82,12 @@ ls -la
 ```
 
 Final section with more content to ensure proper chunking behavior.
+
+## Multiple Code Blocks
+
+
+--- Chunk 5 ---
+Metadata: {header=Multiple Code Blocks, index=4, id=829}
 
 ## Multiple Code Blocks
 

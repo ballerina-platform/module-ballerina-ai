@@ -1,7 +1,7 @@
 500 0
 
 --- Chunk 1 ---
-Metadata: {index=0, id=1368}
+Metadata: {index=0, id=4113}
 # Code Block Test Document
 
 This document contains various code blocks to test the chunking functionality.
@@ -17,7 +17,7 @@ Here's a Java class with some methods:
 
 
 --- Chunk 2 ---
-Metadata: {header=Java Code Example, index=1, language=java, id=1342, type=code_block}
+Metadata: {header=Java Code Example, index=1, language=java, id=4087, type=code_block}
 ```java
 public class ExampleClass {
     private String name;
@@ -45,7 +45,7 @@ public class ExampleClass {
         return "ExampleClass{name='" + name + "', value=" + value + "}"
 
 --- Chunk 3 ---
-Metadata: {header=Java Code Example, index=2, language=java, id=1343, type=code_block, prev=1338}
+Metadata: {header=Java Code Example, index=2, language=java, id=4088, type=code_block, prev=4083}
 ;
     }
 }
@@ -53,7 +53,7 @@ Metadata: {header=Java Code Example, index=2, language=java, id=1343, type=code_
 
 
 --- Chunk 4 ---
-Metadata: {index=3, id=1349}
+Metadata: {index=3, id=4094}
 
 ## Python Code Example
 
@@ -81,7 +81,7 @@ if __name__ == "__main__":
 
 
 --- Chunk 5 ---
-Metadata: {index=4, id=1369}
+Metadata: {index=4, id=4116}
 
 Some code blocks don't specify a language:
 
@@ -98,7 +98,7 @@ Here's some JavaScript code:
 
 
 --- Chunk 6 ---
-Metadata: {header=JavaScript Example, index=5, language=javascript, id=1363, type=code_block}
+Metadata: {header=JavaScript Example, index=5, language=javascript, id=4108, type=code_block}
 ```javascript
 class Calculator {
     constructor() {
@@ -127,14 +127,14 @@ console.log(calc.add(5, 3));
 console.log(calc.subtract(10, 4
 
 --- Chunk 7 ---
-Metadata: {header=JavaScript Example, index=6, language=javascript, id=1364, type=code_block, prev=1359}
+Metadata: {header=JavaScript Example, index=6, language=javascript, id=4109, type=code_block, prev=4104}
 ));
 console.log(calc.getHistory());
 ```
 
 
 --- Chunk 8 ---
-Metadata: {header=Conclusion, index=7, id=1367}
+Metadata: {header=Conclusion, index=7, id=4112}
 
 ## Conclusion
 

@@ -29,8 +29,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.Predicate;
-import java.util.stream.Stream;
 
 class RecursiveChunker {
 
@@ -41,111 +39,46 @@ class RecursiveChunker {
         this.nonMergeableTypes = nonMergeableTypes;
     }
 
-    List<Chunk> chunkUsingSplitters(String content, List<Splitter> delimiters, int maxChunkSize, int maxOverlapSize) {
-        return chunkUsingSplittersInner(content, delimiters, maxChunkSize, maxOverlapSize, Collections.emptyMap());
+    List<Chunk> chunkUsingSplitters(String content, List<Splitter> splitters, int maxChunkSize, int maxOverlapSize) {
+        return chunkUsingSplittersInner(content, splitters, maxChunkSize, maxOverlapSize, Collections.emptyMap());
     }
 
-    static final class Context {
-
-        private final List<Chunk> chunks;
-        private final List<Chunk> nextChunkPieceBuffer;
-        private int nextChunkSize;
-
-        Context() {
-            chunks = new ArrayList<>();
-            nextChunkPieceBuffer = new ArrayList<>();
-            nextChunkSize = 0;
-        }
-
-        void flushBuffer() {
-            nextChunkPieceBuffer.stream().reduce(Chunk::merge).ifPresent(chunks::add);
-            nextChunkPieceBuffer.clear();
-            nextChunkSize = 0;
-        }
-
-        void addChunk(Chunk chunk) {
-            chunks.add(chunk);
-        }
-
-        void addChunks(List<Chunk> newChunks) {
-            chunks.addAll(newChunks);
-        }
-
-        public int nextChunkSize() {
-            return nextChunkSize;
-        }
-
-        public void addPiece(Chunk piece) {
-            nextChunkPieceBuffer.add(piece);
-            nextChunkSize += piece.length();
-        }
-
-        public Stream<Chunk> chunks(ChunkMergeStrategy mergeStrategy, int maxChunkSize, int maxOverlapSize) {
-            return mergeStrategy.merge(chunks, maxChunkSize, maxOverlapSize).stream()
-                    .filter(Predicate.not(Chunk::isEmpty));
-        }
-    }
-
-    @FunctionalInterface
-    interface ChunkMergeStrategy {
-
-        List<Chunk> merge(List<Chunk> chunks, int maxChunkSize, int maxOverlapSize);
-    }
-
-    private List<Chunk> chunkUsingSplittersInner(String content, List<Splitter> delimiters,
+    private List<Chunk> chunkUsingSplittersInner(String content, List<Splitter> splitters,
                                                  int maxChunkSize, int maxOverlapSize,
                                                  Map<String, String> parentMetadata) {
-        Context cx = new Context();
+        return this.mergeChunksWithOverlap(splitters,
+                chunkWithNoMerge(content, splitters, maxChunkSize, parentMetadata), maxChunkSize,
+                maxOverlapSize);
+    }
+
+    private List<Chunk> chunkWithNoMerge(String content, List<Splitter> delimiters,
+                                         int maxChunkSize, Map<String, String> parentMetadata) {
+        List<Chunk> chunks = new ArrayList<>();
         List<Splitter> rest = delimiters.subList(1, delimiters.size());
         Iterator<Chunk> pieces = delimiters.getFirst().split(content);
         while (pieces.hasNext()) {
             Chunk piece = pieces.next();
-
-            // If this piece is non-mergeable, flush buffer and add it directly
             if (isNonMergeable(piece)) {
-                // Flush current buffer
-                cx.flushBuffer();
-
                 // Add non-mergeable piece directly
                 if (piece.length() > maxChunkSize) {
-                    cx.addChunks(breakUpChunk(piece, maxChunkSize));
+                    chunks.addAll(breakUpChunk(piece, maxChunkSize));
                 } else {
-                    cx.addChunk(piece);
+                    chunks.add(piece);
                 }
                 continue;
             }
-
-            if (cx.nextChunkSize() + piece.length() <= maxChunkSize) {
-                cx.addPiece(piece);
-                continue;
-            }
-
-            cx.flushBuffer();
-
-            // If the piece is smaller than the max chunk size, just add it to the next chunk
             if (piece.length() <= maxChunkSize) {
-                cx.addPiece(piece);
-                continue;
+                chunks.add(piece);
+            } else {
+                // Recursively split chunk
+                chunks.addAll(chunkWithNoMerge(piece.piece, rest, maxChunkSize, piece.metadata));
             }
 
-            // Break up the current piece
-            List<Chunk> pieceChunks =
-                    chunkUsingSplittersInner(piece.piece, rest, maxChunkSize, maxOverlapSize, piece.metadata);
-            cx.addChunks(pieceChunks.subList(0, pieceChunks.size() - 1));
-            Chunk lastPieceChunk = pieceChunks.getLast();
-            if (isNonMergeable(lastPieceChunk)) {
-                // If the last piece is non-mergeable, add it directly
-                cx.addChunk(lastPieceChunk);
-            } else {
-                cx.addPiece(lastPieceChunk);
-            }
         }
-        cx.flushBuffer();
-        Stream<Chunk> chunks = cx.chunks(this::mergeChunksWithOverlap, maxChunkSize, maxOverlapSize);
         if (parentMetadata.isEmpty()) {
-            return chunks.toList();
+            return chunks;
         }
-        return chunks.map(chunk -> {
+        return chunks.stream().map(chunk -> {
             HashMap<String, String> metadata = new HashMap<>(parentMetadata);
             metadata.putAll(chunk.metadata);
             return new Chunk(chunk.piece(), Collections.unmodifiableMap(metadata));
@@ -191,11 +124,11 @@ class RecursiveChunker {
         return chunks;
     }
 
-    private List<Chunk> mergeChunksWithOverlap(List<Chunk> pieces, int maxChunkSize, int maxOverlapSize) {
+    private List<Chunk> mergeChunksWithOverlap(List<Splitter> splitters, List<Chunk> pieces, int maxChunkSize,
+                                               int maxOverlapSize) {
         List<Chunk> chunks = new ArrayList<>();
         List<Chunk> mergeBuffer = new ArrayList<>();
         int mergeBufferSize = 0;
-        Chunk lastChunk = Chunk.EMPTY;
         for (Chunk piece : pieces) {
             // If this piece is non-mergeable, flush buffer and add it directly
             if (isNonMergeable(piece)) {
@@ -207,6 +140,7 @@ class RecursiveChunker {
 
                 // Add non-mergeable piece directly
                 chunks.add(piece);
+                // if non-mergeable can't be used as an overlap, reset lastChunk
                 continue;
             }
 
@@ -217,11 +151,8 @@ class RecursiveChunker {
                 piece = p.getLast();
             }
             if (mergeBuffer.isEmpty()) {
-                // First chunk, see if we can overlap with the last piece
-                if (lastChunk.length() < maxOverlapSize && lastChunk.length() + piece.length() <= maxChunkSize) {
-                    // Merge with the last chunk
-                    piece = Chunk.merge(lastChunk, piece);
-                }
+                // First chunk
+                assert piece.length() <= maxChunkSize;
                 mergeBuffer.add(piece);
                 mergeBufferSize += piece.length();
             } else if (mergeBufferSize + piece.length() <= maxChunkSize) {
@@ -231,8 +162,28 @@ class RecursiveChunker {
             } else {
                 // First flush the merge buffer
                 mergeBuffer.stream().reduce(Chunk::merge).ifPresent(chunks::add);
+                Chunk lastPiece;
+                if (maxOverlapSize > 0) {
+                    lastPiece = mergeBuffer.getLast();
+                    if (lastPiece.length() > maxOverlapSize) {
+                        List<Chunk> p = chunkWithNoMerge(lastPiece.piece(), splitters, maxOverlapSize,
+                                lastPiece.metadata);
+                        assert p.size() > 1;
+                        lastPiece = p.getLast();
+                    }
+                } else {
+                    lastPiece = Chunk.EMPTY;
+                }
                 mergeBuffer.clear();
 
+                if (lastPiece.length() + piece.length() <= maxChunkSize) {
+                    // Merge with the last piece
+                    var pieceMetadata = piece.metadata;
+                    piece = Chunk.merge(lastPiece, piece);
+                    // Metadata should not be affected by overlap
+                    piece = piece.appendMetadata(piece, pieceMetadata);
+                }
+                assert piece.length() <= maxChunkSize;
                 mergeBuffer.add(piece);
                 mergeBufferSize = piece.length();
             }
@@ -281,6 +232,12 @@ class RecursiveChunker {
             metadata.put("id", id);
             metadata.put("index", index);
             return new TextSegment(piece, new Metadata(metadata));
+        }
+
+        public Chunk appendMetadata(Chunk base, Map<String, String> metadata) {
+            Map<String, String> newMetadata = new HashMap<>(base.metadata);
+            newMetadata.putAll(metadata);
+            return new Chunk(base.piece, Collections.unmodifiableMap(newMetadata));
         }
     }
 }
