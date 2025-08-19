@@ -200,6 +200,11 @@ class RecursiveChunker {
 
     record Chunk(long id, String piece, Map<String, String> metadata) {
 
+        Chunk {
+            assert piece != null;
+            assert metadata != null;
+        }
+
         private static final AtomicLong nextId = new AtomicLong(0);
 
         Chunk(String piece, Map<String, String> metadata) {
