@@ -133,6 +133,27 @@ public class AbstractTagSplitterTest {
         Assert.assertFalse(iterator.hasNext());
     }
 
+    @Test
+    public void testTagWithAttributes() {
+        TestTagSplitter splitter = new TestTagSplitter("div");
+        Iterator<Chunk> iterator = splitter.split("Before<div class=\"container\" id=\"main\">Content</div>After");
+        
+        // Should properly handle opening tag with attributes
+        Assert.assertTrue(iterator.hasNext());
+        Chunk prefix = iterator.next();
+        Assert.assertEquals(prefix.piece(), "Before");
+        
+        Assert.assertTrue(iterator.hasNext());
+        Chunk tag = iterator.next();
+        Assert.assertEquals(tag.piece(), "<div class=\"container\" id=\"main\">Content</div>");
+        
+        Assert.assertTrue(iterator.hasNext());
+        Chunk suffix = iterator.next();
+        Assert.assertEquals(suffix.piece(), "After");
+        
+        Assert.assertFalse(iterator.hasNext());
+    }
+
     @Test(expectedExceptions = IndexOutOfBoundsException.class)
     public void testUnclosedTag() {
         TestTagSplitter splitter = new TestTagSplitter("h1");
