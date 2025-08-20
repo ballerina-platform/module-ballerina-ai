@@ -11,6 +11,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import org.testng.Assert;
+import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.DataProvider;
 import org.testng.annotations.Test;
 
@@ -20,6 +21,11 @@ public class HTMLChunkerIntegrationTest {
     private static final int MAX_OVERLAP_SIZE = 50;
     private static final String INPUT_DIR = "html-chunker-test/input";
     private static final String EXPECTED_DIR = "html-chunker-test/expected";
+
+    @BeforeMethod
+    public void setUp() throws Exception {
+        TestUtil.resetChunkIdCounter();
+    }
 
     static String normalizeNewLines(String content) {
         return content.replaceAll("\\r\\n", "\n").replaceAll("\\r", "\n");
