@@ -91,7 +91,7 @@ public class Chunkers {
     }
 
     public static Object chunkHtmlDocument(BMap<BString, Object> document, int chunkSize, int maxOverlapSize,
-                                                  BString chunkStrategy, BTypedesc textChunkType) {
+            BString chunkStrategy, BTypedesc textChunkType) {
         try {
             String content = document.getStringValue(StringUtils.fromString(CONTENT_FIELD_NAME)).getValue();
             HtmlChunker.HtmlChunkStrategy strategy = switch (chunkStrategy.getValue()) {

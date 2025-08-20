@@ -1,3 +1,21 @@
+/*
+ *  Copyright (c) 2025, WSO2 LLC. (http://www.wso2.com).
+ *
+ *  WSO2 LLC. licenses this file to you under the Apache License,
+ *  Version 2.0 (the "License"); you may not use this file except
+ *  in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing,
+ *  software distributed under the License is distributed on an
+ *  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ *  KIND, either express or implied.  See the License for the
+ *  specific language governing permissions and limitations
+ *  under the License.
+ */
+
 package io.ballerina.stdlib.ai;
 
 import dev.langchain4j.data.segment.TextSegment;
@@ -48,11 +66,11 @@ public class HtmlChunkerIntegrationTest {
     }
 
     @Test(dataProvider = "htmlFiles")
-    public void testHTMLChunking(String fileName) throws IOException {
+    public void testHtmlChunking(String fileName) throws IOException {
         // Load input HTML file
         String inputContent = normalizeNewLines(loadFileContent(INPUT_DIR + "/" + fileName));
 
-        // Chunk the content using HTMLChunker
+        // Chunk the content using HtmlChunker
         List<TextSegment> chunks = HtmlChunker.chunk(inputContent, CHUNK_SIZE, MAX_OVERLAP_SIZE);
 
         // Sanity checks
@@ -73,11 +91,11 @@ public class HtmlChunkerIntegrationTest {
     }
 
     @Test(dataProvider = "htmlFiles")
-    public void testHTMLChunkingWithoutOverlap(String fileName) throws IOException {
+    public void testHtmlChunkingWithoutOverlap(String fileName) throws IOException {
         // Load input HTML file
         String inputContent = normalizeNewLines(loadFileContent(INPUT_DIR + "/" + fileName));
 
-        // Chunk the content using HTMLChunker
+        // Chunk the content using HtmlChunker
         List<TextSegment> chunks = HtmlChunker.chunk(inputContent, CHUNK_SIZE, 0);
 
         // Sanity checks
@@ -104,10 +122,10 @@ public class HtmlChunkerIntegrationTest {
         String htmlWithHeaders = """
                 <h1>Header 1</h1>
                 <p>Content under header 1.</p>
-                
+
                 <h2>Header 2</h2>
                 <p>Content under header 2.</p>
-                
+
                 <h3>Header 3</h3>
                 <p>Content under header 3.</p>
                 """;
