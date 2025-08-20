@@ -1,0 +1,19 @@
+500 0
+
+--- Chunk 1 ---
+Metadata: {index=0, id=232}
+<h1>Simple HTML Document</h1>
+<p>This is a basic HTML document without the full structure.</p>
+
+<h2>Overview</h2>
+<p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vestibulum consequat, nisi ut consectetur cursus, mauris ante facilisis nulla, et tempor enim metus et nunc.</p>
+
+<h2>Details</h2>
+
+--- Chunk 2 ---
+Metadata: {h1=Simple HTML Document, index=1, h2=Details, id=234}
+
+<p>Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas. Donec auctor blandit quam.</p>
+
+<h3>Subsection</h3>
+<p>Cras vehicula rutrum lorem. Donec dignissim faucibus mauris. Proin vel arcu et pede cursus lobortis.</p>
