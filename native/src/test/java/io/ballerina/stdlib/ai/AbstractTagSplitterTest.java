@@ -1,10 +1,10 @@
 package io.ballerina.stdlib.ai;
 
+import io.ballerina.stdlib.ai.RecursiveChunker.Chunk;
 import org.testng.Assert;
 import org.testng.annotations.Test;
 
 import java.util.Iterator;
-import io.ballerina.stdlib.ai.RecursiveChunker.Chunk;
 
 public class AbstractTagSplitterTest {
 
