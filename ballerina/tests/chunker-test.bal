@@ -988,5 +988,420 @@ function testMarkdownChunkerClassWithVeryLongContent() returns error? {
     }
 }
 
+@test:Config {}
+function simpleHTMLChunking() returns error? {
+    TextDocument doc = {content: "<p>test</p>"};
+    Chunk[] chunks = check chunkHTMLDocument(doc, 100, 40);
+    test:assertEquals(chunks.length(), 1);
+    test:assertEquals(chunks[0].content, "<p>test</p>");
+}
+
+@test:Config {}
+function testHTMLChunkingWithHeaders() returns error? {
+    string htmlContent = "<h1>Main Title</h1>\n" +
+        "<p>This is the introduction paragraph.</p>\n" +
+        "<h2>Section 1</h2>\n" +
+        "<p>Content for section 1. This section contains some text that should be chunked properly.</p>\n" +
+        "<h3>Subsection 1.1</h3>\n" +
+        "<p>More detailed content in subsection 1.1.</p>\n" +
+        "<h2>Section 2</h2>\n" +
+        "<p>Content for section 2. Another section with different content.</p>\n" +
+        "<h3>Subsection 2.1</h3>\n" +
+        "<p>Subsection content here.</p>\n" +
+        "<h2>Conclusion</h2>\n" +
+        "<p>Final thoughts and summary.</p>";
+
+    TextDocument doc = {content: htmlContent};
+
+    Chunk[] headerChunks = check chunkHTMLDocument(doc, 150, 20, HTML_HEADER);
+
+    test:assertTrue(headerChunks.length() > 1, msg = "Should produce multiple chunks with HTML_HEADER strategy");
+
+    foreach Chunk chunk in headerChunks {
+        anydata content = chunk.content;
+        test:assertTrue(content is string, msg = "Chunk content should be string");
+        string chunkContent = <string>content;
+
+        boolean hasHeader = chunkContent.indexOf("<h") >= 0;
+        test:assertTrue(hasHeader || chunkContent.length() <= 150,
+                msg = "Chunks should either contain headers or be within size limit");
+    }
+}
+
+@test:Config {}
+function testHTMLChunkingWithParagraphs() returns error? {
+    string htmlContent = "<h1>Document with Paragraphs</h1>\n" +
+        "<p>First paragraph with some content. This paragraph contains multiple sentences.</p>\n" +
+        "<p>Second paragraph is here. This is another paragraph with different content.</p>\n" +
+        "<p>Third paragraph contains more information. This paragraph discusses various topics.</p>\n" +
+        "<p>Fourth paragraph wraps up the section.</p>";
+
+    TextDocument doc = {content: htmlContent};
+
+    Chunk[] paragraphChunks = check chunkHTMLDocument(doc, 120, 25, HTML_PARAGRAPH);
+
+    test:assertTrue(paragraphChunks.length() > 1, msg = "Should produce multiple chunks with HTML_PARAGRAPH strategy");
+
+    foreach Chunk chunk in paragraphChunks {
+        anydata content = chunk.content;
+        if (content is string) {
+            string chunkContent = <string>content;
+
+            boolean hasParagraph = chunkContent.indexOf("<p>") >= 0 || chunkContent.indexOf("</p>") >= 0;
+            test:assertTrue(hasParagraph || chunkContent.length() <= 120,
+                    msg = "Chunks should contain paragraphs or be within size limit");
+        }
+    }
+}
+
+@test:Config {}
+function testHTMLChunkingWithBreaks() returns error? {
+    string htmlContent = "<h1>Document with Line Breaks</h1>\n" +
+        "<p>First line of content<br>\n" +
+        "Second line of content<br>\n" +
+        "Third line of content<br>\n" +
+        "Fourth line of content<br>\n" +
+        "Fifth line of content</p>";
+
+    TextDocument doc = {content: htmlContent};
+
+    Chunk[] lineChunks = check chunkHTMLDocument(doc, 60, 10, HTML_LINE);
+
+    test:assertTrue(lineChunks.length() > 1, msg = "Should produce multiple chunks with HTML_LINE strategy");
+
+    foreach Chunk chunk in lineChunks {
+        anydata content = chunk.content;
+        if (content is string) {
+            string chunkContent = <string>content;
+
+            boolean hasContent = chunkContent.length() > 0;
+            test:assertTrue(hasContent, msg = "Chunks should contain content");
+        }
+    }
+}
+
+@test:Config {}
+function testHTMLChunkingWithMixedElements() returns error? {
+    string htmlContent = "<h1>Complex HTML Document</h1>\n" +
+        "<p>This document contains various HTML elements.</p>\n" +
+        "<h2>List Section</h2>\n" +
+        "<ul>\n" +
+        "<li>Item 1: This is the first item</li>\n" +
+        "<li>Item 2: This is the second item</li>\n" +
+        "<li>Item 3: This is the third item</li>\n" +
+        "</ul>\n" +
+        "<h2>Table Section</h2>\n" +
+        "<table>\n" +
+        "<tr><th>Header 1</th><th>Header 2</th></tr>\n" +
+        "<tr><td>Data 1</td><td>Data 2</td></tr>\n" +
+        "</table>\n" +
+        "<h2>Final Section</h2>\n" +
+        "<p>This concludes the complex HTML document.</p>";
+
+    TextDocument doc = {content: htmlContent};
+
+    Chunk[] headerChunks = check chunkHTMLDocument(doc, 100, 20, HTML_HEADER);
+    Chunk[] paragraphChunks = check chunkHTMLDocument(doc, 120, 25, HTML_PARAGRAPH);
+
+    test:assertTrue(headerChunks.length() > 1, msg = "Should produce multiple chunks with HTML_HEADER strategy");
+    test:assertTrue(paragraphChunks.length() > 1, msg = "Should produce multiple chunks with HTML_PARAGRAPH strategy");
+
+    foreach Chunk chunk in headerChunks {
+        anydata content = chunk.content;
+        if (content is string) {
+            string chunkContent = <string>content;
+            test:assertTrue(chunkContent.length() <= 100,
+                    msg = "Header strategy chunks must respect size limit");
+        }
+    }
+}
+
+@test:Config {}
+function testHTMLChunkingWithRecursiveFallback() returns error? {
+    string htmlContent = "<h1>Very Long Header</h1>\n" +
+        "<p>This is a very long paragraph that exceeds the maximum chunk size limit. " +
+        "It contains multiple sentences that should trigger recursive fallback to finer-grained chunking strategies. " +
+        "The content is designed to test the fallback mechanism from HTML_HEADER strategy to HTML_PARAGRAPH, then HTML_LINE, then SENTENCE, then WORD, and finally CHARACTER if needed. " +
+        "This ensures that even when headers cannot be used as chunk boundaries due to size constraints, the system gracefully degrades to maintain chunk size limits.</p>";
+
+    TextDocument doc = {content: htmlContent};
+
+    Chunk[] chunks = check chunkHTMLDocument(doc, 50, 10, HTML_HEADER);
+
+    test:assertTrue(chunks.length() > 1, msg = "Should produce multiple chunks using recursive fallback");
+
+    foreach Chunk chunk in chunks {
+        anydata content = chunk.content;
+        test:assertTrue(content is string, msg = "Chunk content should be string");
+        string chunkContent = <string>content;
+        test:assertTrue(chunkContent.length() <= 50,
+                msg = "Each chunk must respect maxChunkSize limit");
+    }
+}
+
+@test:Config {}
+function testHTMLChunkingWithSentenceStrategy() returns error? {
+    string htmlContent = "<h1>Sentence-based HTML Chunking</h1>\n" +
+        "<p>This is the first sentence. " +
+        "This is the second sentence with more content. " +
+        "Here is the third sentence that continues the pattern. " +
+        "The fourth sentence provides additional information. " +
+        "Finally, the fifth sentence concludes this paragraph.</p>\n" +
+        "<p>Another paragraph starts here. " +
+        "It contains multiple sentences as well. " +
+        "Each sentence should be properly identified and chunked.</p>";
+
+    TextDocument doc = {content: htmlContent};
+
+    Chunk[] chunks = check chunkHTMLDocument(doc, 80, 15, SENTENCE);
+
+    test:assertTrue(chunks.length() > 1, msg = "Should produce multiple chunks with SENTENCE strategy");
+
+    foreach Chunk chunk in chunks {
+        anydata content = chunk.content;
+        if (content is string) {
+            string chunkContent = <string>content;
+
+            boolean endsWithSentence = chunkContent.endsWith(".") ||
+                                    chunkContent.endsWith("!") ||
+                                    chunkContent.endsWith("?") ||
+                                    chunkContent.endsWith(">") ||
+                                    chunkContent.length() <= 80;
+
+            test:assertTrue(endsWithSentence,
+                    msg = "Chunks should end with complete sentences or be within size limit");
+        }
+    }
+}
+
+@test:Config {}
+function testHTMLChunkingWithWordStrategy() returns error? {
+    string htmlContent = "<h1>Word-based HTML Chunking</h1>\n" +
+        "<p>This document contains individual words that should be chunked by word boundaries. " +
+        "Each word is separated by spaces and should be preserved as complete units. " +
+        "The chunker should not break words in the middle when using the word strategy.</p>";
+
+    TextDocument doc = {content: htmlContent};
+
+    Chunk[] chunks = check chunkHTMLDocument(doc, 40, 8, WORD);
+
+    test:assertTrue(chunks.length() > 1, msg = "Should produce multiple chunks with WORD strategy");
+
+    foreach Chunk chunk in chunks {
+        anydata content = chunk.content;
+        if (content is string) {
+            string chunkContent = <string>content;
+
+            boolean endsWithCompleteWord = !chunkContent.endsWith(" ") &&
+                                        !chunkContent.endsWith("\n") &&
+                                        chunkContent.length() <= 40;
+
+            test:assertTrue(endsWithCompleteWord || chunkContent.length() <= 40,
+                    msg = "Chunks should contain complete words or be within size limit");
+        }
+    }
+}
+
+@test:Config {}
+function testHTMLChunkingWithCharacterStrategy() returns error? {
+    string htmlContent = "<h1>Character-based HTML Chunking</h1>\n" +
+        "<p>This test verifies that the character strategy works correctly for HTML documents. " +
+        "Each character should be considered individually when chunking.</p>";
+
+    TextDocument doc = {content: htmlContent};
+
+    Chunk[] chunks = check chunkHTMLDocument(doc, 20, 5, CHARACTER);
+
+    test:assertTrue(chunks.length() > 1, msg = "Should produce multiple chunks with CHARACTER strategy");
+
+    foreach Chunk chunk in chunks {
+        anydata content = chunk.content;
+        if (content is string) {
+            string chunkContent = <string>content;
+            test:assertTrue(chunkContent.length() <= 20,
+                    msg = "Each chunk must respect the character size limit");
+        }
+    }
+}
+
+@test:Config {}
+function testHTMLChunkerClassWithHeaderStrategy() returns error? {
+    string htmlContent = "<h1>Main Title</h1>\n" +
+        "<p>Introduction paragraph here.</p>\n" +
+        "<h2>Section 1</h2>\n" +
+        "<p>Content for section 1.</p>\n" +
+        "<h3>Subsection 1.1</h3>\n" +
+        "<p>More detailed content.</p>\n" +
+        "<h2>Section 2</h2>\n" +
+        "<p>Content for section 2.</p>\n" +
+        "<h2>Conclusion</h2>\n" +
+        "<p>Final summary.</p>";
+
+    TextDocument doc = {content: htmlContent};
+    HTMLChunker chunker = new (100, 20, HTML_HEADER);
+    Chunk[] chunks = check chunker.chunk(doc);
+
+    test:assertTrue(chunks.length() > 1, msg = "Should produce multiple chunks with HTML_HEADER strategy");
+
+    foreach Chunk chunk in chunks {
+        anydata content = chunk.content;
+        test:assertTrue(content is string, msg = "Chunk content should be string");
+        string chunkContent = <string>content;
+
+        boolean hasHeader = chunkContent.indexOf("<h") >= 0;
+        test:assertTrue(hasHeader || chunkContent.length() <= 100,
+                msg = "Chunks should contain headers or be within size limit");
+    }
+}
+
+@test:Config {}
+function testHTMLChunkerClassWithParagraphStrategy() returns error? {
+    string htmlContent = "<h1>Test Document</h1>\n" +
+        "<p>First paragraph with some content. This paragraph contains multiple sentences. " +
+        "It should be chunked properly according to the paragraph strategy.</p>\n" +
+        "<p>Second paragraph is here. This is another paragraph with different content. " +
+        "It should also be handled correctly by the chunker.</p>\n" +
+        "<p>Third paragraph contains more information. This paragraph discusses various topics " +
+        "and should be processed as a single unit when possible.</p>\n" +
+        "<p>Final paragraph wraps up the document.</p>";
+
+    TextDocument doc = {content: htmlContent};
+    HTMLChunker chunker = new (120, 25, HTML_PARAGRAPH);
+    Chunk[] chunks = check chunker.chunk(doc);
+
+    test:assertTrue(chunks.length() > 1, msg = "Should produce multiple chunks with HTML_PARAGRAPH strategy");
+
+    foreach Chunk chunk in chunks {
+        anydata content = chunk.content;
+        if (content is string) {
+            string chunkContent = <string>content;
+
+            boolean hasParagraph = chunkContent.indexOf("<p>") >= 0 || chunkContent.indexOf("</p>") >= 0;
+            test:assertTrue(hasParagraph || chunkContent.length() <= 120,
+                    msg = "Chunks should preserve paragraph boundaries or be within size limit");
+        }
+    }
+}
+
+@test:Config {}
+function testHTMLChunkerClassWithLineStrategy() returns error? {
+    string htmlContent = "<h1>Line-based HTML Chunking</h1>\n" +
+        "<p>Line 1: This is the first line of content.<br>\n" +
+        "Line 2: This is the second line with different content.<br>\n" +
+        "Line 3: Third line contains more information.<br>\n" +
+        "Line 4: Fourth line has additional details.<br>\n" +
+        "Line 5: Fifth line continues the pattern.<br>\n" +
+        "Line 6: Sixth line adds more content.<br>\n" +
+        "Line 7: Seventh line provides more context.<br>\n" +
+        "Line 8: Eighth line concludes the section.</p>";
+
+    TextDocument doc = {content: htmlContent};
+    HTMLChunker chunker = new (50, 10, HTML_LINE);
+    Chunk[] chunks = check chunker.chunk(doc);
+
+    test:assertTrue(chunks.length() > 1, msg = "Should produce multiple chunks with HTML_LINE strategy");
+
+    foreach Chunk chunk in chunks {
+        anydata content = chunk.content;
+        if (content is string) {
+            string chunkContent = <string>content;
+
+            boolean hasContent = chunkContent.length() > 0;
+            test:assertTrue(hasContent, msg = "Chunks should contain content");
+        }
+    }
+}
+
+@test:Config {}
+function testHTMLChunkerClassWithDefaultStrategy() returns error? {
+    string htmlContent = "<h1>Default Strategy Test</h1>\n" +
+        "<p>This test uses the default HTML_HEADER strategy.</p>\n" +
+        "<h2>Section 1</h2>\n" +
+        "<p>Content for section 1.</p>\n" +
+        "<h2>Section 2</h2>\n" +
+        "<p>Content for section 2.</p>";
+
+    TextDocument doc = {content: htmlContent};
+    HTMLChunker chunker = new (); // Uses default values
+    Chunk[] chunks = check chunker.chunk(doc);
+
+    test:assertTrue(chunks.length() > 0, msg = "Should produce at least one chunk with default strategy");
+
+    foreach Chunk chunk in chunks {
+        anydata content = chunk.content;
+        if (content is string) {
+            string chunkContent = <string>content;
+            test:assertTrue(chunkContent.length() <= 200,
+                    msg = "Each chunk must respect the default maxChunkSize limit");
+        }
+    }
+}
+
+@test:Config {}
+function testHTMLChunkerClassWithComplexHTML() returns error? {
+    string htmlContent = "<html><head><title>Complex HTML</title></head><body>\n" +
+        "<h1>Complex HTML Document</h1>\n" +
+        "<p>This document contains various HTML elements.</p>\n" +
+        "<div class=\"section\">\n" +
+        "<h2>List Section</h2>\n" +
+        "<ul>\n" +
+        "<li>Item 1: This is the first item</li>\n" +
+        "<li>Item 2: This is the second item</li>\n" +
+        "<li>Item 3: This is the third item</li>\n" +
+        "</ul>\n" +
+        "</div>\n" +
+        "<div class=\"table-section\">\n" +
+        "<h2>Table Section</h2>\n" +
+        "<table border=\"1\">\n" +
+        "<tr><th>Header 1</th><th>Header 2</th></tr>\n" +
+        "<tr><td>Data 1</td><td>Data 2</td></tr>\n" +
+        "</table>\n" +
+        "</div>\n" +
+        "<h2>Final Section</h2>\n" +
+        "<p>This concludes the complex HTML document.</p>\n" +
+        "</body></html>";
+
+    TextDocument doc = {content: htmlContent};
+    HTMLChunker chunker = new (100, 20, HTML_HEADER);
+    Chunk[] chunks = check chunker.chunk(doc);
+
+    test:assertTrue(chunks.length() > 1, msg = "Should produce multiple chunks with complex HTML");
+
+    foreach Chunk chunk in chunks {
+        anydata content = chunk.content;
+        if (content is string) {
+            string chunkContent = <string>content;
+
+            boolean hasHTMLElement = chunkContent.indexOf("<") >= 0 && chunkContent.indexOf(">") >= 0;
+            test:assertTrue(hasHTMLElement || chunkContent.length() <= 100,
+                    msg = "Chunks should contain HTML elements or be within size limit");
+        }
+    }
+}
+
+@test:Config {}
+function testHTMLChunkerClassWithVeryLongContent() returns error? {
+    string htmlContent = "<h1>Very Long HTML Document</h1>\n" +
+        "<p>This is a very long paragraph that exceeds the maximum chunk size limit. " +
+        "It contains multiple sentences that should trigger recursive fallback to finer-grained chunking strategies. " +
+        "The content is designed to test the fallback mechanism from HTML_HEADER strategy to HTML_PARAGRAPH, then HTML_LINE, then SENTENCE, then WORD, and finally CHARACTER if needed. " +
+        "This ensures that even when headers cannot be used as chunk boundaries due to size constraints, the system gracefully degrades to maintain chunk size limits. " +
+        "The recursive fallback is essential for handling documents with very long sections that don't have natural break points at the specified strategy level.</p>";
+
+    TextDocument doc = {content: htmlContent};
+    HTMLChunker chunker = new (50, 10, HTML_HEADER);
+    Chunk[] chunks = check chunker.chunk(doc);
+
+    test:assertTrue(chunks.length() > 1, msg = "Should produce multiple chunks using recursive fallback");
+
+    foreach Chunk chunk in chunks {
+        anydata content = chunk.content;
+        test:assertTrue(content is string, msg = "Chunk content should be string");
+        string chunkContent = <string>content;
+        test:assertTrue(chunkContent.length() <= 50,
+                msg = "Each chunk must respect maxChunkSize limit");
+    }
+}
+
 
 
