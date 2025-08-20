@@ -29,6 +29,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 class RecursiveChunker {
 
@@ -196,6 +198,18 @@ class RecursiveChunker {
     interface Splitter {
 
         Iterator<Chunk> split(String content);
+
+        static Splitter createSentenceSplitter() {
+            return new SimpleDelimiterSplitter("\\.");
+        }
+
+        static Splitter createWordSplitter() {
+            return new SimpleDelimiterSplitter(" ");
+        }
+
+        static Splitter createCharacterSplitter() {
+            return new SimpleDelimiterSplitter("");
+        }
     }
 
     record Chunk(long id, String piece, Map<String, String> metadata) {
@@ -243,6 +257,79 @@ class RecursiveChunker {
             Map<String, String> newMetadata = new HashMap<>(base.metadata);
             newMetadata.putAll(metadata);
             return new Chunk(base.piece, Collections.unmodifiableMap(newMetadata));
+        }
+    }
+
+    static class SimpleDelimiterSplitter implements Splitter {
+
+        private final Pattern pattern;
+
+        SimpleDelimiterSplitter(String delimiter) {
+            pattern = Pattern.compile(Pattern.quote(delimiter));
+        }
+
+        @Override
+        public Iterator<Chunk> split(String content) {
+            return new Iterator<>() {
+                private final Matcher matcher = pattern.matcher(content);
+                private int lastIndex = 0;
+                private String nextPiece = null;
+                private boolean hasNextPiece = false;
+                private boolean finished = false;
+
+                private void prepareNext() {
+                    if (finished) {
+                        return;
+                    }
+
+                    if (matcher.find()) {
+                        int delimiterStart = matcher.start();
+                        int delimiterEnd = matcher.end();
+
+                        if (delimiterStart > lastIndex) {
+                            // Next piece is the content before the delimiter
+                            nextPiece = content.substring(lastIndex, delimiterStart);
+                            lastIndex = delimiterStart;
+                            hasNextPiece = true;
+                            return;
+                        }
+
+                        // Next piece is the delimiter itself
+                        nextPiece = content.substring(delimiterStart, delimiterEnd);
+                        lastIndex = delimiterEnd;
+                        hasNextPiece = true;
+                        return;
+                    }
+
+                    if (lastIndex < content.length()) {
+                        // Remaining content after last delimiter
+                        nextPiece = content.substring(lastIndex);
+                        lastIndex = content.length();
+                        hasNextPiece = true;
+                    } else {
+                        hasNextPiece = false;
+                    }
+                    finished = true;
+                }
+
+                @Override
+                public boolean hasNext() {
+                    if (!hasNextPiece && !finished) {
+                        prepareNext();
+                    }
+                    return hasNextPiece;
+                }
+
+                @Override
+                public Chunk next() {
+                    if (!hasNext()) {
+                        throw new java.util.NoSuchElementException();
+                    }
+                    hasNextPiece = false;
+
+                    return new Chunk(nextPiece, Map.of());
+                }
+            };
         }
     }
 }

@@ -39,10 +39,9 @@ public class HTMLChunker {
                 new HTMLHeaderSplitter(5),
                 new HTMLHeaderSplitter(6),
                 new HTMLParagraphSplitter(),
-                // TODO: we need utility methods to create these
-                new SimpleDelimiterSplitter("\\."),
-                new SimpleDelimiterSplitter(" "),
-                new SimpleDelimiterSplitter(""));
+                Splitter.createSentenceSplitter(),
+                Splitter.createWordSplitter(),
+                Splitter.createCharacterSplitter());
         RecursiveChunker chunker = new RecursiveChunker(Set.of());
         List<Chunk> chunks = chunker.chunkUsingSplitters(content, splitters, chunkSize, maxOverlapSize);
         return range(0, chunks.size())
