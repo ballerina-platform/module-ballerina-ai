@@ -91,6 +91,39 @@ public isolated class MarkdownChunker {
     }
 }
 
+# Represents a HTML document chunker.
+# Provides functionality to recursively chunk a HTML document using a configurable strategy.
+#
+# The chunking process begins with the specified strategy and recursively falls back to
+# finer-grained strategies if the content exceeds the configured `maxChunkSize`. Overlapping content
+# between chunks can be controlled using `maxOverlapSize`.
+public isolated class HTMLChunker {
+    *Chunker;
+    private final int maxChunkSize;
+    private final int maxOverlapSize;
+    private final HTMLChunkStrategy strategy;
+
+    # Initializes a new instance of the `HTMLChunker`.
+    #
+    # + maxChunkSize - Maximum number of characters allowed per chunk
+    # + maxOverlapSize - Maximum number of characters to reuse from the end of the previous chunk when creating
+    # the next one.
+    # + strategy - The HTML chunking strategy to use. Defaults to `HTML_HEADER`
+    public isolated function init(int maxChunkSize = 200, int maxOverlapSize = 40,
+            HTMLChunkStrategy strategy = HTML_HEADER) {
+        self.maxChunkSize = maxChunkSize;
+        self.maxOverlapSize = maxOverlapSize;
+        self.strategy = strategy;
+    }
+
+    # Chunks the provided document.
+    # + document - The input document to be chunked
+    # + return - An array of chunks, or an `ai:Error` if the chunking fails
+    public isolated function chunk(Document document) returns Chunk[]|Error {
+        return chunkHTMLDocument(document, self.maxChunkSize, self.maxOverlapSize, self.strategy);
+    }
+}
+
 # Provides functionality to recursively chunk a text document using a configurable strategy.
 #
 # The chunking process begins with the specified strategy and recursively falls back to
@@ -135,10 +168,32 @@ public isolated function chunkMarkdownDocument(Document document, int maxChunkSi
     return chunkMarkdownDocumentInner(document, maxChunkSize, maxOverlapSize, strategy);
 }
 
+# Provides functionality to recursively chunk a HTML document using a configurable strategy.
+#
+# The chunking process begins with the specified strategy and recursively falls back to
+# finer-grained strategies if the content exceeds the configured `maxChunkSize`. Overlapping content
+# between chunks can be controlled using `maxOverlapSize`.
+#
+# + document - The input document to be chunked
+# + maxChunkSize - Maximum number of characters allowed per chunk
+# + maxOverlapSize - Maximum number of characters to reuse from the end of the previous chunk when creating the next one.
+# + strategy - The HTML chunking strategy to use. Defaults to `HTML_HEADER`
+# + return - An array of chunks, or an `ai:Error` if the chunking fails.
+public isolated function chunkHTMLDocument(Document document, int maxChunkSize, int maxOverlapSize,
+        HTMLChunkStrategy strategy = HTML_HEADER) returns TextChunk[]|Error {
+    return chunkHTMLDocumentInner(document, maxChunkSize, maxOverlapSize, strategy);
+}
+
 isolated function chunkMarkdownDocumentInner(Document document, int chunkSize, int overlapSize,
         MarkdownChunkStrategy chunkStrategy, typedesc<TextChunk> textChunkType = TextChunk) returns TextChunk[]|Error = @java:Method {
     'class: "io.ballerina.stdlib.ai.Chunkers",
     name: "chunkMarkdownDocument"
+} external;
+
+isolated function chunkHTMLDocumentInner(Document document, int chunkSize, int overlapSize,
+        HTMLChunkStrategy chunkStrategy, typedesc<TextChunk> textChunkType = TextChunk) returns TextChunk[]|Error = @java:Method {
+    'class: "io.ballerina.stdlib.ai.Chunkers",
+    name: "chunkHTMLDocument"
 } external;
 
 # Represents the available strategies for recursively chunking a document.
@@ -206,6 +261,33 @@ public enum MarkdownChunkStrategy {
     PARAGRAPH,
 
     LINE,
+
+    SENTENCE,
+
+    WORD,
+
+    CHARACTER
+}
+
+# Represents the available strategies for chunking a HTML document.
+#
+# Each strategy attempts to include as much content as possible using a specific unit (such as paragraph or sentence).
+# If the content exceeds the defined `maxChunkSize` the strategy recursively falls back to a finer-grained unit until
+# the content fits within the limit.
+public enum HTMLChunkStrategy {
+
+    # Split text by HTML headers. Starting with `<h1>...</h1>` recursively falls back to `<h2>`, `<h3>`, `<h4>`, 
+    # `<h5>`, and `<h6>`. If chunk is still too large, it falls back to the HTML_PARAGRAPH, HTML_LINE, SENTENCE, WORD, and 
+    # CHARACTER strategies in that order.
+    HTML_HEADER,
+
+    # Split text by HTML paragraphs (`<p>...</p>`). If chunk is still too large, it falls back to the HTML_LINE, SENTENCE, WORD, and 
+    # CHARACTER strategies in that order.
+    HTML_PARAGRAPH,
+
+    # Split text by HTML breaks (`<br>`). If chunk is still too large, it falls back to the SENTENCE, WORD, and 
+    # CHARACTER strategies in that order.
+    HTML_LINE,
 
     SENTENCE,
 
