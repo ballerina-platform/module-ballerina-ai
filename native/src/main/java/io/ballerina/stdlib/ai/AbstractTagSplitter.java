@@ -18,13 +18,13 @@
 
 package io.ballerina.stdlib.ai;
 
+import io.ballerina.stdlib.ai.RecursiveChunker.Chunk;
+
 import java.util.Iterator;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
-import io.ballerina.stdlib.ai.RecursiveChunker.Chunk;
 
 abstract class AbstractTagSplitter implements RecursiveChunker.Splitter {
 
@@ -35,7 +35,8 @@ abstract class AbstractTagSplitter implements RecursiveChunker.Splitter {
     AbstractTagSplitter(String tagName) {
         this.tagName = tagName;
         // Pattern to match opening tag with optional attributes: <tagName> or <tagName attr="value">
-        this.openTagPattern = Pattern.compile("<" + Pattern.quote(tagName) + "(?:\\s[^>]*)?>", Pattern.CASE_INSENSITIVE);
+        this.openTagPattern = Pattern.compile("<" + Pattern.quote(tagName) + "(?:\\s[^>]*)?>",
+                Pattern.CASE_INSENSITIVE);
         this.closeTagPattern = Pattern.compile("</" + Pattern.quote(tagName) + ">", Pattern.CASE_INSENSITIVE);
     }
 
@@ -66,7 +67,6 @@ abstract class AbstractTagSplitter implements RecursiveChunker.Splitter {
         Map<String, String> suffixAttributes = Map.of();
 
         TagSplitterIterator(String content) {
-            assert content != null;
             this.content = content;
             this.currentState = SplitterState.INIT;
         }
@@ -104,7 +104,9 @@ abstract class AbstractTagSplitter implements RecursiveChunker.Splitter {
                     }
                     yield new Chunk(suffix, suffixAttributes);
                 case END:
-                    yield new Chunk(content, Map.of());
+                    String response = content;
+                    content = "";
+                    yield new Chunk(response, Map.of());
             };
         }
 

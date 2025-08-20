@@ -19,13 +19,12 @@
 package io.ballerina.stdlib.ai;
 
 import dev.langchain4j.data.segment.TextSegment;
+import io.ballerina.stdlib.ai.RecursiveChunker.Chunk;
+import io.ballerina.stdlib.ai.RecursiveChunker.Splitter;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
-
-import io.ballerina.stdlib.ai.RecursiveChunker.Chunk;
-import io.ballerina.stdlib.ai.RecursiveChunker.Splitter;
 
 import static java.util.stream.IntStream.range;
 
@@ -46,14 +45,19 @@ public class HTMLChunker {
                             new HTMLHeaderSplitter(4),
                             new HTMLHeaderSplitter(5),
                             new HTMLHeaderSplitter(6)));
+                    // fall through
                 case HTML_PARAGRAPH:
                     splitters.add(new HTMLParagraphSplitter());
+                    // fall through
                 case HTML_LINE:
                     splitters.add(new RecursiveChunker.SimpleDelimiterSplitter("<br>"));
+                    // fall through
                 case SENTENCE:
                     splitters.add(Splitter.createSentenceSplitter());
+                    // fall through
                 case WORD:
                     splitters.add(Splitter.createWordSplitter());
+                    // fall through
                 case CHARACTER:
                     splitters.add(Splitter.createCharacterSplitter());
             }

@@ -1,10 +1,10 @@
 package io.ballerina.stdlib.ai;
 
+import io.ballerina.stdlib.ai.RecursiveChunker.Chunk;
 import org.testng.Assert;
 import org.testng.annotations.Test;
 
 import java.util.Iterator;
-import io.ballerina.stdlib.ai.RecursiveChunker.Chunk;
 
 public class HTMLParagraphSplitterTest {
 
@@ -77,7 +77,8 @@ public class HTMLParagraphSplitterTest {
     @Test
     public void testParagraphWithAttributes() {
         HTMLParagraphSplitter splitter = new HTMLParagraphSplitter();
-        Iterator<Chunk> iterator = splitter.split("Before<p class=\"intro\" id=\"first\">Paragraph with attributes</p>After");
+        Iterator<Chunk> iterator = splitter.split(
+                "Before<p class=\"intro\" id=\"first\">Paragraph with attributes</p>After");
         
         // Should properly handle opening tag with attributes
         Assert.assertTrue(iterator.hasNext());
@@ -214,7 +215,8 @@ public class HTMLParagraphSplitterTest {
     @Test
     public void testParagraphsAroundOtherTags() {
         HTMLParagraphSplitter splitter = new HTMLParagraphSplitter();
-        Iterator<Chunk> iterator = splitter.split("<div>Div content</div><p>Paragraph content</p><span>Span content</span>");
+        Iterator<Chunk> iterator = splitter.split(
+                "<div>Div content</div><p>Paragraph content</p><span>Span content</span>");
         
         // Should get: prefix (including div tag), tag content, suffix (including span tag)
         Assert.assertTrue(iterator.hasNext());

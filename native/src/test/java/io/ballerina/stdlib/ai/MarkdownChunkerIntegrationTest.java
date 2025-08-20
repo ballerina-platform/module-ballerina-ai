@@ -1,6 +1,10 @@
 package io.ballerina.stdlib.ai;
 
 import dev.langchain4j.data.segment.TextSegment;
+import org.testng.Assert;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.DataProvider;
+import org.testng.annotations.Test;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -9,11 +13,6 @@ import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-
-import org.testng.Assert;
-import org.testng.annotations.BeforeMethod;
-import org.testng.annotations.DataProvider;
-import org.testng.annotations.Test;
 
 public class MarkdownChunkerIntegrationTest {
 

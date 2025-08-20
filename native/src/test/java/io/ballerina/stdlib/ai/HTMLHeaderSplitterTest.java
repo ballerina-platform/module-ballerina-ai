@@ -1,11 +1,10 @@
 package io.ballerina.stdlib.ai;
 
+import io.ballerina.stdlib.ai.RecursiveChunker.Chunk;
 import org.testng.Assert;
 import org.testng.annotations.Test;
 
 import java.util.Iterator;
-import java.util.Map;
-import io.ballerina.stdlib.ai.RecursiveChunker.Chunk;
 
 public class HTMLHeaderSplitterTest {
 
@@ -106,7 +105,8 @@ public class HTMLHeaderSplitterTest {
     @Test
     public void testHeaderWithAttributes() {
         HTMLHeaderSplitter splitter = new HTMLHeaderSplitter(1);
-        Iterator<Chunk> iterator = splitter.split("Before<h1 class=\"title\" id=\"main\">Header with Attributes</h1>After");
+        Iterator<Chunk> iterator = splitter.split(
+                "Before<h1 class=\"title\" id=\"main\">Header with Attributes</h1>After");
         
         // Now that attributes are supported, this should work properly
         // Prefix
