@@ -17,7 +17,7 @@ Metadata: {index=0, id=74}
     <h2>Section with Headers</h2>
 
 --- Chunk 2 ---
-Metadata: {h1=Document with Mixed Tags, index=1, h2=Section with Headers, id=77}
+Metadata: {heading2=Section with Headers, index=1, id=77, heading1=Document with Mixed Tags}
 <h2>Section with Headers</h2>
     <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>
 
@@ -25,7 +25,7 @@ Metadata: {h1=Document with Mixed Tags, index=1, h2=Section with Headers, id=77}
         <h3>Nested Header in Div</h3>
 
 --- Chunk 3 ---
-Metadata: {h1=Document with Mixed Tags, index=2, h2=Section with Headers, h3=Nested Header in Div, id=79}
+Metadata: {heading2=Section with Headers, heading3=Nested Header in Div, index=2, id=79, heading1=Document with Mixed Tags}
 <h3>Nested Header in Div</h3>
         <p>Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.</p>
 
@@ -38,7 +38,7 @@ Metadata: {h1=Document with Mixed Tags, index=2, h2=Section with Headers, h3=Nes
             
 
 --- Chunk 4 ---
-Metadata: {h1=Document with Mixed Tags, index=3, id=383}
+Metadata: {index=3, heading1=Document with Mixed Tags, id=383}
  <h4>Header in Section Tag</h4>
             <p>Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.</p>
         </section>
@@ -55,7 +55,7 @@ Metadata: {h1=Document with Mixed Tags, index=3, id=383}
             
 
 --- Chunk 5 ---
-Metadata: {h1=Document with Mixed Tags, index=4, h2=Another Top-Level Section, id=390}
+Metadata: {heading2=Another Top-Level Section, index=4, id=390, heading1=Document with Mixed Tags}
 <p>Main content inside article: Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium.</p>
         </main>
 
@@ -69,7 +69,7 @@ Metadata: {h1=Document with Mixed Tags, index=4, h2=Another Top-Level Section, i
             
 
 --- Chunk 6 ---
-Metadata: {h1=Document with Mixed Tags, index=5, h2=Another Top-Level Section, id=393}
+Metadata: {heading2=Another Top-Level Section, index=5, id=393, heading1=Document with Mixed Tags}
 <p>Footer with div: Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt.</p>
         </div>
     </footer>

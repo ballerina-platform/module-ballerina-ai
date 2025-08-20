@@ -26,7 +26,7 @@ public class HtmlHeaderSplitter extends AbstractTagSplitter {
 
     HtmlHeaderSplitter(int level) {
         super("h" + level);
-        this.type = "h" + level;
+        this.type = "heading" + level;
     }
 
     @Override

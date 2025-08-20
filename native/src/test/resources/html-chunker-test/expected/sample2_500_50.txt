@@ -11,7 +11,7 @@ Metadata: {index=0, id=20}
 <h2>Details</h2>
 
 --- Chunk 2 ---
-Metadata: {h1=Simple HTML Document, index=1, h2=Details, id=22}
+Metadata: {heading2=Details, index=1, id=22, heading1=Simple HTML Document}
 <h2>Details</h2>
 <p>Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas. Donec auctor blandit quam.</p>
 
