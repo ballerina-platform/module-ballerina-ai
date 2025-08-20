@@ -4,6 +4,9 @@ This file documents all significant changes made to the Ballerina AI package acr
 
 ## [Un-released]
 
+### Added
+- [Add HTMLChunker Implementation](https://github.com/ballerina-platform/ballerina-library/issues/8170)
+
 ### Updated
 - [Update batchEmbed to Validate Chunks at Element Level](https://github.com/ballerina-platform/ballerina-library/issues/8171)
 
