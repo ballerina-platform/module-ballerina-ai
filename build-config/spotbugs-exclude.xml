@@ -29,11 +29,10 @@
         <Bug code="FS"/>
     </Match>
     <Match>
-        <Class name="io.ballerina.stdlib.ai.HTMLChunker$HTMLChunkStrategy"/>
+        <Class name="io.ballerina.stdlib.ai.HtmlChunker$HtmlChunkStrategy"/>
         <Or>
             <Bug pattern="SF_SWITCH_FALLTHROUGH"/>
             <Bug code="SF"/>
         </Or>
     </Match>
 </FindBugsFilter>
-

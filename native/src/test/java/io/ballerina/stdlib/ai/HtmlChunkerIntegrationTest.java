@@ -14,7 +14,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-public class HTMLChunkerIntegrationTest {
+public class HtmlChunkerIntegrationTest {
 
     private static final int CHUNK_SIZE = 500;
     private static final int MAX_OVERLAP_SIZE = 50;
@@ -53,7 +53,7 @@ public class HTMLChunkerIntegrationTest {
         String inputContent = normalizeNewLines(loadFileContent(INPUT_DIR + "/" + fileName));
 
         // Chunk the content using HTMLChunker
-        List<TextSegment> chunks = HTMLChunker.chunk(inputContent, CHUNK_SIZE, MAX_OVERLAP_SIZE);
+        List<TextSegment> chunks = HtmlChunker.chunk(inputContent, CHUNK_SIZE, MAX_OVERLAP_SIZE);
 
         // Sanity checks
         validateTextSegmentIndices(chunks);
@@ -78,7 +78,7 @@ public class HTMLChunkerIntegrationTest {
         String inputContent = normalizeNewLines(loadFileContent(INPUT_DIR + "/" + fileName));
 
         // Chunk the content using HTMLChunker
-        List<TextSegment> chunks = HTMLChunker.chunk(inputContent, CHUNK_SIZE, 0);
+        List<TextSegment> chunks = HtmlChunker.chunk(inputContent, CHUNK_SIZE, 0);
 
         // Sanity checks
         validateTextSegmentIndices(chunks);
@@ -112,7 +112,7 @@ public class HTMLChunkerIntegrationTest {
                 <p>Content under header 3.</p>
                 """;
 
-        List<TextSegment> chunks = HTMLChunker.chunk(htmlWithHeaders, 200, 20);
+        List<TextSegment> chunks = HtmlChunker.chunk(htmlWithHeaders, 200, 20);
 
         Assert.assertFalse(chunks.isEmpty(), "HTML header chunking should produce chunks");
 

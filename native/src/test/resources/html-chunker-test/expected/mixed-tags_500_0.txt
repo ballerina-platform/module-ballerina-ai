@@ -9,68 +9,68 @@ Metadata: {index=0, id=74}
 </head>
 <body>
     <h1>Document with Mixed Tags</h1>
-    
+
     <div class="intro">
         <p>This document contains a mixture of header tags, div tags, and other HTML elements to test chunker behavior with complex structures.</p>
     </div>
-    
+
     <h2>Section with Headers</h2>
 
 --- Chunk 2 ---
 Metadata: {h1=Document with Mixed Tags, index=1, h2=Section with Headers, id=77}
 
     <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>
-    
+
     <div class="content-block">
         <h3>Nested Header in Div</h3>
 
 --- Chunk 3 ---
-Metadata: {h1=Document with Mixed Tags, index=2, h2=Section with Headers, h3=Nested Header in Div, id=79}
+Metadata: {h1=Document with Mixed Tags, index=2, h2=Section with Headers, h3=Nested Header in Div, id=80}
 
         <p>Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.</p>
-        
+
         <div class="sub-block">
             <p>Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.</p>
             <span>This is a span element with some text content that should be included in chunking.</span>
         </div>
-        
+
         <section class="article-section">
-            
+            <h4>Header in Section Tag</h4>
 
 --- Chunk 4 ---
-Metadata: {h1=Document with Mixed Tags, index=3, id=88}
-<h4>Header in Section Tag</h4>
+Metadata: {h1=Document with Mixed Tags, index=3, id=89}
+
             <p>Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.</p>
         </section>
     </div>
-    
+
     <h2>Another Top-Level Section</h2>
-    
+
     <article>
         <header>
             <p>This is inside an article header tag, not an h1-h6 header.</p>
         </header>
-        
+
         <main>
-            
+            <p>Main content inside article: Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium.</p>
 
 --- Chunk 5 ---
-Metadata: {h1=Document with Mixed Tags, index=4, h2=Another Top-Level Section, id=95}
-<p>Main content inside article: Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium.</p>
+Metadata: {h1=Document with Mixed Tags, index=4, h2=Another Top-Level Section, id=96}
+
         </main>
-        
+
         <aside>
             <p>Aside content: Totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo.</p>
         </aside>
     </article>
-    
+
     <footer>
         <div class="footer-content">
-            
+            <p>Footer with div: Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt.</p>
 
 --- Chunk 6 ---
 Metadata: {h1=Document with Mixed Tags, index=5, h2=Another Top-Level Section, id=98}
-<p>Footer with div: Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt.</p>
+
         </div>
     </footer>
 </body>

@@ -991,7 +991,7 @@ function testMarkdownChunkerClassWithVeryLongContent() returns error? {
 @test:Config {}
 function simpleHTMLChunking() returns error? {
     TextDocument doc = {content: "<p>test</p>"};
-    Chunk[] chunks = check chunkHTMLDocument(doc, 100, 40);
+    Chunk[] chunks = check chunkHtmlDocument(doc, 100, 40);
     test:assertEquals(chunks.length(), 1);
     test:assertEquals(chunks[0].content, "<p>test</p>");
 }
@@ -1013,7 +1013,7 @@ function testHTMLChunkingWithHeaders() returns error? {
 
     TextDocument doc = {content: htmlContent};
 
-    Chunk[] headerChunks = check chunkHTMLDocument(doc, 150, 20, HTML_HEADER);
+    Chunk[] headerChunks = check chunkHtmlDocument(doc, 150, 20, HTML_HEADER);
 
     test:assertTrue(headerChunks.length() > 1, msg = "Should produce multiple chunks with HTML_HEADER strategy");
 
@@ -1038,7 +1038,7 @@ function testHTMLChunkingWithParagraphs() returns error? {
 
     TextDocument doc = {content: htmlContent};
 
-    Chunk[] paragraphChunks = check chunkHTMLDocument(doc, 120, 25, HTML_PARAGRAPH);
+    Chunk[] paragraphChunks = check chunkHtmlDocument(doc, 120, 25, HTML_PARAGRAPH);
 
     test:assertTrue(paragraphChunks.length() > 1, msg = "Should produce multiple chunks with HTML_PARAGRAPH strategy");
 
@@ -1065,7 +1065,7 @@ function testHTMLChunkingWithBreaks() returns error? {
 
     TextDocument doc = {content: htmlContent};
 
-    Chunk[] lineChunks = check chunkHTMLDocument(doc, 60, 10, HTML_LINE);
+    Chunk[] lineChunks = check chunkHtmlDocument(doc, 60, 10, HTML_LINE);
 
     test:assertTrue(lineChunks.length() > 1, msg = "Should produce multiple chunks with HTML_LINE strategy");
 
@@ -1100,8 +1100,8 @@ function testHTMLChunkingWithMixedElements() returns error? {
 
     TextDocument doc = {content: htmlContent};
 
-    Chunk[] headerChunks = check chunkHTMLDocument(doc, 100, 20, HTML_HEADER);
-    Chunk[] paragraphChunks = check chunkHTMLDocument(doc, 120, 25, HTML_PARAGRAPH);
+    Chunk[] headerChunks = check chunkHtmlDocument(doc, 100, 20, HTML_HEADER);
+    Chunk[] paragraphChunks = check chunkHtmlDocument(doc, 120, 25, HTML_PARAGRAPH);
 
     test:assertTrue(headerChunks.length() > 1, msg = "Should produce multiple chunks with HTML_HEADER strategy");
     test:assertTrue(paragraphChunks.length() > 1, msg = "Should produce multiple chunks with HTML_PARAGRAPH strategy");
@@ -1126,7 +1126,7 @@ function testHTMLChunkingWithRecursiveFallback() returns error? {
 
     TextDocument doc = {content: htmlContent};
 
-    Chunk[] chunks = check chunkHTMLDocument(doc, 50, 10, HTML_HEADER);
+    Chunk[] chunks = check chunkHtmlDocument(doc, 50, 10, HTML_HEADER);
 
     test:assertTrue(chunks.length() > 1, msg = "Should produce multiple chunks using recursive fallback");
 
@@ -1153,7 +1153,7 @@ function testHTMLChunkingWithSentenceStrategy() returns error? {
 
     TextDocument doc = {content: htmlContent};
 
-    Chunk[] chunks = check chunkHTMLDocument(doc, 80, 15, SENTENCE);
+    Chunk[] chunks = check chunkHtmlDocument(doc, 80, 15, SENTENCE);
 
     test:assertTrue(chunks.length() > 1, msg = "Should produce multiple chunks with SENTENCE strategy");
 
@@ -1183,7 +1183,7 @@ function testHTMLChunkingWithWordStrategy() returns error? {
 
     TextDocument doc = {content: htmlContent};
 
-    Chunk[] chunks = check chunkHTMLDocument(doc, 40, 8, WORD);
+    Chunk[] chunks = check chunkHtmlDocument(doc, 40, 8, WORD);
 
     test:assertTrue(chunks.length() > 1, msg = "Should produce multiple chunks with WORD strategy");
 
@@ -1210,7 +1210,7 @@ function testHTMLChunkingWithCharacterStrategy() returns error? {
 
     TextDocument doc = {content: htmlContent};
 
-    Chunk[] chunks = check chunkHTMLDocument(doc, 20, 5, CHARACTER);
+    Chunk[] chunks = check chunkHtmlDocument(doc, 20, 5, CHARACTER);
 
     test:assertTrue(chunks.length() > 1, msg = "Should produce multiple chunks with CHARACTER strategy");
 
@@ -1225,7 +1225,7 @@ function testHTMLChunkingWithCharacterStrategy() returns error? {
 }
 
 @test:Config {}
-function testHTMLChunkerClassWithHeaderStrategy() returns error? {
+function testHtmlChunkerClassWithHeaderStrategy() returns error? {
     string htmlContent = "<h1>Main Title</h1>\n" +
         "<p>Introduction paragraph here.</p>\n" +
         "<h2>Section 1</h2>\n" +
@@ -1238,7 +1238,7 @@ function testHTMLChunkerClassWithHeaderStrategy() returns error? {
         "<p>Final summary.</p>";
 
     TextDocument doc = {content: htmlContent};
-    HTMLChunker chunker = new (100, 20, HTML_HEADER);
+    HtmlChunker chunker = new (100, 20, HTML_HEADER);
     Chunk[] chunks = check chunker.chunk(doc);
 
     test:assertTrue(chunks.length() > 1, msg = "Should produce multiple chunks with HTML_HEADER strategy");
@@ -1255,7 +1255,7 @@ function testHTMLChunkerClassWithHeaderStrategy() returns error? {
 }
 
 @test:Config {}
-function testHTMLChunkerClassWithParagraphStrategy() returns error? {
+function testHtmlChunkerClassWithParagraphStrategy() returns error? {
     string htmlContent = "<h1>Test Document</h1>\n" +
         "<p>First paragraph with some content. This paragraph contains multiple sentences. " +
         "It should be chunked properly according to the paragraph strategy.</p>\n" +
@@ -1266,7 +1266,7 @@ function testHTMLChunkerClassWithParagraphStrategy() returns error? {
         "<p>Final paragraph wraps up the document.</p>";
 
     TextDocument doc = {content: htmlContent};
-    HTMLChunker chunker = new (120, 25, HTML_PARAGRAPH);
+    HtmlChunker chunker = new (120, 25, HTML_PARAGRAPH);
     Chunk[] chunks = check chunker.chunk(doc);
 
     test:assertTrue(chunks.length() > 1, msg = "Should produce multiple chunks with HTML_PARAGRAPH strategy");
@@ -1284,7 +1284,7 @@ function testHTMLChunkerClassWithParagraphStrategy() returns error? {
 }
 
 @test:Config {}
-function testHTMLChunkerClassWithLineStrategy() returns error? {
+function testHtmlChunkerClassWithLineStrategy() returns error? {
     string htmlContent = "<h1>Line-based HTML Chunking</h1>\n" +
         "<p>Line 1: This is the first line of content.<br>\n" +
         "Line 2: This is the second line with different content.<br>\n" +
@@ -1296,7 +1296,7 @@ function testHTMLChunkerClassWithLineStrategy() returns error? {
         "Line 8: Eighth line concludes the section.</p>";
 
     TextDocument doc = {content: htmlContent};
-    HTMLChunker chunker = new (50, 10, HTML_LINE);
+    HtmlChunker chunker = new (50, 10, HTML_LINE);
     Chunk[] chunks = check chunker.chunk(doc);
 
     test:assertTrue(chunks.length() > 1, msg = "Should produce multiple chunks with HTML_LINE strategy");
@@ -1313,7 +1313,7 @@ function testHTMLChunkerClassWithLineStrategy() returns error? {
 }
 
 @test:Config {}
-function testHTMLChunkerClassWithDefaultStrategy() returns error? {
+function testHtmlChunkerClassWithDefaultStrategy() returns error? {
     string htmlContent = "<h1>Default Strategy Test</h1>\n" +
         "<p>This test uses the default HTML_HEADER strategy.</p>\n" +
         "<h2>Section 1</h2>\n" +
@@ -1322,7 +1322,7 @@ function testHTMLChunkerClassWithDefaultStrategy() returns error? {
         "<p>Content for section 2.</p>";
 
     TextDocument doc = {content: htmlContent};
-    HTMLChunker chunker = new (); // Uses default values
+    HtmlChunker chunker = new (); // Uses default values
     Chunk[] chunks = check chunker.chunk(doc);
 
     test:assertTrue(chunks.length() > 0, msg = "Should produce at least one chunk with default strategy");
@@ -1338,7 +1338,7 @@ function testHTMLChunkerClassWithDefaultStrategy() returns error? {
 }
 
 @test:Config {}
-function testHTMLChunkerClassWithComplexHTML() returns error? {
+function testHtmlChunkerClassWithComplexHtml() returns error? {
     string htmlContent = "<html><head><title>Complex HTML</title></head><body>\n" +
         "<h1>Complex HTML Document</h1>\n" +
         "<p>This document contains various HTML elements.</p>\n" +
@@ -1362,7 +1362,7 @@ function testHTMLChunkerClassWithComplexHTML() returns error? {
         "</body></html>";
 
     TextDocument doc = {content: htmlContent};
-    HTMLChunker chunker = new (100, 20, HTML_HEADER);
+    HtmlChunker chunker = new (100, 20, HTML_HEADER);
     Chunk[] chunks = check chunker.chunk(doc);
 
     test:assertTrue(chunks.length() > 1, msg = "Should produce multiple chunks with complex HTML");
@@ -1380,7 +1380,7 @@ function testHTMLChunkerClassWithComplexHTML() returns error? {
 }
 
 @test:Config {}
-function testHTMLChunkerClassWithVeryLongContent() returns error? {
+function testHtmlChunkerClassWithVeryLongContent() returns error? {
     string htmlContent = "<h1>Very Long HTML Document</h1>\n" +
         "<p>This is a very long paragraph that exceeds the maximum chunk size limit. " +
         "It contains multiple sentences that should trigger recursive fallback to finer-grained chunking strategies. " +
@@ -1389,7 +1389,7 @@ function testHTMLChunkerClassWithVeryLongContent() returns error? {
         "The recursive fallback is essential for handling documents with very long sections that don't have natural break points at the specified strategy level.</p>";
 
     TextDocument doc = {content: htmlContent};
-    HTMLChunker chunker = new (50, 10, HTML_HEADER);
+    HtmlChunker chunker = new (50, 10, HTML_HEADER);
     Chunk[] chunks = check chunker.chunk(doc);
 
     test:assertTrue(chunks.length() > 1, msg = "Should produce multiple chunks using recursive fallback");
