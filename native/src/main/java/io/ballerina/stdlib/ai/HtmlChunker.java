@@ -19,8 +19,6 @@
 package io.ballerina.stdlib.ai;
 
 import dev.langchain4j.data.segment.TextSegment;
-import io.ballerina.stdlib.ai.RecursiveChunker.Chunk;
-import io.ballerina.stdlib.ai.RecursiveChunker.Splitter;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -28,45 +26,45 @@ import java.util.Set;
 
 import static java.util.stream.IntStream.range;
 
-public class HTMLChunker {
+public class HtmlChunker {
 
-    enum HTMLChunkStrategy {
+    enum HtmlChunkStrategy {
         HTML_HEADER, HTML_PARAGRAPH, HTML_LINE, SENTENCE, WORD, CHARACTER;
 
-        public List<Splitter> getSplitters() {
-            List<Splitter> splitters = new ArrayList<>();
+        public List<RecursiveChunker.Splitter> getSplitters() {
+            List<RecursiveChunker.Splitter> splitters = new ArrayList<>();
 
             switch (this) {
                 case HTML_HEADER:
                     splitters.addAll(List.of(
-                            new HTMLHeaderSplitter(1),
-                            new HTMLHeaderSplitter(2),
-                            new HTMLHeaderSplitter(3),
-                            new HTMLHeaderSplitter(4),
-                            new HTMLHeaderSplitter(5),
-                            new HTMLHeaderSplitter(6)));
+                            new HtmlHeaderSplitter(1),
+                            new HtmlHeaderSplitter(2),
+                            new HtmlHeaderSplitter(3),
+                            new HtmlHeaderSplitter(4),
+                            new HtmlHeaderSplitter(5),
+                            new HtmlHeaderSplitter(6)));
                     // fall through
                 case HTML_PARAGRAPH:
-                    splitters.add(new HTMLParagraphSplitter());
+                    splitters.add(new HtmlParagraphSplitter());
                     // fall through
                 case HTML_LINE:
                     splitters.add(new RecursiveChunker.SimpleDelimiterSplitter("<br>"));
                     // fall through
                 case SENTENCE:
-                    splitters.add(Splitter.createSentenceSplitter());
+                    splitters.add(RecursiveChunker.Splitter.createSentenceSplitter());
                     // fall through
                 case WORD:
-                    splitters.add(Splitter.createWordSplitter());
+                    splitters.add(RecursiveChunker.Splitter.createWordSplitter());
                     // fall through
                 case CHARACTER:
-                    splitters.add(Splitter.createCharacterSplitter());
+                    splitters.add(RecursiveChunker.Splitter.createCharacterSplitter());
             }
 
             return splitters;
         }
     }
 
-    static List<TextSegment> chunk(String content, HTMLChunkStrategy strategy, int maxChunkSize, int maxOverlapSize) {
+    static List<TextSegment> chunk(String content, HtmlChunkStrategy strategy, int maxChunkSize, int maxOverlapSize) {
         if (maxChunkSize <= 0) {
             throw new IllegalArgumentException("Chunk size must be greater than 0");
         }
@@ -74,7 +72,7 @@ public class HTMLChunker {
             throw new IllegalArgumentException("Max overlap size must be less than or equal to chunk size");
         }
         RecursiveChunker chunker = new RecursiveChunker(Set.of());
-        List<Chunk> chunks =
+        List<RecursiveChunker.Chunk> chunks =
                 chunker.chunkUsingSplitters(content, strategy.getSplitters(), maxChunkSize, maxOverlapSize);
         return range(0, chunks.size())
                 .mapToObj(i -> chunks.get(i).toTextSegment(i))
@@ -83,8 +81,8 @@ public class HTMLChunker {
 
     static List<TextSegment> chunk(String content, int chunkSize, int maxOverlapSize) {
         RecursiveChunker chunker = new RecursiveChunker(Set.of());
-        List<Chunk> chunks =
-                chunker.chunkUsingSplitters(content, HTMLChunkStrategy.HTML_HEADER.getSplitters(), chunkSize,
+        List<RecursiveChunker.Chunk> chunks =
+                chunker.chunkUsingSplitters(content, HtmlChunkStrategy.HTML_HEADER.getSplitters(), chunkSize,
                         maxOverlapSize);
         return range(0, chunks.size())
                 .mapToObj(i -> chunks.get(i).toTextSegment(i))

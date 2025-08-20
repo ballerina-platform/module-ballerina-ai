@@ -18,28 +18,9 @@
 
 package io.ballerina.stdlib.ai;
 
-import java.util.Map;
+public class HtmlParagraphSplitter extends AbstractTagSplitter {
 
-public class HTMLHeaderSplitter extends AbstractTagSplitter {
-
-    final String type;
-
-    HTMLHeaderSplitter(int level) {
-        super("h" + level);
-        this.type = "h" + level;
-    }
-
-    @Override
-    void onBreakdown(TagSplitterIterator iterator) {
-        if (iterator.currentState != SplitterState.PREFIX) {
-            return;
-        }
-        String tagContent = iterator.tag;
-        // Extract content by removing HTML tags
-        String cleanContent = tagContent.replaceAll("<[^>]*>", "").trim();
-        Map<String, String> attributes = Map.of(type, cleanContent);
-
-        iterator.suffixAttributes = attributes;
-        iterator.tagAttributes = attributes;
+    HtmlParagraphSplitter() {
+        super("p");
     }
 }

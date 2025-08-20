@@ -90,20 +90,20 @@ public class Chunkers {
         }
     }
 
-    public static Object chunkHTMLDocument(BMap<BString, Object> document, int chunkSize, int maxOverlapSize,
-                                          BString chunkStrategy, BTypedesc textChunkType) {
+    public static Object chunkHtmlDocument(BMap<BString, Object> document, int chunkSize, int maxOverlapSize,
+                                                  BString chunkStrategy, BTypedesc textChunkType) {
         try {
             String content = document.getStringValue(StringUtils.fromString(CONTENT_FIELD_NAME)).getValue();
-            HTMLChunker.HTMLChunkStrategy strategy = switch (chunkStrategy.getValue()) {
-                case "HTML_HEADER" -> HTMLChunker.HTMLChunkStrategy.HTML_HEADER;
-                case "HTML_PARAGRAPH" -> HTMLChunker.HTMLChunkStrategy.HTML_PARAGRAPH;
-                case "HTML_LINE" -> HTMLChunker.HTMLChunkStrategy.HTML_LINE;
-                case "SENTENCE" -> HTMLChunker.HTMLChunkStrategy.SENTENCE;
-                case "WORD" -> HTMLChunker.HTMLChunkStrategy.WORD;
-                case "CHARACTER" -> HTMLChunker.HTMLChunkStrategy.CHARACTER;
+            HtmlChunker.HtmlChunkStrategy strategy = switch (chunkStrategy.getValue()) {
+                case "HTML_HEADER" -> HtmlChunker.HtmlChunkStrategy.HTML_HEADER;
+                case "HTML_PARAGRAPH" -> HtmlChunker.HtmlChunkStrategy.HTML_PARAGRAPH;
+                case "HTML_LINE" -> HtmlChunker.HtmlChunkStrategy.HTML_LINE;
+                case "SENTENCE" -> HtmlChunker.HtmlChunkStrategy.SENTENCE;
+                case "WORD" -> HtmlChunker.HtmlChunkStrategy.WORD;
+                case "CHARACTER" -> HtmlChunker.HtmlChunkStrategy.CHARACTER;
                 default -> throw new IllegalArgumentException("unknown chunking strategy " + chunkStrategy.getValue());
             };
-            List<TextSegment> textSegments = HTMLChunker.chunk(content, strategy, chunkSize, maxOverlapSize);
+            List<TextSegment> textSegments = HtmlChunker.chunk(content, strategy, chunkSize, maxOverlapSize);
             return createTextChunkRecordArray(document, textSegments, textChunkType.getDescribingType());
         } catch (RuntimeException e) {
             return handleChunkingErrors(e);

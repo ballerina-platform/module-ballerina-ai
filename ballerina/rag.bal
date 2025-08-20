@@ -152,7 +152,7 @@ isolated function guessChunker(Document|Chunk doc) returns Chunker {
         return new MarkdownChunker();
     }
     if mimeType == "text/html" {
-        return new HTMLChunker();
+        return new HtmlChunker();
     }
     // Fallback to file name
     string? fileName = doc.metadata?.fileName;
@@ -161,7 +161,7 @@ isolated function guessChunker(Document|Chunk doc) returns Chunker {
             return new MarkdownChunker();
         }
         if fileName.endsWith(".html") {
-            return new HTMLChunker();
+            return new HtmlChunker();
         }
     }
     return new GenericRecursiveChunker();
