@@ -90,6 +90,26 @@ public class Chunkers {
         }
     }
 
+    public static Object chunkHTMLDocument(BMap<BString, Object> document, int chunkSize, int maxOverlapSize,
+                                          BString chunkStrategy, BTypedesc textChunkType) {
+        try {
+            String content = document.getStringValue(StringUtils.fromString(CONTENT_FIELD_NAME)).getValue();
+            HTMLChunker.HTMLChunkStrategy strategy = switch (chunkStrategy.getValue()) {
+                case "HTML_HEADER" -> HTMLChunker.HTMLChunkStrategy.HTML_HEADER;
+                case "HTML_PARAGRAPH" -> HTMLChunker.HTMLChunkStrategy.HTML_PARAGRAPH;
+                case "HTML_LINE" -> HTMLChunker.HTMLChunkStrategy.HTML_LINE;
+                case "SENTENCE" -> HTMLChunker.HTMLChunkStrategy.SENTENCE;
+                case "WORD" -> HTMLChunker.HTMLChunkStrategy.WORD;
+                case "CHARACTER" -> HTMLChunker.HTMLChunkStrategy.CHARACTER;
+                default -> throw new IllegalArgumentException("unknown chunking strategy " + chunkStrategy.getValue());
+            };
+            List<TextSegment> textSegments = HTMLChunker.chunk(content, strategy, chunkSize, maxOverlapSize);
+            return createTextChunkRecordArray(document, textSegments, textChunkType.getDescribingType());
+        } catch (RuntimeException e) {
+            return handleChunkingErrors(e);
+        }
+    }
+
     private static DocumentSplitter getDocumentSplitter(BString chunkStrategy, int maxChunkSize, int overlapSize) {
         return switch (ChunkStrategy.fromString(chunkStrategy.getValue())) {
             case LINE -> new DocumentByLineSplitter(maxChunkSize, overlapSize);
