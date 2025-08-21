@@ -1,7 +1,7 @@
 500 0
 
 --- Chunk 1 ---
-Metadata: {index=0, id=47}
+Metadata: {"id": "47","index": "0"}
 # Technical Documentation
 
 ## Overview
@@ -24,7 +24,7 @@ Before starting the installation process, ensure that all system requirements ar
 
 
 --- Chunk 2 ---
-Metadata: {index=1, id=54}
+Metadata: {"id": "54","index": "1"}
 
 Navigate to the download section and select the appropriate package for your operating system.
 
@@ -44,7 +44,7 @@ Edit the configuration file located in the config directory. Set the following p
 
 
 --- Chunk 3 ---
-Metadata: {index=2, id=57}
+Metadata: {"id": "57","index": "2"}
 
 ### Basic Usage
 
@@ -64,7 +64,7 @@ For advanced users, additional configuration options are available in the advanc
 
 
 --- Chunk 4 ---
-Metadata: {header=Troubleshooting, index=3, id=59}
+Metadata: {"header": "Troubleshooting","id": "59","index": "3"}
 
 ### Common Issues
 

@@ -32,6 +32,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import static io.ballerina.stdlib.ai.TestUtil.formatChunksOutput;
+
 public class HtmlChunkerIntegrationTest {
 
     private static final int CHUNK_SIZE = 500;
@@ -138,10 +140,10 @@ public class HtmlChunkerIntegrationTest {
         boolean hasHeaderMetadata = chunks.stream()
                 .anyMatch(chunk -> {
                     Map<String, Object> metadata = chunk.metadata().toMap();
-                    return metadata.containsKey("h1") || metadata.containsKey("h2") || metadata.containsKey("h3");
+                    return metadata.containsKey("header1") || metadata.containsKey("header2")
+                            || metadata.containsKey("header3");
                 });
-        // Note: Due to fallthrough behavior, not all chunks may have header metadata
-        // The test should just verify that the strategy works without errors
+        Assert.assertTrue(hasHeaderMetadata, "HTML header chunking should produce chunks with header metadata");
     }
 
 
@@ -154,28 +156,6 @@ public class HtmlChunkerIntegrationTest {
         return Paths.get(System.getProperty("user.dir"))
                 .resolve("src/test/resources")
                 .resolve(relativePath);
-    }
-
-    private String formatChunksOutput(List<TextSegment> chunks, int chunkSize, int maxOverlapSize) {
-        StringBuilder sb = new StringBuilder();
-        sb.append(chunkSize).append(" ").append(maxOverlapSize).append("\n\n");
-
-        for (int i = 0; i < chunks.size(); i++) {
-            sb.append("--- Chunk ").append(i + 1).append(" ---\n");
-
-            // Add metadata if present
-            Map<String, Object> metadata = chunks.get(i).metadata().toMap();
-            if (!metadata.isEmpty()) {
-                sb.append("Metadata: ").append(metadata).append("\n");
-            }
-
-            sb.append(chunks.get(i).text());
-            if (i < chunks.size() - 1) {
-                sb.append("\n\n");
-            }
-        }
-
-        return sb.toString();
     }
 
     private void validateTextSegmentMaxSize(List<TextSegment> chunks, int maxSize) {

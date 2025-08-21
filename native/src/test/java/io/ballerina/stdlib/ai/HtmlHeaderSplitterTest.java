@@ -41,15 +41,17 @@ public class HtmlHeaderSplitterTest {
         Assert.assertTrue(iterator.hasNext());
         Chunk tag = iterator.next();
         Assert.assertEquals(tag.piece(), "<h1>Main Title</h1>");
-        Assert.assertEquals(tag.metadata().size(), 1);
-        Assert.assertEquals(tag.metadata().get("heading1"), "Main Title");
+        Assert.assertEquals(tag.metadata().size(), 2);
+        Assert.assertEquals(tag.metadata().get("header1"), "Main Title");
+        Assert.assertEquals(tag.metadata().get("header"), "Main Title");
 
         // Suffix - with heading1 metadata
         Assert.assertTrue(iterator.hasNext());
         Chunk suffix = iterator.next();
         Assert.assertEquals(suffix.piece(), "After");
-        Assert.assertEquals(suffix.metadata().size(), 1);
-        Assert.assertEquals(suffix.metadata().get("heading1"), "Main Title");
+        Assert.assertEquals(suffix.metadata().size(), 2);
+        Assert.assertEquals(suffix.metadata().get("header1"), "Main Title");
+        Assert.assertEquals(tag.metadata().get("header"), "Main Title");
 
         Assert.assertFalse(iterator.hasNext());
     }
@@ -69,13 +71,13 @@ public class HtmlHeaderSplitterTest {
         Assert.assertTrue(iterator.hasNext());
         Chunk tag = iterator.next();
         Assert.assertEquals(tag.piece(), "<h2>Subtitle</h2>");
-        Assert.assertEquals(tag.metadata().get("heading2"), "Subtitle");
+        Assert.assertEquals(tag.metadata().get("header2"), "Subtitle");
 
         // Suffix - with heading2 metadata
         Assert.assertTrue(iterator.hasNext());
         Chunk suffix = iterator.next();
         Assert.assertEquals(suffix.piece(), "More content");
-        Assert.assertEquals(suffix.metadata().get("heading2"), "Subtitle");
+        Assert.assertEquals(suffix.metadata().get("header2"), "Subtitle");
 
         Assert.assertFalse(iterator.hasNext());
     }
@@ -94,12 +96,12 @@ public class HtmlHeaderSplitterTest {
         Assert.assertTrue(iterator.hasNext());
         Chunk tag1 = iterator.next();
         Assert.assertEquals(tag1.piece(), "<h1>First</h1>");
-        Assert.assertEquals(tag1.metadata().get("heading1"), "First");
+        Assert.assertEquals(tag1.metadata().get("header1"), "First");
 
         Assert.assertTrue(iterator.hasNext());
         Chunk suffix1 = iterator.next();
         Assert.assertEquals(suffix1.piece(), "Middle");
-        Assert.assertEquals(suffix1.metadata().get("heading1"), "First");
+        Assert.assertEquals(suffix1.metadata().get("header1"), "First");
 
         // Second header sequence
         Assert.assertTrue(iterator.hasNext());
@@ -110,12 +112,12 @@ public class HtmlHeaderSplitterTest {
         Assert.assertTrue(iterator.hasNext());
         Chunk tag2 = iterator.next();
         Assert.assertEquals(tag2.piece(), "<h1>Second</h1>");
-        Assert.assertEquals(tag2.metadata().get("heading1"), "Second");
+        Assert.assertEquals(tag2.metadata().get("header1"), "Second");
 
         Assert.assertTrue(iterator.hasNext());
         Chunk suffix2 = iterator.next();
         Assert.assertEquals(suffix2.piece(), "End");
-        Assert.assertEquals(suffix2.metadata().get("heading1"), "Second");
+        Assert.assertEquals(suffix2.metadata().get("header1"), "Second");
 
         Assert.assertFalse(iterator.hasNext());
     }
@@ -137,13 +139,13 @@ public class HtmlHeaderSplitterTest {
         Assert.assertTrue(iterator.hasNext());
         Chunk tag = iterator.next();
         Assert.assertEquals(tag.piece(), "<h1 class=\"title\" id=\"main\">Header with Attributes</h1>");
-        Assert.assertEquals(tag.metadata().get("heading1"), "Header with Attributes");
+        Assert.assertEquals(tag.metadata().get("header1"), "Header with Attributes");
 
         // Suffix
         Assert.assertTrue(iterator.hasNext());
         Chunk suffix = iterator.next();
         Assert.assertEquals(suffix.piece(), "After");
-        Assert.assertEquals(suffix.metadata().get("heading1"), "Header with Attributes");
+        Assert.assertEquals(suffix.metadata().get("header1"), "Header with Attributes");
 
         Assert.assertFalse(iterator.hasNext());
     }
@@ -163,13 +165,13 @@ public class HtmlHeaderSplitterTest {
         Assert.assertTrue(iterator.hasNext());
         Chunk tag = iterator.next();
         Assert.assertEquals(tag.piece(), "<h2>Header with <em>emphasis</em></h2>");
-        Assert.assertEquals(tag.metadata().get("heading2"), "Header with emphasis");
+        Assert.assertEquals(tag.metadata().get("header2"), "Header with emphasis");
 
         // Suffix
         Assert.assertTrue(iterator.hasNext());
         Chunk suffix = iterator.next();
         Assert.assertEquals(suffix.piece(), "More text");
-        Assert.assertEquals(suffix.metadata().get("heading2"), "Header with emphasis");
+        Assert.assertEquals(suffix.metadata().get("header2"), "Header with emphasis");
 
         Assert.assertFalse(iterator.hasNext());
     }
@@ -190,12 +192,12 @@ public class HtmlHeaderSplitterTest {
             // Check tag
             Assert.assertTrue(iterator.hasNext());
             Chunk tag = iterator.next();
-            Assert.assertEquals(tag.metadata().get("heading" + level), "Level " + level + " Header");
+            Assert.assertEquals(tag.metadata().get("header" + level), "Level " + level + " Header");
 
             // Check suffix
             Assert.assertTrue(iterator.hasNext());
             Chunk suffix = iterator.next();
-            Assert.assertEquals(suffix.metadata().get("heading" + level), "Level " + level + " Header");
+            Assert.assertEquals(suffix.metadata().get("header" + level), "Level " + level + " Header");
         }
     }
 
@@ -213,13 +215,13 @@ public class HtmlHeaderSplitterTest {
         Assert.assertTrue(iterator.hasNext());
         Chunk tag = iterator.next();
         Assert.assertEquals(tag.piece(), "<h1></h1>");
-        Assert.assertEquals(tag.metadata().get("heading1"), "");
+        Assert.assertEquals(tag.metadata().get("header1"), "");
 
         // Suffix
         Assert.assertTrue(iterator.hasNext());
         Chunk suffix = iterator.next();
         Assert.assertEquals(suffix.piece(), "After");
-        Assert.assertEquals(suffix.metadata().get("heading1"), "");
+        Assert.assertEquals(suffix.metadata().get("header1"), "");
 
         Assert.assertFalse(iterator.hasNext());
     }
@@ -235,12 +237,12 @@ public class HtmlHeaderSplitterTest {
         // Tag - whitespace should be trimmed
         Assert.assertTrue(iterator.hasNext());
         Chunk tag = iterator.next();
-        Assert.assertEquals(tag.metadata().get("heading3"), "Whitespace Header");
+        Assert.assertEquals(tag.metadata().get("header3"), "Whitespace Header");
 
         // Suffix
         Assert.assertTrue(iterator.hasNext());
         Chunk suffix = iterator.next();
-        Assert.assertEquals(suffix.metadata().get("heading3"), "Whitespace Header");
+        Assert.assertEquals(suffix.metadata().get("header3"), "Whitespace Header");
 
         Assert.assertFalse(iterator.hasNext());
     }
@@ -279,13 +281,13 @@ public class HtmlHeaderSplitterTest {
         Assert.assertTrue(iterator.hasNext());
         Chunk tag = iterator.next();
         Assert.assertEquals(tag.piece(), "<h1>First Header</h1>");
-        Assert.assertEquals(tag.metadata().get("heading1"), "First Header");
+        Assert.assertEquals(tag.metadata().get("header1"), "First Header");
 
         // Suffix
         Assert.assertTrue(iterator.hasNext());
         Chunk suffix = iterator.next();
         Assert.assertEquals(suffix.piece(), "Content after");
-        Assert.assertEquals(suffix.metadata().get("heading1"), "First Header");
+        Assert.assertEquals(suffix.metadata().get("header1"), "First Header");
 
         Assert.assertFalse(iterator.hasNext());
     }
@@ -304,13 +306,13 @@ public class HtmlHeaderSplitterTest {
         Assert.assertTrue(iterator.hasNext());
         Chunk tag = iterator.next();
         Assert.assertEquals(tag.piece(), "<h2>Last Header</h2>");
-        Assert.assertEquals(tag.metadata().get("heading2"), "Last Header");
+        Assert.assertEquals(tag.metadata().get("header2"), "Last Header");
 
         // Empty suffix
         Assert.assertTrue(iterator.hasNext());
         Chunk suffix = iterator.next();
         Assert.assertEquals(suffix.piece(), "");
-        Assert.assertEquals(suffix.metadata().get("heading2"), "Last Header");
+        Assert.assertEquals(suffix.metadata().get("header2"), "Last Header");
 
         Assert.assertFalse(iterator.hasNext());
     }

@@ -79,7 +79,7 @@ public class MarkdownChunkerIntegrationTest {
         validateChunkContent(chunks, inputContent);
 
         // Format output as specified: "500 50" followed by chunks
-        String actualOutput = formatChunksOutput(chunks, CHUNK_SIZE, MAX_OVERLAP_SIZE);
+        String actualOutput = TestUtil.formatChunksOutput(chunks, CHUNK_SIZE, MAX_OVERLAP_SIZE);
 
         // Handle BLESS environment variable and expected file comparison
         String expectedFileName = fileName.replace(".md", "_" + CHUNK_SIZE + "_" + MAX_OVERLAP_SIZE + ".txt");
@@ -106,7 +106,7 @@ public class MarkdownChunkerIntegrationTest {
         Assert.assertEquals(combinedChunks, inputContent,
                 "Chunking without overlap should return the original content for " + fileName);
 
-        String actualOutput = formatChunksOutput(chunks, CHUNK_SIZE, 0);
+        String actualOutput = TestUtil.formatChunksOutput(chunks, CHUNK_SIZE, 0);
 
         // Handle BLESS environment variable and expected file comparison
         String expectedFileName = fileName.replace(".md", "_" + CHUNK_SIZE + "_" + 0 + ".txt");
@@ -126,28 +126,6 @@ public class MarkdownChunkerIntegrationTest {
         return Paths.get(System.getProperty("user.dir"))
                 .resolve("src/test/resources")
                 .resolve(relativePath);
-    }
-
-    private String formatChunksOutput(List<TextSegment> chunks, int chunkSize, int maxOverlapSize) {
-        StringBuilder sb = new StringBuilder();
-        sb.append(chunkSize).append(" ").append(maxOverlapSize).append("\n\n");
-
-        for (int i = 0; i < chunks.size(); i++) {
-            sb.append("--- Chunk ").append(i + 1).append(" ---\n");
-
-            // Add metadata if present
-            Map<String, Object> metadata = chunks.get(i).metadata().toMap();
-            if (!metadata.isEmpty()) {
-                sb.append("Metadata: ").append(metadata).append("\n");
-            }
-
-            sb.append(chunks.get(i).text());
-            if (i < chunks.size() - 1) {
-                sb.append("\n\n");
-            }
-        }
-
-        return sb.toString();
     }
 
     @DataProvider(name = "chunkStrategies")

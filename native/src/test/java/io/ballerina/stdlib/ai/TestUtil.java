@@ -18,8 +18,13 @@
 
 package io.ballerina.stdlib.ai;
 
+import dev.langchain4j.data.segment.TextSegment;
+
 import java.lang.reflect.Field;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.Collectors;
 
 public class TestUtil {
 
@@ -28,5 +33,29 @@ public class TestUtil {
         nextIdField.setAccessible(true);
         AtomicLong nextId = (AtomicLong) nextIdField.get(null);
         nextId.set(0);
+    }
+
+    static String formatChunksOutput(List<TextSegment> chunks, int chunkSize, int maxOverlapSize) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(chunkSize).append(" ").append(maxOverlapSize).append("\n\n");
+
+        for (int i = 0; i < chunks.size(); i++) {
+            sb.append("--- Chunk ").append(i + 1).append(" ---\n");
+
+            // Add metadata if present
+            Map<String, Object> metadata = chunks.get(i).metadata().toMap();
+            String body = metadata.keySet().stream().sorted().map(key -> """
+                            "%s": "%s"
+                            """.formatted(key, metadata.get(key).toString())).map(String::trim)
+                    .collect(Collectors.joining(","));
+            sb.append("Metadata: {").append(body).append("}\n");
+
+            sb.append(chunks.get(i).text());
+            if (i < chunks.size() - 1) {
+                sb.append("\n\n");
+            }
+        }
+
+        return sb.toString();
     }
 }

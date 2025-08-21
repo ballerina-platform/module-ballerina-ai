@@ -1,7 +1,7 @@
 500 50
 
 --- Chunk 1 ---
-Metadata: {index=0, id=20}
+Metadata: {"header1": "Simple HTML Document","id": "18","index": "0"}
 <h1>Simple HTML Document</h1>
 <p>This is a basic HTML document without the full structure.</p>
 
@@ -11,7 +11,7 @@ Metadata: {index=0, id=20}
 <h2>Details</h2>
 
 --- Chunk 2 ---
-Metadata: {heading2=Details, index=1, id=22, heading1=Simple HTML Document}
+Metadata: {"header": "Details","header1": "Simple HTML Document","header2": "Details","id": "20","index": "1"}
 <h2>Details</h2>
 <p>Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas. Donec auctor blandit quam.</p>
 

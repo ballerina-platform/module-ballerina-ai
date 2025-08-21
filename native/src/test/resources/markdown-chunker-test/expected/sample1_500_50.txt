@@ -1,7 +1,7 @@
 500 50
 
 --- Chunk 1 ---
-Metadata: {index=0, id=35}
+Metadata: {"id": "35","index": "0"}
 # Sample Markdown Document
 
 This is a test markdown file to demonstrate the chunking functionality.
@@ -10,7 +10,7 @@ This is a test markdown file to demonstrate the chunking functionality.
 
 
 --- Chunk 2 ---
-Metadata: {index=1, id=38}
+Metadata: {"id": "38","index": "1"}
 
 ## Introduction
 
@@ -24,7 +24,7 @@ Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu 
 
 
 --- Chunk 3 ---
-Metadata: {index=2, id=42}
+Metadata: {"id": "42","index": "2"}
 
 ## Main Content
 
@@ -38,7 +38,7 @@ Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed 
 
 
 --- Chunk 4 ---
-Metadata: {index=3, id=47}
+Metadata: {"id": "47","index": "3"}
 
 ### Section 2: Advanced Topics
 
@@ -52,7 +52,7 @@ Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis suscipit la
 
 
 --- Chunk 5 ---
-Metadata: {index=4, id=52}
+Metadata: {"id": "52","index": "4"}
 
 #### Subsection 2.2
 
@@ -66,7 +66,7 @@ At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praese
 
 
 --- Chunk 6 ---
-Metadata: {header=Final Thoughts, index=5, id=54}
+Metadata: {"header": "Final Thoughts","id": "54","index": "5"}
 
 ### Final Thoughts
 

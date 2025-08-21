@@ -132,6 +132,9 @@ class RecursiveChunker {
         List<Chunk> mergeBuffer = new ArrayList<>();
         int mergeBufferSize = 0;
         for (Chunk piece : pieces) {
+            if (piece.isEmpty()) {
+                continue;
+            }
             // If this piece is non-mergeable, flush buffer and add it directly
             if (isNonMergeable(piece)) {
                 assert piece.length() <= maxChunkSize;

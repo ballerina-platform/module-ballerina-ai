@@ -1470,24 +1470,60 @@ function testHtmlChunkerHeaderMetadataExtraction() returns error? {
     foreach Chunk chunk in chunks {
         string chunkContent = <string>chunk.content;
 
-        // For now, just verify that the heading text is extracted and present in the content
-        // This validates that the HtmlHeaderSplitter is working correctly
+        // Verify header metadata is extracted and set correctly
         if (chunkContent.indexOf("<h1>Main Title</h1>") >= 0) {
             test:assertTrue(chunkContent.indexOf("Main Title") >= 0,
                     msg = "H1 chunk should contain extracted heading text");
+            
+            // Verify h1 header metadata is set
+            if (chunk.metadata is Metadata) {
+                Metadata metadata = <Metadata>chunk.metadata;
+                test:assertTrue(metadata.header1 is string, 
+                    msg = "H1 chunk should have header1 metadata");
+                if (metadata.header1 is string) {
+                    test:assertEquals(<string>metadata.header1, "Main Title",
+                        msg = "H1 metadata should contain correct header text");
+                }
+            } else {
+                test:assertFail("H1 chunk should have metadata");
+            }
         }
 
         if (chunkContent.indexOf("<h2>Section 1</h2>") >= 0) {
             test:assertTrue(chunkContent.indexOf("Section 1") >= 0,
                     msg = "First H2 chunk should contain extracted heading text");
+            
+            // Verify h2 header metadata is set
+            if (chunk.metadata is Metadata) {
+                Metadata metadata = <Metadata>chunk.metadata;
+                test:assertTrue(metadata.header2 is string,
+                    msg = "H2 chunk should have header2 metadata");
+                if (metadata.header2 is string) {
+                    test:assertEquals(<string>metadata.header2, "Section 1",
+                        msg = "H2 metadata should contain correct header text");
+                }
+            } else {
+                test:assertFail("First H2 chunk should have metadata");
+            }
         }
 
         if (chunkContent.indexOf("<h2>Section 2</h2>") >= 0) {
             test:assertTrue(chunkContent.indexOf("Section 2") >= 0,
                     msg = "Second H2 chunk should contain extracted heading text");
+            
+            // Verify h2 header metadata is set
+            if (chunk.metadata is Metadata) {
+                Metadata metadata = <Metadata>chunk.metadata;
+                test:assertTrue(metadata.header2 is string,
+                    msg = "H2 chunk should have header2 metadata");
+                if (metadata.header2 is string) {
+                    test:assertEquals(<string>metadata.header2, "Section 2",
+                        msg = "H2 metadata should contain correct header text");
+                }
+            } else {
+                test:assertFail("Second H2 chunk should have metadata");
+            }
         }
     }
 }
-
-
 

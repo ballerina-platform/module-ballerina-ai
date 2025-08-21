@@ -41,18 +41,18 @@ public type Metadata record {|
     string header?;
     # Language of the chunk if the chunk is a code block
     string language?;
-    # Header if chunk belongs to h1 header
-    string heading1?;
-    # Header if chunk belongs to h2 header
-    string heading2?;
-    # Header if chunk belongs to h3 header
-    string heading3?;
-    # Header if chunk belongs to h4 header
-    string heading4?;
-    # Header if chunk belongs to h5 header
-    string heading5?;
-    # Header if chunk belongs to h6 header
-    string heading6?;
+    # Header of the chunk if the chunk belongs to a single h1 header
+    string header1?;
+    # Header of the chunk if the chunk belongs to a single h2 header
+    string header2?;
+    # Header of the chunk if the chunk belongs to a single h3 header
+    string header3?;
+    # Header of the chunk if the chunk belongs to a single h4 header
+    string header4?;
+    # Header of the chunk if the chunk belongs to a single h5 header
+    string header5?;
+    # Header of the chunk if the chunk belongs to a single h6 header
+    string header6?;
     json...;
 |};
 

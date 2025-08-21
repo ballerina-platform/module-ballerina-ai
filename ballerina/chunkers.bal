@@ -91,7 +91,7 @@ public isolated class MarkdownChunker {
     }
 }
 
-# Represents a HTML document chunker.
+# Represents an HTML document chunker.
 # Provides functionality to recursively chunk a HTML document using a configurable strategy.
 #
 # The chunking process begins with the specified strategy and recursively falls back to
@@ -107,8 +107,8 @@ public isolated class HtmlChunker {
     #
     # + maxChunkSize - Maximum number of characters allowed per chunk
     # + maxOverlapSize - Maximum number of characters to reuse from the end of the previous chunk when creating
-    # the next one.
-    # + strategy - The HTML chunking strategy to use. Defaults to `HTML_HEADER`
+    # the next one
+    # + strategy - The HTML chunking strategy to use. Defaults to `HTML_HEADER`.
     public isolated function init(int maxChunkSize = 200, int maxOverlapSize = 40,
             HtmlChunkStrategy strategy = HTML_HEADER) {
         self.maxChunkSize = maxChunkSize;
@@ -117,6 +117,7 @@ public isolated class HtmlChunker {
     }
 
     # Chunks the provided document.
+    #
     # + document - The input document to be chunked
     # + return - An array of chunks, or an `ai:Error` if the chunking fails
     public isolated function chunk(Document document) returns Chunk[]|Error {
