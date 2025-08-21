@@ -1,7 +1,7 @@
 500 0
 
 --- Chunk 1 ---
-Metadata: {index=0, id=27}
+Metadata: {"id": "27","index": "0"}
 # Horizontal Line Variations Test
 
 This document specifically tests different horizontal line patterns to validate the splitter patterns.
@@ -22,7 +22,7 @@ This section comes after four asterisks. The pattern should match \n\*\*\*+\n wh
 
 
 --- Chunk 2 ---
-Metadata: {index=1, id=40}
+Metadata: {"id": "40","index": "1"}
 
 Testing with five asterisks to ensure the + quantifier works correctly.
 
@@ -62,7 +62,7 @@ ____
 
 
 --- Chunk 3 ---
-Metadata: {index=2, id=46}
+Metadata: {"id": "46","index": "2"}
 
 Testing with four underscores.
 

@@ -1,7 +1,7 @@
 500 0
 
 --- Chunk 1 ---
-Metadata: {index=0, id=12}
+Metadata: {"id": "12","index": "0"}
 # Short Document
 
 This is a simple markdown document with minimal content for testing edge cases.

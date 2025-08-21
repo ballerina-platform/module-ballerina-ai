@@ -1,7 +1,7 @@
 500 0
 
 --- Chunk 1 ---
-Metadata: {index=0, id=42}
+Metadata: {"id": "42","index": "0"}
 <!DOCTYPE html>
 <html>
 <head>
@@ -13,7 +13,7 @@ Metadata: {index=0, id=42}
             <p>This is a large HTML document that contains div tags and other unsupported elements that the HTML chunker may not handle specifically. The purpose is to test how the chunker behaves with content structured using div elements instead of semantic header tags.</p>
 
 --- Chunk 2 ---
-Metadata: {index=1, id=46}
+Metadata: {"id": "45","index": "1"}
 
         </div>
 
@@ -22,7 +22,7 @@ Metadata: {index=1, id=46}
                 <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.</p>
 
 --- Chunk 3 ---
-Metadata: {index=2, id=52}
+Metadata: {"id": "49","index": "2"}
 
 
                 <div class="subsection">
@@ -33,11 +33,11 @@ Metadata: {index=2, id=52}
                     
 
 --- Chunk 4 ---
-Metadata: {index=3, id=54}
+Metadata: {"id": "51","index": "3"}
 <p>Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt. Neque porro quisquam est, qui dolorem ipsum quia dolor sit amet, consectetur, adipisci velit, sed quia non numquam eius modi tempora incidunt ut labore et dolore magnam aliquam quaerat voluptatem.</p>
 
 --- Chunk 5 ---
-Metadata: {index=4, id=58}
+Metadata: {"id": "54","index": "4"}
 
                 </div>
             </div>
@@ -47,7 +47,7 @@ Metadata: {index=4, id=58}
                     <p>Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis suscipit laboriosam, nisi ut aliquid ex ea commodi consequatur? Quis autem vel eum iure reprehenderit qui in ea voluptate velit esse quam nihil molestiae consequatur, vel illum qui dolorem eum fugiat quo voluptas nulla pariatur?</p>
 
 --- Chunk 6 ---
-Metadata: {index=5, id=64}
+Metadata: {"id": "58","index": "5"}
 
                 </div>
 
@@ -58,7 +58,7 @@ Metadata: {index=5, id=64}
                         
 
 --- Chunk 7 ---
-Metadata: {index=6, id=68}
+Metadata: {"id": "61","index": "6"}
 <p>Et harum quidem rerum facilis est et expedita distinctio. Nam libero tempore, cum soluta nobis est eligendi optio cumque nihil impedit quo minus id quod maxime placeat facere possimus, omnis voluptas assumenda est, omnis dolor repellendus.</p>
                     </div>
 
@@ -66,14 +66,14 @@ Metadata: {index=6, id=68}
                         
 
 --- Chunk 8 ---
-Metadata: {index=7, id=72}
+Metadata: {"id": "64","index": "7"}
 <p>Temporibus autem quibusdam et aut officiis debitis aut rerum necessitatibus saepe eveniet ut et voluptates repudiandae sint et molestiae non recusandae. Itaque earum rerum hic tenetur a sapiente delectus, ut aut reiciendis voluptatibus maiores alias consequatur aut perferendis doloribus asperiores repellat.</p>
 
                         <div class="nested-div">
                             
 
 --- Chunk 9 ---
-Metadata: {index=8, id=76}
+Metadata: {"id": "67","index": "8"}
 <p>Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo. Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit.</p>
                         </div>
                     </div>
@@ -86,7 +86,7 @@ Metadata: {index=8, id=76}
                 
 
 --- Chunk 10 ---
-Metadata: {index=9, id=80}
+Metadata: {"id": "70","index": "9"}
 <p>Sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt. Neque porro quisquam est, qui dolorem ipsum quia dolor sit amet, consectetur, adipisci velit, sed quia non numquam eius modi tempora incidunt ut labore et dolore magnam aliquam quaerat voluptatem.</p>
             </div>
 
@@ -94,7 +94,7 @@ Metadata: {index=9, id=80}
                 
 
 --- Chunk 11 ---
-Metadata: {index=10, id=84}
+Metadata: {"id": "73","index": "10"}
 <p>Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis suscipit laboriosam, nisi ut aliquid ex ea commodi consequatur? Quis autem vel eum iure reprehenderit qui in ea voluptate velit esse quam nihil molestiae consequatur, vel illum qui dolorem eum fugiat quo voluptas nulla pariatur?</p>
             </div>
         </div>
@@ -103,7 +103,7 @@ Metadata: {index=10, id=84}
             
 
 --- Chunk 12 ---
-Metadata: {index=11, id=87}
+Metadata: {"id": "76","index": "11"}
 <p>At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praesentium voluptatum deleniti atque corrupti quos dolores et quas molestias excepturi sint occaecati cupiditate non provident. Similique sunt in culpa qui officia deserunt mollitia animi, id est laborum et dolorum fuga.</p>
         </div>
     </div>
