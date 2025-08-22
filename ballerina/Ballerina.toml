@@ -61,25 +61,90 @@ version = "2.9.2"
 path="./lib/tika-parser-microsoft-module-2.9.2.jar"
 
 [[platform.java21.dependency]]
+groupId = "org.apache.tika"
+artifactId = "tika-parser-zip-commons"
+version = "2.9.2"
+path="./lib/tika-parser-zip-commons-2.9.2.jar"
+
+[[platform.java21.dependency]]
+groupId = "org.apache.poi"
+artifactId = "poi"
+version = "5.2.5"
+path="./lib/poi-5.2.5.jar"
+
+[[platform.java21.dependency]]
+groupId = "org.apache.poi"
+artifactId = "poi-scratchpad"
+version = "5.2.5"
+path="./lib/poi-scratchpad-5.2.5.jar"
+
+[[platform.java21.dependency]]
+groupId = "org.apache.poi"
+artifactId = "poi-ooxml"
+version = "5.2.5"
+path="./lib/poi-ooxml-5.2.5.jar"
+
+[[platform.java21.dependency]]
+groupId = "org.apache.poi"
+artifactId = "poi-ooxml-lite"
+version = "5.2.5"
+path="./lib/poi-ooxml-lite-5.2.5.jar"
+
+[[platform.java21.dependency]]
 groupId = "org.apache.pdfbox"
 artifactId = "pdfbox"
-version = "2.0.29"
-path="./lib/pdfbox-2.0.29.jar"
+version = "2.0.31"
+path="./lib/pdfbox-2.0.31.jar"
 
 [[platform.java21.dependency]]
 groupId = "org.apache.pdfbox"
 artifactId = "fontbox"
-version = "2.0.29"
-path="./lib/fontbox-2.0.29.jar"
-
-[[platform.java21.dependency]]
-groupId = "commons-io"
-artifactId = "commons-io"
-version = "2.14.0"
-path="./lib/commons-io-2.14.0.jar"
+version = "2.0.31"
+path="./lib/fontbox-2.0.31.jar"
 
 [[platform.java21.dependency]]
 groupId = "org.apache.pdfbox"
 artifactId = "jempbox"
 version = "1.8.17"
 path="./lib/jempbox-1.8.17.jar"
+
+# Commons IO
+[[platform.java21.dependency]]
+groupId = "commons-io"
+artifactId = "commons-io"
+version = "2.16.1"
+path="./lib/commons-io-2.16.1.jar"
+
+# Commons Compress
+[[platform.java21.dependency]]
+groupId = "org.apache.commons"
+artifactId = "commons-compress"
+version = "1.26.2"
+path="./lib/commons-compress-1.26.2.jar"
+
+[[platform.java21.dependency]]
+groupId = "org.apache.commons"
+artifactId = "commons-collections4"
+version = "4.4"
+path="./lib/commons-collections4-4.4.jar"
+
+# Minimal logging (required by tika-parser-microsoft-module)
+[[platform.java21.dependency]]
+groupId = "org.apache.logging.log4j"
+artifactId = "log4j-api"
+version = "2.21.1"
+path="./lib/log4j-api-2.21.1.jar"
+
+# XMLBeans (required by POI OOXML)
+[[platform.java21.dependency]]
+groupId = "org.apache.xmlbeans"
+artifactId = "xmlbeans"
+version = "5.2.0"
+path="./lib/xmlbeans-5.2.0.jar"
+
+# SparseBitSet (required by POI PPTX)
+[[platform.java21.dependency]]
+groupId = "com.zaxxer"
+artifactId = "SparseBitSet"
+version = "1.3"
+path="./lib/SparseBitSet-1.3.jar"

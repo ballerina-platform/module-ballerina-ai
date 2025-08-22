@@ -35,6 +35,10 @@ public isolated class TextDataLoader {
     public isolated function load() returns Document[]|Document|Error {
         if self.path.endsWith(".pdf") {
             return loadPdf(self.path);
+        } else if self.path.endsWith(".docx") {
+            return loadDocx(self.path);
+        } else if self.path.endsWith(".pptx") {
+            return loadPptx(self.path);
         }
         return error("Unsupported file type");
     }
@@ -58,9 +62,53 @@ isolated function loadPdf(string path) returns TextDocument|Error {
     };
 }
 
+isolated function loadDocx(string path) returns TextDocument|Error {
+    DocumentInfo|error docInfo = readDocxFromJava(path);
+    if docInfo is error {
+        return error Error(docInfo.message());
+    }
+
+    Metadata metadata = {...docInfo.metadata};
+
+    metadata.fileName = path;
+    metadata.mimeType = docInfo.mimeType;
+
+    return {
+        content: docInfo.content,
+        metadata
+    };
+}
+
+isolated function loadPptx(string path) returns TextDocument|Error {
+    DocumentInfo|error docInfo = readPptxFromJava(path);
+    if docInfo is error {
+        return error Error(docInfo.message());
+    }
+
+    Metadata metadata = {...docInfo.metadata};
+
+    metadata.fileName = path;
+    metadata.mimeType = docInfo.mimeType;
+
+    return {
+        content: docInfo.content,
+        metadata
+    };
+}
+
 isolated function readPdfFromJava(string path) returns DocumentInfo|error = @java:Method {
     'class: "io.ballerina.stdlib.ai.DocReader",
     name: "readPdf"
+} external;
+
+isolated function readDocxFromJava(string path) returns DocumentInfo|error = @java:Method {
+    'class: "io.ballerina.stdlib.ai.DocReader",
+    name: "readDocx"
+} external;
+
+isolated function readPptxFromJava(string path) returns DocumentInfo|error = @java:Method {
+    'class: "io.ballerina.stdlib.ai.DocReader",
+    name: "readPptx"
 } external;
 
 type DocumentInfo record {

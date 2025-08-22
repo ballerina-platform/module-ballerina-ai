@@ -86,3 +86,113 @@ function testTextDataLoaderUnsupportedFileType() returns error? {
         test:assertFail("Should return error for unsupported file types");
     }
 }
+
+@test:Config {}
+function testTextDataLoaderLoadDocx() returns error? {
+    // Test DOCX loading with a sample DOCX file
+    string docxPath = "tests/resources/data-loader/TestDoc.docx";
+    TextDataLoader loader = new (docxPath);
+
+    Document[]|Document|Error result = loader.load();
+
+    // Verify the result is not an error
+    if result is Error {
+        test:assertFail("DOCX loading failed: " + result.message());
+    }
+
+    // Handle both single document and array of documents
+    Document document;
+    if result is Document[] {
+        test:assertEquals(result.length(), 1, "Should return array with single document");
+        document = result[0];
+    } else {
+        document = result;
+    }
+
+    // Validate document type
+    test:assertEquals(document.'type, "text", "Document type should be 'text'");
+
+    // Validate metadata exists and has expected fields
+    Metadata? metadata = document.metadata;
+    if metadata is () {
+        test:assertFail("Document metadata should not be null");
+    }
+
+    // Validate mime type
+    string? mimeType = metadata.mimeType;
+    if mimeType is () {
+        test:assertFail("Document mime type should not be null");
+    }
+    test:assertEquals(mimeType, "application/vnd.openxmlformats-officedocument.wordprocessingml.document", 
+        "MIME type should be 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'");
+
+    // Validate file extension
+    string? fileName = metadata.fileName;
+    if fileName is () {
+        test:assertFail("Document file name should not be null");
+    }
+    test:assertTrue(fileName.endsWith(".docx"), "File name should end with .docx");
+
+    // Validate content is not empty
+    anydata content = document.content;
+    if content is string {
+        test:assertTrue(content.length() > 0, "Document content should not be empty");
+    } else {
+        test:assertFail("Document content should be a string");
+    }
+}
+
+@test:Config {}
+function testTextDataLoaderLoadPptx() returns error? {
+    // Test PPTX loading with a sample PPTX file
+    string pptxPath = "tests/resources/data-loader/Test presentation.pptx";
+    TextDataLoader loader = new (pptxPath);
+
+    Document[]|Document|Error result = loader.load();
+
+    // Verify the result is not an error
+    if result is Error {
+        test:assertFail("PPTX loading failed: " + result.message());
+    }
+
+    // Handle both single document and array of documents
+    Document document;
+    if result is Document[] {
+        test:assertEquals(result.length(), 1, "Should return array with single document");
+        document = result[0];
+    } else {
+        document = result;
+    }
+
+    // Validate document type
+    test:assertEquals(document.'type, "text", "Document type should be 'text'");
+
+    // Validate metadata exists and has expected fields
+    Metadata? metadata = document.metadata;
+    if metadata is () {
+        test:assertFail("Document metadata should not be null");
+    }
+
+    // Validate mime type
+    string? mimeType = metadata.mimeType;
+    if mimeType is () {
+        test:assertFail("Document mime type should not be null");
+    }
+    test:assertEquals(mimeType, "application/vnd.openxmlformats-officedocument.presentationml.presentation", 
+        "MIME type should be 'application/vnd.openxmlformats-officedocument.presentationml.presentation'");
+
+    // Validate file extension
+    string? fileName = metadata.fileName;
+    if fileName is () {
+        test:assertFail("Document file name should not be null");
+    }
+    test:assertTrue(fileName.endsWith(".pptx"), "File name should end with .pptx");
+
+    // Validate content is not empty
+    anydata content = document.content;
+    if content is string {
+        test:assertTrue(content.length() > 0, "Document content should not be empty");
+    } else {
+        test:assertFail("Document content should be a string");
+    }
+}
