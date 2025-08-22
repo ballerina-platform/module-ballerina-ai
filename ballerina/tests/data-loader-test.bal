@@ -19,7 +19,7 @@ import ballerina/test;
 @test:Config {}
 function testTextDataLoaderLoadPdf() returns error? {
     // Test PDF loading with a sample PDF file
-    string pdfPath = "tests/resources/data-loader/Operating_Systems_From_0_to_1.pdf";
+    string pdfPath = "tests/resources/data-loader/TestDoc.pdf";
     TextDataLoader loader = new (pdfPath);
 
     Document[]|Document|Error result = loader.load();
