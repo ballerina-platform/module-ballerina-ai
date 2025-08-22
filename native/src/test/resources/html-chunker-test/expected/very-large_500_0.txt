@@ -1,0 +1,141 @@
+500 0
+
+--- Chunk 1 ---
+Metadata: {"id": "4499","index": "0"}
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Very Large HTML Document</title>
+</head>
+<body>
+    <h1>Very Large Document for Stress Testing</h1>
+
+    <p>This is an extremely large HTML document designed to test the chunking behavior with substantial content that will definitely exceed chunk size limits multiple times over. The document contains various HTML elements and substantial text content to ensure proper chunking behavior under stress conditions.</p>
+
+    <h2>Introduction and Overview</h2>
+
+--- Chunk 2 ---
+Metadata: {"header": "Introduction and Overview","header1": "Very Large Document for Stress Testing","header2": "Introduction and Overview","id": "4577","index": "1"}
+
+
+    <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Sed ut perspiciatis unde omnis iste natus
+
+--- Chunk 3 ---
+Metadata: {"header": "Introduction and Overview","header1": "Very Large Document for Stress Testing","header2": "Introduction and Overview","id": "4652","index": "2"}
+ error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo. Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt. Neque porro quisquam est, qui dolorem ipsum quia dolor sit amet, consectetur, adipisci velit, sed quia non numquam eius modi tempora incidunt ut labore et dolore magnam
+
+--- Chunk 4 ---
+Metadata: {"header": "Introduction and Overview","header1": "Very Large Document for Stress Testing","header2": "Introduction and Overview","id": "4725","index": "3"}
+ aliquam quaerat voluptatem.</p>
+
+    <p>Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis suscipit laboriosam, nisi ut aliquid ex ea commodi consequatur? Quis autem vel eum iure reprehenderit qui in ea voluptate velit esse quam nihil molestiae consequatur, vel illum qui dolorem eum fugiat quo voluptas nulla pariatur? At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praesentium voluptatum deleniti atque corrupti quos dolores et quas molestias excepturi
+
+--- Chunk 5 ---
+Metadata: {"header1": "Very Large Document for Stress Testing","header2": "Introduction and Overview","id": "4794","index": "4"}
+ sint occaecati cupiditate non provident, similique sunt in culpa qui officia deserunt mollitia animi, id est laborum et dolorum fuga.</p>
+
+    <h3>Detailed Analysis Section</h3>
+
+    <p>Et harum quidem rerum facilis est et expedita distinctio. Nam libero tempore, cum soluta nobis est eligendi optio cumque nihil impedit quo minus id quod maxime placeat facere possimus, omnis voluptas assumenda est, omnis dolor repellendus. Temporibus autem quibusdam et aut officiis debitis aut rerum
+
+--- Chunk 6 ---
+Metadata: {"header": "Detailed Analysis Section","header1": "Very Large Document for Stress Testing","header2": "Introduction and Overview","header3": "Detailed Analysis Section","id": "4862","index": "5"}
+ necessitatibus saepe eveniet ut et voluptates repudiandae sint et molestiae non recusandae. Itaque earum rerum hic tenetur a sapiente delectus, ut aut reiciendis voluptatibus maiores alias consequatur aut perferendis doloribus asperiores repellat. Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo.</p>
+
+    <p>Nemo enim ipsam
+
+--- Chunk 7 ---
+Metadata: {"header": "Detailed Analysis Section","header1": "Very Large Document for Stress Testing","header2": "Introduction and Overview","header3": "Detailed Analysis Section","id": "4937","index": "6"}
+ voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt. Neque porro quisquam est, qui dolorem ipsum quia dolor sit amet, consectetur, adipisci velit, sed quia non numquam eius modi tempora incidunt ut labore et dolore magnam aliquam quaerat voluptatem. Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis suscipit laboriosam, nisi ut aliquid ex ea commodi consequatur? Quis autem vel eum iure
+
+--- Chunk 8 ---
+Metadata: {"header1": "Very Large Document for Stress Testing","id": "5006","index": "7"}
+ reprehenderit qui in ea voluptate velit esse quam nihil molestiae consequatur, vel illum qui dolorem eum fugiat quo voluptas nulla pariatur?</p>
+
+    <h2>Extended Content Section One</h2>
+
+    <p>At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praesentium voluptatum deleniti atque corrupti quos dolores et quas molestias excepturi sint occaecati cupiditate non provident, similique sunt in culpa qui officia deserunt mollitia animi, id est laborum et dolorum fuga. Et
+
+--- Chunk 9 ---
+Metadata: {"header1": "Very Large Document for Stress Testing","header2": "Extended Content Section One","id": "5073","index": "8"}
+ harum quidem rerum facilis est et expedita distinctio. Nam libero tempore, cum soluta nobis est eligendi optio cumque nihil impedit quo minus id quod maxime placeat facere possimus, omnis voluptas assumenda est, omnis dolor repellendus. Temporibus autem quibusdam et aut officiis debitis aut rerum necessitatibus saepe eveniet ut et voluptates repudiandae sint et molestiae non recusandae.</p>
+
+    <h3>Subsection with Extensive Detail</h3>
+
+    <p>Itaque earum rerum hic tenetur a sapiente
+
+--- Chunk 10 ---
+Metadata: {"header": "Subsection with Extensive Detail","header1": "Very Large Document for Stress Testing","header2": "Extended Content Section One","header3": "Subsection with Extensive Detail","id": "5145","index": "9"}
+ delectus, ut aut reiciendis voluptatibus maiores alias consequatur aut perferendis doloribus asperiores repellat. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident,
+
+--- Chunk 11 ---
+Metadata: {"header": "Subsection with Extensive Detail","header1": "Very Large Document for Stress Testing","header2": "Extended Content Section One","header3": "Subsection with Extensive Detail","id": "5220","index": "10"}
+ sunt in culpa qui officia deserunt mollit anim id est laborum.</p>
+
+    <p>Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo. Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt. Neque porro quisquam est, qui dolorem ipsum quia
+
+--- Chunk 12 ---
+Metadata: {"header1": "Very Large Document for Stress Testing","header2": "Extended Content Section One","header3": "Subsection with Extensive Detail","id": "5292","index": "11"}
+ dolor sit amet, consectetur, adipisci velit, sed quia non numquam eius modi tempora incidunt ut labore et dolore magnam aliquam quaerat voluptatem.</p>
+
+    <h4>Deep Subsection Analysis</h4>
+
+    <p>Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis suscipit laboriosam, nisi ut aliquid ex ea commodi consequatur? Quis autem vel eum iure reprehenderit qui in ea voluptate velit esse quam nihil molestiae consequatur, vel illum qui dolorem eum fugiat quo voluptas nulla pariatur? At
+
+--- Chunk 13 ---
+Metadata: {"header1": "Very Large Document for Stress Testing","id": "5362","index": "12"}
+ vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praesentium voluptatum deleniti atque corrupti quos dolores et quas molestias excepturi sint occaecati cupiditate non provident.</p>
+
+    <h2>Extended Content Section Two</h2>
+
+    <p>Similique sunt in culpa qui officia deserunt mollitia animi, id est laborum et dolorum fuga. Et harum quidem rerum facilis est et expedita distinctio. Nam libero tempore, cum soluta nobis est eligendi optio cumque nihil impedit quo minus id
+
+--- Chunk 14 ---
+Metadata: {"header1": "Very Large Document for Stress Testing","header2": "Extended Content Section Two","id": "5425","index": "13"}
+ quod maxime placeat facere possimus, omnis voluptas assumenda est, omnis dolor repellendus. Temporibus autem quibusdam et aut officiis debitis aut rerum necessitatibus saepe eveniet ut et voluptates repudiandae sint et molestiae non recusandae. Itaque earum rerum hic tenetur a sapiente delectus, ut aut reiciendis voluptatibus maiores alias consequatur aut perferendis doloribus asperiores repellat.</p>
+
+    <h3>Another Comprehensive Subsection</h3>
+
+    <p>Lorem ipsum dolor sit amet, consectetur
+
+--- Chunk 15 ---
+Metadata: {"header": "Another Comprehensive Subsection","header1": "Very Large Document for Stress Testing","header2": "Extended Content Section Two","header3": "Another Comprehensive Subsection","id": "5501","index": "14"}
+ adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque
+
+--- Chunk 16 ---
+Metadata: {"header": "Another Comprehensive Subsection","header1": "Very Large Document for Stress Testing","header2": "Extended Content Section Two","header3": "Another Comprehensive Subsection","id": "5522","index": "15"}
+ laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo.</p>
+
+    
+
+--- Chunk 17 ---
+Metadata: {"header": "Another Comprehensive Subsection","header1": "Very Large Document for Stress Testing","header2": "Extended Content Section Two","header3": "Another Comprehensive Subsection","id": "5525","index": "16"}
+<p>Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt. Neque porro quisquam est, qui dolorem ipsum quia dolor sit amet, consectetur, adipisci velit, sed quia non numquam eius modi tempora incidunt ut labore et dolore magnam aliquam quaerat voluptatem. Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis suscipit laboriosam, nisi ut aliquid ex ea commodi consequatur?</p>
+
+    
+
+--- Chunk 18 ---
+Metadata: {"header": "Final Extended Section","header1": "Very Large Document for Stress Testing","header2": "Final Extended Section","id": "5597","index": "17"}
+<h2>Final Extended Section</h2>
+
+    <p>Quis autem vel eum iure reprehenderit qui in ea voluptate velit esse quam nihil molestiae consequatur, vel illum qui dolorem eum fugiat quo voluptas nulla pariatur? At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praesentium voluptatum deleniti atque corrupti quos dolores et quas molestias excepturi sint occaecati cupiditate non provident, similique sunt in culpa qui officia deserunt mollitia animi, id est laborum et dolorum fuga.
+
+--- Chunk 19 ---
+Metadata: {"header1": "Very Large Document for Stress Testing","header2": "Final Extended Section","id": "5665","index": "18"}
+ Et harum quidem rerum facilis est et expedita distinctio. Nam libero tempore, cum soluta nobis est eligendi optio cumque nihil impedit quo minus id quod maxime placeat facere possimus, omnis voluptas assumenda est, omnis dolor repellendus.</p>
+
+    <h3>Concluding Thoughts and Summary</h3>
+
+    <p>Temporibus autem quibusdam et aut officiis debitis aut rerum necessitatibus saepe eveniet ut et voluptates repudiandae sint et molestiae non recusandae. Itaque earum rerum hic tenetur a sapiente
+
+--- Chunk 20 ---
+Metadata: {"header": "Concluding Thoughts and Summary","header1": "Very Large Document for Stress Testing","header2": "Final Extended Section","header3": "Concluding Thoughts and Summary","id": "5734","index": "19"}
+ delectus, ut aut reiciendis voluptatibus maiores alias consequatur aut perferendis doloribus asperiores repellat. Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo. Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt.</p>
+
+    
+
+--- Chunk 21 ---
+Metadata: {"header": "Concluding Thoughts and Summary","header1": "Very Large Document for Stress Testing","header2": "Final Extended Section","header3": "Concluding Thoughts and Summary","id": "5737","index": "20"}
+<p>This concludes the very large HTML document designed for stress testing the chunker implementation. The content should be substantial enough to create multiple chunks and test various edge cases in the chunking algorithm.</p>
+</body>
+</html>
