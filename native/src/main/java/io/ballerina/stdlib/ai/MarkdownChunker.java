@@ -1,31 +1,43 @@
+/*
+ *  Copyright (c) 2025, WSO2 LLC. (http://www.wso2.com).
+ *
+ *  WSO2 LLC. licenses this file to you under the Apache License,
+ *  Version 2.0 (the "License"); you may not use this file except
+ *  in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing,
+ *  software distributed under the License is distributed on an
+ *  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ *  KIND, either express or implied.  See the License for the
+ *  specific language governing permissions and limitations
+ *  under the License.
+ */
+
 package io.ballerina.stdlib.ai;
 
-import dev.langchain4j.data.document.Metadata;
 import dev.langchain4j.data.segment.TextSegment;
 
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.IntStream;
 
 class MarkdownChunker {
 
-    // Types that should not be merged with other chunks
     private static final Set<String> NON_MERGEABLE_TYPES = Set.of("code_block");
 
     enum MarkdownChunkStrategy {
         BY_HEADER, BY_CODE_BLOCK, BY_HORIZONTAL_LINE, BY_PARAGRAPH, BY_LINE, BY_SENTENCE, BY_WORD, BY_CHARACTER;
 
-        public List<Splitter> getSplitters() {
-            List<Splitter> splitters = new ArrayList<>();
+        public List<RecursiveChunker.Splitter> getSplitters() {
+            List<RecursiveChunker.Splitter> splitters = new ArrayList<>();
 
             switch (this) {
                 case BY_HEADER:
@@ -39,19 +51,19 @@ class MarkdownChunker {
                     splitters.add(new CodeBlockSplitter());
                 case BY_HORIZONTAL_LINE:
                     splitters.addAll(List.of(
-                            new SimpleDelimiterSplitter("\n\\*\\*\\*+\n"),
-                            new SimpleDelimiterSplitter("\\n---+\\n"),
-                            new SimpleDelimiterSplitter("\n___+\n")));
+                            new RecursiveChunker.SimpleDelimiterSplitter("\n\\*\\*\\*+\n"),
+                            new RecursiveChunker.SimpleDelimiterSplitter("\\n---+\\n"),
+                            new RecursiveChunker.SimpleDelimiterSplitter("\n___+\n")));
                 case BY_PARAGRAPH:
-                    splitters.add(new SimpleDelimiterSplitter("\n\n"));
+                    splitters.add(new RecursiveChunker.SimpleDelimiterSplitter("\n\n"));
                 case BY_LINE:
-                    splitters.add(new SimpleDelimiterSplitter("\n"));
+                    splitters.add(new RecursiveChunker.SimpleDelimiterSplitter("\n"));
                 case BY_SENTENCE:
-                    splitters.add(new SimpleDelimiterSplitter("\\."));
+                    splitters.add(RecursiveChunker.Splitter.createSentenceSplitter());
                 case BY_WORD:
-                    splitters.add(new SimpleDelimiterSplitter(" "));
+                    splitters.add(RecursiveChunker.Splitter.createWordSplitter());
                 case BY_CHARACTER:
-                    splitters.add(new SimpleDelimiterSplitter(""));
+                    splitters.add(RecursiveChunker.Splitter.createCharacterSplitter());
             }
 
             return splitters;
@@ -65,298 +77,21 @@ class MarkdownChunker {
         if (maxOverlapSize > maxChunkSize) {
             throw new IllegalArgumentException("Max overlap size must be less than or equal to chunk size");
         }
-        List<Chunk> chunks = chunkUsingDelimiters(content, strategy.getSplitters(), maxChunkSize, maxOverlapSize);
-        return IntStream.range(0, chunks.size())
-                .mapToObj(i -> chunks.get(i).toTextSegment(i))
-                .toList();
+        RecursiveChunker chunker = new RecursiveChunker(NON_MERGEABLE_TYPES);
+        List<RecursiveChunker.Chunk> chunks =
+                chunker.chunkUsingSplitters(content, strategy.getSplitters(), maxChunkSize, maxOverlapSize);
+        return IntStream.range(0, chunks.size()).mapToObj(i -> chunks.get(i).toTextSegment(i)).toList();
     }
 
     static List<TextSegment> chunk(String content, int chunkSize, int maxOverlapSize) {
-        List<Chunk> chunks = chunkUsingDelimiters(content,
-                        MarkdownChunkStrategy.BY_HEADER.getSplitters(), chunkSize,
-                maxOverlapSize);
-        return IntStream.range(0, chunks.size())
-                .mapToObj(i -> chunks.get(i).toTextSegment(i))
-                .toList();
+        RecursiveChunker chunker = new RecursiveChunker(NON_MERGEABLE_TYPES);
+        List<RecursiveChunker.Chunk> chunks =
+                chunker.chunkUsingSplitters(content, MarkdownChunkStrategy.BY_HEADER.getSplitters(), chunkSize,
+                        maxOverlapSize);
+        return IntStream.range(0, chunks.size()).mapToObj(i -> chunks.get(i).toTextSegment(i)).toList();
     }
 
-    private static List<Chunk> chunkUsingDelimiters(String content, List<Splitter> delimiters, int maxChunkSize,
-                                                    int maxOverlapSize) {
-        return chunkUsingDelimitersInner(content, delimiters, maxChunkSize, maxOverlapSize, Collections.emptyMap());
-    }
-
-    private static List<Chunk> chunkUsingDelimitersInner(String content, List<Splitter> delimiters, int maxChunkSize,
-                                                         int maxOverlapSize, Map<String, String> parentMetadata) {
-        List<Splitter> rest = delimiters.subList(1, delimiters.size());
-        Iterator<Chunk> pieces = delimiters.getFirst().split(content);
-        List<Chunk> chunks = new ArrayList<>();
-        List<Chunk> nextChunkPieceBuffer = new ArrayList<>();
-        int nextChunkSize = 0;
-        while (pieces.hasNext()) {
-            Chunk piece = pieces.next();
-
-            // If this piece is non-mergeable, flush buffer and add it directly
-            if (isNonMergeable(piece)) {
-                // Flush current buffer
-                nextChunkPieceBuffer.stream().reduce(Chunk::merge).ifPresent(chunks::add);
-                nextChunkPieceBuffer.clear();
-                nextChunkSize = 0;
-
-                // Add non-mergeable piece directly
-                if (piece.length() > maxChunkSize) {
-                    chunks.addAll(breakUpChunk(piece, maxChunkSize));
-                } else {
-                    chunks.add(piece);
-                }
-                continue;
-            }
-
-            if (nextChunkSize + piece.length() <= maxChunkSize) {
-                nextChunkPieceBuffer.add(piece);
-                nextChunkSize += piece.length();
-                continue;
-            }
-
-            nextChunkPieceBuffer.stream().reduce(Chunk::merge).ifPresent(chunks::add);
-            nextChunkPieceBuffer.clear();
-            nextChunkSize = 0;
-
-            // If the piece is smaller than the max chunk size, just add it to the next chunk
-            if (piece.length() <= maxChunkSize) {
-                nextChunkPieceBuffer.add(piece);
-                nextChunkSize += piece.length();
-                continue;
-            }
-
-            // Break up the current piece
-            List<Chunk> pieceChunks =
-                    chunkUsingDelimitersInner(piece.piece, rest, maxChunkSize, maxOverlapSize, piece.metadata);
-            chunks.addAll(pieceChunks.subList(0, pieceChunks.size() - 1));
-            Chunk lastPieceChunk = pieceChunks.getLast();
-            if (isNonMergeable(lastPieceChunk)) {
-                // If the last piece is non-mergeable, add it directly
-                chunks.add(lastPieceChunk);
-            } else {
-                nextChunkPieceBuffer.add(lastPieceChunk);
-                nextChunkSize += lastPieceChunk.length();
-            }
-        }
-        nextChunkPieceBuffer.stream().reduce(Chunk::merge).ifPresent(chunks::add);
-        chunks = mergeChunksWithOverlap(chunks, maxChunkSize, maxOverlapSize);
-        if (parentMetadata.isEmpty()) {
-            return chunks;
-        }
-        return chunks.stream().filter(Predicate.not(Chunk::isEmpty)).map(chunk -> {
-            HashMap<String, String> metadata = new HashMap<>(parentMetadata);
-            metadata.putAll(chunk.metadata);
-            return new Chunk(chunk.piece(), Collections.unmodifiableMap(metadata));
-        }).toList();
-    }
-
-    private static boolean isNonMergeable(Chunk chunk) {
-        if (!chunk.metadata().containsKey("type")) {
-            return false;
-        }
-        String type = chunk.metadata().get("type");
-        return NON_MERGEABLE_TYPES.contains(type);
-    }
-
-    static List<Chunk> breakUpChunk(Chunk chunk, int maxChunkSize) {
-        List<Chunk> chunks = new ArrayList<>();
-        Chunk remainder = chunk;
-        Chunk previousChunk = null;
-
-        while (remainder.length() > maxChunkSize) {
-            // Create metadata with link to previous chunk
-            Map<String, String> chunkMetadata = new HashMap<>(remainder.metadata);
-            if (previousChunk != null) {
-                chunkMetadata.put("prev", String.valueOf(previousChunk.id()));
-            }
-
-            Chunk part = new Chunk(remainder.piece().substring(0, maxChunkSize), chunkMetadata);
-            chunks.add(part);
-            previousChunk = part;
-
-            remainder = new Chunk(remainder.piece().substring(maxChunkSize, remainder.length()), remainder.metadata);
-        }
-
-        if (!remainder.isEmpty()) {
-            // Add metadata with link to previous chunk for the remainder
-            Map<String, String> remainderMetadata = new HashMap<>(remainder.metadata);
-            if (previousChunk != null) {
-                remainderMetadata.put("prev", String.valueOf(previousChunk.id()));
-            }
-            chunks.add(new Chunk(remainder.piece(), remainderMetadata));
-        }
-
-        return chunks;
-    }
-
-    private static List<Chunk> mergeChunksWithOverlap(List<Chunk> pieces, int maxChunkSize, int maxOverlapSize) {
-        List<Chunk> chunks = new ArrayList<>();
-        List<Chunk> mergeBuffer = new ArrayList<>();
-        int mergeBufferSize = 0;
-        Chunk lastChunk = Chunk.EMPTY;
-        for (Chunk piece : pieces) {
-            // If this piece is non-mergeable, flush buffer and add it directly
-            if (isNonMergeable(piece)) {
-                assert piece.length() <= maxChunkSize;
-                // First flush the merge buffer
-                mergeBuffer.stream().reduce(Chunk::merge).ifPresent(chunks::add);
-                mergeBuffer.clear();
-                mergeBufferSize = 0;
-
-                // Add non-mergeable piece directly
-                chunks.add(piece);
-                continue;
-            }
-
-            if (piece.length() > maxChunkSize) {
-                List<Chunk> p = breakUpChunk(piece, maxChunkSize);
-                assert p.size() > 1;
-                chunks.addAll(p.subList(0, p.size() - 2));
-                piece = p.getLast();
-            }
-            if (mergeBuffer.isEmpty()) {
-                // First chunk, see if we can overlap with the last piece
-                if (lastChunk.length() < maxOverlapSize && lastChunk.length() + piece.length() <= maxChunkSize) {
-                    // Merge with the last chunk
-                    piece = Chunk.merge(lastChunk, piece);
-                }
-                mergeBuffer.add(piece);
-                mergeBufferSize += piece.length();
-            } else if (mergeBufferSize + piece.length() <= maxChunkSize) {
-                // Add to the merge buffer
-                mergeBuffer.add(piece);
-                mergeBufferSize += piece.length();
-            } else {
-                // First flush the merge buffer
-                mergeBuffer.stream().reduce(Chunk::merge).ifPresent(chunks::add);
-                mergeBuffer.clear();
-
-                mergeBuffer.add(piece);
-                mergeBufferSize = piece.length();
-            }
-        }
-        mergeBuffer.stream().reduce(Chunk::merge).ifPresent(chunks::add);
-        return chunks;
-    }
-
-    record Chunk(long id, String piece, Map<String, String> metadata) {
-        private static final AtomicLong nextId = new AtomicLong(0);
-
-        Chunk(String piece, Map<String, String> metadata) {
-            this(nextId.getAndIncrement(), piece, metadata);
-        }
-
-        public static final Chunk EMPTY = new Chunk("", Collections.emptyMap());
-
-        public int length() {
-            return piece.length();
-        }
-
-        public boolean isEmpty() {
-            return piece.isEmpty();
-        }
-
-        public static Chunk merge(Chunk first, Chunk second) {
-            String mergedPiece = first.piece + second.piece;
-            Map<String, String> mergedMetadata = new HashMap<>();
-            for (String key : first.metadata().keySet()) {
-                if (second.metadata.containsKey(key) && second.metadata.get(key).equals(first.metadata.get(key))) {
-                    mergedMetadata.put(key, first.metadata.get(key));
-                }
-            }
-            return new Chunk(mergedPiece, Collections.unmodifiableMap(mergedMetadata));
-        }
-
-        public TextSegment toTextSegment(int index) {
-            Map<String, Object> metadata = new HashMap<>(this.metadata);
-            metadata.put("id", id);
-            metadata.put("index", index);
-            return new TextSegment(piece, new Metadata(metadata));
-        }
-    }
-
-    interface Splitter {
-
-        Iterator<Chunk> split(String content);
-    }
-
-    static class SimpleDelimiterSplitter implements Splitter {
-
-        private final Pattern pattern;
-
-        SimpleDelimiterSplitter(String delimiter) {
-            pattern = Pattern.compile(Pattern.quote(delimiter));
-        }
-
-        @Override
-        public Iterator<Chunk> split(String content) {
-            return new Iterator<>() {
-                private final Matcher matcher = pattern.matcher(content);
-                private int lastIndex = 0;
-                private String nextPiece = null;
-                private boolean hasNextPiece = false;
-                private boolean finished = false;
-
-                private void prepareNext() {
-                    if (finished) {
-                        return;
-                    }
-
-                    if (matcher.find()) {
-                        int delimiterStart = matcher.start();
-                        int delimiterEnd = matcher.end();
-
-                        if (delimiterStart > lastIndex) {
-                            // Next piece is the content before the delimiter
-                            nextPiece = content.substring(lastIndex, delimiterStart);
-                            lastIndex = delimiterStart;
-                            hasNextPiece = true;
-                            return;
-                        }
-
-                        // Next piece is the delimiter itself
-                        nextPiece = content.substring(delimiterStart, delimiterEnd);
-                        lastIndex = delimiterEnd;
-                        hasNextPiece = true;
-                        return;
-                    }
-
-                    if (lastIndex < content.length()) {
-                        // Remaining content after last delimiter
-                        nextPiece = content.substring(lastIndex);
-                        lastIndex = content.length();
-                        hasNextPiece = true;
-                    } else {
-                        hasNextPiece = false;
-                    }
-                    finished = true;
-                }
-
-                @Override
-                public boolean hasNext() {
-                    if (!hasNextPiece && !finished) {
-                        prepareNext();
-                    }
-                    return hasNextPiece;
-                }
-
-                @Override
-                public Chunk next() {
-                    if (!hasNext()) {
-                        throw new java.util.NoSuchElementException();
-                    }
-                    hasNextPiece = false;
-
-                    return new Chunk(nextPiece, Map.of());
-                }
-            };
-        }
-    }
-
-    static class HeaderSplitter implements Splitter {
+    static class HeaderSplitter implements RecursiveChunker.Splitter {
 
         private final Pattern headerPattern;
 
@@ -365,7 +100,7 @@ class MarkdownChunker {
         }
 
         @Override
-        public Iterator<Chunk> split(String content) {
+        public Iterator<RecursiveChunker.Chunk> split(String content) {
             return new Iterator<>() {
                 private final Matcher matcher = headerPattern.matcher(content);
                 private int lastIndex = 0;
@@ -427,24 +162,24 @@ class MarkdownChunker {
                 }
 
                 @Override
-                public Chunk next() {
+                public RecursiveChunker.Chunk next() {
                     if (!hasNext()) {
                         throw new java.util.NoSuchElementException();
                     }
                     hasNextPiece = false;
-                    return new Chunk(nextPiece, nextPieceMetadata);
+                    return new RecursiveChunker.Chunk(nextPiece, nextPieceMetadata);
                 }
             };
         }
     }
 
-    static class CodeBlockSplitter implements Splitter {
+    static class CodeBlockSplitter implements RecursiveChunker.Splitter {
 
         private final Pattern codeBlockStartPattern = Pattern.compile("```(\\w+)?\\n");
         private final Pattern codeBlockEndPattern = Pattern.compile("```\\n");
 
         @Override
-        public Iterator<Chunk> split(String content) {
+        public Iterator<RecursiveChunker.Chunk> split(String content) {
             return new Iterator<>() {
                 private final Matcher startMatcher = codeBlockStartPattern.matcher(content);
                 private final Matcher endMatcher = codeBlockEndPattern.matcher(content);
@@ -522,12 +257,12 @@ class MarkdownChunker {
                 }
 
                 @Override
-                public Chunk next() {
+                public RecursiveChunker.Chunk next() {
                     if (!hasNext()) {
                         throw new java.util.NoSuchElementException();
                     }
                     hasNextPiece = false;
-                    return new Chunk(nextPiece, nextPieceMetadata);
+                    return new RecursiveChunker.Chunk(nextPiece, nextPieceMetadata);
                 }
             };
         }

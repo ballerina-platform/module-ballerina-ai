@@ -1,0 +1,161 @@
+/*
+ *  Copyright (c) 2025, WSO2 LLC. (http://www.wso2.com).
+ *
+ *  WSO2 LLC. licenses this file to you under the Apache License,
+ *  Version 2.0 (the "License"); you may not use this file except
+ *  in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing,
+ *  software distributed under the License is distributed on an
+ *  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ *  KIND, either express or implied.  See the License for the
+ *  specific language governing permissions and limitations
+ *  under the License.
+ */
+
+package io.ballerina.stdlib.ai;
+
+import io.ballerina.stdlib.ai.RecursiveChunker.Chunk;
+
+import java.util.Iterator;
+import java.util.Map;
+import java.util.NoSuchElementException;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+abstract class AbstractTagSplitter implements RecursiveChunker.Splitter {
+
+    private final String tagName;
+    private final Pattern openTagPattern;
+    private final Pattern closeTagPattern;
+
+    AbstractTagSplitter(String tagName) {
+        this.tagName = tagName;
+        // Pattern to match opening tag with optional attributes: <tagName> or <tagName attr="value">
+        this.openTagPattern = Pattern.compile("<" + Pattern.quote(tagName) + "(?:\\s[^>]*)?>",
+                Pattern.CASE_INSENSITIVE);
+        this.closeTagPattern = Pattern.compile("</" + Pattern.quote(tagName) + ">", Pattern.CASE_INSENSITIVE);
+    }
+
+    @Override
+    public Iterator<Chunk> split(String content) {
+        return new TagSplitterIterator(content);
+    }
+
+    enum SplitterState {
+        INIT, PREFIX, TAG, SUFFIX, END
+    }
+
+    void onBreakdown(TagSplitterIterator iterator) {
+
+    }
+
+    protected class TagSplitterIterator implements Iterator<Chunk> {
+
+        private String content;
+        SplitterState currentState;
+        // Part before the tag
+        String prefix;
+        // Part between open and closing tags
+        String tag;
+        // Part after closing tag but before the next opening tag
+        Map<String, String> tagAttributes = Map.of();
+        String suffix;
+        Map<String, String> suffixAttributes = Map.of();
+
+        TagSplitterIterator(String content) {
+            this.content = content;
+            this.currentState = SplitterState.INIT;
+        }
+
+        @Override
+        public boolean hasNext() {
+            if (currentState == SplitterState.INIT) {
+                breakdownContent();
+                assert currentState != SplitterState.INIT;
+                return hasNext();
+            }
+            return currentState != SplitterState.END || !content.isEmpty();
+        }
+
+        @Override
+        public Chunk next() {
+            if (!hasNext()) {
+                throw new NoSuchElementException();
+            }
+            return switch (currentState) {
+                case INIT:
+                    breakdownContent();
+                    yield next();
+                case PREFIX:
+                    currentState = SplitterState.TAG;
+                    yield new Chunk(prefix, Map.of());
+                case TAG:
+                    currentState = SplitterState.SUFFIX;
+                    yield new Chunk(tag, tagAttributes);
+                case SUFFIX:
+                    if (!content.isEmpty()) {
+                        currentState = SplitterState.INIT;
+                    } else {
+                        currentState = SplitterState.END;
+                    }
+                    yield new Chunk(suffix, suffixAttributes);
+                case END:
+                    String response = content;
+                    content = "";
+                    yield new Chunk(response, Map.of());
+            };
+        }
+
+        private void breakdownContentInner() {
+            assert currentState == SplitterState.INIT;
+            assert content != null;
+            // Find the index to open tag
+            Matcher openTagMatcher = openTagPattern.matcher(content);
+            if (!openTagMatcher.find()) {
+                currentState = SplitterState.END;
+                return;
+            }
+            int openTagIndex = openTagMatcher.start();
+            prefix = content.substring(0, openTagIndex);
+
+            currentState = SplitterState.PREFIX;
+
+            // Find the index to close tag
+            Matcher closeTagMatcher = closeTagPattern.matcher(content);
+            closeTagMatcher.region(openTagMatcher.end(), content.length());
+            if (!closeTagMatcher.find()) {
+                throw new IndexOutOfBoundsException("Invalid HTML <%s> is not properly terminated".formatted(tagName));
+            }
+
+            // Extract complete tag including opening and closing tags
+            tag = content.substring(openTagIndex, closeTagMatcher.end());
+
+            content = content.substring(closeTagMatcher.end());
+
+            // Find the index to the next opening tag
+            Matcher nextOpenTagMatcher = openTagPattern.matcher(content);
+            if (!nextOpenTagMatcher.find()) {
+                // End of content. ie no rest
+                suffix = content;
+                content = "";
+                return;
+            }
+            int nextOpenTagIndex = nextOpenTagMatcher.start();
+            suffix = content.substring(0, nextOpenTagIndex);
+            content = content.substring(nextOpenTagIndex);
+        }
+
+        private void breakdownContent() {
+            breakdownContentInner();
+            breakdownContentCallback();
+        }
+
+        private void breakdownContentCallback() {
+            onBreakdown(this);
+        }
+    }
+}

@@ -1,7 +1,26 @@
+/*
+ *  Copyright (c) 2025, WSO2 LLC. (http://www.wso2.com).
+ *
+ *  WSO2 LLC. licenses this file to you under the Apache License,
+ *  Version 2.0 (the "License"); you may not use this file except
+ *  in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing,
+ *  software distributed under the License is distributed on an
+ *  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ *  KIND, either express or implied.  See the License for the
+ *  specific language governing permissions and limitations
+ *  under the License.
+ */
+
 package io.ballerina.stdlib.ai;
 
 import dev.langchain4j.data.segment.TextSegment;
 import org.testng.Assert;
+import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.DataProvider;
 import org.testng.annotations.Test;
 
@@ -19,6 +38,11 @@ public class MarkdownChunkerIntegrationTest {
     private static final int MAX_OVERLAP_SIZE = 50;
     private static final String INPUT_DIR = "markdown-chunker-test/input";
     private static final String EXPECTED_DIR = "markdown-chunker-test/expected";
+
+    @BeforeMethod
+    public void setUp() throws Exception {
+        TestUtil.resetChunkIdCounter();
+    }
 
     static String normalizeNewLines(String content) {
         return content.replaceAll("\r\n", "\n").replaceAll("\r", "\n");
@@ -49,11 +73,13 @@ public class MarkdownChunkerIntegrationTest {
         // Chunk the content using MarkdownChunker
         List<TextSegment> chunks = MarkdownChunker.chunk(inputContent, CHUNK_SIZE, MAX_OVERLAP_SIZE);
 
-        // Sanity check: validate that TextSegments have indices in correct order
+        // Sanity checks
         validateTextSegmentIndices(chunks);
+        validateTextSegmentMaxSize(chunks, CHUNK_SIZE);
+        validateChunkContent(chunks, inputContent);
 
         // Format output as specified: "500 50" followed by chunks
-        String actualOutput = formatChunksOutput(chunks, CHUNK_SIZE, MAX_OVERLAP_SIZE);
+        String actualOutput = TestUtil.formatChunksOutput(chunks, CHUNK_SIZE, MAX_OVERLAP_SIZE);
 
         // Handle BLESS environment variable and expected file comparison
         String expectedFileName = fileName.replace(".md", "_" + CHUNK_SIZE + "_" + MAX_OVERLAP_SIZE + ".txt");
@@ -72,14 +98,15 @@ public class MarkdownChunkerIntegrationTest {
         // Chunk the content using MarkdownChunker
         List<TextSegment> chunks = MarkdownChunker.chunk(inputContent, CHUNK_SIZE, 0);
 
-        // Sanity check: validate that TextSegments have indices in correct order
+        // Sanity checks
         validateTextSegmentIndices(chunks);
+        validateTextSegmentMaxSize(chunks, CHUNK_SIZE);
 
         String combinedChunks = chunks.stream().map(TextSegment::text).collect(Collectors.joining());
         Assert.assertEquals(combinedChunks, inputContent,
                 "Chunking without overlap should return the original content for " + fileName);
 
-        String actualOutput = formatChunksOutput(chunks, CHUNK_SIZE, 0);
+        String actualOutput = TestUtil.formatChunksOutput(chunks, CHUNK_SIZE, 0);
 
         // Handle BLESS environment variable and expected file comparison
         String expectedFileName = fileName.replace(".md", "_" + CHUNK_SIZE + "_" + 0 + ".txt");
@@ -99,28 +126,6 @@ public class MarkdownChunkerIntegrationTest {
         return Paths.get(System.getProperty("user.dir"))
                 .resolve("src/test/resources")
                 .resolve(relativePath);
-    }
-
-    private String formatChunksOutput(List<TextSegment> chunks, int chunkSize, int maxOverlapSize) {
-        StringBuilder sb = new StringBuilder();
-        sb.append(chunkSize).append(" ").append(maxOverlapSize).append("\n\n");
-
-        for (int i = 0; i < chunks.size(); i++) {
-            sb.append("--- Chunk ").append(i + 1).append(" ---\n");
-
-            // Add metadata if present
-            Map<String, Object> metadata = chunks.get(i).metadata().toMap();
-            if (!metadata.isEmpty()) {
-                sb.append("Metadata: ").append(metadata).append("\n");
-            }
-
-            sb.append(chunks.get(i).text());
-            if (i < chunks.size() - 1) {
-                sb.append("\n\n");
-            }
-        }
-
-        return sb.toString();
     }
 
     @DataProvider(name = "chunkStrategies")
@@ -344,6 +349,22 @@ public class MarkdownChunkerIntegrationTest {
         }
     }
 
+    private void validateTextSegmentMaxSize(List<TextSegment> chunks, int maxSize) {
+        for (TextSegment chunk : chunks) {
+            String text = chunk.text();
+            Assert.assertTrue(text.length() <= maxSize,
+                    "TextSegment exceeds max size of " + maxSize + ": " + text.length());
+        }
+    }
+
+    private void validateChunkContent(List<TextSegment> chunks, String originalContent) {
+        for (TextSegment chunk : chunks) {
+            String text = chunk.text();
+            Assert.assertTrue(originalContent.contains(text),
+                    "Chunk content should be part of the original content: " + text);
+        }
+    }
+
     private void validateTextSegmentIndices(List<TextSegment> chunks) {
         for (int i = 0; i < chunks.size(); i++) {
             TextSegment chunk = chunks.get(i);
@@ -368,24 +389,24 @@ public class MarkdownChunkerIntegrationTest {
     public void testBreakUpChunkMetadataLinking() {
         // Create a test chunk with some metadata
         Map<String, String> originalMetadata = Map.of("type", "test", "source", "unit_test");
-        MarkdownChunker.Chunk originalChunk = new MarkdownChunker.Chunk(
+        RecursiveChunker.Chunk originalChunk = new RecursiveChunker.Chunk(
                 "This is a very long text that needs to be broken up into smaller chunks", originalMetadata);
 
         // Break up the chunk with a small max size to force multiple chunks
-        List<MarkdownChunker.Chunk> brokenChunks = MarkdownChunker.breakUpChunk(originalChunk, 10);
+        List<RecursiveChunker.Chunk> brokenChunks = RecursiveChunker.breakUpChunk(originalChunk, 10);
 
         // Verify we got multiple chunks
         Assert.assertTrue(brokenChunks.size() > 1, "Should create multiple chunks when breaking up large content");
 
         // Verify the first chunk doesn't have a prev link (it's the first)
-        MarkdownChunker.Chunk firstChunk = brokenChunks.get(0);
+        RecursiveChunker.Chunk firstChunk = brokenChunks.get(0);
         Assert.assertFalse(firstChunk.metadata().containsKey("prev"),
                 "First chunk should not have a prev link");
 
         // Verify subsequent chunks have prev links to the previous chunk
         for (int i = 1; i < brokenChunks.size(); i++) {
-            MarkdownChunker.Chunk currentChunk = brokenChunks.get(i);
-            MarkdownChunker.Chunk previousChunk = brokenChunks.get(i - 1);
+            RecursiveChunker.Chunk currentChunk = brokenChunks.get(i);
+            RecursiveChunker.Chunk previousChunk = brokenChunks.get(i - 1);
 
             Assert.assertTrue(currentChunk.metadata().containsKey("prev"),
                     "Chunk " + i + " should have a prev link");
@@ -396,7 +417,7 @@ public class MarkdownChunkerIntegrationTest {
         }
 
         // Verify original metadata is preserved in all chunks
-        for (MarkdownChunker.Chunk chunk : brokenChunks) {
+        for (RecursiveChunker.Chunk chunk : brokenChunks) {
             Assert.assertEquals(chunk.metadata().get("type"), "test",
                     "All chunks should preserve original type metadata");
             Assert.assertEquals(chunk.metadata().get("source"), "unit_test",
@@ -405,7 +426,7 @@ public class MarkdownChunkerIntegrationTest {
 
         // Verify the combined text equals the original
         String combinedText = brokenChunks.stream()
-                .map(MarkdownChunker.Chunk::piece)
+                .map(RecursiveChunker.Chunk::piece)
                 .collect(Collectors.joining());
         Assert.assertEquals(combinedText, originalChunk.piece(),
                 "Combined text from broken chunks should equal original text");
@@ -415,9 +436,9 @@ public class MarkdownChunkerIntegrationTest {
     public void testBreakUpChunkEdgeCases() {
         // Test with chunk smaller than max size
         Map<String, String> metadata = Map.of("type", "small");
-        MarkdownChunker.Chunk smallChunk = new MarkdownChunker.Chunk("Small", metadata);
+        RecursiveChunker.Chunk smallChunk = new RecursiveChunker.Chunk("Small", metadata);
 
-        List<MarkdownChunker.Chunk> result = MarkdownChunker.breakUpChunk(smallChunk, 10);
+        List<RecursiveChunker.Chunk> result = RecursiveChunker.breakUpChunk(smallChunk, 10);
 
         Assert.assertEquals(result.size(), 1, "Should return single chunk when content is smaller than max size");
         Assert.assertEquals(result.get(0).piece(), "Small", "Should preserve original content");
@@ -425,14 +446,14 @@ public class MarkdownChunkerIntegrationTest {
                 "Single chunk should not have prev link");
 
         // Test with empty chunk
-        MarkdownChunker.Chunk emptyChunk = new MarkdownChunker.Chunk("", metadata);
-        List<MarkdownChunker.Chunk> emptyResult = MarkdownChunker.breakUpChunk(emptyChunk, 10);
+        RecursiveChunker.Chunk emptyChunk = new RecursiveChunker.Chunk("", metadata);
+        List<RecursiveChunker.Chunk> emptyResult = RecursiveChunker.breakUpChunk(emptyChunk, 10);
 
         Assert.assertEquals(emptyResult.size(), 0, "Should return empty list for empty chunk");
 
         // Test with chunk exactly at max size
-        MarkdownChunker.Chunk exactChunk = new MarkdownChunker.Chunk("Exactly10!", metadata);
-        List<MarkdownChunker.Chunk> exactResult = MarkdownChunker.breakUpChunk(exactChunk, 10);
+        RecursiveChunker.Chunk exactChunk = new RecursiveChunker.Chunk("Exactly10!", metadata);
+        List<RecursiveChunker.Chunk> exactResult = RecursiveChunker.breakUpChunk(exactChunk, 10);
 
         Assert.assertEquals(exactResult.size(), 1, "Should return single chunk when content is exactly max size");
         Assert.assertEquals(exactResult.get(0).piece(), "Exactly10!", "Should preserve original content");
