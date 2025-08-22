@@ -30,6 +30,10 @@ dependencies {
     implementation group: 'dev.langchain4j', name: 'langchain4j', version: "${langchain4jVersion}"
     implementation group: 'dev.langchain4j', name: 'langchain4j-core', version: "${langchain4jVersion}"
     implementation group: 'org.apache.opennlp', name: 'opennlp-tools', version: "${openNlpToolsVersion}"
+
+
+    implementation group: 'org.apache.tika', name: 'tika-core', version: "${tikaVersion}"
+    implementation group: 'org.apache.tika', name: 'tika-parser-pdf-module', version: "${tikaVersion}"
     
     checkstyle project(":checkstyle")
     checkstyle "com.puppycrawl.tools:checkstyle:${checkstylePluginVersion}"
