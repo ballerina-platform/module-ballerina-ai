@@ -14,9 +14,58 @@
 // specific language governing permissions and limitations
 // under the License.
 
+import ballerina/jballerina.java;
+
 # Represents a data loader that can load documents from various sources.
 public type DataLoader isolated object {
     # Loads documents from a source.
     # + return - document or an array of documents, or an `ai:Error` if the loading fails
     public isolated function load() returns Document[]|Document|Error;
+};
+
+// FIXME: check the name in issue
+public isolated class TextDataLoader {
+    *DataLoader;
+    final string path;
+
+    public isolated function init(string path) {
+        self.path = path;
+    }
+
+    public isolated function load() returns Document[]|Document|Error {
+        if self.path.endsWith(".pdf") {
+            return loadPdf(self.path);
+        }
+        return error("Unsupported file type");
+    }
+}
+
+isolated function loadPdf(string path) returns TextDocument|Error {
+    // FIXME:
+    DocumentInfo|error docInfo = readPdfFromJava(path);
+    if docInfo is error {
+        return error Error(docInfo.message());
+    }
+
+    Metadata metadata = {...docInfo.metadata};
+
+    metadata.fileName = path;
+    metadata.mimeType = docInfo.mimeType;
+
+    return {
+        content: docInfo.content,
+        metadata
+    };
+}
+
+isolated function readPdfFromJava(string path) returns DocumentInfo|error = @java:Method {
+    'class: "io.ballerina.stdlib.ai.DocReader",
+    name: "readPdf"
+} external;
+
+type DocumentInfo record {
+    string mimeType;
+    string extension;
+    map<string> metadata;
+    string content;
 };
