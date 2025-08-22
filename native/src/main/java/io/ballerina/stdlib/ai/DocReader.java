@@ -78,7 +78,7 @@ public class DocReader {
         }
 
         static DocumentInfo fromPpt(String content, Map<String, String> metadata) {
-            return new DocumentInfo("application/vnd.ms-powerpoint", "doc", metadata, content);
+            return new DocumentInfo("application/vnd.ms-powerpoint", "ppt", metadata, content);
         }
 
         BMap<BString, Object> toBallerinaRecord() {
@@ -111,6 +111,32 @@ public class DocReader {
         }
     }
 
+    public static Object readDocx(BString filePath) {
+        String path = filePath.getValue();
+        DocumentInfo docInfo;
+        try {
+            docInfo = parseOfficeX(path, "docx");
+            return docInfo.toBallerinaRecord();
+        } catch (IOException | TikaException | SAXException e) {
+            return createError("Error reading document: " + e.getMessage());
+        } catch (RuntimeException e) {
+            return createError("Unexpected error: " + e.getMessage());
+        }
+    }
+
+    public static Object readPptx(BString filePath) {
+        String path = filePath.getValue();
+        DocumentInfo docInfo;
+        try {
+            docInfo = parseOfficeX(path, "pptx");
+            return docInfo.toBallerinaRecord();
+        } catch (IOException | TikaException | SAXException e) {
+            return createError("Error reading document: " + e.getMessage());
+        } catch (RuntimeException e) {
+            return createError("Unexpected error: " + e.getMessage());
+        }
+    }
+
     static DocumentInfo parsePDF(String path) throws IOException, TikaException, SAXException {
         try (InputStream inputStream = new FileInputStream(path)) {
             Parser parser = new PDFParser();
@@ -120,6 +146,26 @@ public class DocReader {
             parser.parse(inputStream, handler, metadata, context);
             String content = handler.toString();
             return DocumentInfo.fromPdf(content, extractMetadata(metadata));
+        }
+    }
+
+    static DocumentInfo parseOfficeX(String path, String fileType) throws IOException, TikaException, SAXException {
+        try (InputStream inputStream = new FileInputStream(path)) {
+            Parser parser = new OOXMLParser();
+            BodyContentHandler handler = new BodyContentHandler(-1);
+            Metadata metadata = new Metadata();
+            ParseContext context = new ParseContext();
+            parser.parse(inputStream, handler, metadata, context);
+            String content = handler.toString();
+
+            // FIXME: use enum for file tye
+            if ("docx".equals(fileType)) {
+                return DocumentInfo.fromDocx(content, extractMetadata(metadata));
+            } else if ("pptx".equals(fileType)) {
+                return DocumentInfo.fromPptx(content, extractMetadata(metadata));
+            } else {
+                throw new IllegalArgumentException("Unsupported file type: " + fileType);
+            }
         }
     }
 
