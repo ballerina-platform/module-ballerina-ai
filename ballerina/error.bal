@@ -78,7 +78,7 @@ public type ToolInvalidInputError distinct LlmInvalidGenerationError;
 public type MissingHttpParameterError distinct ToolInvalidInputError;
 
 # Represents an error that occurs when the maximum number of iterations has been exceeded.
-public type MaxIterationExceededError distinct (Error & error<record{|(ExecutionResult|ExecutionError)[] steps;|}>);
+public type MaxIterationExceededError distinct (Error & error<record{|(ExecutionResult|ExecutionError|Error)[] steps;|}>);
 
 # Represents errors that occur during memory-related operations.  
 public type MemoryError distinct Error;
