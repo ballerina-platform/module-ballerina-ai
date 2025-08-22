@@ -20,7 +20,7 @@ import ballerina/test;
 function testTextDataLoaderLoadPdf() returns error? {
     // Test PDF loading with a sample PDF file
     string pdfPath = "tests/resources/data-loader/TestDoc.pdf";
-    TextDataLoader loader = new (pdfPath);
+    TextDataLoader loader = check new (pdfPath);
 
     Document[]|Document|Error result = loader.load();
 
@@ -74,14 +74,14 @@ function testTextDataLoaderLoadPdf() returns error? {
 function testTextDataLoaderUnsupportedFileType() returns error? {
     // Test with an unsupported file type
     string unsupportedPath = "tests/resources/data-loader/test.txt";
-    TextDataLoader loader = new (unsupportedPath);
+    TextDataLoader loader = check new (unsupportedPath);
 
     Document[]|Document|Error result = loader.load();
 
     // Verify the result is an error for unsupported file types
     if result is Error {
         test:assertEquals(result.message(), "Unsupported file type",
-            "Should return error for unsupported file types");
+                "Should return error for unsupported file types");
     } else {
         test:assertFail("Should return error for unsupported file types");
     }
@@ -91,7 +91,7 @@ function testTextDataLoaderUnsupportedFileType() returns error? {
 function testTextDataLoaderLoadDocx() returns error? {
     // Test DOCX loading with a sample DOCX file
     string docxPath = "tests/resources/data-loader/TestDoc.docx";
-    TextDataLoader loader = new (docxPath);
+    TextDataLoader loader = check new (docxPath);
 
     Document[]|Document|Error result = loader.load();
 
@@ -123,8 +123,8 @@ function testTextDataLoaderLoadDocx() returns error? {
     if mimeType is () {
         test:assertFail("Document mime type should not be null");
     }
-    test:assertEquals(mimeType, "application/vnd.openxmlformats-officedocument.wordprocessingml.document", 
-        "MIME type should be 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'");
+    test:assertEquals(mimeType, "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "MIME type should be 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'");
 
     // Validate file extension
     string? fileName = metadata.fileName;
@@ -146,7 +146,7 @@ function testTextDataLoaderLoadDocx() returns error? {
 function testTextDataLoaderLoadPptx() returns error? {
     // Test PPTX loading with a sample PPTX file
     string pptxPath = "tests/resources/data-loader/Test presentation.pptx";
-    TextDataLoader loader = new (pptxPath);
+    TextDataLoader loader = check new (pptxPath);
 
     Document[]|Document|Error result = loader.load();
 
@@ -178,8 +178,8 @@ function testTextDataLoaderLoadPptx() returns error? {
     if mimeType is () {
         test:assertFail("Document mime type should not be null");
     }
-    test:assertEquals(mimeType, "application/vnd.openxmlformats-officedocument.presentationml.presentation", 
-        "MIME type should be 'application/vnd.openxmlformats-officedocument.presentationml.presentation'");
+    test:assertEquals(mimeType, "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            "MIME type should be 'application/vnd.openxmlformats-officedocument.presentationml.presentation'");
 
     // Validate file extension
     string? fileName = metadata.fileName;
@@ -194,5 +194,22 @@ function testTextDataLoaderLoadPptx() returns error? {
         test:assertTrue(content.length() > 0, "Document content should not be empty");
     } else {
         test:assertFail("Document content should be a string");
+    }
+}
+
+@test:Config {}
+function testTextDataLoaderFileDoesNotExist() returns error? {
+    // Test with a non-existent file path
+    string nonExistentPath = "tests/resources/data-loader/non_existent_file.pdf";
+
+    // Test constructor with non-existent file
+    TextDataLoader|Error loader = new (nonExistentPath);
+
+    // Verify the constructor returns an error for non-existent files
+    if loader is Error {
+        test:assertTrue(loader.message().includes("File does not exist"),
+                "Error message should indicate file does not exist");
+    } else {
+        test:assertFail("Constructor should return error for non-existent files");
     }
 }
