@@ -44,7 +44,7 @@ public type ChatService distinct service object {
 };
 
 type ExecutionTrace record {|
-    (ExecutionResult|ExecutionError)[] steps;
+    (ExecutionResult|ExecutionError|Error)[] steps;
     string answer?;
 |};
 

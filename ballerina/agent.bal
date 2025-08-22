@@ -105,7 +105,7 @@ public isolated distinct class Agent {
     }
 }
 
-isolated function constructError((ExecutionResult|ExecutionError)[] steps, int maxIter) returns Error {
+isolated function constructError((ExecutionResult|ExecutionError|Error)[] steps, int maxIter) returns Error {
     if (steps.length() == maxIter) {
         return error MaxIterationExceededError("Maximum iteration limit exceeded while processing the query.",
             steps = steps);
@@ -113,7 +113,7 @@ isolated function constructError((ExecutionResult|ExecutionError)[] steps, int m
     // Validates whether the execution steps contain only one memory error.
     // If there is exactly one memory error, it is returned; otherwise, null is returned.
     if steps.length() == 1 {
-        ExecutionResult|ExecutionError step = steps.pop();
+        ExecutionResult|ExecutionError|Error step = steps.pop();
         if step is ExecutionError && step.'error is MemoryError {
             return <MemoryError>step.'error;
         }

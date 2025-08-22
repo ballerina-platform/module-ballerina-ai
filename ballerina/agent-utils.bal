@@ -247,7 +247,7 @@ class Executor {
 isolated function run(BaseAgent agent, string instruction, string query, int maxIter, boolean verbose,
         string sessionId = DEFAULT_SESSION_ID, Context context = new) returns ExecutionTrace {
     lock {
-        (ExecutionResult|ExecutionError)[] steps = [];
+        (ExecutionResult|ExecutionError|Error)[] steps = [];
 
         string? content = ();
         Iterator iterator = new (agent, sessionId, instruction = instruction, query = query, context = context);
@@ -266,6 +266,7 @@ isolated function run(BaseAgent agent, string instruction, string query, int max
             if step is Error {
                 error? cause = step.cause();
                 log:printError("Error occured while executing the agent", step, cause = cause !is () ? cause.toString() : "");
+                steps.push(step);
                 break;
             }
             if step is LlmChatResponse {
