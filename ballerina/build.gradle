@@ -109,6 +109,9 @@ dependencies {
     externalJars(group: 'org.apache.logging.log4j', name: 'log4j-api', version: "${project.log4jVersion}") {
         transitive = false
     }
+    externalJars(group: 'org.apache.logging.log4j', name: 'log4j-core', version: "${project.log4jVersion}") {
+        transitive = false
+    }
     
     // XMLBeans (required by POI OOXML)
     externalJars(group: 'org.apache.xmlbeans', name: 'xmlbeans', version: "${project.xmlbeansVersion}") {
@@ -127,6 +130,16 @@ task updateTomlFiles {
         newConfig = newConfig.replace("@toml.version@", tomlVersion)
         newConfig = newConfig.replace("@langchain4j.version", project.langchain4jVersion)
         newConfig = newConfig.replace("@openNlpTools.version", project.openNlpToolsVersion)
+        newConfig = newConfig.replace("@tikaVersion@", project.tikaVersion)
+        newConfig = newConfig.replace("@poiVersion@", project.poiVersion)
+        newConfig = newConfig.replace("@pdfboxVersion@", project.pdfboxVersion)
+        newConfig = newConfig.replace("@jempboxVersion@", project.jempboxVersion)
+        newConfig = newConfig.replace("@commonsIoVersion@", project.commonsIoVersion)
+        newConfig = newConfig.replace("@commonsCompressVersion@", project.commonsCompressVersion)
+        newConfig = newConfig.replace("@commonsCollections4Version@", project.commonsCollections4Version)
+        newConfig = newConfig.replace("@log4jVersion@", project.log4jVersion)
+        newConfig = newConfig.replace("@xmlbeansVersion@", project.xmlbeansVersion)
+        newConfig = newConfig.replace("@sparseBitSetVersion@", project.sparseBitSetVersion)
         ballerinaTomlFile.text = newConfig
 
         def ballerinaToOpenApiVersion = project.ballerinaToOpenApiVersion
