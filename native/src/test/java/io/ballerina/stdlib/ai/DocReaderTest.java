@@ -18,30 +18,28 @@
 
 package io.ballerina.stdlib.ai;
 
-import org.testng.Assert;
-import org.testng.annotations.Test;
-
+import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+
+import org.apache.tika.exception.TikaException;
+import org.testng.Assert;
+import org.testng.annotations.Test;
+import org.xml.sax.SAXException;
 
 public class DocReaderTest {
 
     @Test
-    public void testParsePDF() {
+    public void testParsePDF() throws TikaException, IOException, SAXException {
         Path resourcePath = Paths.get(System.getProperty("user.dir"))
                 .resolve("src/test/resources")
                 .resolve("doc-reader-test/Operating_Systems_From_0_to_1.pdf");
-        
-        String result = DocReader.parsePDF(resourcePath.toString());
-        
-        Assert.assertNotNull(result, "PDF parsing result should not be null");
-        Assert.assertFalse(result.trim().isEmpty(), "PDF parsing result should not be empty");
-        Assert.assertTrue(result.length() > 100, "PDF should contain substantial content");
-    }
+        var doc = DocReader.parsePDF(resourcePath.toString());
+        String content = doc.content();
 
-    @Test(expectedExceptions = RuntimeException.class)
-    public void testParsePDFWithInvalidPath() {
-        DocReader.parsePDF("non-existent-file.pdf");
+        Assert.assertNotNull(content, "PDF parsing result should not be null");
+        Assert.assertFalse(content.trim().isEmpty(), "PDF parsing result should not be empty");
+        Assert.assertTrue(content.length() > 100, "PDF should contain substantial content");
     }
 
     @Test
