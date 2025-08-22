@@ -26,6 +26,7 @@ import org.apache.tika.exception.TikaException;
 import org.apache.tika.metadata.Metadata;
 import org.apache.tika.parser.ParseContext;
 import org.apache.tika.parser.Parser;
+import org.apache.tika.parser.microsoft.ooxml.OOXMLParser;
 import org.apache.tika.parser.pdf.PDFParser;
 import org.apache.tika.sax.BodyContentHandler;
 import org.xml.sax.SAXException;
@@ -35,6 +36,19 @@ public class DocReader {
     public static String parsePDF(String path) {
         try (InputStream inputStream = new FileInputStream(path)) {
             Parser parser = new PDFParser();
+            BodyContentHandler handler = new BodyContentHandler(-1);
+            Metadata metadata = new Metadata();
+            ParseContext context = new ParseContext();
+            parser.parse(inputStream, handler, metadata, context);
+            return handler.toString();
+        } catch (IOException | TikaException | SAXException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public static String parseOfficeX(String path) {
+        try (InputStream inputStream = new FileInputStream(path)) {
+            Parser parser = new OOXMLParser();
             BodyContentHandler handler = new BodyContentHandler(-1);
             Metadata metadata = new Metadata();
             ParseContext context = new ParseContext();

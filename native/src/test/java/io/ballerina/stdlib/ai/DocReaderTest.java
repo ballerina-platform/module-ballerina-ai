@@ -43,4 +43,35 @@ public class DocReaderTest {
     public void testParsePDFWithInvalidPath() {
         DocReader.parsePDF("non-existent-file.pdf");
     }
+
+    @Test
+    public void testParseOfficeXDocx() {
+        Path resourcePath = Paths.get(System.getProperty("user.dir"))
+                .resolve("src/test/resources")
+                .resolve("doc-reader-test/module.docx");
+        
+        String result = DocReader.parseOfficeX(resourcePath.toString());
+        
+        Assert.assertNotNull(result, "DOCX parsing result should not be null");
+        Assert.assertFalse(result.trim().isEmpty(), "DOCX parsing result should not be empty");
+        Assert.assertTrue(result.length() > 10, "DOCX should contain substantial content");
+    }
+
+    @Test
+    public void testParseOfficeXPptx() {
+        Path resourcePath = Paths.get(System.getProperty("user.dir"))
+                .resolve("src/test/resources")
+                .resolve("doc-reader-test/test.pptx");
+        
+        String result = DocReader.parseOfficeX(resourcePath.toString());
+        
+        Assert.assertNotNull(result, "PPTX parsing result should not be null");
+        Assert.assertFalse(result.trim().isEmpty(), "PPTX parsing result should not be empty");
+        Assert.assertTrue(result.length() > 10, "PPTX should contain substantial content");
+    }
+
+    @Test(expectedExceptions = RuntimeException.class)
+    public void testParseOfficeXWithInvalidPath() {
+        DocReader.parseOfficeX("non-existent-file.docx");
+    }
 }
