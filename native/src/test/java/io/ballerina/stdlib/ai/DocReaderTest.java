@@ -33,7 +33,7 @@ public class DocReaderTest {
     public void testParsePDF() throws TikaException, IOException, SAXException {
         Path resourcePath = Paths.get(System.getProperty("user.dir"))
                 .resolve("src/test/resources")
-                .resolve("doc-reader-test/Operating_Systems_From_0_to_1.pdf");
+                .resolve("doc-reader-test/TestDoc.pdf");
         var doc = DocReader.parsePDF(resourcePath.toString());
         String content = doc.content();
 
@@ -46,10 +46,10 @@ public class DocReaderTest {
     public void testParseOfficeXDocx() {
         Path resourcePath = Paths.get(System.getProperty("user.dir"))
                 .resolve("src/test/resources")
-                .resolve("doc-reader-test/module.docx");
-        
+                .resolve("doc-reader-test/TestDoc.docx");
+
         String result = DocReader.parseOfficeX(resourcePath.toString());
-        
+
         Assert.assertNotNull(result, "DOCX parsing result should not be null");
         Assert.assertFalse(result.trim().isEmpty(), "DOCX parsing result should not be empty");
         Assert.assertTrue(result.length() > 10, "DOCX should contain substantial content");
@@ -59,10 +59,10 @@ public class DocReaderTest {
     public void testParseOfficeXPptx() {
         Path resourcePath = Paths.get(System.getProperty("user.dir"))
                 .resolve("src/test/resources")
-                .resolve("doc-reader-test/test.pptx");
-        
+                .resolve("doc-reader-test/Test presentation.pptx");
+
         String result = DocReader.parseOfficeX(resourcePath.toString());
-        
+
         Assert.assertNotNull(result, "PPTX parsing result should not be null");
         Assert.assertFalse(result.trim().isEmpty(), "PPTX parsing result should not be empty");
         Assert.assertTrue(result.length() > 10, "PPTX should contain substantial content");
