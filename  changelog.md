@@ -4,6 +4,8 @@ This file documents all significant changes made to the Ballerina AI package acr
 
 ## [Unreleased]
 
+## [1.4.0] - 2025-08-22
+
 ### Added
 - [Add HTMLChunker Implementation](https://github.com/ballerina-platform/ballerina-library/issues/8170)
 
