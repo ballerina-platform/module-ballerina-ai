@@ -72,9 +72,7 @@ function testAgentExecutorRun() returns error? {
     test:assertEquals(output?.observation, "Answer: 3.991298452658078");
 }
 
-@test:Config {
-    enable: false
-}
+@test:Config
 function testAgentRunHavingErrorStep() returns error? {
     FunctionCallAgent agent = check new (model, [searchTool, calculatorTool]);
     string query = "Random query";
