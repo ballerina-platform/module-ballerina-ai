@@ -32,9 +32,19 @@ dependencies {
     implementation group: 'org.apache.opennlp', name: 'opennlp-tools', version: "${openNlpToolsVersion}"
 
 
-    implementation group: 'org.apache.tika', name: 'tika-core', version: "${tikaVersion}"
-    implementation group: 'org.apache.tika', name: 'tika-parser-pdf-module', version: "${tikaVersion}"
-    
+    implementation group: 'org.apache.tika', name: 'tika-core', version: "${tikaVersion}", {
+        exclude group: 'xml-apis', module: 'xml-apis'
+        exclude group: 'xerces', module: 'xercesImpl'
+    }
+    implementation group: 'org.apache.tika', name: 'tika-parser-pdf-module', version: "${tikaVersion}", {
+        exclude group: 'xml-apis', module: 'xml-apis'
+        exclude group: 'xerces', module: 'xercesImpl'
+    }
+    implementation group: 'org.apache.tika', name: 'tika-parser-microsoft-module', version: "${tikaVersion}", {
+        exclude group: 'xml-apis', module: 'xml-apis'
+        exclude group: 'xerces', module: 'xercesImpl'
+    }
+
     checkstyle project(":checkstyle")
     checkstyle "com.puppycrawl.tools:checkstyle:${checkstylePluginVersion}"
 
