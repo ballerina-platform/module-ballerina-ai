@@ -18,13 +18,6 @@
 
 package io.ballerina.stdlib.ai;
 
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.util.HashMap;
-import java.util.Locale;
-import java.util.Map;
-
 import io.ballerina.runtime.api.creators.TypeCreator;
 import io.ballerina.runtime.api.creators.ValueCreator;
 import io.ballerina.runtime.api.types.RecordType;
@@ -40,70 +33,101 @@ import org.apache.tika.parser.pdf.PDFParser;
 import org.apache.tika.sax.BodyContentHandler;
 import org.xml.sax.SAXException;
 
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.HashMap;
+import java.util.Locale;
+import java.util.Map;
+
 import static io.ballerina.stdlib.ai.ModuleUtils.createError;
 
-public class DocReader {
+public class TextDataLoader {
 
-    private static final String MIME_TYPE_FIELD = "mimeType";
-    private static final String EXTENSION_FIELD = "extension";
+    private static final String TYPE_FIELD = "type";
     private static final String METADATA_FIELD = "metadata";
     private static final String CONTENT_FIELD = "content";
+    private static final String MIME_TYPE_FIELD = "mimeType";
+    private static final String FILE_NAME_FIELD = "fileName";
     private static final String DEFAULT_MIME_TYPE = "application/octet-stream";
-    private static final String DOCUMENT_INFO_RECORD = "DocumentInfo";
+    private static final String TEXT_DOCUMENT_TYPE = "text";
+    private static final String TEXT_DOCUMENT_RECORD = "TextDocument";
     private static final String X_TIKA_PREFIX = "x-tika";
 
-    record DocumentInfo(
+    // MIME type constants
+    private static final String MIME_TYPE_PDF = "application/pdf";
+    private static final String MIME_TYPE_DOCX =
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+    private static final String MIME_TYPE_PPTX =
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+    private static final String MIME_TYPE_DOC = "application/msword";
+    private static final String MIME_TYPE_PPT = "application/vnd.ms-powerpoint";
+
+    // File extension constants
+    private static final String EXTENSION_PDF = "pdf";
+    private static final String EXTENSION_DOCX = "docx";
+    private static final String EXTENSION_PPTX = "pptx";
+    private static final String EXTENSION_DOC = "doc";
+    private static final String EXTENSION_PPT = "ppt";
+
+    enum FileType {
+        DOCX,
+        PPTX;
+    }
+
+    record TextDocumentInfo(
             String mimeType,
-            String extension,
+            String fileName,
             Map<String, String> metadata,
             String content
     ) {
 
-        static DocumentInfo fromPdf(String content, Map<String, String> metadata) {
-            return new DocumentInfo("application/pdf", "pdf", metadata, content);
+        static TextDocumentInfo fromPdf(String content, Map<String, String> metadata, String fileName) {
+            return new TextDocumentInfo(MIME_TYPE_PDF, fileName, metadata, content);
         }
 
-        static DocumentInfo fromDocx(String content, Map<String, String> metadata) {
-            return new DocumentInfo("application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                    "docx", metadata, content);
+        static TextDocumentInfo fromDocx(String content, Map<String, String> metadata, String fileName) {
+            return new TextDocumentInfo(MIME_TYPE_DOCX, fileName, metadata, content);
         }
 
-        static DocumentInfo fromPptx(String content, Map<String, String> metadata) {
-            return new DocumentInfo("application/vnd.openxmlformats-officedocument.presentationml.presentation",
-                    "pptx", metadata, content);
+        static TextDocumentInfo fromPptx(String content, Map<String, String> metadata, String fileName) {
+            return new TextDocumentInfo(MIME_TYPE_PPTX, fileName, metadata, content);
         }
 
-        static DocumentInfo fromDoc(String content, Map<String, String> metadata) {
-            return new DocumentInfo("application/msword", "doc", metadata, content);
-        }
-
-        static DocumentInfo fromPpt(String content, Map<String, String> metadata) {
-            return new DocumentInfo("application/vnd.ms-powerpoint", "ppt", metadata, content);
-        }
-
-        BMap<BString, Object> toBallerinaRecord() {
+        BMap<BString, Object> toBallerinaTextDocument() {
             RecordType resultRecordType =
-                    TypeCreator.createRecordType(DOCUMENT_INFO_RECORD, ModuleUtils.getModule(), 0, false, 0);
-            BMap<BString, Object> documentInfo = ValueCreator.createRecordValue(resultRecordType);
+                    TypeCreator.createRecordType(TEXT_DOCUMENT_RECORD, ModuleUtils.getModule(), 0, false, 0);
+            BMap<BString, Object> textDocument = ValueCreator.createRecordValue(resultRecordType);
 
-            documentInfo.put(StringUtils.fromString(MIME_TYPE_FIELD),
+            // Set the type field to "text"
+            textDocument.put(StringUtils.fromString(TYPE_FIELD), StringUtils.fromString(TEXT_DOCUMENT_TYPE));
+            
+            // Set the content field
+            textDocument.put(StringUtils.fromString(CONTENT_FIELD), StringUtils.fromString(content()));
+
+            // Create metadata map with mimeType, fileName and other metadata
+            BMap<BString, Object> metadataMap = ValueCreator.createMapValue();
+            metadataMap.put(StringUtils.fromString(MIME_TYPE_FIELD),
                     StringUtils.fromString(mimeType() != null ? mimeType() : DEFAULT_MIME_TYPE));
-            documentInfo.put(StringUtils.fromString(EXTENSION_FIELD), StringUtils.fromString(extension()));
+            metadataMap.put(StringUtils.fromString(FILE_NAME_FIELD), StringUtils.fromString(fileName()));
+            
+            // Add all other metadata
+            for (Map.Entry<String, String> entry : metadata().entrySet()) {
+                metadataMap.put(StringUtils.fromString(entry.getKey()), StringUtils.fromString(entry.getValue()));
+            }
+            
+            textDocument.put(StringUtils.fromString(METADATA_FIELD), metadataMap);
 
-            BMap<BString, Object> metadataMap = toBallerinaMap(metadata());
-            documentInfo.put(StringUtils.fromString(METADATA_FIELD), metadataMap);
-            documentInfo.put(StringUtils.fromString(CONTENT_FIELD), StringUtils.fromString(content()));
-
-            return documentInfo;
+            return textDocument;
         }
     }
 
     public static Object readPdf(BString filePath) {
         String path = filePath.getValue();
-        DocumentInfo docInfo;
+        TextDocumentInfo docInfo;
         try {
             docInfo = parsePDF(path);
-            return docInfo.toBallerinaRecord();
+            return docInfo.toBallerinaTextDocument();
         } catch (IOException | TikaException | SAXException e) {
             return createError("Error reading document: " + e.getMessage());
         } catch (RuntimeException e) {
@@ -113,10 +137,10 @@ public class DocReader {
 
     public static Object readDocx(BString filePath) {
         String path = filePath.getValue();
-        DocumentInfo docInfo;
+        TextDocumentInfo docInfo;
         try {
-            docInfo = parseOfficeX(path, "docx");
-            return docInfo.toBallerinaRecord();
+            docInfo = parseOfficeX(path, FileType.DOCX);
+            return docInfo.toBallerinaTextDocument();
         } catch (IOException | TikaException | SAXException e) {
             return createError("Error reading document: " + e.getMessage());
         } catch (RuntimeException e) {
@@ -126,10 +150,10 @@ public class DocReader {
 
     public static Object readPptx(BString filePath) {
         String path = filePath.getValue();
-        DocumentInfo docInfo;
+        TextDocumentInfo docInfo;
         try {
-            docInfo = parseOfficeX(path, "pptx");
-            return docInfo.toBallerinaRecord();
+            docInfo = parseOfficeX(path, FileType.PPTX);
+            return docInfo.toBallerinaTextDocument();
         } catch (IOException | TikaException | SAXException e) {
             return createError("Error reading document: " + e.getMessage());
         } catch (RuntimeException e) {
@@ -137,7 +161,7 @@ public class DocReader {
         }
     }
 
-    static DocumentInfo parsePDF(String path) throws IOException, TikaException, SAXException {
+    static TextDocumentInfo parsePDF(String path) throws IOException, TikaException, SAXException {
         try (InputStream inputStream = new FileInputStream(path)) {
             Parser parser = new PDFParser();
             BodyContentHandler handler = new BodyContentHandler(-1);
@@ -145,11 +169,12 @@ public class DocReader {
             ParseContext context = new ParseContext();
             parser.parse(inputStream, handler, metadata, context);
             String content = handler.toString();
-            return DocumentInfo.fromPdf(content, extractMetadata(metadata));
+            return TextDocumentInfo.fromPdf(content, extractMetadata(metadata), path);
         }
     }
 
-    static DocumentInfo parseOfficeX(String path, String fileType) throws IOException, TikaException, SAXException {
+    static TextDocumentInfo parseOfficeX(String path, FileType fileType)
+            throws IOException, TikaException, SAXException {
         try (InputStream inputStream = new FileInputStream(path)) {
             Parser parser = new OOXMLParser();
             BodyContentHandler handler = new BodyContentHandler(-1);
@@ -158,14 +183,10 @@ public class DocReader {
             parser.parse(inputStream, handler, metadata, context);
             String content = handler.toString();
 
-            // FIXME: use enum for file tye
-            if ("docx".equals(fileType)) {
-                return DocumentInfo.fromDocx(content, extractMetadata(metadata));
-            } else if ("pptx".equals(fileType)) {
-                return DocumentInfo.fromPptx(content, extractMetadata(metadata));
-            } else {
-                throw new IllegalArgumentException("Unsupported file type: " + fileType);
-            }
+            return switch (fileType) {
+                case DOCX -> TextDocumentInfo.fromDocx(content, extractMetadata(metadata), path);
+                case PPTX -> TextDocumentInfo.fromPptx(content, extractMetadata(metadata), path);
+            };
         }
     }
 
@@ -197,11 +218,4 @@ public class DocReader {
         return metadataMap;
     }
 
-    static BMap<BString, Object> toBallerinaMap(Map<String, String> map) {
-        BMap<BString, Object> metadataMap = ValueCreator.createMapValue();
-        for (String name : map.keySet()) {
-            metadataMap.put(StringUtils.fromString(name), StringUtils.fromString(map.get(name)));
-        }
-        return metadataMap;
-    }
 }

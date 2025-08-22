@@ -18,23 +18,23 @@
 
 package io.ballerina.stdlib.ai;
 
-import java.io.IOException;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-
 import org.apache.tika.exception.TikaException;
 import org.testng.Assert;
 import org.testng.annotations.Test;
 import org.xml.sax.SAXException;
 
-public class DocReaderTest {
+import java.io.IOException;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+
+public class TextDataLoaderTest {
 
     @Test
     public void testParsePDF() throws TikaException, IOException, SAXException {
         Path resourcePath = Paths.get(System.getProperty("user.dir"))
                 .resolve("src/test/resources")
                 .resolve("doc-reader-test/TestDoc.pdf");
-        var doc = DocReader.parsePDF(resourcePath.toString());
+        var doc = TextDataLoader.parsePDF(resourcePath.toString());
         String content = doc.content();
 
         Assert.assertNotNull(content, "PDF parsing result should not be null");
@@ -48,7 +48,7 @@ public class DocReaderTest {
                 .resolve("src/test/resources")
                 .resolve("doc-reader-test/TestDoc.docx");
 
-        String result = DocReader.parseOfficeX(resourcePath.toString());
+        String result = TextDataLoader.parseOfficeX(resourcePath.toString());
 
         Assert.assertNotNull(result, "DOCX parsing result should not be null");
         Assert.assertFalse(result.trim().isEmpty(), "DOCX parsing result should not be empty");
@@ -61,7 +61,7 @@ public class DocReaderTest {
                 .resolve("src/test/resources")
                 .resolve("doc-reader-test/Test presentation.pptx");
 
-        String result = DocReader.parseOfficeX(resourcePath.toString());
+        String result = TextDataLoader.parseOfficeX(resourcePath.toString());
 
         Assert.assertNotNull(result, "PPTX parsing result should not be null");
         Assert.assertFalse(result.trim().isEmpty(), "PPTX parsing result should not be empty");
@@ -70,6 +70,6 @@ public class DocReaderTest {
 
     @Test(expectedExceptions = RuntimeException.class)
     public void testParseOfficeXWithInvalidPath() {
-        DocReader.parseOfficeX("non-existent-file.docx");
+        TextDataLoader.parseOfficeX("non-existent-file.docx");
     }
 }

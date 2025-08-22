@@ -15,6 +15,7 @@
 // under the License.
 
 import ballerina/jballerina.java;
+import ballerina/file;
 
 # Represents a data loader that can load documents from various sources.
 public type DataLoader isolated object {
@@ -23,97 +24,55 @@ public type DataLoader isolated object {
     public isolated function load() returns Document[]|Document|Error;
 };
 
-// FIXME: check the name in issue
 public isolated class TextDataLoader {
     *DataLoader;
     final string path;
 
-    public isolated function init(string path) {
+    public isolated function init(string path) returns Error? {
+        // Check if the file exists by trying to get metadata
+        file:MetaData|error metadata = file:getMetaData(path);
+        if metadata is error {
+            return error Error("File does not exist: " + path);
+        }
         self.path = path;
     }
 
     public isolated function load() returns Document[]|Document|Error {
+
         if self.path.endsWith(".pdf") {
-            return loadPdf(self.path);
+            TextDocument|error result = readPdfFromJava(self.path);
+            if result is error {
+                return error Error(result.message());
+            }
+            return result;
         } else if self.path.endsWith(".docx") {
-            return loadDocx(self.path);
+            TextDocument|error result = readDocxFromJava(self.path);
+            if result is error {
+                return error Error(result.message());
+            }
+            return result;
         } else if self.path.endsWith(".pptx") {
-            return loadPptx(self.path);
+            TextDocument|error result = readPptxFromJava(self.path);
+            if result is error {
+                return error Error(result.message());
+            }
+            return result;
         }
         return error("Unsupported file type");
     }
 }
 
-isolated function loadPdf(string path) returns TextDocument|Error {
-    // FIXME:
-    DocumentInfo|error docInfo = readPdfFromJava(path);
-    if docInfo is error {
-        return error Error(docInfo.message());
-    }
-
-    Metadata metadata = {...docInfo.metadata};
-
-    metadata.fileName = path;
-    metadata.mimeType = docInfo.mimeType;
-
-    return {
-        content: docInfo.content,
-        metadata
-    };
-}
-
-isolated function loadDocx(string path) returns TextDocument|Error {
-    DocumentInfo|error docInfo = readDocxFromJava(path);
-    if docInfo is error {
-        return error Error(docInfo.message());
-    }
-
-    Metadata metadata = {...docInfo.metadata};
-
-    metadata.fileName = path;
-    metadata.mimeType = docInfo.mimeType;
-
-    return {
-        content: docInfo.content,
-        metadata
-    };
-}
-
-isolated function loadPptx(string path) returns TextDocument|Error {
-    DocumentInfo|error docInfo = readPptxFromJava(path);
-    if docInfo is error {
-        return error Error(docInfo.message());
-    }
-
-    Metadata metadata = {...docInfo.metadata};
-
-    metadata.fileName = path;
-    metadata.mimeType = docInfo.mimeType;
-
-    return {
-        content: docInfo.content,
-        metadata
-    };
-}
-
-isolated function readPdfFromJava(string path) returns DocumentInfo|error = @java:Method {
-    'class: "io.ballerina.stdlib.ai.DocReader",
+isolated function readPdfFromJava(string path) returns TextDocument|error = @java:Method {
+    'class: "io.ballerina.stdlib.ai.TextDataLoader",
     name: "readPdf"
 } external;
 
-isolated function readDocxFromJava(string path) returns DocumentInfo|error = @java:Method {
-    'class: "io.ballerina.stdlib.ai.DocReader",
+isolated function readDocxFromJava(string path) returns TextDocument|error = @java:Method {
+    'class: "io.ballerina.stdlib.ai.TextDataLoader",
     name: "readDocx"
 } external;
 
-isolated function readPptxFromJava(string path) returns DocumentInfo|error = @java:Method {
-    'class: "io.ballerina.stdlib.ai.DocReader",
+isolated function readPptxFromJava(string path) returns TextDocument|error = @java:Method {
+    'class: "io.ballerina.stdlib.ai.TextDataLoader",
     name: "readPptx"
 } external;
-
-type DocumentInfo record {
-    string mimeType;
-    string extension;
-    map<string> metadata;
-    string content;
-};
