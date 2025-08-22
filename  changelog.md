@@ -10,6 +10,9 @@ This file documents all significant changes made to the Ballerina AI package acr
 ### Updated
 - [Update batchEmbed to Validate Chunks at Element Level](https://github.com/ballerina-platform/ballerina-library/issues/8171)
 
+### Fixed
+- [Fix Model Provider Errors Not Propagated to ai:Error in Agent Run Steps](https://github.com/ballerina-platform/ballerina-library/issues/8192)
+
 ## [1.3.0] - 2025-08-16
 
 ### Added
