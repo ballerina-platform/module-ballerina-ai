@@ -113,7 +113,7 @@ isolated function constructError((ExecutionResult|ExecutionError|Error)[] steps,
     // Validates whether the execution steps contain only one memory error.
     // If there is exactly one memory error, it is returned; otherwise, null is returned.
     if steps.length() == 1 {
-        ExecutionResult|ExecutionError|Error step = steps.pop();
+        ExecutionResult|ExecutionError|Error step = steps[0];
         if step is ExecutionError && step.'error is MemoryError {
             return <MemoryError>step.'error;
         }
