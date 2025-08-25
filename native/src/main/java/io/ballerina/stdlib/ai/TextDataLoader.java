@@ -53,6 +53,7 @@ public class TextDataLoader {
     private static final String TEXT_DOCUMENT_TYPE = "text";
     private static final String TEXT_DOCUMENT_RECORD = "TextDocument";
     private static final String X_TIKA_PREFIX = "x-tika";
+    private static final int UNLIMITED_CONTENT_SIZE = -1; // No limit on content size for BodyContentHandler
 
     // MIME type constants
     private static final String MIME_TYPE_PDF = "application/pdf";
@@ -164,7 +165,7 @@ public class TextDataLoader {
     static TextDocumentInfo parsePDF(String path) throws IOException, TikaException, SAXException {
         try (InputStream inputStream = new FileInputStream(path)) {
             Parser parser = new PDFParser();
-            BodyContentHandler handler = new BodyContentHandler(-1);
+            BodyContentHandler handler = new BodyContentHandler(UNLIMITED_CONTENT_SIZE);
             Metadata metadata = new Metadata();
             ParseContext context = new ParseContext();
             parser.parse(inputStream, handler, metadata, context);
@@ -177,7 +178,7 @@ public class TextDataLoader {
             throws IOException, TikaException, SAXException {
         try (InputStream inputStream = new FileInputStream(path)) {
             Parser parser = new OOXMLParser();
-            BodyContentHandler handler = new BodyContentHandler(-1);
+            BodyContentHandler handler = new BodyContentHandler(UNLIMITED_CONTENT_SIZE);
             Metadata metadata = new Metadata();
             ParseContext context = new ParseContext();
             parser.parse(inputStream, handler, metadata, context);
@@ -193,7 +194,7 @@ public class TextDataLoader {
     static String parseOfficeX(String path) {
         try (InputStream inputStream = new FileInputStream(path)) {
             Parser parser = new OOXMLParser();
-            BodyContentHandler handler = new BodyContentHandler(-1);
+            BodyContentHandler handler = new BodyContentHandler(UNLIMITED_CONTENT_SIZE);
             Metadata metadata = new Metadata();
             ParseContext context = new ParseContext();
             parser.parse(inputStream, handler, metadata, context);

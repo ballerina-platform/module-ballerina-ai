@@ -24,6 +24,8 @@ public type DataLoader isolated object {
     public isolated function load() returns Document[]|Document|Error;
 };
 
+# Dataloader that can be used to load supported file types as a `TextDocument` 
+# Currently only support `pdf`, `docx` and `pptx`
 public isolated class TextDataLoader {
     *DataLoader;
     final string path;
@@ -38,28 +40,53 @@ public isolated class TextDataLoader {
     }
 
     public isolated function load() returns Document[]|Document|Error {
-
-        if self.path.endsWith(".pdf") {
-            TextDocument|error result = readPdfFromJava(self.path);
-            if result is error {
-                return error Error(result.message());
-            }
-            return result;
-        } else if self.path.endsWith(".docx") {
-            TextDocument|error result = readDocxFromJava(self.path);
-            if result is error {
-                return error Error(result.message());
-            }
-            return result;
-        } else if self.path.endsWith(".pptx") {
-            TextDocument|error result = readPptxFromJava(self.path);
-            if result is error {
-                return error Error(result.message());
-            }
-            return result;
+        string? fileType = getFileType(self.path);
+        if fileType is () {
+            string extension = getFileExtension(self.path);
+            return error Error(string `Unsupported file type: ${extension}`);
         }
-        return error("Unsupported file type");
+
+        match fileType {
+            "pdf" => {
+                TextDocument|error result = readPdfFromJava(self.path);
+                if result is error {
+                    return error Error(result.message());
+                }
+                return result;
+            }
+            "docx" => {
+                TextDocument|error result = readDocxFromJava(self.path);
+                if result is error {
+                    return error Error(result.message());
+                }
+                return result;
+            }
+            "pptx" => {
+                TextDocument|error result = readPptxFromJava(self.path);
+                if result is error {
+                    return error Error(result.message());
+                }
+                return result;
+            }
+        }
+        return error Error("Unexpected error in file type processing");
     }
+}
+
+isolated function getFileType(string path) returns "pdf"|"docx"|"pptx"? {
+    string lowerPath = path.toLowerAscii();
+    if lowerPath.endsWith(".pdf") { return "pdf"; }
+    if lowerPath.endsWith(".docx") { return "docx"; }
+    if lowerPath.endsWith(".pptx") { return "pptx"; }
+    return ();
+}
+
+isolated function getFileExtension(string path) returns string {
+    int? lastDotIndex = path.lastIndexOf(".");
+    if lastDotIndex is () {
+        return "unknown";
+    }
+    return path.substring(lastDotIndex + 1);
 }
 
 isolated function readPdfFromJava(string path) returns TextDocument|error = @java:Method {
