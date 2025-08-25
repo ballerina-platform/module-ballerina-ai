@@ -14,14 +14,14 @@ graalvmCompatible = true
 [[platform.java21.dependency]]
 groupId = "io.ballerina.stdlib"
 artifactId = "ai-native"
-version = "1.4.1"
-path = "../native/build/libs/ai-native-1.4.1.jar"
+version = "1.4.2-SNAPSHOT"
+path = "../native/build/libs/ai-native-1.4.2-SNAPSHOT.jar"
 
 [[platform.java21.dependency]]
 groupId = "io.ballerina.stdlib"
 artifactId = "ai-native"
-version = "1.4.1"
-path = "../native/build/libs/ai-native-1.4.1-tests.jar"
+version = "1.4.2-SNAPSHOT"
+path = "../native/build/libs/ai-native-1.4.2-SNAPSHOT-tests.jar"
 testOnly = true
 
 [[platform.java21.dependency]]
