@@ -43,6 +43,8 @@ configurations {
 }
 
 dependencies {
+    externalJars project(":ai-native")
+    
     externalJars(group: 'dev.langchain4j', name: 'langchain4j', version:  "${project.langchain4jVersion}") {
         transitive = false
     }
@@ -50,6 +52,74 @@ dependencies {
         transitive = false
     }
     externalJars(group: 'org.apache.opennlp', name: 'opennlp-tools', version: "${project.openNlpToolsVersion}") {
+        transitive = false
+    }
+    
+    // Tika dependencies
+    externalJars(group: 'org.apache.tika', name: 'tika-core', version: "${project.tikaVersion}") {
+        transitive = false
+    }
+    externalJars(group: 'org.apache.tika', name: 'tika-parser-pdf-module', version: "${project.tikaVersion}") {
+        transitive = false
+    }
+    externalJars(group: 'org.apache.tika', name: 'tika-parser-microsoft-module', version: "${project.tikaVersion}") {
+        transitive = false
+    }
+    externalJars(group: 'org.apache.tika', name: 'tika-parser-zip-commons', version: "${project.tikaVersion}") {
+        transitive = false
+    }
+    
+    // POI dependencies  
+    externalJars(group: 'org.apache.poi', name: 'poi', version: "${project.poiVersion}") {
+        transitive = false
+    }
+    externalJars(group: 'org.apache.poi', name: 'poi-scratchpad', version: "${project.poiVersion}") {
+        transitive = false
+    }
+    externalJars(group: 'org.apache.poi', name: 'poi-ooxml', version: "${project.poiVersion}") {
+        transitive = false
+    }
+    externalJars(group: 'org.apache.poi', name: 'poi-ooxml-lite', version: "${project.poiVersion}") {
+        transitive = false
+    }
+    
+    // PDF processing dependencies
+    externalJars(group: 'org.apache.pdfbox', name: 'pdfbox', version: "${project.pdfboxVersion}") {
+        transitive = false
+    }
+    externalJars(group: 'org.apache.pdfbox', name: 'fontbox', version: "${project.pdfboxVersion}") {
+        transitive = false
+    }
+    externalJars(group: 'org.apache.pdfbox', name: 'jempbox', version: "${project.jempboxVersion}") {
+        transitive = false
+    }
+    
+    // Commons dependencies (tika)
+    externalJars(group: 'commons-io', name: 'commons-io', version: "${project.commonsIoVersion}") {
+        transitive = false
+    }
+    externalJars(group: 'org.apache.commons', name: 'commons-compress', version: "${project.commonsCompressVersion}") {
+        transitive = false
+    }
+    externalJars(group: 'org.apache.commons', name: 'commons-collections4', version: "${project.commonsCollections4Version}") {
+        transitive = false
+    }
+    
+    // Minimal logging (required by tika-parser-microsoft-module)
+    externalJars(group: 'org.apache.logging.log4j', name: 'log4j-api', version: "${project.log4jVersion}") {
+        transitive = false
+    }
+    externalJars(group: 'org.apache.logging.log4j', name: 'log4j-core', version: "${project.log4jVersion}") {
+        transitive = false
+    }
+    
+    // XMLBeans (required by POI OOXML)
+    externalJars(group: 'org.apache.xmlbeans', name: 'xmlbeans', version: "${project.xmlbeansVersion}") {
+        transitive = false
+    }
+    
+    // SparseBitSet (required by POI PPTX)
+    externalJars(group: 'com.zaxxer', name: 'SparseBitSet', version: "${project.sparseBitSetVersion}") {
         transitive = false
     }
 }
@@ -60,6 +130,16 @@ task updateTomlFiles {
         newConfig = newConfig.replace("@toml.version@", tomlVersion)
         newConfig = newConfig.replace("@langchain4j.version", project.langchain4jVersion)
         newConfig = newConfig.replace("@openNlpTools.version", project.openNlpToolsVersion)
+        newConfig = newConfig.replace("@tikaVersion@", project.tikaVersion)
+        newConfig = newConfig.replace("@poiVersion@", project.poiVersion)
+        newConfig = newConfig.replace("@pdfboxVersion@", project.pdfboxVersion)
+        newConfig = newConfig.replace("@jempboxVersion@", project.jempboxVersion)
+        newConfig = newConfig.replace("@commonsIoVersion@", project.commonsIoVersion)
+        newConfig = newConfig.replace("@commonsCompressVersion@", project.commonsCompressVersion)
+        newConfig = newConfig.replace("@commonsCollections4Version@", project.commonsCollections4Version)
+        newConfig = newConfig.replace("@log4jVersion@", project.log4jVersion)
+        newConfig = newConfig.replace("@xmlbeansVersion@", project.xmlbeansVersion)
+        newConfig = newConfig.replace("@sparseBitSetVersion@", project.sparseBitSetVersion)
         ballerinaTomlFile.text = newConfig
 
         def ballerinaToOpenApiVersion = project.ballerinaToOpenApiVersion

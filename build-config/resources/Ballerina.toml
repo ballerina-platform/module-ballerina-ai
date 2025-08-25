@@ -41,3 +41,117 @@ groupId = "org.apache.opennlp"
 artifactId = "opennlp-tools"
 version = "@openNlpTools.version"
 path="./lib/opennlp-tools-@openNlpTools.version.jar"
+
+[[platform.java21.dependency]]
+groupId = "org.apache.tika"
+artifactId = "tika-core"
+version = "@tikaVersion@"
+path="./lib/tika-core-@tikaVersion@.jar"
+
+[[platform.java21.dependency]]
+groupId = "org.apache.tika"
+artifactId = "tika-parser-pdf-module"
+version = "@tikaVersion@"
+path="./lib/tika-parser-pdf-module-@tikaVersion@.jar"
+
+[[platform.java21.dependency]]
+groupId = "org.apache.tika"
+artifactId = "tika-parser-microsoft-module"
+version = "@tikaVersion@"
+path="./lib/tika-parser-microsoft-module-@tikaVersion@.jar"
+
+[[platform.java21.dependency]]
+groupId = "org.apache.tika"
+artifactId = "tika-parser-zip-commons"
+version = "@tikaVersion@"
+path="./lib/tika-parser-zip-commons-@tikaVersion@.jar"
+
+# POI dependencies
+[[platform.java21.dependency]]
+groupId = "org.apache.poi"
+artifactId = "poi"
+version = "@poiVersion@"
+path="./lib/poi-@poiVersion@.jar"
+
+[[platform.java21.dependency]]
+groupId = "org.apache.poi"
+artifactId = "poi-scratchpad"
+version = "@poiVersion@"
+path="./lib/poi-scratchpad-@poiVersion@.jar"
+
+[[platform.java21.dependency]]
+groupId = "org.apache.poi"
+artifactId = "poi-ooxml"
+version = "@poiVersion@"
+path="./lib/poi-ooxml-@poiVersion@.jar"
+
+[[platform.java21.dependency]]
+groupId = "org.apache.poi"
+artifactId = "poi-ooxml-lite"
+version = "@poiVersion@"
+path="./lib/poi-ooxml-lite-@poiVersion@.jar"
+
+# PDF processing dependencies
+[[platform.java21.dependency]]
+groupId = "org.apache.pdfbox"
+artifactId = "pdfbox"
+version = "@pdfboxVersion@"
+path="./lib/pdfbox-@pdfboxVersion@.jar"
+
+[[platform.java21.dependency]]
+groupId = "org.apache.pdfbox"
+artifactId = "fontbox"
+version = "@pdfboxVersion@"
+path="./lib/fontbox-@pdfboxVersion@.jar"
+
+[[platform.java21.dependency]]
+groupId = "org.apache.pdfbox"
+artifactId = "jempbox"
+version = "@jempboxVersion@"
+path="./lib/jempbox-@jempboxVersion@.jar"
+
+# Commons dependencies (tika)
+[[platform.java21.dependency]]
+groupId = "commons-io"
+artifactId = "commons-io"
+version = "@commonsIoVersion@"
+path="./lib/commons-io-@commonsIoVersion@.jar"
+
+[[platform.java21.dependency]]
+groupId = "org.apache.commons"
+artifactId = "commons-compress"
+version = "@commonsCompressVersion@"
+path="./lib/commons-compress-@commonsCompressVersion@.jar"
+
+[[platform.java21.dependency]]
+groupId = "org.apache.commons"
+artifactId = "commons-collections4"
+version = "@commonsCollections4Version@"
+path="./lib/commons-collections4-@commonsCollections4Version@.jar"
+
+# Minimal logging (required by tika-parser-microsoft-module)
+[[platform.java21.dependency]]
+groupId = "org.apache.logging.log4j"
+artifactId = "log4j-api"
+version = "@log4jVersion@"
+path="./lib/log4j-api-@log4jVersion@.jar"
+
+[[platform.java21.dependency]]
+groupId = "org.apache.logging.log4j"
+artifactId = "log4j-core"
+version = "@log4jVersion@"
+path="./lib/log4j-core-@log4jVersion@.jar"
+
+# XMLBeans (required by POI OOXML)
+[[platform.java21.dependency]]
+groupId = "org.apache.xmlbeans"
+artifactId = "xmlbeans"
+version = "@xmlbeansVersion@"
+path="./lib/xmlbeans-@xmlbeansVersion@.jar"
+
+# SparseBitSet (required by POI PPTX)
+[[platform.java21.dependency]]
+groupId = "com.zaxxer"
+artifactId = "SparseBitSet"
+version = "@sparseBitSetVersion@"
+path="./lib/SparseBitSet-@sparseBitSetVersion@.jar"

@@ -1,0 +1,11 @@
+[
+  {
+    "type": "substitution",
+    "original": "org.apache.xmlbeans.XmlBeans",
+    "substitute": "org.apache.xmlbeans.XmlBeans",
+    "action": "replace_field",
+    "field": "typeLoaderForClassLoader",
+    "replacement": "null"
+  }
+]
+

@@ -1,6 +1,12 @@
 {
   "resources":{
   "includes":[{
+    "pattern": "\\QMETA-INF/log4j-provider.properties\\E"
+  },
+  {
+    "pattern": "\\QMETA-INF/org/apache/logging/log4j/core/config/plugins/Log4j2Plugins.dat\\E"
+  },
+  {
     "pattern":"\\QMETA-INF/services/java.lang.System$LoggerFinder\\E"
   }, {
     "pattern":"\\QMETA-INF/services/java.net.spi.InetAddressResolverProvider\\E"
@@ -13,16 +19,399 @@
   }, {
     "pattern":"\\QMETA-INF/services/java.util.spi.ResourceBundleControlProvider\\E"
   }, {
+    "pattern": "\\QMETA-INF/services/javax.xml.parsers.DocumentBuilderFactory\\E"
+  },
+  {
+    "pattern": "\\QMETA-INF/services/javax.xml.parsers.SAXParserFactory\\E"
+  },
+  {
+    "pattern": "\\QMETA-INF/services/javax.xml.xpath.XPathFactory\\E"
+  },
+  {
+    "pattern": "\\QMETA-INF/services/org.apache.commons.logging.LogFactory\\E"
+  },
+  {
+    "pattern": "\\QMETA-INF/services/org.apache.logging.log4j.core.util.ContextDataProvider\\E"
+  },
+  {
+    "pattern": "\\QMETA-INF/services/org.apache.logging.log4j.core.util.WatchEventService\\E"
+  },
+  {
+    "pattern": "\\QMETA-INF/services/org.apache.logging.log4j.spi.Provider\\E"
+  },
+  {
+    "pattern": "\\QMETA-INF/services/org.apache.logging.log4j.util.PropertySource\\E"
+  },
+  {
+    "pattern": "\\QMETA-INF/services/org.apache.tika.detect.Detector\\E"
+  },
+  {
+    "pattern": "\\QMETA-INF/services/org.apache.tika.detect.EncodingDetector\\E"
+  },
+  {
+    "pattern": "\\QMETA-INF/services/org.apache.tika.detect.zip.ZipContainerDetector\\E"
+  },
+  {
+    "pattern": "\\QMETA-INF/services/org.apache.tika.parser.Parser\\E"
+  },
+  {
+    "pattern": "\\QMETA-INF/services/org.apache.tika.renderer.Renderer\\E"
+  },
+  {
     "pattern":"\\QMETA-INF/services/org.slf4j.spi.SLF4JServiceProvider\\E"
   }, {
+    "pattern": "\\Qcommons-logging.properties\\E"
+  },
+  {
+    "pattern": "\\Qlog4j2-test.jsn\\E"
+  },
+  {
+    "pattern": "\\Qlog4j2-test.json\\E"
+  },
+  {
+    "pattern": "\\Qlog4j2-test.properties\\E"
+  },
+  {
+    "pattern": "\\Qlog4j2-test.xml\\E"
+  },
+  {
+    "pattern": "\\Qlog4j2-test.yaml\\E"
+  },
+  {
+    "pattern": "\\Qlog4j2-test.yml\\E"
+  },
+  {
+    "pattern": "\\Qlog4j2-test18b4aac2.jsn\\E"
+  },
+  {
+    "pattern": "\\Qlog4j2-test18b4aac2.json\\E"
+  },
+  {
+    "pattern": "\\Qlog4j2-test18b4aac2.properties\\E"
+  },
+  {
+    "pattern": "\\Qlog4j2-test18b4aac2.xml\\E"
+  },
+  {
+    "pattern": "\\Qlog4j2-test18b4aac2.yaml\\E"
+  },
+  {
+    "pattern": "\\Qlog4j2-test18b4aac2.yml\\E"
+  },
+  {
+    "pattern": "\\Qlog4j2.StatusLogger.properties\\E"
+  },
+  {
+    "pattern": "\\Qlog4j2.component.properties\\E"
+  },
+  {
+    "pattern": "\\Qlog4j2.jsn\\E"
+  },
+  {
+    "pattern": "\\Qlog4j2.json\\E"
+  },
+  {
+    "pattern": "\\Qlog4j2.properties\\E"
+  },
+  {
+    "pattern": "\\Qlog4j2.system.properties\\E"
+  },
+  {
+    "pattern": "\\Qlog4j2.xml\\E"
+  },
+  {
+    "pattern": "\\Qlog4j2.yaml\\E"
+  },
+  {
+    "pattern": "\\Qlog4j2.yml\\E"
+  },
+  {
+    "pattern": "\\Qlog4j218b4aac2.jsn\\E"
+  },
+  {
+    "pattern": "\\Qlog4j218b4aac2.json\\E"
+  },
+  {
+    "pattern": "\\Qlog4j218b4aac2.properties\\E"
+  },
+  {
+    "pattern": "\\Qlog4j218b4aac2.xml\\E"
+  },
+  {
+    "pattern": "\\Qlog4j218b4aac2.yaml\\E"
+  },
+  {
+    "pattern": "\\Qlog4j218b4aac2.yml\\E"
+  },
+  {
     "pattern":"\\Qlogging.properties\\E"
   }, {
     "pattern":"\\Qopennlp/opennlp-en-ud-ewt-sentence-1.2-2.5.0.bin\\E"
   }, {
     "pattern":"\\Qopennlp/tools/util/opennlp.version\\E"
+  }, {
+    "pattern": "\\Qorg/apache/fontbox/cmap/Identity-H\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/pdfbox/resources/glyphlist/additional.txt\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/pdfbox/resources/glyphlist/glyphlist.txt\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/pdfbox/resources/glyphlist/zapfdingbats.txt\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/pdfbox/resources/text/BidiMirroring.txt\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/poi/schemas/ooxml/system/ooxml/ctapplicationnonvisualdrawingprops2fb6type.xsb\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/poi/schemas/ooxml/system/ooxml/ctbody0f06type.xsb\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/poi/schemas/ooxml/system/ooxml/ctbookmarkd672type.xsb\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/poi/schemas/ooxml/system/ooxml/ctcommonslidedata8c7ftype.xsb\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/poi/schemas/ooxml/system/ooxml/ctdocdefaults2ea8type.xsb\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/poi/schemas/ooxml/system/ooxml/ctdocument64adtype.xsb\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/poi/schemas/ooxml/system/ooxml/ctgroupshape5b43type.xsb\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/poi/schemas/ooxml/system/ooxml/ctgroupshapenonvisual3e44type.xsb\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/poi/schemas/ooxml/system/ooxml/ctgroupshapeproperties8690type.xsb\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/poi/schemas/ooxml/system/ooxml/ctmarkuprangeba3dtype.xsb\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/poi/schemas/ooxml/system/ooxml/ctnonvisualdrawingprops8fb0type.xsb\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/poi/schemas/ooxml/system/ooxml/ctnonvisualdrawingshapepropsf17btype.xsb\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/poi/schemas/ooxml/system/ooxml/ctnotesmaster69ectype.xsb\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/poi/schemas/ooxml/system/ooxml/ctnotesslideab75type.xsb\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/poi/schemas/ooxml/system/ooxml/ctnumberingfdf9type.xsb\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/poi/schemas/ooxml/system/ooxml/ctnumlvl416ctype.xsb\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/poi/schemas/ooxml/system/ooxml/ctofficestylesheetce25type.xsb\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/poi/schemas/ooxml/system/ooxml/ctoutershadoweffect7b5dtype.xsb\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/poi/schemas/ooxml/system/ooxml/ctpa1e2type.xsb\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/poi/schemas/ooxml/system/ooxml/ctplaceholder9efctype.xsb\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/poi/schemas/ooxml/system/ooxml/ctppr01c0type.xsb\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/poi/schemas/ooxml/system/ooxml/ctpprdefaultf839type.xsb\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/poi/schemas/ooxml/system/ooxml/ctpprgenerald6f2type.xsb\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/poi/schemas/ooxml/system/ooxml/ctpresentation56cbtype.xsb\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/poi/schemas/ooxml/system/ooxml/ctproperties2c18type.xsb\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/poi/schemas/ooxml/system/ooxml/ctproperties3f10type.xsb\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/poi/schemas/ooxml/system/ooxml/ctr8120type.xsb\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/poi/schemas/ooxml/system/ooxml/ctregulartextrun7e3dtype.xsb\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/poi/schemas/ooxml/system/ooxml/ctrpr097etype.xsb\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/poi/schemas/ooxml/system/ooxml/ctrprdefault5ebbtype.xsb\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/poi/schemas/ooxml/system/ooxml/ctsectpr1123type.xsb\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/poi/schemas/ooxml/system/ooxml/ctsettingsd6a5type.xsb\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/poi/schemas/ooxml/system/ooxml/ctshapecfcetype.xsb\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/poi/schemas/ooxml/system/ooxml/ctshapenonvisualb619type.xsb\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/poi/schemas/ooxml/system/ooxml/ctshapeproperties30e5type.xsb\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/poi/schemas/ooxml/system/ooxml/ctslided7betype.xsb\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/poi/schemas/ooxml/system/ooxml/ctslideidlist70a5type.xsb\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/poi/schemas/ooxml/system/ooxml/ctslideidlistentry427dtype.xsb\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/poi/schemas/ooxml/system/ooxml/ctslidelayouteb34type.xsb\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/poi/schemas/ooxml/system/ooxml/ctslidemasterd8fctype.xsb\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/poi/schemas/ooxml/system/ooxml/ctslidemasteridlist0b63type.xsb\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/poi/schemas/ooxml/system/ooxml/ctslidemasteridlistentryae7ftype.xsb\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/poi/schemas/ooxml/system/ooxml/ctstring9c37type.xsb\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/poi/schemas/ooxml/system/ooxml/ctstyle41c1type.xsb\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/poi/schemas/ooxml/system/ooxml/ctstyles8506type.xsb\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/poi/schemas/ooxml/system/ooxml/cttext7f5btype.xsb\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/poi/schemas/ooxml/system/ooxml/cttextbodya3catype.xsb\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/poi/schemas/ooxml/system/ooxml/cttextcharacterproperties76c0type.xsb\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/poi/schemas/ooxml/system/ooxml/cttextfield187etype.xsb\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/poi/schemas/ooxml/system/ooxml/cttextparagraphcaf2type.xsb\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/poi/schemas/ooxml/system/ooxml/cttextparagraphpropertiesdd05type.xsb\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/poi/schemas/ooxml/system/ooxml/document2bd9doctype.xsb\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/poi/schemas/ooxml/system/ooxml/index.xsb\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/poi/schemas/ooxml/system/ooxml/notes4a02doctype.xsb\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/poi/schemas/ooxml/system/ooxml/notesmaster8840doctype.xsb\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/poi/schemas/ooxml/system/ooxml/numbering1c4ddoctype.xsb\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/poi/schemas/ooxml/system/ooxml/presentation02f7doctype.xsb\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/poi/schemas/ooxml/system/ooxml/properties288cdoctype.xsb\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/poi/schemas/ooxml/system/ooxml/propertiesee84doctype.xsb\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/poi/schemas/ooxml/system/ooxml/settings9dd1doctype.xsb\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/poi/schemas/ooxml/system/ooxml/sld1b98doctype.xsb\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/poi/schemas/ooxml/system/ooxml/sldlayout638edoctype.xsb\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/poi/schemas/ooxml/system/ooxml/sldmaster5156doctype.xsb\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/poi/schemas/ooxml/system/ooxml/stdrawingelementid75a4type.xsb\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/poi/schemas/ooxml/system/ooxml/sthdrftr30catype.xsb\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/poi/schemas/ooxml/system/ooxml/stplaceholdertypeca72type.xsb\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/poi/schemas/ooxml/system/ooxml/strelationshipid1e94type.xsb\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/poi/schemas/ooxml/system/ooxml/ststring76cbtype.xsb\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/poi/schemas/ooxml/system/ooxml/styles2732doctype.xsb\\E"
+  },
+  {
+    "pattern": "\\Qorg/apache/poi/schemas/ooxml/system/ooxml/themefd26doctype.xsb\\E"
+  }, {
+    "pattern": "\\Qorg/apache/tika/mime/custom-mimetypes.xml\\E"
+  }, {
+    "pattern": "\\Qorg/apache/tika/mime/tika-mimetypes.xml\\E"
+  }, {
+    "pattern": "\\Qorg/apache/xmlbeans/metadata/system/sXMLCONFIG/index.xsb\\E"
+  }, {
+    "pattern": "\\Qorg/apache/xmlbeans/metadata/system/sXMLLANG/index.xsb\\E"
+  }, {
+    "pattern": "\\Qorg/apache/xmlbeans/metadata/system/sXMLLANG/space9344attrtypetype.xsb\\E"
+  }, {
+    "pattern": "\\Qorg/apache/xmlbeans/metadata/system/sXMLLANG/spaceattribute.xsb\\E"
+  }, {
+    "pattern": "\\Qorg/apache/xmlbeans/metadata/system/sXMLLANG/spaceb986attrtype.xsb\\E"
+  }, {
+    "pattern": "\\Qorg/apache/xmlbeans/metadata/system/sXMLSCHEMA/index.xsb\\E"
+  }, {
+    "pattern": "\\Qorg/apache/xmlbeans/metadata/system/sXMLTOOLS/index.xsb\\E"
+  }, {
+    "pattern": "java.base:\\Qjdk/internal/icu/impl/data/icudt72b/nfc.nrm\\E"
+  }, {
+    "pattern": "java.base:\\Qjdk/internal/icu/impl/data/icudt72b/ubidi.icu\\E"
+  }, {
+    "pattern": "jdk.jfr:\\Qjdk/jfr/internal/query/view.ini\\E"
   }]},
   "bundles":[{
     "name":"MessagesBundle",
     "locales":[""]
+  },
+  {
+    "name": "org.apache.xmlbeans.impl.regex.message",
+    "locales": [
+      ""
+    ]
+  },
+  {
+    "name": "sun.awt.resources.awt",
+    "classNames": [
+      "sun.awt.resources.awt"
+    ]
   }]
 }
