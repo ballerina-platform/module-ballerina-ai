@@ -53,9 +53,7 @@ isolated service /llm on new http:Listener(8080) {
 
         test:assertEquals(parameters, getExpectedParameterSchema(initialText),
                 string `Parameter assertion failed for prompt starting with '${initialText}'`);
-        lock {
-            return getTestServiceResponse(initialText, index);
-        }
+        return getTestServiceResponse(initialText, index);
     }
 }
 
@@ -65,7 +63,7 @@ isolated function assertContentParts(ChatCompletionRequestMessage[] messages,
         test:assertFail("Expected at least one message in the payload");
     }
 
-    // We tests the user inputs only.
+    // Test input messages where the role is 'user'.
     ChatCompletionRequestMessage message = messages[index * 2];
 
     json|error? content = message["content"].ensureType();

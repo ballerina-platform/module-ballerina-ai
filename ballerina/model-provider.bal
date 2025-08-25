@@ -179,9 +179,11 @@ public isolated distinct client class Wso2ModelProvider {
         if llmClient is error {
             return error Error("Failed to initialize Wso2ModelProvider", llmClient);
         }
+
         self.llmClient = llmClient;
         self.temperature = temperature;
         self.generatorConfig = generatorConfig;
+
     }
 
     # Sends a chat request to the model with the given messages and tools.
