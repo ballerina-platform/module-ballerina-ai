@@ -24,45 +24,56 @@ public type DataLoader isolated object {
     public isolated function load() returns Document[]|Document|Error;
 };
 
-# Dataloader that can be used to load supported file types as a `TextDocument` 
-# Currently only support `pdf`, `docx` and `pptx`
+# Dataloader that can be used to load supported file types as `TextDocument`s.
+# Currently only supports `pdf`, `docx` and `pptx` file types.
 public isolated class TextDataLoader {
     *DataLoader;
-    final string path;
+    final readonly & string[] paths;
 
-    public isolated function init(string path) returns Error? {
+    public isolated function init(string ...paths) returns Error? {
         // Check if the file exists by trying to get metadata
-        file:MetaData|error metadata = file:getMetaData(path);
-        if metadata is error {
-            return error Error("File does not exist: " + path);
+        foreach string path in paths {
+            file:MetaData|error metadata = file:getMetaData(path);
+            if metadata is error {
+                return error Error("File does not exist: " + path);
+            }
         }
-        self.path = path;
+        self.paths = paths.cloneReadOnly();
     }
 
     public isolated function load() returns Document[]|Document|Error {
-        string? fileType = getFileType(self.path);
+        Document[] documents = from string path in self.paths select check loadDocument(path);
+        if documents.length() == 1 {
+            return documents[0];
+        }
+        return documents;
+    }
+}
+
+isolated function loadDocument(string path) returns Document|Error {
+        string? fileType = getFileType(path);
         if fileType is () {
-            string extension = getFileExtension(self.path);
+            string extension = getFileExtension(path);
             return error Error(string `Unsupported file type: ${extension}`);
         }
 
         match fileType {
             "pdf" => {
-                TextDocument|error result = readPdfFromJava(self.path);
+                TextDocument|error result = readPdfNative(path);
                 if result is error {
                     return error Error(result.message());
                 }
                 return result;
             }
             "docx" => {
-                TextDocument|error result = readDocxFromJava(self.path);
+                TextDocument|error result = readDocxNative(path);
                 if result is error {
                     return error Error(result.message());
                 }
                 return result;
             }
             "pptx" => {
-                TextDocument|error result = readPptxFromJava(self.path);
+                TextDocument|error result = readPptxNative(path);
                 if result is error {
                     return error Error(result.message());
                 }
@@ -70,7 +81,6 @@ public isolated class TextDataLoader {
             }
         }
         return error Error("Unexpected error in file type processing");
-    }
 }
 
 isolated function getFileType(string path) returns "pdf"|"docx"|"pptx"? {
@@ -89,17 +99,17 @@ isolated function getFileExtension(string path) returns string {
     return path.substring(lastDotIndex + 1);
 }
 
-isolated function readPdfFromJava(string path) returns TextDocument|error = @java:Method {
+isolated function readPdfNative(string path) returns TextDocument|error = @java:Method {
     'class: "io.ballerina.stdlib.ai.TextDataLoader",
     name: "readPdf"
 } external;
 
-isolated function readDocxFromJava(string path) returns TextDocument|error = @java:Method {
+isolated function readDocxNative(string path) returns TextDocument|error = @java:Method {
     'class: "io.ballerina.stdlib.ai.TextDataLoader",
     name: "readDocx"
 } external;
 
-isolated function readPptxFromJava(string path) returns TextDocument|error = @java:Method {
+isolated function readPptxNative(string path) returns TextDocument|error = @java:Method {
     'class: "io.ballerina.stdlib.ai.TextDataLoader",
     name: "readPptx"
 } external;
