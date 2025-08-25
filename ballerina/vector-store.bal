@@ -140,7 +140,7 @@ public distinct isolated class InMemoryVectorStore {
     private isolated function entryMatchesFilters(VectorMatch|InMemoryVectorEntry entry, MetadataFilters filters) returns boolean|error {
         Metadata? metadata = entry.chunk.metadata;
         if metadata is () {
-            return true;
+            return false;
         }
         return check self.evaluateFilterNode(metadata, filters);
     }
