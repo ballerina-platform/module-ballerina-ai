@@ -16,7 +16,7 @@
 
 import ballerina/test;
 
-@test:Config {}
+@test:Config { groups: ["pdf"]}
 function testTextDataLoaderLoadPdf() returns error? {
     // Test PDF loading with a sample PDF file
     string pdfPath = "tests/resources/data-loader/TestDoc.pdf";
