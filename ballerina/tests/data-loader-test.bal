@@ -66,7 +66,7 @@ isolated function getSingleDocument(Document[]|Document|Error result) returns Do
     return document;
 }
 
-@test:Config { groups: ["pdf", "document-loader"] }
+@test:Config {groups: ["pdf", "document-loader"]}
 function testTextDataLoaderLoadPdf() returns error? {
     // Test PDF loading with a sample PDF file
     string pdfPath = "tests/resources/data-loader/TestDoc.pdf";
@@ -77,7 +77,7 @@ function testTextDataLoaderLoadPdf() returns error? {
     check validateDocument(document, "application/pdf", ".pdf");
 }
 
-@test:Config { groups: ["document-loader", "error-handling"] }
+@test:Config {groups: ["document-loader", "error-handling"]}
 function testTextDataLoaderUnsupportedFileType() returns error? {
     // Test with an unsupported file type
     string unsupportedPath = "tests/resources/data-loader/test.txt";
@@ -94,7 +94,7 @@ function testTextDataLoaderUnsupportedFileType() returns error? {
     }
 }
 
-@test:Config { groups: ["docx", "document-loader"] }
+@test:Config {groups: ["docx", "document-loader"]}
 function testTextDataLoaderLoadDocx() returns error? {
     // Test DOCX loading with a sample DOCX file
     string docxPath = "tests/resources/data-loader/TestDoc.docx";
@@ -105,7 +105,7 @@ function testTextDataLoaderLoadDocx() returns error? {
     check validateDocument(document, "application/vnd.openxmlformats-officedocument.wordprocessingml.document", ".docx");
 }
 
-@test:Config { groups: ["pptx", "document-loader"] }
+@test:Config {groups: ["pptx", "document-loader"]}
 function testTextDataLoaderLoadPptx() returns error? {
     // Test PPTX loading with a sample PPTX file
     string pptxPath = "tests/resources/data-loader/Test presentation.pptx";
@@ -116,7 +116,7 @@ function testTextDataLoaderLoadPptx() returns error? {
     check validateDocument(document, "application/vnd.openxmlformats-officedocument.presentationml.presentation", ".pptx");
 }
 
-@test:Config { groups: ["document-loader", "error-handling"] }
+@test:Config {groups: ["document-loader", "error-handling"]}
 function testTextDataLoaderFileDoesNotExist() returns error? {
     // Test with a non-existent file path
     string nonExistentPath = "tests/resources/data-loader/non_existent_file.pdf";
@@ -133,20 +133,20 @@ function testTextDataLoaderFileDoesNotExist() returns error? {
     }
 }
 
-@test:Config { groups: ["document-loader", "error-handling", "pdf"] }
+@test:Config {groups: ["document-loader", "error-handling", "pdf"]}
 function testTextDataLoaderCaseInsensitiveExtensions() returns error? {
     // Test that uppercase extensions work (assuming we can create test files with uppercase extensions)
     // This test validates the case-insensitive extension checking
     string pdfPath = "tests/resources/data-loader/TestDoc.pdf";
     TextDataLoader loader = check new (pdfPath);
-    
+
     // This should work even though we check with .PDF, .Pdf etc. internally
     Document[]|Document|Error result = loader.load();
     Document document = check getSingleDocument(result);
     check validateDocument(document, "application/pdf", ".pdf");
 }
 
-@test:Config { groups: ["document-loader", "error-handling"] }
+@test:Config {groups: ["document-loader", "error-handling"]}
 function testTextDataLoaderImprovedErrorMessage() returns error? {
     // Test that error message includes file extension
     string unsupportedPath = "tests/resources/data-loader/test.txt";
@@ -160,5 +160,67 @@ function testTextDataLoaderImprovedErrorMessage() returns error? {
                 "Error message should include the file extension");
     } else {
         test:assertFail("Should return error for unsupported file types");
+    }
+}
+
+@test:Config {groups: ["document-loader", "multiple-files"]}
+function testTextDataLoaderMultipleFiles() returns error? {
+    // Test loading multiple files at once
+    string pdfPath = "tests/resources/data-loader/TestDoc.pdf";
+    string docxPath = "tests/resources/data-loader/TestDoc.docx";
+    string pptxPath = "tests/resources/data-loader/Test presentation.pptx";
+
+    TextDataLoader loader = check new (pdfPath, docxPath, pptxPath);
+
+    Document[]|Document|Error result = loader.load();
+
+    // Since we're loading multiple files, the result should be an array
+    if result is Document[] {
+        test:assertEquals(result.length(), 3, "Should return array with 3 documents");
+
+        // Validate each document
+        Document pdfDoc = result[0];
+        Document docxDoc = result[1];
+        Document pptxDoc = result[2];
+
+        check validateDocument(pdfDoc, "application/pdf", ".pdf");
+        check validateDocument(docxDoc, "application/vnd.openxmlformats-officedocument.wordprocessingml.document", ".docx");
+        check validateDocument(pptxDoc, "application/vnd.openxmlformats-officedocument.presentationml.presentation", ".pptx");
+    } else {
+        test:assertFail("Should return array of documents when loading multiple files");
+    }
+}
+
+@test:Config {groups: ["document-loader", "multiple-files", "single-file"]}
+function testTextDataLoaderSingleFileReturnsSingleDocument() returns error? {
+    // Test that loading a single file returns a single document (not an array)
+    string pdfPath = "tests/resources/data-loader/TestDoc.pdf";
+
+    TextDataLoader loader = check new (pdfPath);
+
+    Document[]|Document|Error result = loader.load();
+
+    // When loading a single file, the result should be a single document
+    if result is Document {
+        check validateDocument(result, "application/pdf", ".pdf");
+    } else {
+        test:assertFail("Should return single document when loading single file");
+    }
+}
+
+@test:Config {groups: ["document-loader", "multiple-files", "error-handling"]}
+function testTextDataLoaderMultipleFilesWithInvalidFile() returns error? {
+    // Test loading multiple files where one doesn't exist
+    string pdfPath = "tests/resources/data-loader/TestDoc.pdf";
+    string nonExistentPath = "tests/resources/data-loader/non_existent_file.docx";
+
+    // Constructor should fail if any file doesn't exist
+    TextDataLoader|Error loader = new (pdfPath, nonExistentPath);
+
+    if loader is Error {
+        test:assertTrue(loader.message().includes("File does not exist"),
+                "Error message should indicate file does not exist");
+    } else {
+        test:assertFail("Constructor should return error when any file doesn't exist");
     }
 }
