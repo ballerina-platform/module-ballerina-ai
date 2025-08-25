@@ -116,3 +116,22 @@ public const AUTO = "AUTO";
 # Represents the disabled chunker configuration in the `VectorKnowledgeBase`.
 # This chunker will not perform any chunking and will treat the entire document as a single chunk.
 public const DISABLE = "DISABLE";
+
+# Represents the configuration for a generate method.
+# + retryConfig - Configuration for retrying on response parsing failures
+public type GeneratorConfig record {|
+    @display {label: "Retry Configuration"}
+    RetryConfig retryConfig?;
+|};
+
+# Provides configurations for controlling the retrying behavior in failure scenarios.
+#
+# + count - Number of retry attempts before giving up
+# + interval - Retry interval in seconds
+public type RetryConfig record {|
+    @display {label: "Retry Count"}
+    int count = 0;
+
+    @display {label: "Retry Interval"}
+    decimal interval?;
+|};

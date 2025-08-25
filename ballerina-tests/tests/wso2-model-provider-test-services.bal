@@ -17,8 +17,10 @@
 import ballerina/http;
 import ballerina/test;
 
-service /llm on new http:Listener(8080) {
-    resource function post azureopenai/deployments/gpt4onew/chat/completions(
+isolated service /llm on new http:Listener(8080) {
+    private map<int> retryCountMap = {};
+
+    isolated resource function post azureopenai/deployments/gpt4onew/chat/completions(
             @http:Payload CreateChatCompletionRequest payload) returns CreateChatCompletionResponse|error {
         test:assertEquals(payload?.temperature, 0.7d);
         ChatCompletionRequestMessage[] messages = check payload.messages.ensureType();
@@ -31,8 +33,13 @@ service /llm on new http:Listener(8080) {
 
         TextContentPart initialTextContent = check content[0].fromJsonWithType();
         string initialText = initialTextContent.text;
-        test:assertEquals(content, getExpectedContentParts(initialText),
-            string `Prompt assertion failed for prompt starting with '${initialText}'`);
+
+        int index;
+        lock {
+            index = updateRetryCountMap(initialText, self.retryCountMap);
+        }
+
+        check assertContentParts(messages, initialText, index);
         test:assertEquals(message.role, "user");
         ChatCompletionTool[]? tools = payload.tools;
         if tools is () || tools.length() == 0 {
@@ -46,6 +53,39 @@ service /llm on new http:Listener(8080) {
 
         test:assertEquals(parameters, getExpectedParameterSchema(initialText),
                 string `Parameter assertion failed for prompt starting with '${initialText}'`);
-        return getTestServiceResponse(initialText);
+        return getTestServiceResponse(initialText, index);
     }
+}
+
+isolated function assertContentParts(ChatCompletionRequestMessage[] messages, 
+        string initialText, int index) returns error? {
+    if index >= messages.length() {
+        test:assertFail("Expected at least one message in the payload");
+    }
+
+    // Test input messages where the role is 'user'.
+    ChatCompletionRequestMessage message = messages[index * 2];
+
+    json|error? content = message["content"].ensureType();
+
+    if content is () {
+        test:assertFail("Expected content in the payload");
+    }
+
+    if index == 0 {
+        test:assertEquals(content, getExpectedContentParts(initialText),
+            string `Prompt assertion failed for prompt starting with '${initialText}'`);
+        return;
+    }
+
+    if index == 1 {
+        test:assertEquals(content, getExpectedContentPartsForFirstRetryCall(initialText),
+            string `Prompt assertion failed for prompt starting with '${initialText}' 
+                on first attempt of the retry`);
+        return;
+    }
+
+    test:assertEquals(content, getExpectedContentPartsForSecondRetryCall(initialText),
+            string `Prompt assertion failed for prompt starting with '${initialText}' on 
+                second attempt of the retry`);
 }

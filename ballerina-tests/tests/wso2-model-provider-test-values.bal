@@ -132,6 +132,15 @@ final readonly & map<anydata>[] expectedContentPartsForRateBlog9 = [
     {"type": "text", "text": ". Thank you!"}
 ];
 
+final readonly & map<anydata>[] expectedContentPartsForRateBlog11 = [
+    {
+        "type": "text",
+        "text": string `On a scale from 1 to 10, how would you rank this blog?.
+        Title: ${blog2.title}
+        Content: ${blog2.content}`
+    }
+];
+
 final readonly & map<anydata>[] expectedContentPartsForRateBlog10 = [
     {
         "type": "text",
