@@ -117,23 +117,21 @@ public const AUTO = "AUTO";
 # This chunker will not perform any chunking and will treat the entire document as a single chunk.
 public const DISABLE = "DISABLE";
 
-# Represents the configuration for a generator.
-# + retryConfig - Optional configuration for retrying in case of parsing failures in LLM response.
+# Represents the configuration for a generate method.
+# + retryConfig - Configuration for retrying on response parsing failures
 public type GeneratorConfig record {|
-    @display {
-        label: "Retry Configuration"
-    }
-    ProviderRetryConfig retryConfig?;
+    @display {label: "Retry Configuration"}
+    RetryConfig retryConfig?;
 |};
 
 # Provides configurations for controlling the retrying behavior in failure scenarios.
 #
 # + count - Number of retry attempts before giving up
 # + interval - Retry interval in seconds
-public type ProviderRetryConfig record {|
+public type RetryConfig record {|
     @display {label: "Retry Count"}
-    int:Unsigned8 count = 0;
+    int count = 0;
 
     @display {label: "Retry Interval"}
-    decimal interval = 0;
+    decimal interval?;
 |};
