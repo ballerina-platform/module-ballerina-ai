@@ -89,17 +89,135 @@ public distinct isolated class InMemoryVectorStore {
     # + return - An array of vector matches sorted by similarity score (limited to topK), 
     # or an `ai:Error` if the query fails
     public isolated function query(VectorStoreQuery query) returns VectorMatch[]|Error {
-        if query.embedding !is Vector {
-            return error Error("InMemoryVectorStore supports dense vectors exclusively");
-        }
-
         lock {
-            VectorMatch[] sorted = from var entry in self.entries
+            Embedding? embedding = query.cloneReadOnly().embedding;
+            MetadataFilters? filters = query.cloneReadOnly().filters;
+            if embedding is () && filters is () {
+                return error Error("Either embedding or filters must be provided");
+            }
+            if embedding !is Vector? {
+                return error Error("InMemoryVectorStore supports dense vectors exclusively");
+            }
+            if embedding is () && filters !is () {
+                VectorMatch[] results = [];
+                foreach InMemoryVectorEntry entry in self.entries {
+                    boolean 'match = check self.entryMatchesFilters(entry, filters);
+                    if 'match {
+                        results.push({
+                            chunk: entry.chunk,
+                            embedding: entry.embedding,
+                            similarityScore: 1.0,
+                            id: entry.id
+                        });
+                    }
+                }
+                return results.cloneReadOnly();
+            }
+            VectorMatch[] results = from InMemoryVectorEntry entry in self.entries
                 let float similarity = self.calculateSimilarity(<Vector>query.embedding.clone(), <Vector>entry.embedding)
                 order by similarity descending
                 limit self.topK
-                select {chunk: entry.chunk, embedding: entry.embedding, similarityScore: similarity};
-            return sorted.clone();
+                select {
+                    chunk: entry.chunk,
+                    embedding: entry.embedding,
+                    similarityScore: similarity,
+                    id: entry.id
+                }.clone();
+            if filters !is () {
+                foreach VectorMatch result in results {
+                    boolean 'match = check self.entryMatchesFilters(result, filters);
+                    if !'match {
+                        _ = results.remove(check results.indexOf(result).cloneWithType());
+                    }
+                }
+            }
+            return results.cloneReadOnly();
+        } on fail error err {
+            return error("Failed to query vector store", err);
+        }
+    }
+
+    private isolated function entryMatchesFilters(VectorMatch|InMemoryVectorEntry entry, MetadataFilters filters) returns boolean|error {
+        Metadata? metadata = entry.chunk.metadata;
+        if metadata is () {
+            return true;
+        }
+        return check self.evaluateFilterNode(metadata, filters);
+    }
+
+    private isolated function evaluateFilterNode(Metadata content, MetadataFilters|MetadataFilter node) returns boolean|error {
+        if node is MetadataFilter {
+            return content.hasKey(node.key) ? self.compareValues(content.get(node.key), node.operator, node.value) : false;
+        }
+        boolean[] results = [];
+        foreach MetadataFilters|MetadataFilter child in node.filters {
+            boolean childResult = check self.evaluateFilterNode(content, child);
+            results.push(childResult);
+        }
+        return self.evaluateCondition(node.condition, results);
+    }
+
+    private isolated function evaluateCondition(MetadataFilterCondition condition, boolean[] results) returns boolean {
+        if condition == AND {
+            foreach boolean result in results {
+                if !result {
+                    return false;
+                }
+            }
+            return true;
+        }
+        foreach boolean result in results {
+            if result {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private isolated function compareValues(json left, MetadataFilterOperator operation, json right) returns boolean|error {
+        match operation {
+            EQUAL => {
+                return left == right;
+            }
+            NOT_EQUAL => {
+                return left != right;
+            }
+            IN => {
+                if right is json[] {
+                    foreach json value in right {
+                        if left == value {
+                            return true;
+                        }
+                    }
+                }
+                return false;
+            }
+            NOT_IN => {
+                if right is json[] {
+                    foreach json value in right {
+                        if left == value {
+                            return false;
+                        }
+                    }
+                    return true;
+                }
+                return false;
+            }
+            GREATER_THAN => {
+                return check left.cloneWithType(decimal) > check right.cloneWithType(decimal);
+            }
+            LESS_THAN => {
+                return check left.cloneWithType(decimal) < check right.cloneWithType(decimal);
+            }
+            GREATER_THAN_OR_EQUAL => {
+                return check left.cloneWithType(decimal) >= check right.cloneWithType(decimal);
+            }
+            LESS_THAN_OR_EQUAL => {
+                return check left.cloneWithType(decimal) <= check right.cloneWithType(decimal);
+            }
+            _ => {
+                return error(string `Unsupported operator: ${operation}`);
+            }
         }
     }
 
