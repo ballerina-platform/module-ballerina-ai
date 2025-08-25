@@ -23,10 +23,14 @@ const ERROR_MESSAGE = "Error occurred while attempting to parse the response fro
 const RUNTIME_SCHEMA_NOT_SUPPORTED_ERROR_MESSAGE = "Runtime schema generation is not yet supported";
 
 final ai:Wso2ModelProvider defaultModelProvider = check new (SERVICE_URL, API_KEY);
-final ai:Wso2ModelProvider defaultModelProviderWithRetryConfig = check new (SERVICE_URL, API_KEY, generatorConfig = {retryConfig: {count: 2, interval: 2}});
-final ai:Wso2ModelProvider defaultModelProviderWithRetryConfig2 = check new (SERVICE_URL, API_KEY, generatorConfig = {retryConfig: {count: 2}});
-final ai:Wso2ModelProvider defaultModelProviderWithRetryConfig3 = check new (SERVICE_URL, API_KEY, generatorConfig = {retryConfig: {count: 1}});
-final ai:Wso2ModelProvider defaultModelProviderWithRetryConfig4 = check new (SERVICE_URL, API_KEY, generatorConfig = {retryConfig: {}});
+final ai:Wso2ModelProvider defaultModelProviderWithRetryConfig = 
+        check new (SERVICE_URL, API_KEY, generatorConfig = {retryConfig: {count: 2, interval: 2}});
+final ai:Wso2ModelProvider defaultModelProviderWithRetryConfig2 = 
+        check new (SERVICE_URL, API_KEY, generatorConfig = {retryConfig: {count: 2}});
+final ai:Wso2ModelProvider defaultModelProviderWithRetryConfig3 = 
+        check new (SERVICE_URL, API_KEY, generatorConfig = {retryConfig: {count: 1}});
+final ai:Wso2ModelProvider defaultModelProviderWithRetryConfig4 = 
+        check new (SERVICE_URL, API_KEY, generatorConfig = {retryConfig: {}});
 
 @test:Config
 function testGenerateMethodWithBasicReturnType() returns ai:Error? {

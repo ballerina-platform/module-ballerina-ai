@@ -33,7 +33,7 @@ isolated function getExpectedParameterSchema(string message) returns map<json> {
         return expectedParameterSchemaStringForRateBlog2;
     }
 
-    if message.startsWith("please rate this blog") {
+    if message.startsWith("On a scale from 1 to 10") {
         return expectedParameterSchemaStringForRateBlog2;
     }
 
@@ -170,7 +170,7 @@ isolated function getTheMockLLMResult(string message) returns string {
         return review;
     }
 
-    if message.startsWith("please rate this blog") {
+    if message.startsWith("On a scale from 1 to 10") {
         return review;
     }
 
@@ -292,18 +292,6 @@ isolated function getTestServiceResponse(string content, int retryCount) returns
     ]
 };
 
-isolated function getSecondRetryLLMResult(string message) returns string {
-    if message.startsWith("What is the result of 1 + 1?") {
-        return "{\"result\": 2}";
-    }
-
-    if message.startsWith("What is the result of 1 + 2?") {
-        return "{\"result\": 3}";
-    }
-
-    return "";
-}
-
 isolated function getFirstRetryLLMResult(string message) returns string {
     if message.startsWith("What is the result of 1 + 1?") {
         return "{\"result\": \"hi\"}";
@@ -324,25 +312,41 @@ isolated function getFirstRetryLLMResult(string message) returns string {
     return "";
 }
 
-isolated function getExpectedContentPartsForFirstRetryCall(string message) returns string {
+isolated function getSecondRetryLLMResult(string message) returns string {
     if message.startsWith("What is the result of 1 + 1?") {
-        return string `The generated response is not in the expected format. Please check the prompt and retry. 
-            Error: error("{ballerina/lang.value}ConversionError",message="'boolean' value cannot be converted to 'int'")`;
+        return "{\"result\": 2}";
     }
 
     if message.startsWith("What is the result of 1 + 2?") {
-        return string `The generated response is not in the expected format. Please check the prompt and retry. 
-            Error: error("{ballerina/lang.value}ConversionError",message="'boolean' value cannot be converted to 'int'")`;
+        return "{\"result\": 3}";
+    }
+
+    return "";
+}
+
+isolated function getExpectedContentPartsForFirstRetryCall(string message) returns string {
+    if message.startsWith("What is the result of 1 + 1?") {
+        return string `The tool call with ID 'tool-call-id' for the function 'getResults' failed.
+            Error: error("{ballerina/lang.value}ConversionError",message="'boolean' value cannot be converted to 'int'")
+            You must correct the function arguments based on this error and respond with a valid tool call.`;
+    }
+
+    if message.startsWith("What is the result of 1 + 2?") {
+        return string `The tool call with ID 'tool-call-id' for the function 'getResults' failed.
+            Error: error("{ballerina/lang.value}ConversionError",message="'boolean' value cannot be converted to 'int'")
+            You must correct the function arguments based on this error and respond with a valid tool call.`;
     }
 
     if message.startsWith("What is the result of 1 + 3?") {
-        return string `The generated response is not in the expected format. Please check the prompt and retry. 
-            Error: error("{ballerina/lang.value}ConversionError",message="'boolean' value cannot be converted to 'int'")`;
+        return string `The tool call with ID 'tool-call-id' for the function 'getResults' failed.
+            Error: error("{ballerina/lang.value}ConversionError",message="'boolean' value cannot be converted to 'int'")
+            You must correct the function arguments based on this error and respond with a valid tool call.`;
     }
 
     if message.startsWith("What is the result of 1 + 6?") {
-        return string `The generated response is not in the expected format. Please check the prompt and retry. 
-            Error: error("{ballerina/lang.value}ConversionError",message="'boolean' value cannot be converted to 'int'")`;
+        return string `The tool call with ID 'tool-call-id' for the function 'getResults' failed.
+            Error: error("{ballerina/lang.value}ConversionError",message="'boolean' value cannot be converted to 'int'")
+            You must correct the function arguments based on this error and respond with a valid tool call.`;
     }
 
     return "";
@@ -350,13 +354,15 @@ isolated function getExpectedContentPartsForFirstRetryCall(string message) retur
 
 isolated function getExpectedContentPartsForSecondRetryCall(string message) returns string {
     if message.startsWith("What is the result of 1 + 1?") {
-        return string `The generated response is not in the expected format. Please check the prompt and retry. 
-            Error: error("{ballerina/lang.value}ConversionError",message="'string' value cannot be converted to 'int'")`;
+        return string `The tool call with ID 'tool-call-id' for the function 'getResults' failed.
+            Error: error("{ballerina/lang.value}ConversionError",message="'string' value cannot be converted to 'int'")
+            You must correct the function arguments based on this error and respond with a valid tool call.`;
     }
 
     if message.startsWith("What is the result of 1 + 2?") {
-        return string `The generated response is not in the expected format. Please check the prompt and retry. 
-            Error: error("{ballerina/lang.value}ConversionError",message="cannot convert '()' to type 'int'")`;
+        return string `The tool call with ID 'tool-call-id' for the function 'getResults' failed.
+            Error: error("{ballerina/lang.value}ConversionError",message="cannot convert '()' to type 'int'")
+            You must correct the function arguments based on this error and respond with a valid tool call.`;
     }
 
     return "";
@@ -379,7 +385,7 @@ isolated function getExpectedContentParts(string message) returns (map<anydata>)
         return expectedContentPartsForRateBlog2;
     }
 
-    if message.startsWith("please rate this blog") {
+    if message.startsWith("On a scale from 1 to 10") {
         return expectedContentPartsForRateBlog11;
     }
 
