@@ -154,7 +154,7 @@ isolated function getRetryConfigValues(GeneratorConfig generatorConfig) returns 
         if count < 0 {
             return error("Invalid retry count: " + count.toString());
         }
-        if interval is decimal && interval < 0d {
+        if interval < 0d {
             return error("Invalid retry interval: " + interval.toString());
         }
 
