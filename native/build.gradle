@@ -30,7 +30,29 @@ dependencies {
     implementation group: 'dev.langchain4j', name: 'langchain4j', version: "${langchain4jVersion}"
     implementation group: 'dev.langchain4j', name: 'langchain4j-core', version: "${langchain4jVersion}"
     implementation group: 'org.apache.opennlp', name: 'opennlp-tools', version: "${openNlpToolsVersion}"
-    
+
+    implementation group: 'org.apache.tika', name: 'tika-core', version: "${tikaVersion}", {
+        exclude group: 'xml-apis', module: 'xml-apis'
+        exclude group: 'xerces', module: 'xercesImpl'
+    }
+    implementation group: 'org.apache.tika', name: 'tika-parser-pdf-module', version: "${tikaVersion}", {
+        exclude group: 'xml-apis', module: 'xml-apis'
+        exclude group: 'xerces', module: 'xercesImpl'
+        exclude group: 'org.bouncycastle', module: 'bcmail-jdk18on'
+        exclude group: 'org.bouncycastle', module: 'bcprov-jdk18on'
+        exclude group: 'org.bouncycastle', module: 'bcutil-jdk18on'
+        exclude group: 'org.bouncycastle', module: 'bcpkix-jdk18on'
+    }
+    implementation group: 'org.apache.tika', name: 'tika-parser-microsoft-module', version: "${tikaVersion}", {
+        exclude group: 'xml-apis', module: 'xml-apis'
+        exclude group: 'xerces', module: 'xercesImpl'
+        exclude group: 'org.bouncycastle', module: 'bcmail-jdk18on'
+        exclude group: 'org.bouncycastle', module: 'bcprov-jdk18on'
+        exclude group: 'org.bouncycastle', module: 'bcutil-jdk18on'
+        exclude group: 'org.bouncycastle', module: 'bcpkix-jdk18on'
+        exclude group: 'com.healthmarketscience.jackcess', module: 'jackcess-encrypt'
+    }
+
     checkstyle project(":checkstyle")
     checkstyle "com.puppycrawl.tools:checkstyle:${checkstylePluginVersion}"
 
