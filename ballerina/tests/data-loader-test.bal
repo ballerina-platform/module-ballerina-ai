@@ -116,7 +116,7 @@ function testTextDataLoaderLoadPptx() returns error? {
     check validateDocument(document, "application/vnd.openxmlformats-officedocument.presentationml.presentation", ".pptx");
 }
 
-@test:Config {groups: ["document-loader", "error-handling"]}
+@test:Config {groups: ["document-loader", "error-handling", "pdf"]}
 function testTextDataLoaderFileDoesNotExist() returns error? {
     // Test with a non-existent file path
     string nonExistentPath = "tests/resources/data-loader/non_existent_file.pdf";
@@ -163,7 +163,7 @@ function testTextDataLoaderImprovedErrorMessage() returns error? {
     }
 }
 
-@test:Config {groups: ["document-loader", "multiple-files"]}
+@test:Config {groups: ["document-loader", "multiple-files", "pdf", "docx", "pptx"]}
 function testTextDataLoaderMultipleFiles() returns error? {
     // Test loading multiple files at once
     string pdfPath = "tests/resources/data-loader/TestDoc.pdf";
@@ -191,7 +191,7 @@ function testTextDataLoaderMultipleFiles() returns error? {
     }
 }
 
-@test:Config {groups: ["document-loader", "multiple-files", "single-file"]}
+@test:Config {groups: ["document-loader", "multiple-files", "single-file", "pdf"]}
 function testTextDataLoaderSingleFileReturnsSingleDocument() returns error? {
     // Test that loading a single file returns a single document (not an array)
     string pdfPath = "tests/resources/data-loader/TestDoc.pdf";
@@ -208,7 +208,7 @@ function testTextDataLoaderSingleFileReturnsSingleDocument() returns error? {
     }
 }
 
-@test:Config {groups: ["document-loader", "multiple-files", "error-handling"]}
+@test:Config {groups: ["document-loader", "multiple-files", "error-handling", "pdf"]}
 function testTextDataLoaderMultipleFilesWithInvalidFile() returns error? {
     // Test loading multiple files where one doesn't exist
     string pdfPath = "tests/resources/data-loader/TestDoc.pdf";
