@@ -90,38 +90,36 @@ public distinct isolated class InMemoryVectorStore {
     # or an `ai:Error` if the query fails
     public isolated function query(VectorStoreQuery query) returns VectorMatch[]|Error {
         lock {
-            Embedding? embedding = query.cloneReadOnly().embedding;
-            MetadataFilters? filters = query.cloneReadOnly().filters;
-            VectorMatch[] results = [];
-            if embedding is () && filters is () {
-                foreach InMemoryVectorEntry entry in self.entries {
-                    results.push({
-                        chunk: entry.chunk,
-                        embedding: entry.embedding,
-                        similarityScore: 1.0,
-                        id: entry.id
-                    });
-                }
-                return results.cloneReadOnly();
-            }
+            VectorStoreQuery clonedQuery = query.cloneReadOnly();
+            Embedding? embedding = clonedQuery.embedding;
+            MetadataFilters? filters = clonedQuery.filters;
             if embedding !is Vector? {
                 return error Error("InMemoryVectorStore supports dense vectors exclusively");
             }
-            if embedding is () && filters !is () {
-                foreach InMemoryVectorEntry entry in self.entries {
-                    boolean 'match = check entryMatchesFilters(entry, filters);
-                    if 'match {
-                        results.push({
-                            chunk: entry.chunk,
-                            embedding: entry.embedding,
-                            similarityScore: 1.0,
-                            id: entry.id
-                        });
-                    }
+            if embedding is () {
+                readonly & VectorMatch[] results;
+                if filters is () {
+                    results = from InMemoryVectorEntry entry in self.entries
+                    select {
+                        chunk: entry.chunk.cloneReadOnly(),
+                        embedding: entry.embedding.cloneReadOnly(),
+                        similarityScore: 1.0,
+                        id: entry.id
+                    };
+                    return results.cloneReadOnly();
                 }
+                MetadataFilters metadataFilters = filters.cloneReadOnly();
+                results = from InMemoryVectorEntry entry in self.entries
+                    where check entryMatchesFilters(entry, metadataFilters)
+                    select {
+                        chunk: entry.chunk.cloneReadOnly(),
+                        embedding: entry.embedding.cloneReadOnly(),
+                        similarityScore: 1.0,
+                        id: entry.id
+                    };
                 return results.cloneReadOnly();
             }
-            results = from InMemoryVectorEntry entry in self.entries
+            VectorMatch[] results = from InMemoryVectorEntry entry in self.entries
                 let float similarity = self.calculateSimilarity(<Vector>query.embedding.clone(), <Vector>entry.embedding)
                 order by similarity descending
                 limit self.topK
@@ -130,7 +128,7 @@ public distinct isolated class InMemoryVectorStore {
                     embedding: entry.embedding,
                     similarityScore: similarity,
                     id: entry.id
-                }.clone();
+                };
             if filters !is () {
                 foreach VectorMatch result in results {
                     boolean 'match = check entryMatchesFilters(result, filters);
