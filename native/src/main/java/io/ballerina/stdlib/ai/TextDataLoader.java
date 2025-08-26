@@ -218,5 +218,4 @@ public class TextDataLoader {
         }
         return metadataMap;
     }
-
 }

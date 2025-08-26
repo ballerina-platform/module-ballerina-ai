@@ -218,9 +218,8 @@ function testTextDataLoaderMultipleFilesWithInvalidFile() returns error? {
     TextDataLoader|Error loader = new (pdfPath, nonExistentPath);
 
     if loader is Error {
-        test:assertTrue(loader.message().includes("File does not exist"),
+        return test:assertTrue(loader.message().includes("File does not exist"),
                 "Error message should indicate file does not exist");
-    } else {
-        test:assertFail("Constructor should return error when any file doesn't exist");
     }
+    test:assertFail("Constructor should return error when any file doesn't exist");
 }

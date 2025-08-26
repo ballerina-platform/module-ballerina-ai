@@ -30,6 +30,9 @@ public isolated class TextDataLoader {
     *DataLoader;
     final readonly & string[] paths;
 
+    # Initializes the data loader with the given paths.
+    # + paths - The paths to the files to load
+    # + return - an error if the file does not exist
     public isolated function init(string ...paths) returns Error? {
         // Check if the file exists by trying to get metadata
         foreach string path in paths {
@@ -41,6 +44,8 @@ public isolated class TextDataLoader {
         self.paths = paths.cloneReadOnly();
     }
 
+    # Loads documents as `TextDocument`s from a source.
+    # + return - document or an array of documents, or an `ai:Error` if the loading fails
     public isolated function load() returns Document[]|Document|Error {
         Document[] documents = from string path in self.paths select check loadDocument(path);
         if documents.length() == 1 {
@@ -58,58 +63,53 @@ isolated function loadDocument(string path) returns Document|Error {
         }
 
         match fileType {
-            "pdf" => {
-                TextDocument|error result = readPdfNative(path);
-                if result is error {
-                    return error Error(result.message());
-                }
-                return result;
+            PDF => {
+                return readPdfNative(path);
             }
-            "docx" => {
-                TextDocument|error result = readDocxNative(path);
-                if result is error {
-                    return error Error(result.message());
-                }
-                return result;
+            DOCX => {
+                return readDocxNative(path);
             }
-            "pptx" => {
-                TextDocument|error result = readPptxNative(path);
-                if result is error {
-                    return error Error(result.message());
-                }
-                return result;
+            PPTX => {
+                return readPptxNative(path);
             }
         }
         return error Error("Unexpected error in file type processing");
 }
 
-isolated function getFileType(string path) returns "pdf"|"docx"|"pptx"? {
-    string lowerPath = path.toLowerAscii();
-    if lowerPath.endsWith(".pdf") { return "pdf"; }
-    if lowerPath.endsWith(".docx") { return "docx"; }
-    if lowerPath.endsWith(".pptx") { return "pptx"; }
-    return ();
+enum SupportedFileType {
+    PDF = "pdf",
+    DOCX = "docx",
+    PPTX = "pptx"
+}
+
+isolated function getFileType(string path) returns SupportedFileType? {
+    match getFileExtension(path) {
+        "pdf" => {return PDF;}
+        "docx" => {return DOCX;}
+        "pptx" => {return PPTX;}
+        _ => {return ();}
+    }
 }
 
 isolated function getFileExtension(string path) returns string {
-    int? lastDotIndex = path.lastIndexOf(".");
+    int? lastDotIndex = path.toLowerAscii().lastIndexOf(".");
     if lastDotIndex is () {
         return "unknown";
     }
     return path.substring(lastDotIndex + 1);
 }
 
-isolated function readPdfNative(string path) returns TextDocument|error = @java:Method {
+isolated function readPdfNative(string path) returns TextDocument|Error = @java:Method {
     'class: "io.ballerina.stdlib.ai.TextDataLoader",
     name: "readPdf"
 } external;
 
-isolated function readDocxNative(string path) returns TextDocument|error = @java:Method {
+isolated function readDocxNative(string path) returns TextDocument|Error = @java:Method {
     'class: "io.ballerina.stdlib.ai.TextDataLoader",
     name: "readDocx"
 } external;
 
-isolated function readPptxNative(string path) returns TextDocument|error = @java:Method {
+isolated function readPptxNative(string path) returns TextDocument|Error = @java:Method {
     'class: "io.ballerina.stdlib.ai.TextDataLoader",
     name: "readPptx"
 } external;
