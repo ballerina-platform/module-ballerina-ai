@@ -95,9 +95,9 @@ isolated function evaluateFilterNode(Metadata content, MetadataFilters|MetadataF
 
 isolated function evaluateCondition(MetadataFilterCondition condition, boolean[] results) returns boolean {
     if condition == AND {
-        return !results.some(n => n == false);
+        return !results.some(result => result == false);
     }
-    return results.some(n => n == true);
+    return results.some(result => result == true);
 }
 
 isolated function compareValues(json left, MetadataFilterOperator operation, json right) returns boolean|error {
