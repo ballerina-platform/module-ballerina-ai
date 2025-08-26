@@ -135,6 +135,12 @@ artifactId = "commons-collections4"
 version = "@commonsCollections4Version@"
 path="./lib/commons-collections4-@commonsCollections4Version@.jar"
 
+[[platform.java21.dependency]]
+groupId = "org.apache.commons"
+artifactId = "commons-lang3"
+version = "@commonsLang3Version@"
+path="./lib/commons-lang3-@commonsLang3Version@.jar"
+
 # Minimal logging (required by tika-parser-microsoft-module)
 [[platform.java21.dependency]]
 groupId = "org.apache.logging.log4j"
