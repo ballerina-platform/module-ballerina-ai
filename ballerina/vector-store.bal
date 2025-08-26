@@ -92,14 +92,22 @@ public distinct isolated class InMemoryVectorStore {
         lock {
             Embedding? embedding = query.cloneReadOnly().embedding;
             MetadataFilters? filters = query.cloneReadOnly().filters;
+            VectorMatch[] results = [];
             if embedding is () && filters is () {
-                return error Error("Either embedding or filters must be provided");
+                foreach InMemoryVectorEntry entry in self.entries {
+                    results.push({
+                        chunk: entry.chunk,
+                        embedding: entry.embedding,
+                        similarityScore: 1.0,
+                        id: entry.id
+                    });
+                }
+                return results.cloneReadOnly();
             }
             if embedding !is Vector? {
                 return error Error("InMemoryVectorStore supports dense vectors exclusively");
             }
             if embedding is () && filters !is () {
-                VectorMatch[] results = [];
                 foreach InMemoryVectorEntry entry in self.entries {
                     boolean 'match = check entryMatchesFilters(entry, filters);
                     if 'match {
@@ -113,7 +121,7 @@ public distinct isolated class InMemoryVectorStore {
                 }
                 return results.cloneReadOnly();
             }
-            VectorMatch[] results = from InMemoryVectorEntry entry in self.entries
+            results = from InMemoryVectorEntry entry in self.entries
                 let float similarity = self.calculateSimilarity(<Vector>query.embedding.clone(), <Vector>entry.embedding)
                 order by similarity descending
                 limit self.topK

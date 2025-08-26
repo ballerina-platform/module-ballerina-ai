@@ -72,7 +72,8 @@ isolated function getChatMessageStringContent(Prompt|string prompt) returns stri
     return str.trim();
 }
 
-isolated function entryMatchesFilters(VectorMatch|InMemoryVectorEntry entry, MetadataFilters filters) returns boolean|error {
+isolated function entryMatchesFilters(VectorMatch|InMemoryVectorEntry entry, 
+                                      MetadataFilters filters) returns boolean|error {
     Metadata? metadata = entry.chunk.metadata;
     if metadata is () {
         return false;
@@ -94,19 +95,9 @@ isolated function evaluateFilterNode(Metadata content, MetadataFilters|MetadataF
 
 isolated function evaluateCondition(MetadataFilterCondition condition, boolean[] results) returns boolean {
     if condition == AND {
-        foreach boolean result in results {
-            if !result {
-                return false;
-            }
-        }
-        return true;
+        return !results.some(n => n == false);
     }
-    foreach boolean result in results {
-        if result {
-            return true;
-        }
-    }
-    return false;
+    return results.some(n => n == true);
 }
 
 isolated function compareValues(json left, MetadataFilterOperator operation, json right) returns boolean|error {
