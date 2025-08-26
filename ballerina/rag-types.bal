@@ -76,7 +76,7 @@ public type MetadataFilters record {|
 
 # Defines a query to the vector store with an embedding vector and optional metadata filters.
 # Supports precise search operations by combining vector similarity with metadata conditions.
-# Provide `embedding`, `filters`, or both. If neither is provided, all vector store entries are returned.
+# User can provide `embedding`, `filters`, or both. If neither is provided, all vector store entries are returned.
 public type VectorStoreQuery record {|
     # The vector to use for similarity search
     Embedding embedding?;
