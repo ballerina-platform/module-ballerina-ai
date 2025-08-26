@@ -130,12 +130,10 @@ public distinct isolated class InMemoryVectorStore {
                     id: entry.id
                 };
             if filters !is () {
-                foreach VectorMatch result in results {
-                    boolean 'match = check entryMatchesFilters(result, filters);
-                    if !'match {
-                        _ = results.remove(check results.indexOf(result).cloneWithType());
-                    }
-                }
+                final readonly & MetadataFilters metadataFilters = filters.cloneReadOnly();
+                results = from VectorMatch result in results
+                    where check entryMatchesFilters(result, metadataFilters)
+                    select result;
             }
             return results.cloneReadOnly();
         } on fail error err {
