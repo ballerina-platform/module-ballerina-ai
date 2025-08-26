@@ -87,6 +87,9 @@ dependencies {
     externalJars(group: 'org.apache.pdfbox', name: 'pdfbox', version: "${project.pdfboxVersion}") {
         transitive = false
     }
+    externalJars(group: 'org.apache.pdfbox', name: 'pdfbox-io', version: "${project.pdfboxIoVersion}") {
+        transitive = false
+    }
     externalJars(group: 'org.apache.pdfbox', name: 'fontbox', version: "${project.pdfboxVersion}") {
         transitive = false
     }
@@ -133,6 +136,7 @@ task updateTomlFiles {
         newConfig = newConfig.replace("@tikaVersion@", project.tikaVersion)
         newConfig = newConfig.replace("@poiVersion@", project.poiVersion)
         newConfig = newConfig.replace("@pdfboxVersion@", project.pdfboxVersion)
+        newConfig = newConfig.replace("@pdfboxIoVersion@", project.pdfboxIoVersion)
         newConfig = newConfig.replace("@jempboxVersion@", project.jempboxVersion)
         newConfig = newConfig.replace("@commonsIoVersion@", project.commonsIoVersion)
         newConfig = newConfig.replace("@commonsCompressVersion@", project.commonsCompressVersion)

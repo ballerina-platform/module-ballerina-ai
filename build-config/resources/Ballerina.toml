@@ -100,6 +100,12 @@ path="./lib/pdfbox-@pdfboxVersion@.jar"
 
 [[platform.java21.dependency]]
 groupId = "org.apache.pdfbox"
+artifactId = "pdfbox-io"
+version = "@pdfboxIoVersion@"
+path="./lib/pdfbox-io-@pdfboxIoVersion@.jar"
+
+[[platform.java21.dependency]]
+groupId = "org.apache.pdfbox"
 artifactId = "fontbox"
 version = "@pdfboxVersion@"
 path="./lib/fontbox-@pdfboxVersion@.jar"
