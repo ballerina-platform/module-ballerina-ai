@@ -306,12 +306,8 @@ isolated function getLlMResponse(intelligence:Client llmClient,
 
 isolated function handleResponseWithExpectedType(map<json> arguments, boolean isOriginallyJsonObject,
         typedesc responseType, typedesc<anydata> expectedResponseTypedesc) returns anydata|error {
-    anydata|error res = parseResponseAsType(arguments,
+    anydata res = check parseResponseAsType(arguments,
             expectedResponseTypedesc, isOriginallyJsonObject);
-    if res is error {
-        return res;
-    }
-
     return res.ensureType(expectedResponseTypedesc);
 }
 
