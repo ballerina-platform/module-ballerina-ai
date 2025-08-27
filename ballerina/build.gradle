@@ -39,7 +39,9 @@ ballerina {
 }
 
 configurations {
-    externalJars
+    externalJars {
+        exclude group: 'org.ballerinalang', module: 'maven-resolver'
+    }
 }
 
 dependencies {
