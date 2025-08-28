@@ -96,25 +96,39 @@ public distinct isolated class InMemoryVectorStore {
             if embedding !is Vector? {
                 return error Error("InMemoryVectorStore supports dense vectors exclusively");
             }
-            if embedding is () {
-                readonly & VectorMatch[] results;
-                if filters is () {
-                    results = from InMemoryVectorEntry entry in self.entries
+            if embedding is () && filters is () {
+                readonly & VectorMatch[] results = from InMemoryVectorEntry entry in self.entries
                     select {
                         chunk: entry.chunk.cloneReadOnly(),
                         embedding: entry.embedding.cloneReadOnly(),
-                        similarityScore: 1.0,
+                        similarityScore: 0.0,
                         id: entry.id
                     };
-                    return results.cloneReadOnly();
-                }
+                return results.cloneReadOnly();
+            }
+            if embedding is () && filters !is () {
                 MetadataFilters metadataFilters = filters.cloneReadOnly();
-                results = from InMemoryVectorEntry entry in self.entries
+                readonly & VectorMatch[] results = from InMemoryVectorEntry entry in self.entries
                     where check entryMatchesFilters(entry, metadataFilters)
                     select {
                         chunk: entry.chunk.cloneReadOnly(),
                         embedding: entry.embedding.cloneReadOnly(),
-                        similarityScore: 1.0,
+                        similarityScore: 0.0,
+                        id: entry.id
+                    };
+                return results.cloneReadOnly();
+            }
+            if filters !is () {
+                final readonly & MetadataFilters metadataFilters = filters.cloneReadOnly();
+                readonly & VectorMatch[] results = from InMemoryVectorEntry entry in self.entries
+                    let float similarity = self.calculateSimilarity(<Vector>query.embedding.clone(), <Vector>entry.embedding)
+                    where check entryMatchesFilters(entry, metadataFilters)
+                    order by similarity descending
+                    limit self.topK
+                    select {
+                        chunk: entry.chunk.cloneReadOnly(),
+                        embedding: entry.embedding.cloneReadOnly(),
+                        similarityScore: similarity,
                         id: entry.id
                     };
                 return results.cloneReadOnly();
@@ -129,12 +143,6 @@ public distinct isolated class InMemoryVectorStore {
                     similarityScore: similarity,
                     id: entry.id
                 };
-            if filters !is () {
-                final readonly & MetadataFilters metadataFilters = filters.cloneReadOnly();
-                results = from VectorMatch result in results
-                    where check entryMatchesFilters(result, metadataFilters)
-                    select result;
-            }
             return results.cloneReadOnly();
         } on fail error err {
             return error("Failed to query vector store", err);
