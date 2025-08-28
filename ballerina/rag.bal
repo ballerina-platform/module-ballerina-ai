@@ -48,7 +48,8 @@ public distinct isolated class VectorRetriever {
     # Retrieves relevant chunks for the given query.
     #
     # + query - The text query to search for
-    # + topK - The maximum number of most similar items to return. Defaults to 10
+    # + topK - The maximum number of similar items to return (default: 10).  
+    # Use `-1` to return all available entries.
     # + filters - Optional metadata filters to apply during retrieval
     # + return - An array of matching chunks with similarity scores, or an `ai:Error` if retrieval fails
     public isolated function retrieve(string query, int topK = 10, MetadataFilters? filters = ()) returns QueryMatch[]|Error {
@@ -148,7 +149,8 @@ public distinct isolated class VectorKnowledgeBase {
     # Retrieves relevant chunk for the given query.
     #
     # + query - The text query to search for
-    # + topK - The maximum number of most similar items to return. Defaults to 10
+    # + topK - The maximum number of similar items to return (default: 10).  
+    # Use `-1` to return all available entries.
     # + filters - Optional metadata filters to apply during retrieval
     # + return - An array of matching chunks with similarity scores, or an `ai:Error` if retrieval fails
     public isolated function retrieve(string query, int topK = 10, MetadataFilters? filters = ()) returns QueryMatch[]|Error {
