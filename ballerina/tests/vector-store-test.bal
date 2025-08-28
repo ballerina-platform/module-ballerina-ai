@@ -56,9 +56,9 @@ final readonly & string[] words = [
 
 @test:Config
 isolated function testInMemoryStoreWithMetrics() returns error? {
-    VectorStore vectorStore1 = check new InMemoryVectorStore(topK = 5);
-    VectorStore vectorStore2 = check new InMemoryVectorStore(topK = 5, similarityMetric = DOT_PRODUCT);
-    VectorStore vectorStore3 = check new InMemoryVectorStore(topK = 5, similarityMetric = EUCLIDEAN);
+    VectorStore vectorStore1 = check new InMemoryVectorStore();
+    VectorStore vectorStore2 = check new InMemoryVectorStore(similarityMetric = DOT_PRODUCT);
+    VectorStore vectorStore3 = check new InMemoryVectorStore(similarityMetric = EUCLIDEAN);
 
     VectorEntry[] vectorEntries = [];
     foreach string word in words {
@@ -86,7 +86,7 @@ isolated function testInMemoryStoreWithMetrics() returns error? {
 
 @test:Config {}
 isolated function testInMemoryStoreWithFilters() returns error? {
-    VectorStore vectorStore1 = check new InMemoryVectorStore(topK = 5);
+    VectorStore vectorStore1 = check new InMemoryVectorStore();
     VectorEntry[] vectorEntries = [];
     foreach string word in words {
         TextChunk chunk = {content: word, metadata: {
@@ -119,18 +119,8 @@ isolated function testInMemoryStoreWithFilters() returns error? {
 }
 
 @test:Config
-isolated function testInMemoryVectorStoreWithInvalidTopKConfig() {
-    VectorStore|Error vectorStore = new InMemoryVectorStore(topK = 0);
-    if vectorStore is Error {
-        test:assertEquals(vectorStore.message(), "topK must be greater than 0");
-    } else {
-        test:assertFail("Expected an 'Error' but got 'VectorStore'");
-    }
-}
-
-@test:Config
 isolated function testInMemoryVectorStoreWithSparseVector() returns error? {
-    VectorStore vectorStore = check new InMemoryVectorStore(topK = 5);
+    VectorStore vectorStore = check new InMemoryVectorStore();
     SparseVector vector = {indices: [], values: []};
     VectorEntry entry = {embedding: vector, chunk: {'type: "text", content: "test"}};
     Error? result = vectorStore.add([entry]);
@@ -143,7 +133,7 @@ isolated function testInMemoryVectorStoreWithSparseVector() returns error? {
 
 @test:Config
 isolated function testInMemoryVectorDeletion() returns error? {
-    VectorStore vectorStore = check new InMemoryVectorStore(topK = 5);
+    VectorStore vectorStore = check new InMemoryVectorStore();
     int id = 0;
 
     VectorEntry[] vectorEntries = [];

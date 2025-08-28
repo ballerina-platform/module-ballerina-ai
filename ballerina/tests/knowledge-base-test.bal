@@ -18,14 +18,19 @@ import ballerina/test;
 
 @test:Config
 isolated function testVectorKnowledgeBase() returns error? {
-    VectorKnowledgeBase kb = new (check new InMemoryVectorStore(topK = 1), new MockEmbeddingProvider());
+    VectorKnowledgeBase kb = new (check new InMemoryVectorStore(), new MockEmbeddingProvider());
     from string word in words
     do {
-        TextChunk chunk = {content: word};
+        TextChunk chunk = {content: word, metadata: {fileName: "words.txt"}};
         check kb.ingest(chunk);
     };
 
-    QueryMatch[] 'match = check kb.retrieve("dog");
+    QueryMatch[] 'match = check kb.retrieve("dog", topK = 1);
     test:assertEquals('match.length(), 1);
     test:assertEquals('match[0].chunk.content, "puppy");
+
+    MetadataFilters deleteFilter = {filters: [{'key: "fileName", value: "words.txt"}]};
+    check kb.deleteByFilter(deleteFilter);
+    'match = check kb.retrieve("dog");
+    test:assertEquals('match.length(), 0);
 }
