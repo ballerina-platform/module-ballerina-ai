@@ -84,6 +84,40 @@ isolated function testInMemoryStoreWithMetrics() returns error? {
     test:assertEquals(matchWithEuclidean[0].chunk.content, expectedContent);
 }
 
+@test:Config {}
+isolated function testInMemoryStoreWithFilters() returns error? {
+    VectorStore vectorStore1 = check new InMemoryVectorStore(topK = 5);
+    VectorEntry[] vectorEntries = [];
+    foreach string word in words {
+        TextChunk chunk = {content: word, metadata: {
+            fileName: "test.txt"
+        }};
+        Embedding embedding = check mockEmbeddingProvider->embed(chunk);
+        vectorEntries.push({chunk, embedding});
+    }
+    check vectorStore1.add(vectorEntries);
+    string expectedContent = "puppy";
+    VectorMatch[] matchWithCosine = check vectorStore1.query({filters: {
+        filters: [
+            {
+                'key: "fileName",
+                operator: EQUAL,
+                value: "test.txt"
+            }
+        ]}});
+    test:assertEquals(matchWithCosine[0].chunk.content, expectedContent);
+
+    matchWithCosine = check vectorStore1.query({filters: {
+        filters: [
+            {
+                'key: "fileName",
+                operator: EQUAL,
+                value: "invalid_file_name.txt"
+            }
+        ]}});
+    test:assertEquals(matchWithCosine.length(), 0);
+}
+
 @test:Config
 isolated function testInMemoryVectorStoreWithInvalidTopKConfig() {
     VectorStore|Error vectorStore = new InMemoryVectorStore(topK = 0);
