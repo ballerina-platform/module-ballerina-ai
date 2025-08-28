@@ -71,3 +71,75 @@ isolated function getChatMessageStringContent(Prompt|string prompt) returns stri
     }
     return str.trim();
 }
+
+isolated function entryMatchesFilters(VectorMatch|InMemoryVectorEntry entry, 
+                                      MetadataFilters filters) returns boolean|error {
+    Metadata? metadata = entry.chunk.metadata;
+    if metadata is () {
+        return false;
+    }
+    return evaluateFilterNode(metadata, filters);
+}
+
+isolated function evaluateFilterNode(Metadata content, MetadataFilters|MetadataFilter node) returns boolean|error {
+    if node is MetadataFilter {
+        return content.hasKey(node.key) ? compareValues(content.get(node.key), node.operator, node.value) : false;
+    }
+    boolean[] results = from MetadataFilters|MetadataFilter child in node.filters 
+        select check evaluateFilterNode(content, child);
+    return evaluateCondition(node.condition, results);
+}
+
+isolated function evaluateCondition(MetadataFilterCondition condition, boolean[] results) returns boolean {
+    if condition == AND {
+        return !results.some(result => result == false);
+    }
+    return results.some(result => result == true);
+}
+
+isolated function compareValues(json left, MetadataFilterOperator operation, json right) returns boolean|error {
+    match operation {
+        EQUAL => {
+            return left == right;
+        }
+        NOT_EQUAL => {
+            return left != right;
+        }
+        IN => {
+            if right is json[] {
+                foreach json value in right {
+                    if left == value {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+        NOT_IN => {
+            if right is json[] {
+                foreach json value in right {
+                    if left == value {
+                        return false;
+                    }
+                }
+                return true;
+            }
+            return false;
+        }
+        GREATER_THAN => {
+            return check left.cloneWithType(decimal) > check right.cloneWithType(decimal);
+        }
+        LESS_THAN => {
+            return check left.cloneWithType(decimal) < check right.cloneWithType(decimal);
+        }
+        GREATER_THAN_OR_EQUAL => {
+            return check left.cloneWithType(decimal) >= check right.cloneWithType(decimal);
+        }
+        LESS_THAN_OR_EQUAL => {
+            return check left.cloneWithType(decimal) <= check right.cloneWithType(decimal);
+        }
+        _ => {
+            return error(string `Unsupported operator: ${operation}`);
+        }
+    }
+}
