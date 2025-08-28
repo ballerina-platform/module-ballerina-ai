@@ -148,7 +148,8 @@ public isolated distinct client class Wso2ModelProvider {
     #
     # + serviceUrl - The base URL of WSO2 intelligence API endpoint
     # + accessToken - The access token for authenticating API requests
-    # + temperature - The temperature for controlling randomness in the model's output  
+    # + temperature - The temperature for controlling randomness in the model's output
+    # + generatorConfig - Configuration for the `ModelProvider.generate()` method.
     # + connectionConfig - Additional HTTP connection configuration
     # + return - `nil` on success, or an `ai:Error` if initialization fails
     public isolated function init(@display {label: "Service URL"} string serviceUrl,
