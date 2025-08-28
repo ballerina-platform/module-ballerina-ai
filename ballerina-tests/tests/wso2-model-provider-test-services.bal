@@ -19,51 +19,20 @@ import ballerina/test;
 
 isolated service /llm on new http:Listener(8080) {
     private map<int> retryCountMap = {};
-
-    resource function post azureopenai/deployments/gpt4onew/chat/completions(
+    isolated resource function post azureopenai/deployments/gpt4onew/chat/completions(
             @http:Payload CreateChatCompletionRequest payload) returns CreateChatCompletionResponse|error {
-        test:assertEquals(payload?.temperature, 0.7d);
-        ChatCompletionRequestMessage[] messages = check payload.messages.ensureType();
-        ChatCompletionRequestMessage message = messages[0];
+        [ChatCompletionRequestMessage[], string] [messages, initialText] = check validateChatCompletionPayload(payload);
 
-        json[]? content = check message["content"].ensureType();
-        if content is () {
-            test:assertFail("Expected content in the payload");
-        }
-
-        TextContentPart initialTextContent = check content[0].fromJsonWithType();
-        string initialText = initialTextContent.text;
+        json[]? content = check messages[0]["content"].ensureType();
         test:assertEquals(content, getExpectedContentParts(initialText),
             string `Prompt assertion failed for prompt starting with '${initialText}'`);
-        test:assertEquals(message.role, "user");
-        ChatCompletionTool[]? tools = payload.tools;
-        if tools is () || tools.length() == 0 {
-            test:assertFail("No tools in the payload");
-        }
 
-        map<json>? parameters = check tools[0].'function?.parameters.toJson().cloneWithType();
-        if parameters is () {
-            test:assertFail("No parameters in the expected tool");
-        }
-
-        test:assertEquals(parameters, getExpectedParameterSchema(initialText),
-                string `Parameter assertion failed for prompt starting with '${initialText}'`);
         return getTestServiceResponse(initialText);
     }
 
     isolated resource function post azureopenai/deployments/gpt4onew\-retry/chat/completions(
             @http:Payload CreateChatCompletionRequest payload) returns CreateChatCompletionResponse|error {
-        test:assertEquals(payload?.temperature, 0.7d);
-        ChatCompletionRequestMessage[] messages = check payload.messages.ensureType();
-        ChatCompletionRequestMessage message = messages[0];
-
-        json[]? content = check message["content"].ensureType();
-        if content is () {
-            test:assertFail("Expected content in the payload");
-        }
-
-        TextContentPart initialTextContent = check content[0].fromJsonWithType();
-        string initialText = initialTextContent.text;
+        [ChatCompletionRequestMessage[], string] [messages, initialText] = check validateChatCompletionPayload(payload);
 
         int index;
         lock {
@@ -71,21 +40,40 @@ isolated service /llm on new http:Listener(8080) {
         }
 
         check assertContentParts(messages, initialText, index);
-        test:assertEquals(message.role, "user");
-        ChatCompletionTool[]? tools = payload.tools;
-        if tools is () || tools.length() == 0 {
-            test:assertFail("No tools in the payload");
-        }
-
-        map<json>? parameters = check tools[0].'function?.parameters.toJson().cloneWithType();
-        if parameters is () {
-            test:assertFail("No parameters in the expected tool");
-        }
-
-        test:assertEquals(parameters, getExpectedParameterSchema(initialText),
-                string `Parameter assertion failed for prompt starting with '${initialText}'`);
         return check getTestServiceResponse(initialText, index);
     }
+}
+
+isolated function validateChatCompletionPayload(CreateChatCompletionRequest payload) 
+        returns [ChatCompletionRequestMessage[], string]|error {
+    test:assertEquals(payload?.temperature, 0.7d);
+
+    ChatCompletionRequestMessage[] messages = check payload.messages.ensureType();
+    ChatCompletionRequestMessage message = messages[0];
+    test:assertEquals(message.role, "user");
+
+    json[]? content = check message["content"].ensureType();
+    if content is () {
+        test:assertFail("Expected content in the payload");
+    }
+
+    TextContentPart initialTextContent = check content[0].fromJsonWithType();
+    string initialText = initialTextContent.text;
+
+    ChatCompletionTool[]? tools = payload.tools;
+    if tools is () || tools.length() == 0 {
+        test:assertFail("No tools in the payload");
+    }
+
+    map<json>? parameters = check tools[0].'function?.parameters.toJson().cloneWithType();
+    if parameters is () {
+        test:assertFail("No parameters in the expected tool");
+    }
+
+    test:assertEquals(parameters, getExpectedParameterSchema(initialText),
+            string `Parameter assertion failed for prompt starting with '${initialText}'`);
+
+    return [messages, initialText];
 }
 
 isolated function assertContentParts(ChatCompletionRequestMessage[] messages, 
@@ -110,13 +98,13 @@ isolated function assertContentParts(ChatCompletionRequestMessage[] messages,
     }
 
     if index == 1 {
-        test:assertEquals(content, getExpectedContentPartsForFirstRetryCall(initialText),
+        test:assertEquals(content, check getExpectedContentPartsForFirstRetryCall(initialText),
             string `Prompt assertion failed for prompt starting with '${initialText}' 
                 on first attempt of the retry`);
         return;
     }
 
-    test:assertEquals(content, getExpectedContentPartsForSecondRetryCall(initialText),
+    test:assertEquals(content,check getExpectedContentPartsForSecondRetryCall(initialText),
             string `Prompt assertion failed for prompt starting with '${initialText}' on 
                 second attempt of the retry`);
 }
