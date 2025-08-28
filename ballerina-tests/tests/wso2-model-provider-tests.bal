@@ -225,7 +225,7 @@ function testGenerateMethodWithRecordArrayReturnType() returns error? {
 }
 
 @test:Config
-function testGenerateMethodWithInvalidBasicType() returns error? {
+function testGenerateMethodWithInvalidBasicType() {
     boolean|ai:Error rating = defaultModelProvider->generate(`What is ${1} + ${1}?`);
     test:assertTrue(rating is error);
     test:assertTrue((<error>rating).message().includes(ERROR_MESSAGE));
@@ -340,43 +340,62 @@ function testGenerateMethodWithArrayUnionRecord2() returns ai:Error? {
 }
 
 @test:Config
-function testRetryImplementationInGenerateMethodWithInvalidBasicType() returns error? {
-    final ai:Wso2ModelProvider defaultModelProviderWithRetryConfig = 
+function testGenerateWithValidRetryConfig() returns error? {
+    final ai:Wso2ModelProvider modelProvider =
         check new (RETRY_SERVICE_URL, API_KEY, generatorConfig = {retryConfig: {count: 2, interval: 2}});
-    final ai:Wso2ModelProvider defaultModelProviderWithRetryConfig2 = 
-        check new (RETRY_SERVICE_URL, API_KEY, generatorConfig = {retryConfig: {count: 2}});
-    final ai:Wso2ModelProvider defaultModelProviderWithRetryConfig3 = 
-        check new (RETRY_SERVICE_URL, API_KEY, generatorConfig = {retryConfig: {count: 1}});
-    final ai:Wso2ModelProvider defaultModelProviderWithRetryConfig4 = 
-        check new (RETRY_SERVICE_URL, API_KEY, generatorConfig = {retryConfig: {}});
-    final ai:Wso2ModelProvider defaultModelProviderWithInvalidRetryConfig = 
-        check new (RETRY_SERVICE_URL, API_KEY, generatorConfig = {retryConfig: {count: -1}});
-    final ai:Wso2ModelProvider defaultModelProviderWithInvalidRetryConfig2 = 
-        check new (RETRY_SERVICE_URL, API_KEY, generatorConfig = {retryConfig: {count: 4, interval: -1}});
-        
-    int|ai:Error rating = defaultModelProviderWithRetryConfig->generate(`What is the result of ${1} + ${1}?`);
-    test:assertEquals(rating, 2);
 
-    rating = defaultModelProviderWithRetryConfig2->generate(`What is the result of 1 + 2?`);
-    test:assertEquals(rating, 3);
-
-    rating = defaultModelProviderWithRetryConfig3->generate(`What is the result of 1 + 3?`);
-    test:assertEquals(rating, 4);
-
-    rating = defaultModelProviderWithRetryConfig4->generate(`What is the result of 1 + 4?`);
-    test:assertEquals(rating, 5);
-
-    rating = defaultModelProviderWithRetryConfig->generate(`What is the result of ${1} + ${5}?`);
-    test:assertEquals(rating, 6);
-
-    rating = defaultModelProviderWithRetryConfig->generate(`What is the result of ${1} + ${6}?`);
-    test:assertEquals(rating, 7);
-
-    rating = defaultModelProviderWithInvalidRetryConfig->generate(`What is the result of ${1} + ${6}?`);
-    test:assertTrue(rating is error);
-    test:assertEquals((<error>rating).message(), "Invalid retry count: -1");
-
-    rating = defaultModelProviderWithInvalidRetryConfig2->generate(`What is the result of ${1} + ${6}?`);
-    test:assertTrue(rating is error);
-    test:assertEquals((<error>rating).message(), "Invalid retry interval: -1");
+    int|ai:Error rating = modelProvider->generate(`What is the result of ${1} + ${1}?`);
+    test:assertEquals(rating, 2, "Failed with valid retry config {count: 2, interval: 2}");
 }
+
+@test:Config
+function testGenerateWithDefaultRetryInterval() returns error? {
+    final ai:Wso2ModelProvider modelProvider =
+        check new (RETRY_SERVICE_URL, API_KEY, generatorConfig = {retryConfig: {count: 2}});
+
+    int|ai:Error rating = modelProvider->generate(`What is the result of 1 + 2?`);
+    test:assertEquals(rating, 3, "Failed with retry config {count: 2}");
+}
+
+@test:Config
+function testGenerateWithSingleRetry() returns error? {
+    final ai:Wso2ModelProvider modelProvider =
+        check new (RETRY_SERVICE_URL, API_KEY, generatorConfig = {retryConfig: {count: 1}});
+
+    int|ai:Error rating = modelProvider->generate(`What is the result of 1 + 3?`);
+    test:assertEquals(rating, 4, "Failed with retry config {count: 1}");
+}
+
+@test:Config
+function testGenerateWithEmptyRetryConfig() returns error? {
+    final ai:Wso2ModelProvider modelProvider =
+        check new (RETRY_SERVICE_URL, API_KEY, generatorConfig = {retryConfig: {}});
+
+    int|ai:Error rating = modelProvider->generate(`What is the result of 1 + 4?`);
+    test:assertEquals(rating, 5, "Failed with empty retry config {}");
+}
+
+@test:Config
+function testGenerateFailsWithInvalidNegativeRetryCount() returns error? {
+    final ai:Wso2ModelProvider modelProvider =
+        check new (RETRY_SERVICE_URL, API_KEY, generatorConfig = {retryConfig: {count: -1}});
+
+    int|ai:Error rating = modelProvider->generate(`What is the result of ${1} + ${6}?`);
+    test:assertTrue(rating is error, "Expected an error for negative retry count");
+    if rating is error {
+        test:assertEquals(rating.message(), "Invalid retry count: -1");
+    }
+}
+
+@test:Config
+function testGenerateFailsWithInvalidNegativeRetryInterval() returns error? {
+    final ai:Wso2ModelProvider modelProvider =
+        check new (RETRY_SERVICE_URL, API_KEY, generatorConfig = {retryConfig: {count: 4, interval: -1}});
+
+    int|ai:Error rating = modelProvider->generate(`What is the result of ${1} + ${6}?`);
+    test:assertTrue(rating is error, "Expected an error for negative retry interval");
+    if rating is error {
+        test:assertEquals(rating.message(), "Invalid retry interval: -1");
+    }
+}
+

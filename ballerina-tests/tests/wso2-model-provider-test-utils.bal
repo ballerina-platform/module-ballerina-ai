@@ -323,13 +323,12 @@ isolated function getSecondRetryLlmResult(string message) returns string|error {
     return error("Unexpected message for second retry call");
 }
 
-isolated function generateConversionErrorMessage(string errorMessage) returns string {
-    return string `The tool call with ID 'tool-call-id' for the function 'getResults' failed.
+isolated function generateConversionErrorMessage(string errorMessage) returns string =>
+    string `The tool call with ID 'tool-call-id' for the function 'getResults' failed.
         Error: error("{ballerina/lang.value}ConversionError",message="${errorMessage}")
         You must correct the function arguments based on this error and respond with a valid tool call.`;
-}
 
-isolated function getExpectedContentPartsForFirstRetryCall(string message) returns string {
+isolated function getExpectedContentPartsForFirstRetryCall(string message) returns string|error {
     if message.startsWith("What is the result of 1 + 1?")
         || message.startsWith("What is the result of 1 + 2?")
         || message.startsWith("What is the result of 1 + 3?")
@@ -337,10 +336,10 @@ isolated function getExpectedContentPartsForFirstRetryCall(string message) retur
         return generateConversionErrorMessage("'boolean' value cannot be converted to 'int'");
     }
 
-    return "";
+    return error("Unexpected content parts for first retry call");
 }
 
-isolated function getExpectedContentPartsForSecondRetryCall(string message) returns string {
+isolated function getExpectedContentPartsForSecondRetryCall(string message) returns string|error {
     if message.startsWith("What is the result of 1 + 1?") {
         return generateConversionErrorMessage("'string' value cannot be converted to 'int'");
     }
@@ -349,7 +348,7 @@ isolated function getExpectedContentPartsForSecondRetryCall(string message) retu
         return generateConversionErrorMessage("cannot convert '()' to type 'int'");
     }
 
-    return "";
+    return error("Unexpected content parts for second retry call");
 }
 
 isolated function getExpectedContentParts(string message) returns (map<anydata>)[] {

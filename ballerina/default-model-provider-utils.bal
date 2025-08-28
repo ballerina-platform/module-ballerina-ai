@@ -71,8 +71,7 @@ isolated function generateJsonObjectSchema(map<json> schema) returns ResponseSch
 isolated function parseResponseAsType(map<json> resp,
         typedesc<anydata> expectedResponseTypedesc, boolean isOriginallyJsonObject) returns anydata|error {
     if !isOriginallyJsonObject {
-        map<json> respContent = check resp.fromJsonWithType();
-        anydata|error result = trap respContent[RESULT].fromJsonWithType(expectedResponseTypedesc);
+        anydata|error result = trap resp[RESULT].fromJsonWithType(expectedResponseTypedesc);
         if result is error {
             return handleParseResponseError(result);
         }
