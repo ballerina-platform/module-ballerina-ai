@@ -171,8 +171,7 @@ isolated function buildTextContentPart(string content) returns TextContentPart? 
     };
 }
 
-isolated function buildImageContentPart(ImageDocument doc) returns ImageContentPart|Error =>
-    {
+isolated function buildImageContentPart(ImageDocument doc) returns ImageContentPart|Error => {
     image_url: {
         url: check buildImageUrl(doc.content, doc.metadata?.mimeType)
     }
@@ -268,14 +267,7 @@ isolated function getLlMResponse(intelligence:Client llmClient,
     string functionName = func.name;
     history.push({
         role: ASSISTANT,
-        "tool_calls": {
-            'id: tool.id,
-            'type: tool.'type,
-            'function: {
-                name: functionName,
-                arguments: arguments.toJsonString()
-            }
-        }
+        "tool_calls": tool
     });
 
     anydata|error result = handleResponseWithExpectedType(arguments, isOriginallyJsonObject,
@@ -306,8 +298,7 @@ isolated function getLlMResponse(intelligence:Client llmClient,
 
 isolated function handleResponseWithExpectedType(map<json> arguments, boolean isOriginallyJsonObject,
         typedesc responseType, typedesc<anydata> expectedResponseTypedesc) returns anydata|error {
-    anydata res = check parseResponseAsType(arguments,
-            expectedResponseTypedesc, isOriginallyJsonObject);
+    anydata res = check parseResponseAsType(arguments, expectedResponseTypedesc, isOriginallyJsonObject);
     return res.ensureType(expectedResponseTypedesc);
 }
 
@@ -318,6 +309,6 @@ isolated function getRepairMessage(error e, string toolId, string functionName) 
     }
 
     return string `The tool call with ID '${toolId}' for the function '${functionName}' failed.
-            Error: ${cause.toString()}
-            You must correct the function arguments based on this error and respond with a valid tool call.`;
+        Error: ${cause.toString()}
+        You must correct the function arguments based on this error and respond with a valid tool call.`;
 }

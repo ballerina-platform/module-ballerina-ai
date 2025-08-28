@@ -18,23 +18,12 @@ import ballerina/ai;
 import ballerina/test;
 
 const SERVICE_URL = "http://localhost:8080/llm/azureopenai/deployments/gpt4onew";
+const RETRY_SERVICE_URL = "http://localhost:8080/llm/azureopenai/deployments/gpt4onew-retry";
 const API_KEY = "not-a-real-api-key";
 const ERROR_MESSAGE = "Error occurred while attempting to parse the response from the LLM as the expected type. Retrying and/or validating the prompt could fix the response.";
 const RUNTIME_SCHEMA_NOT_SUPPORTED_ERROR_MESSAGE = "Runtime schema generation is not yet supported";
 
 final ai:Wso2ModelProvider defaultModelProvider = check new (SERVICE_URL, API_KEY);
-final ai:Wso2ModelProvider defaultModelProviderWithRetryConfig = 
-        check new (SERVICE_URL, API_KEY, generatorConfig = {retryConfig: {count: 2, interval: 2}});
-final ai:Wso2ModelProvider defaultModelProviderWithRetryConfig2 = 
-        check new (SERVICE_URL, API_KEY, generatorConfig = {retryConfig: {count: 2}});
-final ai:Wso2ModelProvider defaultModelProviderWithRetryConfig3 = 
-        check new (SERVICE_URL, API_KEY, generatorConfig = {retryConfig: {count: 1}});
-final ai:Wso2ModelProvider defaultModelProviderWithRetryConfig4 = 
-        check new (SERVICE_URL, API_KEY, generatorConfig = {retryConfig: {}});
-final ai:Wso2ModelProvider defaultModelProviderWithInvalidRetryConfig = 
-        check new (SERVICE_URL, API_KEY, generatorConfig = {retryConfig: {count: -1}});
-final ai:Wso2ModelProvider defaultModelProviderWithInvalidRetryConfig2 = 
-        check new (SERVICE_URL, API_KEY, generatorConfig = {retryConfig: {count: 4, interval: -1}});
 
 @test:Config
 function testGenerateMethodWithBasicReturnType() returns ai:Error? {
@@ -352,6 +341,19 @@ function testGenerateMethodWithArrayUnionRecord2() returns ai:Error? {
 
 @test:Config
 function testRetryImplementationInGenerateMethodWithInvalidBasicType() returns error? {
+    final ai:Wso2ModelProvider defaultModelProviderWithRetryConfig = 
+        check new (RETRY_SERVICE_URL, API_KEY, generatorConfig = {retryConfig: {count: 2, interval: 2}});
+    final ai:Wso2ModelProvider defaultModelProviderWithRetryConfig2 = 
+        check new (RETRY_SERVICE_URL, API_KEY, generatorConfig = {retryConfig: {count: 2}});
+    final ai:Wso2ModelProvider defaultModelProviderWithRetryConfig3 = 
+        check new (RETRY_SERVICE_URL, API_KEY, generatorConfig = {retryConfig: {count: 1}});
+    final ai:Wso2ModelProvider defaultModelProviderWithRetryConfig4 = 
+        check new (RETRY_SERVICE_URL, API_KEY, generatorConfig = {retryConfig: {}});
+    final ai:Wso2ModelProvider defaultModelProviderWithInvalidRetryConfig = 
+        check new (RETRY_SERVICE_URL, API_KEY, generatorConfig = {retryConfig: {count: -1}});
+    final ai:Wso2ModelProvider defaultModelProviderWithInvalidRetryConfig2 = 
+        check new (RETRY_SERVICE_URL, API_KEY, generatorConfig = {retryConfig: {count: 4, interval: -1}});
+        
     int|ai:Error rating = defaultModelProviderWithRetryConfig->generate(`What is the result of ${1} + ${1}?`);
     test:assertEquals(rating, 2);
 
