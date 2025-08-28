@@ -14,6 +14,8 @@
 // specific language governing permissions and limitations
 // under the License.
 
+const INVALID = "Invalid content";
+
 isolated function getExpectedParameterSchema(string message) returns map<json> {
     if message.startsWith("Evaluate this") {
         return expectedParameterSchemaStringForRateBlog6;
@@ -29,6 +31,14 @@ isolated function getExpectedParameterSchema(string message) returns map<json> {
 
     if message.startsWith("Please rate this blog") {
         return expectedParameterSchemaStringForRateBlog2;
+    }
+
+    if message.startsWith("On a scale from 1 to 10") {
+        return expectedParameterSchemaStringForRateBlog2;
+    }
+
+    if message.startsWith("What is the result of") {
+        return {"type": "object", "properties": {"result": {"type": "integer"}}};
     }
 
     if message.startsWith("What is") {
@@ -88,9 +98,8 @@ isolated function getExpectedParameterSchema(string message) returns map<json> {
     }
 
     if message.startsWith("Give me a random joke") {
-        return {"type":"object","properties":{"result":{"anyOf":[{"type":"string"},{"type":"null"}]}}};
+        return {"type": "object", "properties": {"result": {"anyOf": [{"type": "string"}, {"type": "null"}]}}};
     }
-
 
     if message.startsWith("Name a random world class cricketer in India") {
         return expectedParameterSchemaForRecUnionNull;
@@ -143,7 +152,7 @@ isolated function getExpectedParameterSchema(string message) returns map<json> {
     return {};
 }
 
-isolated function getTheMockLLMResult(string message) returns string {
+isolated function getInitialMockLlmResult(string message) returns string|error {
     if message.startsWith("Evaluate this") {
         return string `{"result": [9, 1]}`;
     }
@@ -158,6 +167,22 @@ isolated function getTheMockLLMResult(string message) returns string {
 
     if message.startsWith("Please rate this blog") {
         return review;
+    }
+
+    if message.startsWith("On a scale from 1 to 10") {
+        return review;
+    }
+
+    if message.startsWith("What is the result of 1 + 4?") {
+        return "{\"result\": 5}";
+    }
+
+    if message.startsWith("What is the result of 1 + 5?") {
+        return "{\"result\": 6}";
+    }
+
+    if message.startsWith("What is the result of") {
+        return "{\"result\": true}";
     }
 
     if message.startsWith("What is") {
@@ -237,10 +262,10 @@ isolated function getTheMockLLMResult(string message) returns string {
         return "{\"result\": \"This is a random joke\"}";
     }
 
-    return "INVALID";
+    return error("Unexpected message for initial call");
 }
 
-isolated function getTestServiceResponse(string content) returns CreateChatCompletionResponse =>
+isolated function getTestServiceResponse(string content, int retryCount = 0) returns CreateChatCompletionResponse|error =>
     {
     id: "test-id",
     'object: "chat.completion",
@@ -255,7 +280,9 @@ isolated function getTestServiceResponse(string content) returns CreateChatCompl
                         'type: "function",
                         'function: {
                             name: "getResults",
-                            arguments: getTheMockLLMResult(content)
+                            arguments: retryCount == 0 ?
+                                check getInitialMockLlmResult(content) : retryCount == 1 ? check getFirstRetryLlmResult(content) :
+                                    check getSecondRetryLlmResult(content)
                         }
                     }
                 ]
@@ -263,6 +290,66 @@ isolated function getTestServiceResponse(string content) returns CreateChatCompl
         }
     ]
 };
+
+isolated function getFirstRetryLlmResult(string message) returns string|error {
+    if message.startsWith("What is the result of 1 + 1?") {
+        return "{\"result\": \"hi\"}";
+    }
+
+    if message.startsWith("What is the result of 1 + 2?") {
+        return "{\"result\": null}";
+    }
+
+    if message.startsWith("What is the result of 1 + 3?") {
+        return "{\"result\": 4}";
+    }
+
+    if message.startsWith("What is the result of 1 + 6?") {
+        return "{\"result\": 7}";
+    }
+
+    return error("Unexpected message for first retry call");
+}
+
+isolated function getSecondRetryLlmResult(string message) returns string|error {
+    if message.startsWith("What is the result of 1 + 1?") {
+        return "{\"result\": 2}";
+    }
+
+    if message.startsWith("What is the result of 1 + 2?") {
+        return "{\"result\": 3}";
+    }
+
+    return error("Unexpected message for second retry call");
+}
+
+isolated function generateConversionErrorMessage(string errorMessage) returns string =>
+    string `The tool call with ID 'tool-call-id' for the function 'getResults' failed.
+        Error: error("{ballerina/lang.value}ConversionError",message="${errorMessage}")
+        You must correct the function arguments based on this error and respond with a valid tool call.`;
+
+isolated function getExpectedContentPartsForFirstRetryCall(string message) returns string|error {
+    if message.startsWith("What is the result of 1 + 1?")
+        || message.startsWith("What is the result of 1 + 2?")
+        || message.startsWith("What is the result of 1 + 3?")
+        || message.startsWith("What is the result of 1 + 6?") {
+        return generateConversionErrorMessage("'boolean' value cannot be converted to 'int'");
+    }
+
+    return error("Unexpected content parts for first retry call");
+}
+
+isolated function getExpectedContentPartsForSecondRetryCall(string message) returns string|error {
+    if message.startsWith("What is the result of 1 + 1?") {
+        return generateConversionErrorMessage("'string' value cannot be converted to 'int'");
+    }
+
+    if message.startsWith("What is the result of 1 + 2?") {
+        return generateConversionErrorMessage("cannot convert '()' to type 'int'");
+    }
+
+    return error("Unexpected content parts for second retry call");
+}
 
 isolated function getExpectedContentParts(string message) returns (map<anydata>)[] {
     if message.startsWith("Rate this blog") {
@@ -279,6 +366,34 @@ isolated function getExpectedContentParts(string message) returns (map<anydata>)
 
     if message.startsWith("Please rate this blog") {
         return expectedContentPartsForRateBlog2;
+    }
+
+    if message.startsWith("On a scale from 1 to 10") {
+        return expectedContentPartsForRateBlog11;
+    }
+
+    if message.startsWith("What is the result of 1 + 1?") {
+        return [{"type": "text", "text": "What is the result of 1 + 1?"}];
+    }
+
+    if message.startsWith("What is the result of 1 + 2?") {
+        return [{"type": "text", "text": "What is the result of 1 + 2?"}];
+    }
+
+    if message.startsWith("What is the result of 1 + 3?") {
+        return [{"type": "text", "text": "What is the result of 1 + 3?"}];
+    }
+
+    if message.startsWith("What is the result of 1 + 4?") {
+        return [{"type": "text", "text": "What is the result of 1 + 4?"}];
+    }
+
+    if message.startsWith("What is the result of 1 + 5?") {
+        return [{"type": "text", "text": "What is the result of 1 + 5?"}];
+    }
+
+    if message.startsWith("What is the result of 1 + 6?") {
+        return [{"type": "text", "text": "What is the result of 1 + 6?"}];
     }
 
     if message.startsWith("What is") {
@@ -482,7 +597,18 @@ isolated function getExpectedContentParts(string message) returns (map<anydata>)
     return [
         {
             "type": "text",
-            "text": "INVALID"
+            "text": INVALID
         }
     ];
+}
+
+isolated function updateRetryCountMap(string initialText, map<int> retryCountMap) returns int {
+    if retryCountMap.hasKey(initialText) {
+        int index = retryCountMap.get(initialText) + 1;
+        retryCountMap[initialText] = index;
+        return index;
+    }
+
+    retryCountMap[initialText] = 0;
+    return 0;
 }
