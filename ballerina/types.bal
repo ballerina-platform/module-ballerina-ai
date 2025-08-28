@@ -124,7 +124,7 @@ public type GeneratorConfig record {|
     RetryConfig retryConfig?;
 |};
 
-# Represents retry configuration on LLM response parsing failures.
+# Represents retry configuration on response parsing failures.
 public type RetryConfig record {|
     # Number of retry attempts
     @display {label: "Retry Count"}

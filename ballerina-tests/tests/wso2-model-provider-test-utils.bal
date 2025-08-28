@@ -98,9 +98,8 @@ isolated function getExpectedParameterSchema(string message) returns map<json> {
     }
 
     if message.startsWith("Give me a random joke") {
-        return {"type":"object","properties":{"result":{"anyOf":[{"type":"string"},{"type":"null"}]}}};
+        return {"type": "object", "properties": {"result": {"anyOf": [{"type": "string"}, {"type": "null"}]}}};
     }
-
 
     if message.startsWith("Name a random world class cricketer in India") {
         return expectedParameterSchemaForRecUnionNull;
@@ -153,7 +152,7 @@ isolated function getExpectedParameterSchema(string message) returns map<json> {
     return {};
 }
 
-isolated function getTheMockLLMResult(string message) returns string {
+isolated function getInitialMockLlmResult(string message) returns string|error {
     if message.startsWith("Evaluate this") {
         return string `{"result": [9, 1]}`;
     }
@@ -263,10 +262,10 @@ isolated function getTheMockLLMResult(string message) returns string {
         return "{\"result\": \"This is a random joke\"}";
     }
 
-    return INVALID;
+    return error("Unexpected message for initial call");
 }
 
-isolated function getTestServiceResponse(string content, int retryCount) returns CreateChatCompletionResponse =>
+isolated function getTestServiceResponse(string content, int retryCount = 0) returns CreateChatCompletionResponse|error =>
     {
     id: "test-id",
     'object: "chat.completion",
@@ -281,9 +280,9 @@ isolated function getTestServiceResponse(string content, int retryCount) returns
                         'type: "function",
                         'function: {
                             name: "getResults",
-                            arguments: retryCount == 0 ? 
-                                getTheMockLLMResult(content): retryCount == 1 ? getFirstRetryLLMResult(content) :
-                                getSecondRetryLLMResult(content)
+                            arguments: retryCount == 0 ?
+                                check getInitialMockLlmResult(content) : retryCount == 1 ? check getFirstRetryLlmResult(content) :
+                                    check getSecondRetryLlmResult(content)
                         }
                     }
                 ]
@@ -292,7 +291,7 @@ isolated function getTestServiceResponse(string content, int retryCount) returns
     ]
 };
 
-isolated function getFirstRetryLLMResult(string message) returns string {
+isolated function getFirstRetryLlmResult(string message) returns string|error {
     if message.startsWith("What is the result of 1 + 1?") {
         return "{\"result\": \"hi\"}";
     }
@@ -309,10 +308,10 @@ isolated function getFirstRetryLLMResult(string message) returns string {
         return "{\"result\": 7}";
     }
 
-    return "";
+    return error("Unexpected message for first retry call");
 }
 
-isolated function getSecondRetryLLMResult(string message) returns string {
+isolated function getSecondRetryLlmResult(string message) returns string|error {
     if message.startsWith("What is the result of 1 + 1?") {
         return "{\"result\": 2}";
     }
@@ -321,32 +320,21 @@ isolated function getSecondRetryLLMResult(string message) returns string {
         return "{\"result\": 3}";
     }
 
-    return "";
+    return error("Unexpected message for second retry call");
+}
+
+isolated function generateConversionErrorMessage(string errorMessage) returns string {
+    return string `The tool call with ID 'tool-call-id' for the function 'getResults' failed.
+        Error: error("{ballerina/lang.value}ConversionError",message="${errorMessage}")
+        You must correct the function arguments based on this error and respond with a valid tool call.`;
 }
 
 isolated function getExpectedContentPartsForFirstRetryCall(string message) returns string {
-    if message.startsWith("What is the result of 1 + 1?") {
-        return string `The tool call with ID 'tool-call-id' for the function 'getResults' failed.
-            Error: error("{ballerina/lang.value}ConversionError",message="'boolean' value cannot be converted to 'int'")
-            You must correct the function arguments based on this error and respond with a valid tool call.`;
-    }
-
-    if message.startsWith("What is the result of 1 + 2?") {
-        return string `The tool call with ID 'tool-call-id' for the function 'getResults' failed.
-            Error: error("{ballerina/lang.value}ConversionError",message="'boolean' value cannot be converted to 'int'")
-            You must correct the function arguments based on this error and respond with a valid tool call.`;
-    }
-
-    if message.startsWith("What is the result of 1 + 3?") {
-        return string `The tool call with ID 'tool-call-id' for the function 'getResults' failed.
-            Error: error("{ballerina/lang.value}ConversionError",message="'boolean' value cannot be converted to 'int'")
-            You must correct the function arguments based on this error and respond with a valid tool call.`;
-    }
-
-    if message.startsWith("What is the result of 1 + 6?") {
-        return string `The tool call with ID 'tool-call-id' for the function 'getResults' failed.
-            Error: error("{ballerina/lang.value}ConversionError",message="'boolean' value cannot be converted to 'int'")
-            You must correct the function arguments based on this error and respond with a valid tool call.`;
+    if message.startsWith("What is the result of 1 + 1?")
+        || message.startsWith("What is the result of 1 + 2?")
+        || message.startsWith("What is the result of 1 + 3?")
+        || message.startsWith("What is the result of 1 + 6?") {
+        return generateConversionErrorMessage("'boolean' value cannot be converted to 'int'");
     }
 
     return "";
@@ -354,15 +342,11 @@ isolated function getExpectedContentPartsForFirstRetryCall(string message) retur
 
 isolated function getExpectedContentPartsForSecondRetryCall(string message) returns string {
     if message.startsWith("What is the result of 1 + 1?") {
-        return string `The tool call with ID 'tool-call-id' for the function 'getResults' failed.
-            Error: error("{ballerina/lang.value}ConversionError",message="'string' value cannot be converted to 'int'")
-            You must correct the function arguments based on this error and respond with a valid tool call.`;
+        return generateConversionErrorMessage("'string' value cannot be converted to 'int'");
     }
 
     if message.startsWith("What is the result of 1 + 2?") {
-        return string `The tool call with ID 'tool-call-id' for the function 'getResults' failed.
-            Error: error("{ballerina/lang.value}ConversionError",message="cannot convert '()' to type 'int'")
-            You must correct the function arguments based on this error and respond with a valid tool call.`;
+        return generateConversionErrorMessage("cannot convert '()' to type 'int'");
     }
 
     return "";
@@ -408,7 +392,7 @@ isolated function getExpectedContentParts(string message) returns (map<anydata>)
     if message.startsWith("What is the result of 1 + 5?") {
         return [{"type": "text", "text": "What is the result of 1 + 5?"}];
     }
-    
+
     if message.startsWith("What is the result of 1 + 6?") {
         return [{"type": "text", "text": "What is the result of 1 + 6?"}];
     }
