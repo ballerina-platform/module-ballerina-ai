@@ -4,6 +4,8 @@ This file documents all significant changes made to the Ballerina AI package acr
 
 ## [Unreleased]
 
+## [1.5.0] - 2025-08-29
+
 ### Added
 - [Add `deleteByFilter` API to KnowledgeBase](https://github.com/ballerina-platform/ballerina-library/issues/8198)
 
