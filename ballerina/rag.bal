@@ -22,9 +22,10 @@ public type Retriever distinct isolated object {
     # Retrieves relevant chunks for the given query.
     #
     # + query - The text query to search for
+    # + maxLimit - The maximum number of items to return
     # + filters - Optional metadata filters to apply during retrieval
     # + return - An array of matching chunks with similarity scores, or an `ai:Error` if retrieval fails
-    public isolated function retrieve(string query, MetadataFilters? filters = ()) returns QueryMatch[]|Error;
+    public isolated function retrieve(string query, int maxLimit, MetadataFilters? filters = ()) returns QueryMatch[]|Error;
 };
 
 # Represents a retriever that finds relevant chunks based on query similarity.
@@ -47,14 +48,17 @@ public distinct isolated class VectorRetriever {
     # Retrieves relevant chunks for the given query.
     #
     # + query - The text query to search for
+    # + topK - The maximum number of similar items to return (default: 10).  
+    # Use `-1` to return all available entries.
     # + filters - Optional metadata filters to apply during retrieval
     # + return - An array of matching chunks with similarity scores, or an `ai:Error` if retrieval fails
-    public isolated function retrieve(string query, MetadataFilters? filters = ()) returns QueryMatch[]|Error {
+    public isolated function retrieve(string query, int topK = 10, MetadataFilters? filters = ()) returns QueryMatch[]|Error {
         TextChunk queryChunk = {content: query, 'type: "text-chunk"};
         Embedding queryEmbedding = check self.embeddingModel->embed(queryChunk);
         VectorStoreQuery vectorStoreQuery = {
             embedding: queryEmbedding,
-            filters
+            filters,
+            topK
         };
         VectorMatch[] matches = check self.vectorStore.query(vectorStoreQuery);
         return from VectorMatch {chunk, similarityScore} in matches
@@ -73,9 +77,16 @@ public type KnowledgeBase distinct isolated object {
     # Retrieves relevant chunks for the given query.
     #
     # + query - The text query to search for
+    # + maxLimit - The maximum number of items to return
     # + filters - Optional metadata filters to apply during retrieval
     # + return - An array of matching chunks with similarity scores, or an `ai:Error` if retrieval fails
-    public isolated function retrieve(string query, MetadataFilters? filters = ()) returns QueryMatch[]|Error;
+    public isolated function retrieve(string query, int maxLimit, MetadataFilters? filters = ()) returns QueryMatch[]|Error;
+
+    # Deletes chunks that match the given metadata filters.
+    #
+    # + filters - The metadata filters used to identify which chunks to delete
+    # + return - An `ai:Error` if the deletion fails, otherwise `nil`
+    public isolated function deleteByFilter(MetadataFilters filters) returns Error?;
 };
 
 # Represents a vector knowledge base for managing chunk indexing and retrieval operations.
@@ -138,10 +149,25 @@ public distinct isolated class VectorKnowledgeBase {
     # Retrieves relevant chunk for the given query.
     #
     # + query - The text query to search for
+    # + topK - The maximum number of similar items to return (default: 10).  
+    # Use `-1` to return all available entries.
     # + filters - Optional metadata filters to apply during retrieval
     # + return - An array of matching chunks with similarity scores, or an `ai:Error` if retrieval fails
-    public isolated function retrieve(string query, MetadataFilters? filters = ()) returns QueryMatch[]|Error {
-        return self.retriever.retrieve(query, filters);
+    public isolated function retrieve(string query, int topK = 10, MetadataFilters? filters = ()) returns QueryMatch[]|Error {
+        return self.retriever.retrieve(query, topK, filters);
+    }
+
+    # Deletes chunks that match the given metadata filters.
+    #
+    # + filters - The metadata filters used to identify which chunks to delete
+    # + return - An `ai:Error` if the deletion fails, otherwise `nil`
+    public isolated function deleteByFilter(MetadataFilters filters) returns Error? {
+        VectorMatch[] entries = check self.vectorStore.query({filters, topK: -1});
+        string[] entryIds = from VectorMatch entry in entries
+            let string? id = entry.id
+            where id is string
+            select id;
+        check self.vectorStore.delete(entryIds);
     }
 }
 

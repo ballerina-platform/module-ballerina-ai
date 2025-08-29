@@ -80,8 +80,10 @@ public type MetadataFilters record {|
 public type VectorStoreQuery record {|
     # The vector to use for similarity search
     Embedding embedding?;
-    # Optional metadata filters to refine the search results.
+    # Optional metadata filters to refine the search results
     MetadataFilters filters?;
+    # The maximum number of most similar items to return. Set to `-1` to retrieve all available entries
+    int topK = 10;
 |};
 
 # Represents a vector entry combining an embedding with its source chunk. 
