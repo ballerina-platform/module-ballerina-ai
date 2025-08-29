@@ -178,7 +178,6 @@ public distinct isolated class InMemoryVectorStore {
             return;
         }
         _ = ids.'map(id => check self.deleteEntry(id));
-        return;
     }
 
     private isolated function deleteEntry(string id) returns Error? {
