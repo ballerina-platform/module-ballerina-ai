@@ -144,3 +144,21 @@ isolated function compareValues(json left, MetadataFilterOperator operation, jso
         }
     }
 }
+
+isolated function getRetryConfigValues(GeneratorConfig generatorConfig) returns [int, decimal]|Error {
+    RetryConfig? retryConfig = generatorConfig.retryConfig;
+    if retryConfig != () {
+        int count = retryConfig.count;
+        decimal? interval = retryConfig.interval;
+
+        if count < 0 {
+            return error("Invalid retry count: " + count.toString());
+        }
+        if interval < 0d {
+            return error("Invalid retry interval: " + interval.toString());
+        }
+
+        return [count, interval ?: 0d];
+    }
+    return [0, 0d];
+}

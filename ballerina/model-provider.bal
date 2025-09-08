@@ -135,23 +135,27 @@ public type Wso2ProviderConfig record {|
 |};
 
 const DEFAULT_TEMPERATURE = 0.7d;
+const DEFAULT_GENERATOR_CONFIG = {};
 
 # WSO2 model provider implementation that provides chat completion capabilities using WSO2's AI services.
 public isolated distinct client class Wso2ModelProvider {
     *ModelProvider;
     private final intelligence:Client llmClient;
     private final decimal temperature;
+    private final readonly & GeneratorConfig generatorConfig;
 
     # Initializes a new `WSO2ModelProvider` instance.
     #
     # + serviceUrl - The base URL of WSO2 intelligence API endpoint
     # + accessToken - The access token for authenticating API requests
-    # + temperature - The temperature for controlling randomness in the model's output  
+    # + temperature - The temperature for controlling randomness in the model's output
+    # + generatorConfig - Configuration for the `ModelProvider.generate()` method.
     # + connectionConfig - Additional HTTP connection configuration
     # + return - `nil` on success, or an `ai:Error` if initialization fails
     public isolated function init(@display {label: "Service URL"} string serviceUrl,
             @display {label: "Access Token"} string accessToken,
             @display {label: "Temperature"} decimal temperature = DEFAULT_TEMPERATURE,
+            @display {label: "Generator Configuration"} readonly & GeneratorConfig generatorConfig = DEFAULT_GENERATOR_CONFIG,
             @display {label: "Connection Configuration"} *ConnectionConfig connectionConfig) returns Error? {
         intelligence:ConnectionConfig intelligenceConfig = {
             auth: {
@@ -176,8 +180,10 @@ public isolated distinct client class Wso2ModelProvider {
         if llmClient is error {
             return error Error("Failed to initialize Wso2ModelProvider", llmClient);
         }
+
         self.llmClient = llmClient;
         self.temperature = temperature;
+        self.generatorConfig = generatorConfig;
     }
 
     # Sends a chat request to the model with the given messages and tools.
