@@ -4,6 +4,8 @@ This file documents all significant changes made to the Ballerina AI package acr
 
 ## [Unreleased]
 
+## [1.5.1] - 2025-09-09
+
 ### Removed
 - [Remove `commons-lang3` Dependency](https://github.com/ballerina-platform/ballerina-library/issues/8220).
 
