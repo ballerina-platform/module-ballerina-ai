@@ -109,9 +109,6 @@ dependencies {
     externalJars(group: 'org.apache.commons', name: 'commons-collections4', version: "${project.commonsCollections4Version}") {
         transitive = false
     }
-    externalJars(group: 'org.apache.commons', name: 'commons-lang3', version: "${project.commonsLang3Version}") {
-        transitive = false
-    }
     
     // Minimal logging (required by tika-parser-microsoft-module)
     externalJars(group: 'org.apache.logging.log4j', name: 'log4j-api', version: "${project.log4jVersion}") {
@@ -146,7 +143,6 @@ task updateTomlFiles {
         newConfig = newConfig.replace("@commonsIoVersion@", project.commonsIoVersion)
         newConfig = newConfig.replace("@commonsCompressVersion@", project.commonsCompressVersion)
         newConfig = newConfig.replace("@commonsCollections4Version@", project.commonsCollections4Version)
-        newConfig = newConfig.replace("@commonsLang3Version@", project.commonsLang3Version)
         newConfig = newConfig.replace("@log4jVersion@", project.log4jVersion)
         newConfig = newConfig.replace("@xmlbeansVersion@", project.xmlbeansVersion)
         newConfig = newConfig.replace("@sparseBitSetVersion@", project.sparseBitSetVersion)
