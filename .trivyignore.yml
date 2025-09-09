@@ -1,0 +1,5 @@
+ignore:
+  - id: CVE-2025-48924
+    package:
+      name: org.apache.commons:commons-lang3
+      version: "3.12.0"
