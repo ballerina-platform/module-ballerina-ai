@@ -4,6 +4,12 @@ This file documents all significant changes made to the Ballerina AI package acr
 
 ## [Unreleased]
 
+### Added
+- [Add Support for Markdown and HTML in TextDataLoader](https://github.com/ballerina-platform/ballerina-library/issues/8228)
+
+### Fixed
+- [Fix TextDataLoader Sets `fileName` Metadata to File Path](https://github.com/ballerina-platform/ballerina-library/issues/8230)
+
 ## [1.5.1] - 2025-09-09
 
 ### Removed

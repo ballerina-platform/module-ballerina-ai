@@ -14,8 +14,9 @@
 // specific language governing permissions and limitations
 // under the License.
 
-import ballerina/jballerina.java;
 import ballerina/file;
+import ballerina/io;
+import ballerina/jballerina.java;
 
 # Represents a data loader that can load documents from various sources.
 public type DataLoader isolated object {
@@ -33,7 +34,7 @@ public isolated class TextDataLoader {
     # Initializes the data loader with the given paths.
     # + paths - The paths to the files to load
     # + return - an error if the file does not exist
-    public isolated function init(string ...paths) returns Error? {
+    public isolated function init(string... paths) returns Error? {
         // Check if the file exists by trying to get metadata
         foreach string path in paths {
             file:MetaData|error metadata = file:getMetaData(path);
@@ -47,7 +48,8 @@ public isolated class TextDataLoader {
     # Loads documents as `TextDocument`s from a source.
     # + return - document or an array of documents, or an `ai:Error` if the loading fails
     public isolated function load() returns Document[]|Document|Error {
-        Document[] documents = from string path in self.paths select check loadDocument(path);
+        Document[] documents = from string path in self.paths
+            select check loadDocument(path);
         if documents.length() == 1 {
             return documents[0];
         }
@@ -56,34 +58,43 @@ public isolated class TextDataLoader {
 }
 
 isolated function loadDocument(string path) returns Document|Error {
-        string? fileType = getFileType(path);
-        if fileType is () {
-            string extension = getFileExtension(path);
-            return error Error(string `Unsupported file type: ${extension}`);
-        }
+    string? fileType = getFileType(path);
+    if fileType is () {
+        string extension = getFileExtension(path);
+        return error Error(string `Unsupported file type: ${extension}`);
+    }
 
-        match fileType {
-            PDF => {
-                return readPdfNative(path);
-            }
-            DOCX => {
-                return readDocxNative(path);
-            }
-            PPTX => {
-                return readPptxNative(path);
-            }
+    match fileType {
+        HTML|HTM|MARKDOWN => {
+            return readMarkupDocument(path);
         }
-        return error Error("Unexpected error in file type processing");
+        PDF => {
+            return readPdfNative(path);
+        }
+        DOCX => {
+            return readDocxNative(path);
+        }
+        PPTX => {
+            return readPptxNative(path);
+        }
+    }
+    return error Error("Unexpected error in file type processing");
 }
 
 enum SupportedFileType {
     PDF = "pdf",
     DOCX = "docx",
-    PPTX = "pptx"
+    PPTX = "pptx",
+    HTML = "html",
+    HTM = "htm",
+    MARKDOWN = "md"
 }
 
 isolated function getFileType(string path) returns SupportedFileType? {
     match getFileExtension(path) {
+        "html" => {return HTML;}
+        "htm" => {return HTM;}
+        "md" => {return MARKDOWN;}
         "pdf" => {return PDF;}
         "docx" => {return DOCX;}
         "pptx" => {return PPTX;}
@@ -97,6 +108,18 @@ isolated function getFileExtension(string path) returns string {
         return "unknown";
     }
     return path.substring(lastDotIndex + 1);
+}
+
+isolated function readMarkupDocument(string filePath) returns TextDocument|Error {
+    do {
+        string fileName = check file:basename(filePath);
+        file:MetaData meta = check file:getMetaData(filePath);
+        string content = check io:fileReadString(filePath);
+        Metadata metadata = {fileName, modifiedAt: meta.modifiedTime, fileSize: <decimal>meta.size};
+        return {content, metadata};
+    } on fail error e {
+        return error(string `failed to create document from file '${filePath}': ${e.message()}`, e);
+    }
 }
 
 isolated function readPdfNative(string path) returns TextDocument|Error = @java:Method {
