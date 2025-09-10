@@ -108,6 +108,36 @@ function testTextDataLoaderLoadPptx() returns error? {
     check validateDocument(document, "application/vnd.openxmlformats-officedocument.presentationml.presentation", "Test presentation.pptx");
 }
 
+@test:Config {groups: ["md", "document-loader"]}
+function testTextDataLoaderLoadMarkdown() returns error? {
+    string mdPath = "tests/resources/data-loader/Test.md";
+    TextDataLoader loader = check new (mdPath);
+
+    Document[]|Document|Error result = loader.load();
+    Document document = check getSingleDocument(result);
+    check validateDocument(document, (), "Test.md");
+}
+
+@test:Config {groups: ["html", "document-loader"]}
+function testTextDataLoaderHtml() returns error? {
+    string htmlPath = "tests/resources/data-loader/Test.html";
+    TextDataLoader loader = check new (htmlPath);
+
+    Document[]|Document|Error result = loader.load();
+    Document document = check getSingleDocument(result);
+    check validateDocument(document, (), "Test.html");
+}
+
+@test:Config {groups: ["html", "document-loader"]}
+function testTextDataLoaderHtm() returns error? {
+    string htmlPath = "tests/resources/data-loader/Test.htm";
+    TextDataLoader loader = check new (htmlPath);
+
+    Document[]|Document|Error result = loader.load();
+    Document document = check getSingleDocument(result);
+    check validateDocument(document, (), "Test.htm");
+}
+
 @test:Config {groups: ["document-loader", "error-handling", "pdf"]}
 function testTextDataLoaderFileDoesNotExist() returns error? {
     // Test with a non-existent file path
