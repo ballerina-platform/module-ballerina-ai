@@ -36,6 +36,8 @@ import org.xml.sax.SAXException;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -170,7 +172,7 @@ public class TextDataLoader {
             ParseContext context = new ParseContext();
             parser.parse(inputStream, handler, metadata, context);
             String content = handler.toString();
-            return TextDocumentInfo.fromPdf(content, extractMetadata(metadata), path);
+            return TextDocumentInfo.fromPdf(content, extractMetadata(metadata), getFileName(path));
         }
     }
 
@@ -183,12 +185,24 @@ public class TextDataLoader {
             ParseContext context = new ParseContext();
             parser.parse(inputStream, handler, metadata, context);
             String content = handler.toString();
-
             return switch (fileType) {
-                case DOCX -> TextDocumentInfo.fromDocx(content, extractMetadata(metadata), path);
-                case PPTX -> TextDocumentInfo.fromPptx(content, extractMetadata(metadata), path);
+                case DOCX -> TextDocumentInfo.fromDocx(content, extractMetadata(metadata), getFileName(path));
+                case PPTX -> TextDocumentInfo.fromPptx(content, extractMetadata(metadata), getFileName(path));
             };
         }
+    }
+
+    private static String getFileName(String filePath) {
+        if (filePath == null || filePath.isBlank()) {
+            return null;
+        }
+
+        Path path = Paths.get(filePath);
+        Path fileNamePath = path.getFileName();
+        if (fileNamePath != null) {
+            return fileNamePath.toString();
+        }
+        return null;
     }
 
     static String parseOfficeX(String path) {

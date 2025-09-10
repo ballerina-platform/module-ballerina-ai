@@ -17,7 +17,7 @@
 import ballerina/test;
 
 // Helper function to validate document structure and metadata
-isolated function validateDocument(Document document, string expectedMimeType, string expectedExtension) returns error? {
+isolated function validateDocument(Document document, string? expectedMimeType, string expectedFileName) returns error? {
     // Validate document type
     test:assertEquals(document.'type, "text", "Document type should be 'text'");
 
@@ -28,18 +28,10 @@ isolated function validateDocument(Document document, string expectedMimeType, s
     }
 
     // Validate mime type
-    string? mimeType = metadata.mimeType;
-    if mimeType is () {
-        test:assertFail("Document mime type should not be null");
-    }
-    test:assertEquals(mimeType, expectedMimeType, string `MIME type should be '${expectedMimeType}'`);
+    test:assertEquals(metadata.mimeType, expectedMimeType, string `MIME type should be '${expectedMimeType.toString()}'`);
 
-    // Validate file extension
-    string? fileName = metadata.fileName;
-    if fileName is () {
-        test:assertFail("Document file name should not be null");
-    }
-    test:assertTrue(fileName.endsWith(expectedExtension), string `File name should end with ${expectedExtension}`);
+    // Validate file name
+    test:assertEquals(metadata.fileName, expectedFileName, "File name doesn't match expected value");
 
     // Validate content is not empty
     anydata content = document.content;
@@ -74,7 +66,7 @@ function testTextDataLoaderLoadPdf() returns error? {
 
     Document[]|Document|Error result = loader.load();
     Document document = check getSingleDocument(result);
-    check validateDocument(document, "application/pdf", ".pdf");
+    check validateDocument(document, "application/pdf", "TestDoc.pdf");
 }
 
 @test:Config {groups: ["document-loader", "error-handling"]}
@@ -102,7 +94,7 @@ function testTextDataLoaderLoadDocx() returns error? {
 
     Document[]|Document|Error result = loader.load();
     Document document = check getSingleDocument(result);
-    check validateDocument(document, "application/vnd.openxmlformats-officedocument.wordprocessingml.document", ".docx");
+    check validateDocument(document, "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "TestDoc.docx");
 }
 
 @test:Config {groups: ["pptx", "document-loader"]}
@@ -113,7 +105,37 @@ function testTextDataLoaderLoadPptx() returns error? {
 
     Document[]|Document|Error result = loader.load();
     Document document = check getSingleDocument(result);
-    check validateDocument(document, "application/vnd.openxmlformats-officedocument.presentationml.presentation", ".pptx");
+    check validateDocument(document, "application/vnd.openxmlformats-officedocument.presentationml.presentation", "Test presentation.pptx");
+}
+
+@test:Config {groups: ["md", "document-loader"]}
+function testTextDataLoaderLoadMarkdown() returns error? {
+    string mdPath = "tests/resources/data-loader/Test.md";
+    TextDataLoader loader = check new (mdPath);
+
+    Document[]|Document|Error result = loader.load();
+    Document document = check getSingleDocument(result);
+    check validateDocument(document, (), "Test.md");
+}
+
+@test:Config {groups: ["html", "document-loader"]}
+function testTextDataLoaderHtml() returns error? {
+    string htmlPath = "tests/resources/data-loader/Test.html";
+    TextDataLoader loader = check new (htmlPath);
+
+    Document[]|Document|Error result = loader.load();
+    Document document = check getSingleDocument(result);
+    check validateDocument(document, (), "Test.html");
+}
+
+@test:Config {groups: ["html", "document-loader"]}
+function testTextDataLoaderHtm() returns error? {
+    string htmlPath = "tests/resources/data-loader/Test.htm";
+    TextDataLoader loader = check new (htmlPath);
+
+    Document[]|Document|Error result = loader.load();
+    Document document = check getSingleDocument(result);
+    check validateDocument(document, (), "Test.htm");
 }
 
 @test:Config {groups: ["document-loader", "error-handling", "pdf"]}
@@ -143,7 +165,7 @@ function testTextDataLoaderCaseInsensitiveExtensions() returns error? {
     // This should work even though we check with .PDF, .Pdf etc. internally
     Document[]|Document|Error result = loader.load();
     Document document = check getSingleDocument(result);
-    check validateDocument(document, "application/pdf", ".pdf");
+    check validateDocument(document, "application/pdf", "TestDoc.pdf");
 }
 
 @test:Config {groups: ["document-loader", "error-handling"]}
@@ -183,9 +205,9 @@ function testTextDataLoaderMultipleFiles() returns error? {
         Document docxDoc = result[1];
         Document pptxDoc = result[2];
 
-        check validateDocument(pdfDoc, "application/pdf", ".pdf");
-        check validateDocument(docxDoc, "application/vnd.openxmlformats-officedocument.wordprocessingml.document", ".docx");
-        check validateDocument(pptxDoc, "application/vnd.openxmlformats-officedocument.presentationml.presentation", ".pptx");
+        check validateDocument(pdfDoc, "application/pdf", "TestDoc.pdf");
+        check validateDocument(docxDoc, "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "TestDoc.docx");
+        check validateDocument(pptxDoc, "application/vnd.openxmlformats-officedocument.presentationml.presentation", "Test presentation.pptx");
     } else {
         test:assertFail("Should return array of documents when loading multiple files");
     }
@@ -202,7 +224,7 @@ function testTextDataLoaderSingleFileReturnsSingleDocument() returns error? {
 
     // When loading a single file, the result should be a single document
     if result is Document {
-        check validateDocument(result, "application/pdf", ".pdf");
+        check validateDocument(result, "application/pdf", "TestDoc.pdf");
     } else {
         test:assertFail("Should return single document when loading single file");
     }
