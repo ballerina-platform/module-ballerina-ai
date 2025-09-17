@@ -18,6 +18,7 @@
 
 package io.ballerina.stdlib.ai.observability;
 
+import java.util.Locale;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public abstract class Span {
@@ -137,7 +138,7 @@ public abstract class Span {
         }
 
         public static SpanKind from(String spanKind) {
-            return switch (spanKind.toUpperCase()) {
+            return switch (spanKind.toUpperCase(Locale.ROOT)) {
                 case "LLM" -> LLM;
                 case "EMBEDDING" -> EMBEDDING;
                 case "CHAIN" -> CHAIN;
@@ -165,7 +166,7 @@ public abstract class Span {
         }
 
         public static Status from(String status) {
-            return switch (status.toUpperCase()) {
+            return switch (status.toUpperCase(Locale.ROOT)) {
                 case "OK" -> OK;
                 case "ERROR" -> ERROR;
                 default -> throw new IllegalArgumentException("Unknown status: " + status);

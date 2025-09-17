@@ -25,11 +25,11 @@ public class PythonWrapper {
 
     private static class ContextHolder {
 
-        static final Context context = GraalPyResources.createContext();
+        private static final Context CONTEXT = GraalPyResources.createContext();
     }
 
     private static Context getContext() {
-        return ContextHolder.context;
+        return ContextHolder.CONTEXT;
     }
 
     public static synchronized void execVoid(String code) {
