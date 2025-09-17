@@ -19,6 +19,7 @@ plugins {
     id 'java'
     id 'com.github.spotbugs'
     id 'checkstyle'
+    id("org.graalvm.python") version "${polyglotVersion}"
 }
 
 description = 'Ballerina - AI package Java Utils'
@@ -52,6 +53,10 @@ dependencies {
         exclude group: 'org.bouncycastle', module: 'bcpkix-jdk18on'
         exclude group: 'com.healthmarketscience.jackcess', module: 'jackcess-encrypt'
     }
+
+
+    implementation group: 'org.graalvm.polyglot', name: 'polyglot', version: "${polyglotVersion}"
+    implementation group: 'org.graalvm.polyglot', name: 'python', version: "${polyglotVersion}"
 
     checkstyle project(":checkstyle")
     checkstyle "com.puppycrawl.tools:checkstyle:${checkstylePluginVersion}"
@@ -140,3 +145,8 @@ task testJar(type: Jar) {
 artifacts {
     archives testJar
 }
+
+graalPy {
+    packages = ["arize-phoenix-otel==${arizePhoenixOtelVersion}", "grpcio==${grpcioVersion}"]
+}
+
