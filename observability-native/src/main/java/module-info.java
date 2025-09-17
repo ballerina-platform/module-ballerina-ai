@@ -16,16 +16,8 @@
  * under the License.
  */
 
-module io.ballerina.stdlib.ai {
-    requires io.ballerina.runtime;
-    requires io.ballerina.lang;
-    requires io.ballerina.lang.value;
-    requires langchain4j;
-    requires langchain4j.core;
-    requires org.apache.tika.core;
-    requires org.apache.tika.parser.pdf;
-    requires java.xml;
-    requires org.apache.tika.parser.microsoft;
-    requires io.ballerina.stdlib.ai.observability;
-    exports io.ballerina.stdlib.ai;
+module io.ballerina.stdlib.ai.observability {
+    requires org.graalvm.polyglot;
+    requires org.graalvm.python.embedding;
+    exports io.ballerina.stdlib.ai.observability;
 }
