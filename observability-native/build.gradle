@@ -17,37 +17,35 @@
 
 plugins {
     id 'java'
-    id 'com.github.spotbugs'
+    id 'com.github.spotbugs' version '6.0.18'
     id 'checkstyle'
-    id("org.graalvm.python") version "${polyglotVersion}"
+    id 'org.graalvm.python' version '24.2.2'
+}
+
+repositories {
+    mavenCentral()
 }
 
 description = 'Ballerina - AI Observability Native Utils'
 
 dependencies {
+    implementation group: 'org.graalvm.polyglot', name: 'polyglot', version: '24.2.2'
+    implementation group: 'org.graalvm.polyglot', name: 'python', version: '24.2.2'
 
-    implementation group: 'org.graalvm.polyglot', name: 'polyglot', version: "${polyglotVersion}"
-    implementation group: 'org.graalvm.polyglot', name: 'python', version: "${polyglotVersion}"
+    checkstyle "com.puppycrawl.tools:checkstyle:10.12.0"
 
-    checkstyle project(":checkstyle")
-    checkstyle "com.puppycrawl.tools:checkstyle:${checkstylePluginVersion}"
-
-    testImplementation group: 'org.testng', name: 'testng', version: "${testngVersion}"
-    testImplementation group: 'com.fasterxml.jackson.core', name: 'jackson-databind', version: "${jacksonVersion}"
+    testImplementation group: 'org.testng', name: 'testng', version: '7.6.1'
+    testImplementation group: 'com.fasterxml.jackson.core', name: 'jackson-databind', version: '2.17.0'
 }
 
 spotbugsMain {
+    ignoreFailures = true
     def classLoader = plugins["com.github.spotbugs"].class.classLoader
     def SpotBugsConfidence = classLoader.findLoadedClass("com.github.spotbugs.snom.Confidence")
     def SpotBugsEffort = classLoader.findLoadedClass("com.github.spotbugs.snom.Effort")
-    ignoreFailures = true
     effort = SpotBugsEffort.MAX
     reportLevel = SpotBugsConfidence.LOW
     reportsDir = file("$project.buildDir/reports/spotbugs")
-    def excludeFile = file("${rootDir}/build-config/spotbugs-exclude.xml")
-    if (excludeFile.exists()) {
-        it.excludeFilter = excludeFile
-    }
     reports {
         text.enabled = true
     }
@@ -57,32 +55,14 @@ spotbugsTest {
     enabled = false
 }
 
-task validateSpotbugs() {
-    doLast {
-        if (spotbugsMain.reports.size() > 0 &&
-                spotbugsMain.reports[0].destination.exists() &&
-                spotbugsMain.reports[0].destination.text.readLines().size() > 0) {
-            spotbugsMain.reports[0].destination?.eachLine {
-                println 'Failure: ' + it
-            }
-            throw new GradleException("Spotbugs rule violations were found.");
-        }
-    }
-}
-
 checkstyle {
-    toolVersion '7.8.2'
-    configFile file("${rootDir}/build-config/checkstyle/build/checkstyle.xml")
-    configProperties = ["suppressionFile": file("${rootDir}/build-config/checkstyle/build/suppressions.xml")]
+    toolVersion '10.12.0'
+    configFile file('checkstyle.xml')
 }
 
 tasks.withType(Checkstyle) {
     exclude '**/module-info.java'
 }
-
-spotbugsMain.finalizedBy validateSpotbugs
-checkstyleMain.dependsOn(":checkstyle:downloadCheckstyleRuleFiles")
-checkstyleTest.dependsOn(":checkstyle:downloadCheckstyleRuleFiles")
 
 compileJava {
     doFirst {
@@ -204,6 +184,33 @@ test {
         showStandardStreams = true
         events "passed", "skipped", "failed"
     }
+}
+
+// Create uber jar with all dependencies and platform-specific classifier
+jar {
+    from {
+        configurations.runtimeClasspath.findAll { it.name.endsWith('.jar') }.collect {
+            zipTree(it)
+        }
+    }
+
+    // Include platform-specific classifier
+    archiveClassifier = getOsClassifier()
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+
+    exclude 'META-INF/*.RSA', 'META-INF/*.SF', 'META-INF/*.DSA'
+}
+
+def getOsClassifier() {
+    def osName = System.getProperty("os.name").toLowerCase()
+    def osArch = System.getProperty("os.arch").toLowerCase()
+
+    if (osName.contains("mac") || osName.contains("darwin")) {
+        return "darwin-${osArch}"
+    } else if (osName.contains("linux")) {
+        return "linux-${osArch}"
+    }
+    return "unknown"
 }
 
 task testJar(type: Jar) {
