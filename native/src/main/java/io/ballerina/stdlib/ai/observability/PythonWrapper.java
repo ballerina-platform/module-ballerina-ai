@@ -21,7 +21,11 @@ package io.ballerina.stdlib.ai.observability;
 import org.graalvm.polyglot.Context;
 import org.graalvm.python.embedding.GraalPyResources;
 
+import java.io.PrintStream;
+
 public class PythonWrapper {
+
+    private static final PrintStream out = System.out;
 
     private static class ContextHolder {
 
@@ -33,11 +37,15 @@ public class PythonWrapper {
     }
 
     public static synchronized void execVoid(String code) {
+        String debugPy = System.getenv("DEBUG_PY");
+        boolean isDebug = debugPy != null && !debugPy.isEmpty();
         try {
             getContext().eval("python", code);
+            if (isDebug) {
+                out.println("Executed Python code:\n" + code);
+            }
         } catch (Exception e) {
-            String debugPy = System.getenv("DEBUG_PY");
-            if (debugPy != null && !debugPy.isEmpty()) {
+            if (isDebug) {
                 throw new RuntimeException("error executing: " + code, e);
             } else {
                 throw new RuntimeException("unexpected error", e);

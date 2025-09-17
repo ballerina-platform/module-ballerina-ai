@@ -16,12 +16,10 @@
  *  under the License.
  */
 
-package io.ballerina.stdlib.ai;
+package io.ballerina.stdlib.ai.observability;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.graalvm.polyglot.Context;
-import org.graalvm.python.embedding.GraalPyResources;
 import org.testng.annotations.Test;
 
 import java.net.URI;
@@ -52,8 +50,7 @@ public class TracingTest {
         // First, check if Phoenix is running using Java
         assertPhoenixIsRunning();
 
-        // Then generate traces using Python
-        generateTracesWithPython();
+        insertTraces();
 
         // Wait for traces to be exported
         TimeUnit.SECONDS.sleep(5);
@@ -62,110 +59,48 @@ public class TracingTest {
         validateTracesInPhoenix();
     }
 
-    private void generateTracesWithPython() {
-        String tracingSetup = """
-                import os
-                from opentelemetry import trace
-                from opentelemetry.semconv._incubating.attributes.gen_ai_attributes import (
-                    GEN_AI_PROVIDER_NAME,
-                    GEN_AI_REQUEST_MODEL,
-                    GEN_AI_USAGE_INPUT_TOKENS,
-                    GEN_AI_USAGE_OUTPUT_TOKENS,
-                    GEN_AI_TOOL_NAME,
-                    GEN_AI_AGENT_NAME
-                )
+    private void insertTraces() {
+        Observability.initTracing(PHOENIX_BASE_URL + "/v1/traces", "test");
+        AgentSpan agentSpan = new AgentSpan("agent");
+        agentSpan.init(Observability.TRACER);
+        agentSpan.enter();
+        agentSpan.setInput("h1");
 
-                os.environ["PHOENIX_COLLECTOR_ENDPOINT"] = "http://localhost:6006/v1/traces"
+        {
+            LLMSpan llmSpan = new LLMSpan("llm", "chatgpt-4o-latest", "openai");
+            llmSpan.init(Observability.TRACER);
+            llmSpan.enter();
+            llmSpan.setInput("hi llm");
+            String toolInput = """
+                    {
+                        "arg1": "value1",
+                        "arg2": "value2"
+                    }
+                    """;
+            llmSpan.addToolCallInputs(new LLMSpan.ToolRequest("tool-name", toolInput, "12345"));
+            {
+                ToolSpan toolSpan = new ToolSpan("tool");
+                toolSpan.init(Observability.TRACER);
+                toolSpan.enter();
+                toolSpan.setInput(toolInput);
+                toolSpan.setOutput("tool output");
+                toolSpan.setStatus(Span.Status.OK);
+                toolSpan.exit();
+            }
+            llmSpan.addToolCallResponse(new LLMSpan.ToolResponse("tool-name", "tool output", "12345"));
 
-                from phoenix.otel import register
-                tracer_provider = register(
-                    project_name="test",
-                    auto_instrument=True,
-                    endpoint="http://localhost:6006/v1/traces",
-                )
+            llmSpan.addIntermediateRequest("what is the output of the tool?");
+            llmSpan.addIntermediateResponse("the output of the tool is great");
 
-                tracer = tracer_provider.get_tracer(__name__)
-
-                def chat(prompt: str) -> str:
-                    span_context = tracer.start_as_current_span(
-                        "llm",
-                        attributes={
-                            GEN_AI_PROVIDER_NAME: "openai",
-                            GEN_AI_REQUEST_MODEL: "gpt-4",
-                            GEN_AI_USAGE_INPUT_TOKENS: 100,
-                            GEN_AI_USAGE_OUTPUT_TOKENS: 50,
-                        },
-                        kind=trace.SpanKind.CLIENT,
-                    )
-                    span = span_context.__enter__()
-                    try:
-                        span.set_attribute("input.value", prompt)
-                        response = f"LLM response to: {prompt}"
-                        span.set_attribute("output.value", response)
-                        return response
-                    finally:
-                        span_context.__exit__(None, None, None)
-
-                def tool(input_str: str) -> str:
-                    span_context = tracer.start_as_current_span(
-                        "tool",
-                        attributes={
-                            GEN_AI_TOOL_NAME: "example_tool",
-                        },
-                        kind=trace.SpanKind.INTERNAL,
-                    )
-                    span = span_context.__enter__()
-                    try:
-                        span.set_attribute("input.value", input_str)
-                        result = f"Tool result for: {input_str}"
-                        span.set_attribute("output.value", result)
-                        return result
-                    finally:
-                        span_context.__exit__(None, None, None)
-
-                def agent_flow(initial_prompt: str) -> str:
-                    span_context = tracer.start_as_current_span(
-                        "agent",
-                        attributes={
-                            GEN_AI_AGENT_NAME: "simple_agent",
-                        },
-                        kind=trace.SpanKind.INTERNAL,
-                    )
-                    span = span_context.__enter__()
-                    try:
-                        span.set_attribute("input.value", initial_prompt)
-                        current_state = initial_prompt
-                        current_state = chat(current_state)
-                        tool_input = "extract info from: " + current_state
-                        current_state = tool(tool_input)
-                        final_response = chat(current_state)
-                        span.set_attribute("output.value", final_response)
-                        return final_response
-                    finally:
-                        span_context.__exit__(None, None, None)
-                """;
-
-        String traceGenerationCode = """
-                import time
-
-                # Generate traces
-                initial_prompt = "Hi how are you?"
-                result = agent_flow(initial_prompt)
-
-                # Generate additional traces
-                chat_result = chat("test prompt")
-                tool_result = tool("test input")
-
-                # Wait for traces to be exported
-                time.sleep(2)
-
-                print("Traces generated successfully")
-                """;
-
-        try (Context cx = GraalPyResources.createContext()) {
-            cx.eval("python", tracingSetup);
-            cx.eval("python", traceGenerationCode);
+            llmSpan.setOutput("final llm output");
+            llmSpan.setTokenCount(150, 100, 50);
+            llmSpan.setStatus(Span.Status.OK);
+            llmSpan.exit();
         }
+
+        agentSpan.setOutput("end of agent");
+        agentSpan.setStatus(Span.Status.OK);
+        agentSpan.exit();
     }
 
     private void validateTracesInPhoenix() throws Exception {

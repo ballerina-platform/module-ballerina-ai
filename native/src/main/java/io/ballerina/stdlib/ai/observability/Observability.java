@@ -38,5 +38,6 @@ public class Observability {
                 )
                 %s = tracer_provider.get_tracer(__name__)
                 """.formatted(phoenixEndpoint, projectName, phoenixEndpoint, TRACER);
+        PythonWrapper.execVoid(code);
     }
 }

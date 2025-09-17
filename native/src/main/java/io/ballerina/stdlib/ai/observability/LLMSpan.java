@@ -61,7 +61,6 @@ public class LLMSpan extends Span {
         String prefix = "llm.input_messages.%d.message.tool_calls".formatted(inputIndex);
         for (int i = 0; i < toolCalls.length; i++) {
             String perCallPrefix = "%s.%d.tool_call".formatted(prefix, i);
-            System.out.println(toolCalls[i]);
             setJsonAttribute("%s.function.arguments".formatted(perCallPrefix), toolCalls[i].argumentJson);
             setAttribute("%s.function.name".formatted(perCallPrefix), toolCalls[i].name);
             setAttribute("%s.id".formatted(perCallPrefix), toolCalls[i].id);

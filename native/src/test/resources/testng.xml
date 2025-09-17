@@ -8,7 +8,7 @@
     </test>
     <test name="TracingTest" verbose="2">
         <classes>
-            <class name="io.ballerina.stdlib.ai.TracingTest"/>
+            <class name="io.ballerina.stdlib.ai.observability.TracingTest"/>
         </classes>
     </test>
 </suite>

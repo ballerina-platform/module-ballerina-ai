@@ -59,10 +59,14 @@ public abstract class Span {
 
     @SuppressWarnings("unused")
     public void setAttribute(String key, String value) {
-        String code = """
+        try {
+            String code = """
                 %s.set_attribute("%s", "%s")
                 """.formatted(spanVar(), key, value);
-        PythonWrapper.execVoid(code);
+            PythonWrapper.execVoid(code);
+        } catch (Exception ignored) {
+            setJsonAttribute(key, value);
+        }
     }
 
     @SuppressWarnings("unused")
