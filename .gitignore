@@ -1,4 +1,4 @@
-De# Compiled class file
+# Compiled class file
 *.class
 
 # Log file
@@ -62,3 +62,4 @@ docker.env
 build
 node_modules
 native/bin
+*/bin/*
