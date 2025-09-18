@@ -63,6 +63,7 @@ dependencies {
     testImplementation group: 'org.ballerinalang', name: 'ballerina-lang', version: "${ballerinaLangVersion}"
     testImplementation group: 'org.ballerinalang', name: 'ballerina-runtime', version: "${ballerinaLangVersion}"
     testImplementation group: 'org.testng', name: 'testng', version: "${testngVersion}"
+    testImplementation group: 'com.fasterxml.jackson.core', name: 'jackson-databind', version: '2.17.0'
 }
 
 spotbugsMain {

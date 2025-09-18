@@ -17,7 +17,7 @@
 
 plugins {
     id 'java'
-    id 'com.github.spotbugs' version '6.0.18'
+    id 'com.github.spotbugs'
     id 'checkstyle'
     id 'org.graalvm.python' version '24.2.2'
 }
