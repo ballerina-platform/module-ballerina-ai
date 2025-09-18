@@ -20,7 +20,6 @@ package io.ballerina.stdlib.ai.observability;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.testng.annotations.Test;
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -30,6 +29,8 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+
+import org.testng.annotations.Test;
 
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
@@ -60,7 +61,7 @@ public class TracingTest {
     }
 
     private void insertTraces() {
-        Observability.initTracing(PHOENIX_BASE_URL + "/v1/traces", "test");
+        Observability.initTracing(PHOENIX_BASE_URL + "/v1/traces", "TT");
         AgentSpan agentSpan = new AgentSpan("agent");
         agentSpan.init(Observability.TRACER);
         agentSpan.enter();

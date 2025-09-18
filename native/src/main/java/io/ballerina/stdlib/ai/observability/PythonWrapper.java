@@ -18,10 +18,9 @@
 
 package io.ballerina.stdlib.ai.observability;
 
-import org.graalvm.polyglot.Context;
-import org.graalvm.python.embedding.GraalPyResources;
-
 import java.io.PrintStream;
+
+import org.graalvm.polyglot.Context;
 
 public class PythonWrapper {
 
@@ -29,7 +28,20 @@ public class PythonWrapper {
 
     private static class ContextHolder {
 
-        private static final Context CONTEXT = GraalPyResources.createContext();
+        private static final Context CONTEXT = createContext();
+
+        private static Context createContext() {
+            String pathToVenv = "/Users/heshanp/Projects/module-ballerina-ai/venvs/darwin";
+            String sitePackagesPath = pathToVenv + "/lib/python3.11/site-packages";
+            String stdLibPath = "/Users/heshanp/Projects/module-ballerina-ai/venvs/darwin-std-lib/python3.11";
+            return Context.newBuilder("python")
+                    .option("python.PythonHome", pathToVenv)
+                    .option("python.PythonPath", sitePackagesPath + ":" + stdLibPath)
+                    .option("python.StdLibHome", stdLibPath)
+                    .option("python.ForceImportSite", "true")
+                    .allowAllAccess(true)
+                    .build();
+        }
     }
 
     private static Context getContext() {
