@@ -1,0 +1,136 @@
+name: Build Python Virtual Environments
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, develop, feat/observability ]
+    paths:
+      - 'venv-build-scripts/**'
+      - 'native/src/main/resources/**'
+  pull_request:
+    branches: [ main, develop, feat/observability ]
+    paths:
+      - 'venv-build-scripts/**'
+      - 'native/src/main/resources/**'
+
+jobs:
+  build-venvs:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            platform: darwin
+            script: build-darwin.sh
+          - os: ubuntu-latest
+            platform: linux
+            script: build-linux.sh
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install system dependencies (Linux)
+      if: matrix.platform == 'linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y wget build-essential
+
+    - name: Install system dependencies (macOS)
+      if: matrix.platform == 'darwin'
+      run: |
+        brew install wget
+
+    - name: Make build script executable
+      run: chmod +x venv-build-scripts/${{ matrix.script }}
+
+    - name: Run build script
+      working-directory: venv-build-scripts
+      run: ./${{ matrix.script }}
+
+    - name: Verify resources directory structure
+      run: |
+        echo "Checking resources directory structure..."
+        ls -la native/src/main/resources/
+        if [ -d "native/src/main/resources/venvs/${{ matrix.platform }}" ]; then
+          echo "✅ venvs/${{ matrix.platform }} directory exists"
+          ls -la native/src/main/resources/venvs/${{ matrix.platform }}/
+        else
+          echo "❌ venvs/${{ matrix.platform }} directory not found"
+          exit 1
+        fi
+
+    - name: Create platform-specific archive
+      run: |
+        cd native/src/main/resources
+        tar -czf venv-${{ matrix.platform }}.tar.gz venvs/${{ matrix.platform }}/
+        echo "Created venv-${{ matrix.platform }}.tar.gz"
+        ls -la venv-${{ matrix.platform }}.tar.gz
+
+    - name: Upload platform-specific artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: venv-${{ matrix.platform }}
+        path: native/src/main/resources/venv-${{ matrix.platform }}.tar.gz
+        retention-days: 30
+
+  package-resources:
+    needs: build-venvs
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: artifacts
+
+    - name: Extract and combine artifacts
+      run: |
+        mkdir -p combined-resources/venvs
+        for platform in darwin linux; do
+          if [ -f "artifacts/venv-$platform/venv-$platform.tar.gz" ]; then
+            echo "Extracting venv-$platform..."
+            tar -xzf "artifacts/venv-$platform/venv-$platform.tar.gz" -C combined-resources/
+          else
+            echo "⚠️  venv-$platform artifact not found"
+          fi
+        done
+
+    - name: Verify combined structure
+      run: |
+        echo "Combined resources structure:"
+        ls -la combined-resources/
+        if [ -d "combined-resources/venvs" ]; then
+          echo "venvs directory contents:"
+          ls -la combined-resources/venvs/
+        fi
+
+    - name: Create final resources archive
+      run: |
+        tar -czf resources-complete.tar.gz -C combined-resources .
+        echo "Created resources-complete.tar.gz"
+        ls -la resources-complete.tar.gz
+
+    - name: Upload complete resources artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: resources-complete
+        path: resources-complete.tar.gz
+        retention-days: 90
+
+    - name: Upload to release (if tag)
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: resources-complete.tar.gz
+        draft: false
+        prerelease: false
