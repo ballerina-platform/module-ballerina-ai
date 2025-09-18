@@ -45,8 +45,8 @@ public class PythonWrapper {
                 Path tempDir = Files.createTempDirectory("ballerina-ai-python");
                 copyVenvResourceToDirectory(tempDir.toString());
 
-                String sitePackagesPath = tempDir.resolve("venvs/darwin/lib/python3.11/site-packages").toString();
-                String stdLibPath = tempDir.resolve("venvs/darwin-std-lib/python3.11").toString();
+                String sitePackagesPath = tempDir.resolve("venvs/darwin/venv/lib/python3.11/site-packages").toString();
+                String stdLibPath = tempDir.resolve("venvs/darwin/std-lib/python3.11").toString();
 
                 return Context.newBuilder("python")
                         .option("python.PythonPath", sitePackagesPath + ":" + stdLibPath)
