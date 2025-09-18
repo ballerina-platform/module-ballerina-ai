@@ -18,8 +18,17 @@
 
 package io.ballerina.stdlib.ai.observability;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.io.PrintStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 
+import io.github.classgraph.ClassGraph;
+import io.github.classgraph.Resource;
+import io.github.classgraph.ScanResult;
 import org.graalvm.polyglot.Context;
 
 public class PythonWrapper {
@@ -31,16 +40,46 @@ public class PythonWrapper {
         private static final Context CONTEXT = createContext();
 
         private static Context createContext() {
-            String pathToVenv = "/Users/heshanp/Projects/module-ballerina-ai/venvs/darwin";
-            String sitePackagesPath = pathToVenv + "/lib/python3.11/site-packages";
-            String stdLibPath = "/Users/heshanp/Projects/module-ballerina-ai/venvs/darwin-std-lib/python3.11";
-            return Context.newBuilder("python")
-                    .option("python.PythonHome", pathToVenv)
-                    .option("python.PythonPath", sitePackagesPath + ":" + stdLibPath)
-                    .option("python.StdLibHome", stdLibPath)
-                    .option("python.ForceImportSite", "true")
-                    .allowAllAccess(true)
-                    .build();
+            try {
+                // Create temp directory and copy venv resources
+                Path tempDir = Files.createTempDirectory("ballerina-ai-python");
+                copyVenvResourceToDirectory(tempDir.toString());
+
+                String sitePackagesPath = tempDir.resolve("venvs/darwin/lib/python3.11/site-packages").toString();
+                String stdLibPath = tempDir.resolve("venvs/darwin-std-lib/python3.11").toString();
+
+                return Context.newBuilder("python")
+                        .option("python.PythonPath", sitePackagesPath + ":" + stdLibPath)
+                        .option("python.StdLibHome", stdLibPath)
+                        .option("python.ForceImportSite", "true")
+                        .allowAllAccess(true)
+                        .build();
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to initialize Python context", e);
+            }
+        }
+
+        private static void copyVenvResourceToDirectory(String target) throws IOException {
+            try (ScanResult scanResult = new ClassGraph()
+                    .acceptPaths("venvs")
+                    .enableAllInfo()
+                    .scan()) {
+                for (Resource resource : scanResult.getAllResources()) {
+                    String resourcePath = resource.getPath();
+                    Path targetPath = Paths.get(target, resourcePath);
+
+                    // Create parent directories if they don't exist
+                    Path parent = targetPath.getParent();
+                    if (parent != null) {
+                        Files.createDirectories(parent);
+                    }
+
+                    // Copy the resource to the target path
+                    try (InputStream inputStream = resource.open()) {
+                        Files.copy(inputStream, targetPath, StandardCopyOption.REPLACE_EXISTING);
+                    }
+                }
+            }
         }
     }
 

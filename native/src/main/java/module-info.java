@@ -28,5 +28,6 @@ module io.ballerina.stdlib.ai {
     requires org.apache.tika.parser.microsoft;
     requires org.graalvm.polyglot;
     requires org.graalvm.python.embedding;
+    requires io.github.classgraph;
     exports io.ballerina.stdlib.ai;
 }
