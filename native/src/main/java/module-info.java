@@ -26,6 +26,7 @@ module io.ballerina.stdlib.ai {
     requires org.apache.tika.parser.pdf;
     requires java.xml;
     requires org.apache.tika.parser.microsoft;
-    requires io.ballerina.stdlib.ai.observability;
+    requires org.graalvm.polyglot;
+    requires org.graalvm.python.embedding;
     exports io.ballerina.stdlib.ai;
 }
