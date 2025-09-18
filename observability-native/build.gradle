@@ -17,7 +17,7 @@
 
 plugins {
     id 'java'
-    id 'com.github.spotbugs'
+    id 'com.github.spotbugs' version "${spotbugsPluginVersion}"
     id 'checkstyle'
     id 'org.graalvm.python' version '24.2.2'
 }
@@ -186,17 +186,10 @@ test {
     }
 }
 
-// Create uber jar with all dependencies and platform-specific classifier
+// Create standard thin jar with platform-specific classifier
 jar {
-    from {
-        configurations.runtimeClasspath.findAll { it.name.endsWith('.jar') }.collect {
-            zipTree(it)
-        }
-    }
-
     // Include platform-specific classifier
     archiveClassifier = getOsClassifier()
-    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 
     exclude 'META-INF/*.RSA', 'META-INF/*.SF', 'META-INF/*.DSA'
 }
