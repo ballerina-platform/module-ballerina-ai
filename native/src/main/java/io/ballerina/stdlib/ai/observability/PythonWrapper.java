@@ -35,18 +35,55 @@ public class PythonWrapper {
 
     private static final PrintStream out = System.out;
 
+    private enum OperatingSystem {
+        LINUX("linux"),
+        DARWIN("darwin");
+
+        private final String name;
+
+        OperatingSystem(String name) {
+            this.name = name;
+        }
+
+        public String getName() {
+            return name;
+        }
+
+        public String getSitePackagesPath() {
+            return "venvs/" + name + "/venv/lib/python3.11/site-packages";
+        }
+
+        public String getStdLibPath() {
+            return "venvs/" + name + "/std-lib/python3.11";
+        }
+
+        public static OperatingSystem detect() {
+            String osName = System.getProperty("os.name").toLowerCase();
+            if (osName.contains("linux")) {
+                return LINUX;
+            } else if (osName.contains("mac") || osName.contains("darwin")) {
+                return DARWIN;
+            } else {
+                throw new RuntimeException("Unsupported operating system: " + osName);
+            }
+        }
+    }
+
     private static class ContextHolder {
 
         private static final Context CONTEXT = createContext();
 
         private static Context createContext() {
             try {
+                // Detect operating system
+                OperatingSystem os = OperatingSystem.detect();
+
                 // Create temp directory and copy venv resources
                 Path tempDir = Files.createTempDirectory("ballerina-ai-python");
-                copyVenvResourceToDirectory(tempDir.toString());
+                copyVenvResourceToDirectory(tempDir.toString(), os);
 
-                String sitePackagesPath = tempDir.resolve("venvs/darwin/venv/lib/python3.11/site-packages").toString();
-                String stdLibPath = tempDir.resolve("venvs/darwin/std-lib/python3.11").toString();
+                String sitePackagesPath = tempDir.resolve(os.getSitePackagesPath()).toString();
+                String stdLibPath = tempDir.resolve(os.getStdLibPath()).toString();
 
                 return Context.newBuilder("python")
                         .option("python.PythonPath", sitePackagesPath + ":" + stdLibPath)
@@ -55,13 +92,14 @@ public class PythonWrapper {
                         .allowAllAccess(true)
                         .build();
             } catch (Exception e) {
+                System.out.println(e);
                 throw new RuntimeException("Failed to initialize Python context", e);
             }
         }
 
-        private static void copyVenvResourceToDirectory(String target) throws IOException {
+        private static void copyVenvResourceToDirectory(String target, OperatingSystem os) throws IOException {
             try (ScanResult scanResult = new ClassGraph()
-                    .acceptPaths("venvs")
+                    .acceptPaths("venvs/" + os.getName())
                     .enableAllInfo()
                     .scan()) {
                 for (Resource resource : scanResult.getAllResources()) {
