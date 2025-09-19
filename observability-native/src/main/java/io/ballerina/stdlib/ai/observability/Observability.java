@@ -40,4 +40,32 @@ public class Observability {
                 """.formatted(phoenixEndpoint, projectName, phoenixEndpoint, TRACER);
         PythonWrapper.execVoid(code);
     }
+
+    public static AgentSpan createAgentSpan(String name) {
+      AgentSpan agentSpan = new AgentSpan("agent");
+      agentSpan.init(Observability.TRACER);
+      return agentSpan;
+    }
+
+    public static LLMSpan createLLMSpan(String name, String modelName, String providerName) {
+      LLMSpan llmSpan = new LLMSpan(name, modelName, providerName);
+      llmSpan.init(Observability.TRACER);
+      return llmSpan;
+    }
+
+    public static void enterSpan(Span span) {
+      span.enter();
+    }
+
+    public static void setInput(Span span, String input) {
+      span.setInput(input);
+    }
+
+    public static void setOutput(Span span, String output) {
+      span.setOutput(output);
+    }
+
+    public static void setStatus(Span span, String status) {
+      span.setStatus(Span.Status.from(status));
+    }
 }
