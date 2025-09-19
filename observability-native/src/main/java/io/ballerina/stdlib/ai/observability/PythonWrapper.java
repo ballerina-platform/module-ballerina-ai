@@ -18,6 +18,11 @@
 
 package io.ballerina.stdlib.ai.observability;
 
+import io.github.classgraph.ClassGraph;
+import io.github.classgraph.Resource;
+import io.github.classgraph.ScanResult;
+import org.graalvm.polyglot.Context;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintStream;
@@ -25,11 +30,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
-
-import io.github.classgraph.ClassGraph;
-import io.github.classgraph.Resource;
-import io.github.classgraph.ScanResult;
-import org.graalvm.polyglot.Context;
+import java.util.Locale;
 
 public class PythonWrapper {
 
@@ -58,7 +59,7 @@ public class PythonWrapper {
         }
 
         public static OperatingSystem detect() {
-            String osName = System.getProperty("os.name").toLowerCase();
+            String osName = System.getProperty("os.name").toLowerCase(Locale.ENGLISH);
             if (osName.contains("linux")) {
                 return LINUX;
             } else if (osName.contains("mac") || osName.contains("darwin")) {
@@ -92,7 +93,6 @@ public class PythonWrapper {
                         .allowAllAccess(true)
                         .build();
             } catch (Exception e) {
-                System.out.println(e);
                 throw new RuntimeException("Failed to initialize Python context", e);
             }
         }
