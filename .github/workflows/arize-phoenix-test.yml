@@ -1,0 +1,46 @@
+name: Arize Phoenix Integration Test
+
+on:
+  push:
+    branches: [ feat/observability ]
+  pull_request:
+    branches: [ feat/observability ]
+
+jobs:
+  test-with-arize-phoenix:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up JDK 21
+      uses: actions/setup-java@v4
+      with:
+        java-version: '21'
+        distribution: 'temurin'
+
+
+    - name: Start Arize Phoenix Docker container
+      run: |
+        docker run -d \
+          --name arize-phoenix \
+          -p 6006:6006 \
+          -p 4317:4317 \
+          arizephoenix/phoenix:latest
+
+    - name: Wait for Arize Phoenix to be ready
+      run: |
+        echo "Waiting for Arize Phoenix to start..."
+        sleep 10
+        echo "Arize Phoenix is ready!"
+
+    - name: Run JAR with Arize Phoenix
+      run: |
+        java -jar ai.jar
+
+    - name: Cleanup
+      if: always()
+      run: |
+        docker stop arize-phoenix || true
+        docker rm arize-phoenix || true
