@@ -18,6 +18,7 @@ echo "Using CXX=$CXX"
 pip3 install -r requirements.txt
 
 mkdir -p $RESOURCE_DIR/venvs/linux
-cp -r $VENV_DIR $RESOURCE_DIR/venvs/linux/venv
+# Copy venv directory and resolve symlinks to avoid broken absolute paths
+cp -rL $VENV_DIR $RESOURCE_DIR/venvs/linux/venv
 mkdir -p $RESOURCE_DIR/venvs/linux/std-lib
 cp -r graalpy-24.2.2-linux-amd64/lib/python3.11 $RESOURCE_DIR/venvs/linux/std-lib/python3.11
