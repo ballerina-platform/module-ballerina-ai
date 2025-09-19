@@ -28,7 +28,6 @@ dependencies {
 
     implementation group: 'org.graalvm.polyglot', name: 'polyglot', version: '24.2.2'
     implementation group: 'org.graalvm.polyglot', name: 'python', version: '24.2.2'
-    implementation group: 'io.github.classgraph', name: 'classgraph', version: '4.8.165'
 
     // Force BouncyCastle version to match ballerina/crypto
     implementation group: 'org.bouncycastle', name: 'bcprov-jdk18on', version: '1.80'
@@ -94,7 +93,7 @@ compileJava {
     doFirst {
         options.compilerArgs = [
                 '--module-path', classpath.asPath,
-                '--add-modules', 'io.github.classgraph,org.graalvm.polyglot'
+                '--add-modules', 'org.graalvm.polyglot'
         ]
         classpath = files()
     }

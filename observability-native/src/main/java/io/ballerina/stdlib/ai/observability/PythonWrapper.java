@@ -18,9 +18,6 @@
 
 package io.ballerina.stdlib.ai.observability;
 
-import io.github.classgraph.ClassGraph;
-import io.github.classgraph.Resource;
-import io.github.classgraph.ScanResult;
 import org.graalvm.polyglot.Context;
 
 import java.io.IOException;
@@ -31,6 +28,8 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.Locale;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 
 public class PythonWrapper {
 
@@ -98,23 +97,35 @@ public class PythonWrapper {
         }
 
         private static void copyVenvResourceToDirectory(String target, OperatingSystem os) throws IOException {
-            try (ScanResult scanResult = new ClassGraph()
-                    .acceptPaths("venvs/" + os.getName())
-                    .enableAllInfo()
-                    .scan()) {
-                for (Resource resource : scanResult.getAllResources()) {
-                    String resourcePath = resource.getPath();
-                    Path targetPath = Paths.get(target, resourcePath);
+            String zipFileName = os.getName() + "-venv.zip";
 
-                    // Create parent directories if they don't exist
-                    Path parent = targetPath.getParent();
-                    if (parent != null) {
-                        Files.createDirectories(parent);
-                    }
+            // Try to get the resource from the classpath
+            try (InputStream inputStream = PythonWrapper.class.getClassLoader().getResourceAsStream(zipFileName)) {
+                if (inputStream == null) {
+                    throw new IOException("Zip file not found in classpath: " + zipFileName);
+                }
 
-                    // Copy the resource to the target path
-                    try (InputStream inputStream = resource.open()) {
-                        Files.copy(inputStream, targetPath, StandardCopyOption.REPLACE_EXISTING);
+                try (ZipInputStream zipInputStream = new ZipInputStream(inputStream)) {
+                    ZipEntry entry;
+                    while ((entry = zipInputStream.getNextEntry()) != null) {
+                        String entryName = entry.getName();
+                        Path targetPath = Paths.get(target, entryName);
+
+                        // Skip if it's a directory entry
+                        if (entry.isDirectory()) {
+                            Files.createDirectories(targetPath);
+                            continue;
+                        }
+
+                        // Create parent directories if they don't exist
+                        Path parent = targetPath.getParent();
+                        if (parent != null) {
+                            Files.createDirectories(parent);
+                        }
+
+                        // Extract the file
+                        Files.copy(zipInputStream, targetPath, StandardCopyOption.REPLACE_EXISTING);
+                        zipInputStream.closeEntry();
                     }
                 }
             }
