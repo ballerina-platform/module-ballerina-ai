@@ -19,52 +19,24 @@ plugins {
     id 'java'
     id 'com.github.spotbugs'
     id 'checkstyle'
-    id 'org.graalvm.python' version '24.2.2'
+    id 'com.gradleup.shadow' version '9.1.0'
 }
 
-description = 'Ballerina - AI package Java Utils'
+description = 'Ballerina - AI package Observability Java Utils'
 
 dependencies {
-    implementation group: 'org.ballerinalang', name: 'ballerina-lang', version: "${ballerinaLangVersion}"
-    implementation group: 'org.ballerinalang', name: 'ballerina-runtime', version: "${ballerinaLangVersion}"
-    implementation group: 'org.ballerinalang', name: 'value', version: "${ballerinaLangVersion}"
-    implementation group: 'dev.langchain4j', name: 'langchain4j', version: "${langchain4jVersion}"
-    implementation group: 'dev.langchain4j', name: 'langchain4j-core', version: "${langchain4jVersion}"
-    implementation group: 'org.apache.opennlp', name: 'opennlp-tools', version: "${openNlpToolsVersion}"
 
     implementation group: 'org.graalvm.polyglot', name: 'polyglot', version: '24.2.2'
     implementation group: 'org.graalvm.polyglot', name: 'python', version: '24.2.2'
-    implementation group: 'io.github.classgraph', name: 'classgraph', version: '4.8.165'
 
-    implementation group: 'org.apache.tika', name: 'tika-core', version: "${tikaVersion}", {
-        exclude group: 'xml-apis', module: 'xml-apis'
-        exclude group: 'xerces', module: 'xercesImpl'
-    }
-    implementation group: 'org.apache.tika', name: 'tika-parser-pdf-module', version: "${tikaVersion}", {
-        exclude group: 'xml-apis', module: 'xml-apis'
-        exclude group: 'xerces', module: 'xercesImpl'
-        exclude group: 'org.bouncycastle', module: 'bcmail-jdk18on'
-        exclude group: 'org.bouncycastle', module: 'bcprov-jdk18on'
-        exclude group: 'org.bouncycastle', module: 'bcutil-jdk18on'
-        exclude group: 'org.bouncycastle', module: 'bcpkix-jdk18on'
-    }
-    implementation group: 'org.apache.tika', name: 'tika-parser-microsoft-module', version: "${tikaVersion}", {
-        exclude group: 'xml-apis', module: 'xml-apis'
-        exclude group: 'xerces', module: 'xercesImpl'
-        exclude group: 'org.bouncycastle', module: 'bcmail-jdk18on'
-        exclude group: 'org.bouncycastle', module: 'bcprov-jdk18on'
-        exclude group: 'org.bouncycastle', module: 'bcutil-jdk18on'
-        exclude group: 'org.bouncycastle', module: 'bcpkix-jdk18on'
-        exclude group: 'com.healthmarketscience.jackcess', module: 'jackcess-encrypt'
-    }
-
-
+    // Force BouncyCastle version to match ballerina/crypto
+    implementation group: 'org.bouncycastle', name: 'bcprov-jdk18on', version: '1.80'
+    implementation group: 'org.bouncycastle', name: 'bcpkix-jdk18on', version: '1.80'
+    implementation group: 'org.bouncycastle', name: 'bcutil-jdk18on', version: '1.80'
 
     checkstyle project(":checkstyle")
     checkstyle "com.puppycrawl.tools:checkstyle:${checkstylePluginVersion}"
 
-    testImplementation group: 'org.ballerinalang', name: 'ballerina-lang', version: "${ballerinaLangVersion}"
-    testImplementation group: 'org.ballerinalang', name: 'ballerina-runtime', version: "${ballerinaLangVersion}"
     testImplementation group: 'org.testng', name: 'testng', version: "${testngVersion}"
     testImplementation group: 'com.fasterxml.jackson.core', name: 'jackson-databind', version: '2.17.0'
 }
@@ -111,7 +83,6 @@ checkstyle {
 
 tasks.withType(Checkstyle) {
     exclude '**/module-info.java'
-    exclude '**/MarkdownChunker.java'
 }
 
 spotbugsMain.finalizedBy validateSpotbugs
@@ -122,6 +93,7 @@ compileJava {
     doFirst {
         options.compilerArgs = [
                 '--module-path', classpath.asPath,
+                '--add-modules', 'org.graalvm.polyglot'
         ]
         classpath = files()
     }
@@ -247,6 +219,22 @@ artifacts {
     archives testJar
 }
 
-graalPy {
-    packages = ["arize-phoenix-otel==${arizePhoenixOtelVersion}", "grpcio==${grpcioVersion}"]
+shadowJar {
+    archiveBaseName = 'observability-native'
+    archiveClassifier = ''
+    archiveVersion = "${project.version}"
+    from sourceSets.main.output
+    from sourceSets.main.resources
+    configurations = [project.configurations.runtimeClasspath]
+
+    // Exclude module-info.class to avoid conflicts
+    exclude 'META-INF/versions/*/module-info.class'
+    exclude 'module-info.class'
+
+    // Enable zip64 for large archives with many files
+    zip64 = true
+
+    // Merge service files to avoid conflicts
+    mergeServiceFiles()
 }
+

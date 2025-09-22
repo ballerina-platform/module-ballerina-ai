@@ -77,6 +77,10 @@ release {
 task build {
     dependsOn(':ai-compiler-plugin:build')
     dependsOn(':ai-native:build')
+    // Only build observability-native when explicitly enabled
+    if (project.hasProperty('buildObservabilityNative')) {
+        dependsOn(':observability-native:build')
+    }
     dependsOn(':ai-ballerina:build')
     dependsOn(':ai-ballerina-tests:test')
     dependsOn(':ai-compiler-plugin-tests:test')
