@@ -22,7 +22,6 @@ dependencies = [
 	{org = "ballerina", name = "lang.array"},
 	{org = "ballerina", name = "lang.regexp"},
 	{org = "ballerina", name = "lang.runtime"},
-	{org = "ballerina", name = "log"},
 	{org = "ballerina", name = "math.vector"},
 	{org = "ballerina", name = "mcp"},
 	{org = "ballerina", name = "mime"},
@@ -83,7 +82,7 @@ dependencies = [
 [[package]]
 org = "ballerina"
 name = "data.jsondata"
-version = "1.1.2"
+version = "1.1.0"
 dependencies = [
 	{org = "ballerina", name = "jballerina.java"},
 	{org = "ballerina", name = "lang.object"}
@@ -281,15 +280,12 @@ dependencies = [
 [[package]]
 org = "ballerina"
 name = "log"
-version = "2.13.0"
+version = "2.12.0"
 dependencies = [
 	{org = "ballerina", name = "io"},
 	{org = "ballerina", name = "jballerina.java"},
 	{org = "ballerina", name = "lang.value"},
 	{org = "ballerina", name = "observe"}
-]
-modules = [
-	{org = "ballerina", packageName = "log", moduleName = "log"}
 ]
 
 [[package]]
