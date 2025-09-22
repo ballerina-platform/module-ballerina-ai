@@ -127,8 +127,9 @@ public isolated class McpToolKit {
     private final mcp:StreamableHttpClient mcpClient;
     private final ToolConfig[] & readonly tools;
 
-    public isolated function init(string serverUrl, mcp:Implementation info,
-            string[]? permittedTools = (), *mcp:StreamableHttpClientTransportConfig config) returns Error? {
+    public isolated function init(string serverUrl, string[]? permittedTools = (),
+            mcp:Implementation info = {name: "MCP Client", version: "1.0.0"},
+            *mcp:StreamableHttpClientTransportConfig config) returns Error? {
         mcp:StreamableHttpClient|mcp:ClientError mcpClient = new (serverUrl, config);
         if mcpClient is error {
             return error Error("Failed to initialize the MCP client", mcpClient);
