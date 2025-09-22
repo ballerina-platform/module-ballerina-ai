@@ -25,6 +25,12 @@ path = "../native/build/libs/ai-native-@project.version@-tests.jar"
 testOnly = true
 
 [[platform.java21.dependency]]
+groupId = "io.ballerina.stdlib"
+artifactId = "observability-native"
+version = "@toml.version@"
+path = "../observability-native/build/libs/observability-native-1.5.2-SNAPSHOT.jar"
+
+[[platform.java21.dependency]]
 groupId = "dev.langchain4j"
 artifactId = "langchain4j"
 version = "@langchain4j.version"
