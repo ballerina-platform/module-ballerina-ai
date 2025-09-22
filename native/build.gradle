@@ -19,7 +19,6 @@ plugins {
     id 'java'
     id 'com.github.spotbugs'
     id 'checkstyle'
-    id 'org.graalvm.python' version '24.2.2'
 }
 
 description = 'Ballerina - AI package Java Utils'
@@ -31,10 +30,6 @@ dependencies {
     implementation group: 'dev.langchain4j', name: 'langchain4j', version: "${langchain4jVersion}"
     implementation group: 'dev.langchain4j', name: 'langchain4j-core', version: "${langchain4jVersion}"
     implementation group: 'org.apache.opennlp', name: 'opennlp-tools', version: "${openNlpToolsVersion}"
-
-    implementation group: 'org.graalvm.polyglot', name: 'polyglot', version: '24.2.2'
-    implementation group: 'org.graalvm.polyglot', name: 'python', version: '24.2.2'
-    implementation group: 'io.github.classgraph', name: 'classgraph', version: '4.8.165'
 
     implementation group: 'org.apache.tika', name: 'tika-core', version: "${tikaVersion}", {
         exclude group: 'xml-apis', module: 'xml-apis'
@@ -245,8 +240,4 @@ task testJar(type: Jar) {
 
 artifacts {
     archives testJar
-}
-
-graalPy {
-    packages = ["arize-phoenix-otel==${arizePhoenixOtelVersion}", "grpcio==${grpcioVersion}"]
 }
