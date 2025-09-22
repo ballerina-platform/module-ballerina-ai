@@ -1,7 +1,7 @@
 [package]
 org = "ballerina"
 name = "ai_tests"
-version = "1.5.2"
+version = "1.5.3"
 
 [build-options]
 observabilityIncluded = true
@@ -9,12 +9,12 @@ observabilityIncluded = true
 [[platform.java21.dependency]]
 groupId = "io.ballerina.stdlib"
 artifactId = "ai-native"
-version = "1.5.2"
-path = "../../../../../../../native/build/libs/ai-native-1.5.2.jar"
+version = "1.5.3"
+path = "../../../../../../../native/build/libs/ai-native-1.5.3.jar"
 
 [[platform.java21.dependency]]
 groupId = "io.ballerina.stdlib"
 artifactId = "ai-native"
-version = "1.5.2"
-path = "../../../../../../../native/build/libs/ai-native-1.5.2-tests.jar"
+version = "1.5.3"
+path = "../../../../../../../native/build/libs/ai-native-1.5.3-tests.jar"
 testOnly = true
