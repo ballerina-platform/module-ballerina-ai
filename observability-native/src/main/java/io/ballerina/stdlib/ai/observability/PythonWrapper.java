@@ -127,7 +127,7 @@ public class PythonWrapper {
                         .allowAllAccess(true)
                         .build();
             } catch (Exception e) {
-                throw new RuntimeException("Failed to initialize Python context", e);
+                throw new RuntimeException("Failed to initialize Python context due to" + e.getMessage(), e);
             }
         }
 
