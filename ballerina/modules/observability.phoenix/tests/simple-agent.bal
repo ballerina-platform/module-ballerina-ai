@@ -3,6 +3,8 @@ import ballerina/os;
 import ballerina/http;
 import ballerina/jballerina.java;
 import ballerina/lang.runtime;
+import ai.observability;
+
 @test:Config {
     enable: true,
     before: startPhoenix,
@@ -12,33 +14,33 @@ function testSimpleAgentFlow() {
     if isWindows() {
         return;
     }
-    initTracing("http://localhost:6006/v1/traces", "test-from-ballerina");
-    AgentSpan agentSpan = createAgentSpan("agent");
+    observability:initTracing("http://localhost:6006/v1/traces", "test-from-ballerina");
+    observability:AgentSpan agentSpan = observability:createAgentSpan("agent");
     agentSpan.enter();
     agentSpan.setInput("hi");
     {
-        LLMSpan llmSpan = createLLMSpan("llm", "gpt-4o-mini", "openai");
+        observability:LLMSpan llmSpan = observability:createLLMSpan("llm", "gpt-4o-mini", "openai");
         llmSpan.enter();
         llmSpan.setInput("hi llm");
         map<json> toolInput = {
             "arg1": "value1",
             "arg2": "value2"
         };
-        ToolCallRequest toolCallRequest = {
+        observability:ToolCallRequest toolCallRequest = {
             name: "tool",
             id: "123",
             argumentJson: toolInput
         };
         llmSpan.addToolCallRequests(toolCallRequest);
         {
-            ToolSpan toolSpan = createToolSpan("tool");
+            observability:ToolSpan toolSpan = observability:createToolSpan("tool");
             toolSpan.enter();
             toolSpan.setInput("hi tool");
             toolSpan.setOutput("bye tool");
-            toolSpan.setStatus(OK);
+            toolSpan.setStatus(observability:OK);
             toolSpan.exit();
         }
-        ToolCallResponse toolCallResponse = {
+        observability:ToolCallResponse toolCallResponse = {
             name: "tool",
             id: "123",
             content: "bye tool"
@@ -48,11 +50,11 @@ function testSimpleAgentFlow() {
         llmSpan.addIntermediateResponse("the output of the tool is great");
         llmSpan.setOutput("final llm output");
         llmSpan.setTokenCount(100, 50, 50);
-        llmSpan.setStatus(OK);
+        llmSpan.setStatus(observability:OK);
         llmSpan.exit();
     }
     agentSpan.setOutput("bye agent");
-    agentSpan.setStatus(OK);
+    agentSpan.setStatus(observability:OK);
     agentSpan.exit();
 }
 
