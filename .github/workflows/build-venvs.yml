@@ -1,0 +1,58 @@
+name: Build Virtual Environments
+
+on:
+  push:
+    branches: [ feat/observability-clean ]
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: 'Platform to build (all, darwin, linux)'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+        - all
+        - darwin
+        - linux
+
+jobs:
+  build-darwin:
+    if: github.event_name == 'workflow_dispatch' && (github.event.inputs.platform == 'all' || github.event.inputs.platform == 'darwin') || github.event_name == 'push'
+    runs-on: macos-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up GraalPy
+      run: |
+        cd venv-build-scripts
+        chmod +x build-darwin.sh
+        ./build-darwin.sh
+
+    - name: Upload Darwin venv artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: darwin-venv
+        path: observability-native/src/main/resources/darwin-venv.zip
+        retention-days: 30
+
+  build-linux:
+    if: github.event_name == 'workflow_dispatch' && (github.event.inputs.platform == 'all' || github.event.inputs.platform == 'linux') || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up GraalPy
+      run: |
+        cd venv-build-scripts
+        chmod +x build-linux.sh
+        ./build-linux.sh
+
+    - name: Upload Linux venv artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: linux-venv
+        path: observability-native/src/main/resources/linux-venv.zip
+        retention-days: 30
+
