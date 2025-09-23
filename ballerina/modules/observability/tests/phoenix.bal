@@ -2,6 +2,7 @@ import ballerina/test;
 import ballerina/os;
 import ballerina/http;
 import ballerina/jballerina.java;
+import ballerina/lang.runtime;
 @test:Config {
     enable: true,
     before: startPhoenix,
@@ -106,7 +107,7 @@ function startPhoenix() {
     _ = checkpanic os:exec({ value: "docker", arguments: ["rm", "phoenix-otel-collector"] });
 
     // Start new Phoenix container with proper configuration
-    _ = checkpanic os:exec({
+    var result = checkpanic os:exec({
         value: "docker",
         arguments: [
             "run", "-d",
@@ -117,7 +118,9 @@ function startPhoenix() {
             "arizephoenix/phoenix:latest"
         ]
     });
-
+    if result.waitForExit() != 0 {
+        panic error("Failed to start Phoenix container");
+    }
     // Wait for Phoenix to be ready
     waitForPhoenix();
 }
@@ -129,7 +132,7 @@ function checkHealth() returns boolean|error {
 }
 
 function waitForPhoenix() {
-    int maxWaitTime = 120; // seconds
+    int maxWaitTime = 3 * 60; // seconds
     int waitTime = 0;
 
     while waitTime < maxWaitTime {
@@ -138,12 +141,7 @@ function waitForPhoenix() {
             return;
         }
 
-        // Wait 5 seconds before next check
-        // Using a simple loop for delay since runtime:sleep is not available
-        int i = 0;
-        while i < 5000000 {
-            i += 1;
-        }
+        runtime:sleep(5);
         waitTime += 5;
     }
 
