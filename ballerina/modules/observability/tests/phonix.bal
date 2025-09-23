@@ -78,7 +78,7 @@ function startPhoenix() {
             "--name", "phoenix-otel-collector",
             "-p", "6006:6006",
             "-p", "4317:4317",
-            "-p", "9090:9090",
+            "-p", "9091:9090",
             "arizephoenix/phoenix:latest"
         ]
     });
