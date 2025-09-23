@@ -11,6 +11,9 @@ repository = "https://github.com/ballerina-platform/module-ballerina-ai"
 [platform.java21]
 graalvmCompatible = true
 
+[build-options]
+graalvmBuildOptions = "-H:+AllowDeprecatedBuilderClassesOnImageClasspath"
+
 [[platform.java21.dependency]]
 groupId = "io.ballerina.stdlib"
 artifactId = "ai-native"

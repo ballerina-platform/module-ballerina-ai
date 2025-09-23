@@ -241,6 +241,12 @@ shadowJar {
     exclude 'META-INF/versions/*/module-info.class'
     exclude 'module-info.class'
 
+    // Exclude native-image properties that force module path and cause 'native' keyword conflict
+    exclude 'META-INF/native-image/**'
+
+    // Exclude BouncyCastle classes to avoid signer conflicts between different versions
+    exclude 'org/bouncycastle/**'
+
     // Enable zip64 for large archives with many files
     zip64 = true
 
