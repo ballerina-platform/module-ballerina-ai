@@ -108,8 +108,9 @@ jobs:
           java-version: 21.0.3
 
       - name: Set ENV Variables
+        shell: pwsh
         run: |
-          echo -e '${{ toJson(secrets) }}' | jq -r 'to_entries[] | .key + "=" + .value' >> $GITHUB_ENV
+          '${{ toJson(secrets) }}' | ConvertFrom-Json | ForEach-Object { $_.PSObject.Properties } | ForEach-Object { "$($_.Name)=$($_.Value)" } | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Build the Package
         env:

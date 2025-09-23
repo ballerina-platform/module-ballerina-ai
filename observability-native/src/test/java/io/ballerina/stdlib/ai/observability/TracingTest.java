@@ -20,6 +20,7 @@ package io.ballerina.stdlib.ai.observability;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.testng.SkipException;
 import org.testng.annotations.Test;
 
 import java.net.URI;
@@ -49,6 +50,10 @@ public class TracingTest {
 
     @Test
     public void testTracingIntegration() throws Exception {
+        if (isWindows()) {
+            throw new SkipException("Skipping test on Windows");
+        }
+
         // First, check if Phoenix is running using Java
         assertPhoenixIsRunning();
 
@@ -172,5 +177,10 @@ public class TracingTest {
         }
 
         return spanNames;
+    }
+
+    private boolean isWindows() {
+        String osName = System.getProperty("os.name");
+        return osName != null && osName.toLowerCase().contains("windows");
     }
 }

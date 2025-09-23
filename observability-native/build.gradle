@@ -105,6 +105,11 @@ compileTestJava {
 
 task startPhoenix {
     doLast {
+        if (System.getProperty("os.name").toLowerCase().contains("windows")) {
+            println "Skipping Phoenix startup on Windows"
+            return
+        }
+
         println "Checking if Phoenix container is already running..."
 
         // Check if Phoenix is already running by testing the health endpoint
@@ -185,6 +190,11 @@ task startPhoenix {
 
 task stopPhoenix {
     doLast {
+        if (System.getProperty("os.name").toLowerCase().contains("windows")) {
+            println "Skipping Phoenix cleanup on Windows"
+            return
+        }
+
         if (project.hasProperty('phoenixContainer')) {
             println "Stopping Phoenix container: ${project.phoenixContainer}"
             exec {
