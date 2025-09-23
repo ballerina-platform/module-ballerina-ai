@@ -1,12 +1,16 @@
 import ballerina/test;
 import ballerina/os;
 import ballerina/http;
+import ballerina/jballerina.java;
 @test:Config {
     enable: true,
     before: startPhoenix,
     after: stopPhoenix
 }
 function testSimpleAgentFlow() {
+    if isWindows() {
+        return;
+    }
     initTracing("http://localhost:6006/v1/traces", "test-from-ballerina");
     AgentSpan agentSpan = createAgentSpan("agent");
     agentSpan.enter();
@@ -51,12 +55,43 @@ function testSimpleAgentFlow() {
     agentSpan.exit();
 }
 
+enum OS {
+    LINUX,
+    DARWIN,
+    WINDOWS,
+    UNKNOWN
+}
+
+function getOS() returns OS {
+    string? os = getProperty("os.name");
+    if os == () {
+        return UNKNOWN;
+    }
+    string osString = os.toLowerAscii();
+    if osString.includes("mac") || osString.includes("darwin") {
+        return DARWIN;
+    } else if osString.includes("linux") {
+        return LINUX;
+    } else if osString.includes("windows") {
+        return WINDOWS;
+    } else {
+        return UNKNOWN;
+    }
+}
+
+function isWindows() returns boolean {
+    return getOS() == WINDOWS;
+}
+
 function setupPhoenix() {
     // Pull the Phoenix container image
     _ = checkpanic os:exec({ value: "docker", arguments: ["pull", "arizephoenix/phoenix:latest"] });
 }
 
 function startPhoenix() {
+    if isWindows() {
+        return;
+    }
     // Setup Phoenix first
     setupPhoenix();
 
@@ -116,6 +151,18 @@ function waitForPhoenix() {
 }
 
 function stopPhoenix() {
+    if isWindows() {
+        return;
+    }
     _ = checkpanic os:exec({ value: "docker", arguments: ["stop", "phoenix-otel-collector"] });
     _ = checkpanic os:exec({ value: "docker", arguments: ["rm", "phoenix-otel-collector"] });
 }
+
+function getProperty(string property) returns string? {
+    return java:toString(getPropertyNative(java:fromString(property)));
+}
+
+isolated function getPropertyNative(handle property) returns handle = @java:Method {
+    'class: "java.lang.System",
+    name: "getProperty"
+} external;
