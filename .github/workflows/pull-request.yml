@@ -18,7 +18,17 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v3
 
+      - name: Cache ${{ matrix.platform }} venv
+        id: cache-venv
+        uses: actions/cache@v4
+        with:
+          path: observability-native/src/main/resources/${{ matrix.platform }}-venv.zip
+          key: ${{ matrix.platform }}-venv-${{ hashFiles('venv-build-scripts/requirements.txt', 'gradle.properties') }}
+          restore-keys: |
+            ${{ matrix.platform }}-venv-
+
       - name: Build ${{ matrix.platform }} venv
+        if: steps.cache-venv.outputs.cache-hit != 'true'
         run: |
           cd venv-build-scripts
           chmod +x build-${{ matrix.platform }}.sh
