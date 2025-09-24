@@ -35,4 +35,9 @@
             <Bug code="SF"/>
         </Or>
     </Match>
+    <!-- Exclude format string warnings from observability classes - these are Python code strings, not Java format strings -->
+    <Match>
+        <Package name="io.ballerina.stdlib.ai.observability"/>
+        <Bug code="FS"/>
+    </Match>
 </FindBugsFilter>
