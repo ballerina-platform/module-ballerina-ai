@@ -38,10 +38,7 @@ type MemoryChatSystemMessage readonly & record {|
     *ChatSystemMessage;
 |};
 
-type SummarizationResult record {|
-    string summary;
-|};
-
+const string SUMMARY_PREFIX = "Summary of previous interactions:";
 final readonly & string:RegExp CHAT_HISTORY_REGEX = re `\{\{CHAT_HISTORY\}\}`;
 final readonly & string:RegExp MAX_SUMMARY_TOKEN_COUNT_REGEX = re `\{\{MAX_SUMMARY_TOKEN_COUNT\}\}`;
 
@@ -53,10 +50,10 @@ final readonly & Prompt DEFAULT_SUMMARY_PROMPT = `
     Here is the chat history to summarize:
 
     <chat_history>
-    ${CHAT_HISTORY_REGEX}
+    {{CHAT_HISTORY}}
     </chat_history>
 
-    Your summary must contain no more than ${MAX_SUMMARY_TOKEN_COUNT_REGEX} tokens.
+    Your summary must contain no more than {{MAX_SUMMARY_TOKEN_COUNT}} tokens.
 
     Before writing your summary, use the scratchpad below to plan your approach:
 
@@ -87,7 +84,10 @@ final readonly & Prompt DEFAULT_SUMMARY_PROMPT = `
     - Use clear, concise sentences
     - Group related topics together
     - Use bullet points or numbered lists when appropriate for clarity
-    - Maintain chronological order when the sequence of events matters
+    - Maintain chronological order when the sequence of events matters.
+
+    Please do not include the scratchpad in your final summary.
+    Please do not include any text before or after the summary.
 `;
 
 # Configuration for summarizing Stm content when it overflows.
@@ -96,8 +96,8 @@ public type SummarizeOverflowConfig record {|
     ModelProvider modelProvider;
     # Prompt template for summarization.
     Prompt summarizationPrompt = DEFAULT_SUMMARY_PROMPT;
-    # Number of oldest messages to include in the summarization context.
-    int:Signed8 numberOfMessagesToSummarize = 5;
+    # Maximum tokens for the summary output.
+    int maxSummaryTokens = 1024;
 |};
 
 # Provides an in-memory chat message window with a limit on stored messages.
@@ -106,13 +106,24 @@ public isolated class MessageWindowChatMemory {
     private final int size;
     private final map<MemoryChatMessage[]> sessions = {};
     private final map<MemoryChatSystemMessage> systemMessageSessions = {};
-    private SummarizeOverflowConfig? summarizeOverflowConfig;
+    private final SummarizeOverflowConfig? summarizeOverflowConfig;
 
     # Initializes a new memory window with a default or given size.
     # + size - The maximum capacity for stored messages
-    public isolated function init(int size = 10, readonly & SummarizeOverflowConfig? summarizeOverflowConfig = ()) {
+    public isolated function init(int size = 10, SummarizeOverflowConfig? summarizeOverflowConfig = ()) {
         self.size = size;
-        self.summarizeOverflowConfig = summarizeOverflowConfig;
+        if summarizeOverflowConfig is () {
+            self.summarizeOverflowConfig = ();
+        } else {
+            Prompt summarizationPrompt = summarizeOverflowConfig.summarizationPrompt;
+            self.summarizeOverflowConfig = {
+                modelProvider: summarizeOverflowConfig.modelProvider,
+                summarizationPrompt: createPrompt(
+                    summarizationPrompt.strings.cloneReadOnly(),
+                    summarizationPrompt.insertions.cloneReadOnly()
+                )
+            };
+        }
     }
 
     # Retrieves a copy of all stored messages, with an optional system prompt.
@@ -122,7 +133,7 @@ public isolated class MessageWindowChatMemory {
     public isolated function get(string sessionId) returns ChatMessage[]|MemoryError {
         lock {
             self.createSessionIfNotExist(sessionId);
-            MemoryChatMessage[] memory = self.sessions.get(sessionId);
+            MemoryChatMessage[] memory = self.sessions.get(sessionId).clone();
             if self.systemMessageSessions.hasKey(sessionId) {
                 memory.unshift(self.systemMessageSessions.get(sessionId).clone());
             }
@@ -139,45 +150,51 @@ public isolated class MessageWindowChatMemory {
         readonly & MemoryChatMessage newMessage = check self.mapToMemoryChatMessage(message);
         lock {
             self.createSessionIfNotExist(sessionId);
-            MemoryChatMessage[] memory = self.sessions.get(sessionId);
-            SummarizeOverflowConfig? config = self.summarizeOverflowConfig;
-            if memory.length() >= self.size - 1 {
-                if config is () {
-                    _ = memory.shift();
-                } else {
-                    int numToSummarize = config.numberOfMessagesToSummarize;
-                    if numToSummarize <= 0 {
-                        _ = memory.shift();
-                    } else {
-                        MemoryChatMessage[] slicedMemory = memory.slice(0, int:min(memory.length(), numToSummarize));
-                        Error? e = self.generateAndAppendSummary(
-                            slicedMemory, config.modelProvider, config.summarizationPrompt, numToSummarize);
-                        if e is Error {
-                            _ = memory.shift();
-                        } else {
-                            self.sessions[sessionId] = slicedMemory;
-                        }
-                    }
-                }
-            }
-
             if newMessage is MemoryChatSystemMessage {
                 self.systemMessageSessions[sessionId] = newMessage;
                 return;
             }
+
+            MemoryChatMessage[] memory = self.sessions.get(sessionId);
+            int memoryLength = memory.length();
+            ROLE newMessageRole = newMessage.role;
+            int size = self.size;
+            int maxLimit = size - 1;
+            SummarizeOverflowConfig? config = self.summarizeOverflowConfig;
+            
+            if config !is () && memoryLength == size - 3 && newMessageRole == USER {
+                maxLimit = size - 2;
+            }
+
+            if memoryLength >= maxLimit {
+                if config is () || size <= 2 {
+                    // No summarization config or too small window - just remove oldest
+                    _ = memory.shift();
+                } else {
+                    MemoryChatMessage|Error summaryMessage = self.generateSummary(
+                        memory, config.modelProvider, config.summarizationPrompt, config.maxSummaryTokens); 
+                    if summaryMessage is Error {
+                        // Fallback: remove oldest message if summarization fails
+                        _ = memory.shift();
+                    } else {
+                        memory.removeAll();
+                        memory.unshift(summaryMessage);
+                        self.sessions[sessionId] = memory;
+                    }
+                }
+            }
+
             memory.push(newMessage);
         }
     }
 
-    isolated function generateAndAppendSummary(MemoryChatMessage[] slicedMemory, ModelProvider provider, 
-                                                Prompt summarizationPrompt, int numToSummarize) returns Error? {
-                                
-        string updatedPropmt = CHAT_HISTORY_REGEX.replace(stringifyPromptContent(summarizationPrompt), 
-                                                          stringifyMemoryMessages(slicedMemory));
-        updatedPropmt = MAX_SUMMARY_TOKEN_COUNT_REGEX.replace(updatedPropmt, numToSummarize.toString());
-        SummarizationResult summarizationModelResult = check callSummarizationModel(provider, updatedPropmt);
-        slicedMemory.unshift({role: USER, content: `Summary of previous interactions: ${summarizationModelResult.summary}`});
-        return;
+    isolated function generateSummary(MemoryChatMessage[] slicedMemory, ModelProvider provider, 
+                                Prompt summarizationPrompt, int maxSummaryTokens) returns MemoryChatMessage|Error {
+        string updatedPropmt = CHAT_HISTORY_REGEX.replace(stringifyPromptContent(
+                summarizationPrompt), slicedMemory.toString());
+        updatedPropmt = MAX_SUMMARY_TOKEN_COUNT_REGEX.replace(updatedPropmt, maxSummaryTokens.toString());
+        ChatAssistantMessage summarizationModelResult = check callSummarizationModel(provider, updatedPropmt);
+        return {role: USER, content: string `${SUMMARY_PREFIX} ${summarizationModelResult.content.toString()}`};
     }
 
     private isolated function mapToMemoryChatMessage(ChatMessage message) returns readonly & MemoryChatMessage|MemoryError {
@@ -226,24 +243,8 @@ public isolated class MessageWindowChatMemory {
     }
 }
 
-isolated function callSummarizationModel(ModelProvider provider, string prompt) returns SummarizationResult|Error {
-    return provider->generate(`${prompt}`);
-}
-
-isolated function stringifyMemoryMessages(MemoryChatMessage[] memoryMessages) returns string {
-    string str = "";
-    foreach MemoryChatMessage message in memoryMessages {
-        string content = "";
-        string|Prompt? contentResult = message.content;
-        if contentResult is Prompt {
-            content = stringifyPromptContent(contentResult);
-        } else {
-            content = contentResult.toString();
-        }
-
-        str = str + message.role.toUpperAscii() + ": " + content + "\n";
-    }
-    return str;
+isolated function callSummarizationModel(ModelProvider provider, string prompt) returns ChatAssistantMessage|Error {
+    return provider->chat({role:USER, content: `${prompt}`});
 }
 
 isolated function createPrompt(string[] & readonly strings, anydata[] & readonly insertions)
