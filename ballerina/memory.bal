@@ -110,6 +110,9 @@ public isolated class MessageWindowChatMemory {
 
     # Initializes a new memory window with a default or given size.
     # + size - The maximum capacity for stored messages
+    # + summarizeOverflowConfig - Defines how content should be summarized when memory overflows.
+    #                             If this is not provided, or if the configured size is less than 3 (too small),
+    #                             the memory will discard the oldest messages instead of summarizing.
     public isolated function init(int size = 10, SummarizeOverflowConfig? summarizeOverflowConfig = ()) {
         self.size = size;
         if summarizeOverflowConfig is () {
