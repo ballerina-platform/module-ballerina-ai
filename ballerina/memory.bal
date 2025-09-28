@@ -122,6 +122,7 @@ public isolated class MessageWindowChatMemory {
             Prompt summarizationPrompt = summarizeOverflowConfig.summarizationPrompt;
             self.summarizeOverflowConfig = {
                 modelProvider: summarizeOverflowConfig.modelProvider,
+                maxSummaryTokens: summarizeOverflowConfig.maxSummaryTokens,
                 summarizationPrompt: createPrompt(
                     summarizationPrompt.strings.cloneReadOnly(),
                     summarizationPrompt.insertions.cloneReadOnly()
@@ -201,10 +202,10 @@ public isolated class MessageWindowChatMemory {
 
     isolated function generateSummary(MemoryChatMessage[] slicedMemory, ModelProvider provider, 
                                 Prompt summarizationPrompt, int maxSummaryTokens) returns MemoryChatMessage|Error {
-        string updatedPropmt = CHAT_HISTORY_REGEX.replace(stringifyPromptContent(
+        string updatedPrompt = CHAT_HISTORY_REGEX.replace(stringifyPromptContent(
                 summarizationPrompt), slicedMemory.toString());
-        updatedPropmt = MAX_SUMMARY_TOKEN_COUNT_REGEX.replace(updatedPropmt, maxSummaryTokens.toString());
-        ChatAssistantMessage summarizationModelResult = check callSummarizationModel(provider, updatedPropmt);
+        updatedPrompt = MAX_SUMMARY_TOKEN_COUNT_REGEX.replace(updatedPrompt, maxSummaryTokens.toString());
+        ChatAssistantMessage summarizationModelResult = check callSummarizationModel(provider, updatedPrompt);
         return {role: USER, content: string `${SUMMARY_PREFIX} ${summarizationModelResult.content.toString()}`};
     }
 
