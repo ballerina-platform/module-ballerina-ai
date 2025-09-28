@@ -91,7 +91,7 @@ final readonly & Prompt DEFAULT_SUMMARY_PROMPT = `
     Please do not include any text before or after the summary.
 `;
 
-# Configuration for summarizing Stm content when it overflows.
+# Configuration for summarizing short-term memory content when it overflows.
 public type SummarizeOverflowConfig record {|
     # AI model provider for generating summaries.
     ModelProvider modelProvider;
