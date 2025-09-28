@@ -112,8 +112,8 @@ public isolated class MessageWindowChatMemory {
     # Initializes a new memory window with a default or given size.
     # + size - The maximum capacity for stored messages
     # + summarizeOverflowConfig - Defines how content should be summarized when memory overflows.
-    #                             If this is not provided, or if the configured size is less than 3 (too small),
-    #                             the memory will discard the oldest messages instead of summarizing.
+    # If this is not provided, or if the configured size is less than 3 (too small),
+    # the memory will discard the oldest messages instead of summarizing.
     public isolated function init(int size = 10, SummarizeOverflowConfig? summarizeOverflowConfig = ()) {
         self.size = size;
         if summarizeOverflowConfig is () {
@@ -124,8 +124,8 @@ public isolated class MessageWindowChatMemory {
                 modelProvider: summarizeOverflowConfig.modelProvider,
                 maxSummaryTokens: summarizeOverflowConfig.maxSummaryTokens,
                 summarizationPrompt: createPrompt(
-                    summarizationPrompt.strings.cloneReadOnly(),
-                    summarizationPrompt.insertions.cloneReadOnly()
+                        summarizationPrompt.strings.cloneReadOnly(),
+                        summarizationPrompt.insertions.cloneReadOnly()
                 )
             };
         }
@@ -178,7 +178,7 @@ public isolated class MessageWindowChatMemory {
                         : memory;
 
                     MemoryChatMessage|Error summaryMessage = self.generateSummary(
-                        slicedMemory, config.modelProvider, config.summarizationPrompt, config.maxSummaryTokens); 
+                        slicedMemory, config.modelProvider, config.summarizationPrompt, config.maxSummaryTokens);
                     if summaryMessage is Error {
                         // Fallback: remove oldest message if summarization fails
                         _ = memory.shift();
@@ -200,8 +200,8 @@ public isolated class MessageWindowChatMemory {
         }
     }
 
-    isolated function generateSummary(MemoryChatMessage[] slicedMemory, ModelProvider provider, 
-                                Prompt summarizationPrompt, int maxSummaryTokens) returns MemoryChatMessage|Error {
+    isolated function generateSummary(MemoryChatMessage[] slicedMemory, ModelProvider provider,
+            Prompt summarizationPrompt, int maxSummaryTokens) returns MemoryChatMessage|Error {
         string updatedPrompt = CHAT_HISTORY_REGEX.replace(stringifyPromptContent(
                 summarizationPrompt), slicedMemory.toString());
         updatedPrompt = MAX_SUMMARY_TOKEN_COUNT_REGEX.replace(updatedPrompt, maxSummaryTokens.toString());
@@ -256,7 +256,7 @@ public isolated class MessageWindowChatMemory {
 }
 
 isolated function callSummarizationModel(ModelProvider provider, string prompt) returns ChatAssistantMessage|Error {
-    return provider->chat({role:USER, content: `${prompt}`});
+    return provider->chat({role: USER, content: `${prompt}`});
 }
 
 isolated function createPrompt(string[] & readonly strings, anydata[] & readonly insertions)
