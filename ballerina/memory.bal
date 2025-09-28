@@ -159,25 +159,32 @@ public isolated class MessageWindowChatMemory {
             int memoryLength = memory.length();
             ROLE newMessageRole = newMessage.role;
             int size = self.size;
-            int maxLimit = size - 1;
             SummarizeOverflowConfig? config = self.summarizeOverflowConfig;
-            
-            if config !is () && memoryLength == size - 3 && newMessageRole == USER {
-                maxLimit = size - 2;
-            }
 
-            if memoryLength >= maxLimit {
-                if config is () || size <= 2 {
+            if memoryLength >= size - 1 {
+                if config is () || size <= 3 {
                     // No summarization config or too small window - just remove oldest
                     _ = memory.shift();
                 } else {
+                    ROLE lastMessageRole = memory[memoryLength - 1].role;
+                    boolean isLastInteractionFromAgent = lastMessageRole != USER && newMessageRole == USER;
+                    MemoryChatMessage[] slicedMemory = isLastInteractionFromAgent
+                        ? memory.slice(0, memoryLength - 1)
+                        : memory;
+
                     MemoryChatMessage|Error summaryMessage = self.generateSummary(
-                        memory, config.modelProvider, config.summarizationPrompt, config.maxSummaryTokens); 
+                        slicedMemory, config.modelProvider, config.summarizationPrompt, config.maxSummaryTokens); 
                     if summaryMessage is Error {
                         // Fallback: remove oldest message if summarization fails
                         _ = memory.shift();
                     } else {
-                        memory.removeAll();
+                        if isLastInteractionFromAgent {
+                            MemoryChatMessage lastMessage = memory.pop();
+                            memory.removeAll();
+                            memory.push(lastMessage);
+                        } else {
+                            memory.removeAll();
+                        }
                         memory.unshift(summaryMessage);
                         self.sessions[sessionId] = memory;
                     }
