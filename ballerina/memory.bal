@@ -68,6 +68,7 @@ final readonly & Prompt DEFAULT_SUMMARY_PROMPT = `
     When creating your summary, follow these guidelines:
 
     **What to prioritize:**
+    - The most recent user request or question to ensure the summary reflects the immediate context.
     - Key questions asked and answers provided
     - Important decisions made or conclusions reached
     - Critical context that affects ongoing conversations
