@@ -26,7 +26,7 @@ public type DataLoader isolated object {
 };
 
 # Dataloader that can be used to load supported file types as `TextDocument`s.
-# Currently only supports `pdf`, `docx` and `pptx` file types.
+# Currently only supports `pdf`, `docx`, `markdown`, `html`, and `pptx` file types.
 public isolated class TextDataLoader {
     *DataLoader;
     final readonly & string[] paths;
