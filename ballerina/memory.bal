@@ -40,7 +40,6 @@ type MemoryChatSystemMessage readonly & record {|
 
 const string SUMMARY_PREFIX = "Summary of previous interactions:";
 final readonly & string:RegExp chatHistoryRegex = re `\{\{CHAT_HISTORY\}\}`;
-final readonly & string:RegExp maxSummaryTokenCountRegex = re `\{\{MAX_SUMMARY_TOKEN_COUNT\}\}`;
 
 final readonly & Prompt DEFAULT_SUMMARY_PROMPT = `
     You are an expert at summarizing conversations.
@@ -52,8 +51,6 @@ final readonly & Prompt DEFAULT_SUMMARY_PROMPT = `
     <chat_history>
     {{CHAT_HISTORY}}
     </chat_history>
-
-    Your summary must contain no more than {{MAX_SUMMARY_TOKEN_COUNT}} tokens.
 
     Before writing your summary, use the scratchpad below to plan your approach:
 
@@ -97,8 +94,6 @@ public type OverflowSummarizationConfig record {|
     ModelProvider modelProvider;
     # Prompt template for summarization.
     Prompt summarizationPrompt = DEFAULT_SUMMARY_PROMPT;
-    # Maximum tokens for the summary output.
-    int maxSummaryTokens = 1024;
 |};
 
 # Provides an in-memory chat message window with a limit on stored messages.
@@ -111,7 +106,7 @@ public isolated class MessageWindowChatMemory {
 
     # Initializes a new memory window with a default or given size.
     # + size - The maximum capacity for stored messages
-    # + summarizeOverflowConfig - Defines how content should be summarized when memory overflows.
+    # + overflowSummarizationConfig - Defines how content should be summarized when memory overflows.
     # If this is not provided, or if the configured size is less than 3 (too small),
     # the memory will discard the oldest messages instead of summarizing.
     public isolated function init(int size = 10, OverflowSummarizationConfig? overflowSummarizationConfig = ()) {
@@ -124,7 +119,6 @@ public isolated class MessageWindowChatMemory {
         Prompt summarizationPrompt = overflowSummarizationConfig.summarizationPrompt;
         self.overflowSummarizationConfig = {
             modelProvider: overflowSummarizationConfig.modelProvider,
-            maxSummaryTokens: overflowSummarizationConfig.maxSummaryTokens,
             summarizationPrompt: createPrompt(
                     summarizationPrompt.strings,
                     summarizationPrompt.insertions.cloneReadOnly()
@@ -251,12 +245,15 @@ returns readonly & Prompt =>
 };
 
 isolated function stringifyPromptContent(Prompt prompt) returns string {
-    string str = prompt.strings[0];
+    string[] parts = [prompt.strings[0]];
     anydata[] insertions = prompt.insertions;
+
     foreach int i in 0 ..< insertions.length() {
-        str = str + insertions[i].toString() + prompt.strings[i + 1];
+        parts.push(insertions[i].toString());
+        parts.push(prompt.strings[i + 1]);
     }
-    return str.trim();
+    
+    return string:'join("", ...parts).trim();
 }
 
 isolated function summarizeAndRebuildMemory(MemoryChatMessage[] memory, ROLE newMessageRole, 
@@ -270,7 +267,7 @@ isolated function summarizeAndRebuildMemory(MemoryChatMessage[] memory, ROLE new
         : memory;
 
     MemoryChatMessage|Error summaryMessage = generateSummary(
-        sliceToSummarize, config.modelProvider, config.summarizationPrompt, config.maxSummaryTokens);
+        sliceToSummarize, config.modelProvider, config.summarizationPrompt);
 
     if summaryMessage is Error {
         trimOldestMessage(memory);
@@ -292,10 +289,9 @@ isolated function trimOldestMessage(MemoryChatMessage[] memory) {
 }
 
 isolated function generateSummary(MemoryChatMessage[] slicedMemory, ModelProvider provider,
-        Prompt summarizationPrompt, int maxSummaryTokens) returns MemoryChatMessage|Error {
+        Prompt summarizationPrompt) returns MemoryChatMessage|Error {
     string updatedPrompt = chatHistoryRegex.replace(stringifyPromptContent(
             summarizationPrompt), slicedMemory.toString());
-    updatedPrompt = maxSummaryTokenCountRegex.replace(updatedPrompt, maxSummaryTokens.toString());
     ChatAssistantMessage summarizationModelResult = check callSummarizationModel(provider, updatedPrompt);
     return {role: USER, content: string `${SUMMARY_PREFIX} ${summarizationModelResult.content.toString()}`};
 }
