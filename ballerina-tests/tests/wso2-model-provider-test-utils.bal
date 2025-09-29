@@ -614,8 +614,8 @@ isolated function updateRetryCountMap(string initialText, map<int> retryCountMap
     return 0;
 }
 
-isolated function getMemorySummarizerResponse() returns CreateChatCompletionResponse {
-    return {
+isolated function getMemorySummarizerResponse() returns CreateChatCompletionResponse =>
+    {
         id: "chatcmpl-123",
         'object: "chat.completion",
         created: 1677652288,
@@ -629,4 +629,3 @@ isolated function getMemorySummarizerResponse() returns CreateChatCompletionResp
             }
         ]
     };
-}

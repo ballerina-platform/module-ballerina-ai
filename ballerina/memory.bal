@@ -39,8 +39,8 @@ type MemoryChatSystemMessage readonly & record {|
 |};
 
 const string SUMMARY_PREFIX = "Summary of previous interactions:";
-final readonly & string:RegExp CHAT_HISTORY_REGEX = re `\{\{CHAT_HISTORY\}\}`;
-final readonly & string:RegExp MAX_SUMMARY_TOKEN_COUNT_REGEX = re `\{\{MAX_SUMMARY_TOKEN_COUNT\}\}`;
+final readonly & string:RegExp chatHistoryRegex = re `\{\{CHAT_HISTORY\}\}`;
+final readonly & string:RegExp maxSummaryTokenCountRegex = re `\{\{MAX_SUMMARY_TOKEN_COUNT\}\}`;
 
 final readonly & Prompt DEFAULT_SUMMARY_PROMPT = `
     You are an expert at summarizing conversations.
@@ -92,7 +92,7 @@ final readonly & Prompt DEFAULT_SUMMARY_PROMPT = `
 `;
 
 # Configuration for summarizing short-term memory content when it overflows.
-public type SummarizeOverflowConfig record {|
+public type OverflowSummarizationConfig record {|
     # AI model provider for generating summaries.
     ModelProvider modelProvider;
     # Prompt template for summarization.
@@ -107,28 +107,29 @@ public isolated class MessageWindowChatMemory {
     private final int size;
     private final map<MemoryChatMessage[]> sessions = {};
     private final map<MemoryChatSystemMessage> systemMessageSessions = {};
-    private final SummarizeOverflowConfig? summarizeOverflowConfig;
+    private final OverflowSummarizationConfig? overflowSummarizationConfig;
 
     # Initializes a new memory window with a default or given size.
     # + size - The maximum capacity for stored messages
     # + summarizeOverflowConfig - Defines how content should be summarized when memory overflows.
     # If this is not provided, or if the configured size is less than 3 (too small),
     # the memory will discard the oldest messages instead of summarizing.
-    public isolated function init(int size = 10, SummarizeOverflowConfig? summarizeOverflowConfig = ()) {
+    public isolated function init(int size = 10, OverflowSummarizationConfig? overflowSummarizationConfig = ()) {
         self.size = size;
-        if summarizeOverflowConfig is () {
-            self.summarizeOverflowConfig = ();
-        } else {
-            Prompt summarizationPrompt = summarizeOverflowConfig.summarizationPrompt;
-            self.summarizeOverflowConfig = {
-                modelProvider: summarizeOverflowConfig.modelProvider,
-                maxSummaryTokens: summarizeOverflowConfig.maxSummaryTokens,
-                summarizationPrompt: createPrompt(
-                        summarizationPrompt.strings.cloneReadOnly(),
-                        summarizationPrompt.insertions.cloneReadOnly()
-                )
-            };
+        if overflowSummarizationConfig is () {
+            self.overflowSummarizationConfig = ();
+            return;
         }
+
+        Prompt summarizationPrompt = overflowSummarizationConfig.summarizationPrompt;
+        self.overflowSummarizationConfig = {
+            modelProvider: overflowSummarizationConfig.modelProvider,
+            maxSummaryTokens: overflowSummarizationConfig.maxSummaryTokens,
+            summarizationPrompt: createPrompt(
+                    summarizationPrompt.strings,
+                    summarizationPrompt.insertions.cloneReadOnly()
+            )
+        };
     }
 
     # Retrieves a copy of all stored messages, with an optional system prompt.
@@ -155,61 +156,18 @@ public isolated class MessageWindowChatMemory {
         readonly & MemoryChatMessage newMessage = check self.mapToMemoryChatMessage(message);
         lock {
             self.createSessionIfNotExist(sessionId);
-            if newMessage is MemoryChatSystemMessage {
-                self.systemMessageSessions[sessionId] = newMessage;
+
+            if self.handleSystemMessage(sessionId, newMessage) {
                 return;
             }
 
+            self.manageMemoryOverflow(sessionId, newMessage.role);
             MemoryChatMessage[] memory = self.sessions.get(sessionId);
-            int memoryLength = memory.length();
-            ROLE newMessageRole = newMessage.role;
-            int size = self.size;
-            SummarizeOverflowConfig? config = self.summarizeOverflowConfig;
-
-            if memoryLength >= size - 1 {
-                if config is () || size <= 3 {
-                    // No summarization config or too small window - just remove oldest
-                    _ = memory.shift();
-                } else {
-                    ROLE lastMessageRole = memory[memoryLength - 1].role;
-                    boolean isLastInteractionFromAgent = lastMessageRole != USER && newMessageRole == USER;
-                    MemoryChatMessage[] slicedMemory = isLastInteractionFromAgent
-                        ? memory.slice(0, memoryLength - 1)
-                        : memory;
-
-                    MemoryChatMessage|Error summaryMessage = self.generateSummary(
-                        slicedMemory, config.modelProvider, config.summarizationPrompt, config.maxSummaryTokens);
-                    if summaryMessage is Error {
-                        // Fallback: remove oldest message if summarization fails
-                        _ = memory.shift();
-                    } else {
-                        if isLastInteractionFromAgent {
-                            MemoryChatMessage lastMessage = memory.pop();
-                            memory.removeAll();
-                            memory.push(lastMessage);
-                        } else {
-                            memory.removeAll();
-                        }
-                        memory.unshift(summaryMessage);
-                        self.sessions[sessionId] = memory;
-                    }
-                }
-            }
-
             memory.push(newMessage);
         }
     }
 
-    isolated function generateSummary(MemoryChatMessage[] slicedMemory, ModelProvider provider,
-            Prompt summarizationPrompt, int maxSummaryTokens) returns MemoryChatMessage|Error {
-        string updatedPrompt = CHAT_HISTORY_REGEX.replace(stringifyPromptContent(
-                summarizationPrompt), slicedMemory.toString());
-        updatedPrompt = MAX_SUMMARY_TOKEN_COUNT_REGEX.replace(updatedPrompt, maxSummaryTokens.toString());
-        ChatAssistantMessage summarizationModelResult = check callSummarizationModel(provider, updatedPrompt);
-        return {role: USER, content: string `${SUMMARY_PREFIX} ${summarizationModelResult.content.toString()}`};
-    }
-
-    private isolated function mapToMemoryChatMessage(ChatMessage message) returns readonly & MemoryChatMessage|MemoryError {
+    isolated function mapToMemoryChatMessage(ChatMessage message) returns readonly & MemoryChatMessage|MemoryError {
         if message is ChatAssistantMessage|ChatFunctionMessage {
             return message.cloneReadOnly();
         }
@@ -253,6 +211,32 @@ public isolated class MessageWindowChatMemory {
             }
         }
     }
+
+    isolated function handleSystemMessage(string sessionId, readonly & MemoryChatMessage message) returns boolean {
+        lock {
+            if message is MemoryChatSystemMessage {
+                self.systemMessageSessions[sessionId] = message;
+                return true;
+            }
+            return false;
+        }
+    }
+
+    isolated function manageMemoryOverflow(string sessionId, ROLE newMessageRole) {
+        lock {
+            MemoryChatMessage[] memory = self.sessions.get(sessionId);
+            int size = self.size;
+
+            if memory.length() >= size - 1 {
+                OverflowSummarizationConfig? config = self.overflowSummarizationConfig;
+                if config is () || size <= 3 {
+                    trimOldestMessage(memory);
+                } else {
+                    summarizeAndRebuildMemory(memory, newMessageRole, config);
+                }
+            }
+        }
+    }
 }
 
 isolated function callSummarizationModel(ModelProvider provider, string prompt) returns ChatAssistantMessage|Error {
@@ -273,4 +257,45 @@ isolated function stringifyPromptContent(Prompt prompt) returns string {
         str = str + insertions[i].toString() + prompt.strings[i + 1];
     }
     return str.trim();
+}
+
+isolated function summarizeAndRebuildMemory(MemoryChatMessage[] memory, ROLE newMessageRole, 
+                OverflowSummarizationConfig config) {
+    int memoryLength = memory.length();
+    ROLE lastMessageRole = memory[memoryLength - 1].role;
+    boolean isLastInteractionFromAgent = lastMessageRole != USER && newMessageRole == USER;
+
+    MemoryChatMessage[] sliceToSummarize = isLastInteractionFromAgent
+        ? memory.slice(0, memoryLength - 1)
+        : memory;
+
+    MemoryChatMessage|Error summaryMessage = generateSummary(
+        sliceToSummarize, config.modelProvider, config.summarizationPrompt, config.maxSummaryTokens);
+
+    if summaryMessage is Error {
+        trimOldestMessage(memory);
+        return;
+    }
+
+    if isLastInteractionFromAgent {
+        MemoryChatMessage lastMessage = memory.pop();
+        memory.removeAll();
+        memory.push(lastMessage);
+    } else {
+        memory.removeAll();
+    }
+    memory.unshift(summaryMessage);
+}
+
+isolated function trimOldestMessage(MemoryChatMessage[] memory) {
+    _ = memory.shift();
+}
+
+isolated function generateSummary(MemoryChatMessage[] slicedMemory, ModelProvider provider,
+        Prompt summarizationPrompt, int maxSummaryTokens) returns MemoryChatMessage|Error {
+    string updatedPrompt = chatHistoryRegex.replace(stringifyPromptContent(
+            summarizationPrompt), slicedMemory.toString());
+    updatedPrompt = maxSummaryTokenCountRegex.replace(updatedPrompt, maxSummaryTokens.toString());
+    ChatAssistantMessage summarizationModelResult = check callSummarizationModel(provider, updatedPrompt);
+    return {role: USER, content: string `${SUMMARY_PREFIX} ${summarizationModelResult.content.toString()}`};
 }

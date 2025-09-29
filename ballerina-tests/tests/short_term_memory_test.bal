@@ -1,4 +1,4 @@
-// Copyright (c) 2023 WSO2 LLC (http://www.wso2.com).
+// Copyright (c) 2025 WSO2 LLC (http://www.wso2.com).
 //
 // WSO2 LLC. licenses this file to you under the Apache License,
 // Version 2.0 (the "License"); you may not use this file except
@@ -17,7 +17,7 @@
 import ballerina/ai;
 import ballerina/test;
 
-const string SUMMARY_PREFIX = "Summary of previous interactions:";
+const SUMMARY_PREFIX = "Summary of previous interactions:";
 const DEFAULT_SESSION_ID = "default-session-id";
 const MEMORY_PROVIDER_SERVICE_URL = "http://localhost:8080/llm/azureopenai/deployments/gpt4onew/memory/summarization";
 const MEMORY_ERROR_PROVIDER_SERVICE_URL = "http://localhost:8080/llm/azureopenai/deployments/gpt4onew/memory-error";
