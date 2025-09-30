@@ -15,6 +15,7 @@
 // under the License.
 
 const INVALID = "Invalid content";
+const SAMPLE_SUMMARY_RESPONSE = "<Summary>";
 
 isolated function getExpectedParameterSchema(string message) returns map<json> {
     if message.startsWith("Evaluate this") {
@@ -612,3 +613,19 @@ isolated function updateRetryCountMap(string initialText, map<int> retryCountMap
     retryCountMap[initialText] = 0;
     return 0;
 }
+
+isolated function getMemorySummarizerResponse() returns CreateChatCompletionResponse =>
+    {
+        id: "chatcmpl-123",
+        'object: "chat.completion",
+        created: 1677652288,
+        model: "gpt-4o",
+        choices: [
+            {
+                message: {
+                    role: "assistant",
+                    content: SAMPLE_SUMMARY_RESPONSE
+                }
+            }
+        ]
+    };

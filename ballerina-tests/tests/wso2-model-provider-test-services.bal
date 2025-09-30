@@ -42,6 +42,16 @@ isolated service /llm on new http:Listener(8080) {
         check assertContentParts(messages, initialText, index);
         return check getTestServiceResponse(initialText, index);
     }
+
+    isolated resource function post azureopenai/deployments/gpt4onew/memory/summarization/chat/completions(
+            @http:Payload CreateChatCompletionRequest payload) returns CreateChatCompletionResponse {
+        return getMemorySummarizerResponse();
+    }
+
+    isolated resource function post azureopenai/deployments/gpt4onew/memory\-error/chat/completions(
+            @http:Payload CreateChatCompletionRequest payload) returns CreateChatCompletionResponse|error {
+        return error("Simulated error from the summary model provider");
+    }
 }
 
 isolated function validateChatCompletionPayload(CreateChatCompletionRequest payload) 
