@@ -41,7 +41,7 @@ type MemoryChatSystemMessage readonly & record {|
 const string SUMMARY_PREFIX = "Summary of previous interactions:";
 final readonly & string:RegExp chatHistoryRegex = re `\{\{CHAT_HISTORY\}\}`;
 
-final readonly & Prompt DEFAULT_SUMMARY_PROMPT = `
+final readonly & Prompt defaultSummaryPropmt = `
     You are an expert at summarizing conversations.
     You will summarize a chat history between users and an AI agent to create a concise summary 
     that preserves the most important information while adhering to a specified token limit.
@@ -93,7 +93,7 @@ public type OverflowSummarizationConfig record {|
     # AI model provider for generating summaries.
     ModelProvider modelProvider;
     # Prompt template for summarization.
-    Prompt prompt = DEFAULT_SUMMARY_PROMPT;
+    Prompt prompt = defaultSummaryPropmt;
 |};
 
 # Provides an in-memory chat message window with a limit on stored messages.
