@@ -93,7 +93,7 @@ public type OverflowSummarizationConfig record {|
     # AI model provider for generating summaries.
     ModelProvider modelProvider;
     # Prompt template for summarization.
-    Prompt summarizationPrompt = DEFAULT_SUMMARY_PROMPT;
+    Prompt prompt = DEFAULT_SUMMARY_PROMPT;
 |};
 
 # Provides an in-memory chat message window with a limit on stored messages.
@@ -116,10 +116,10 @@ public isolated class MessageWindowChatMemory {
             return;
         }
 
-        Prompt summarizationPrompt = overflowSummarizationConfig.summarizationPrompt;
+        Prompt summarizationPrompt = overflowSummarizationConfig.prompt;
         self.overflowSummarizationConfig = {
             modelProvider: overflowSummarizationConfig.modelProvider,
-            summarizationPrompt: createPrompt(
+            prompt: createPrompt(
                     summarizationPrompt.strings,
                     summarizationPrompt.insertions.cloneReadOnly()
             )
@@ -133,9 +133,11 @@ public isolated class MessageWindowChatMemory {
     public isolated function get(string sessionId) returns ChatMessage[]|MemoryError {
         lock {
             self.createSessionIfNotExist(sessionId);
-            MemoryChatMessage[] memory = self.sessions.get(sessionId).clone();
+            MemoryChatMessage[] memory = self.sessions.get(sessionId);
             if self.systemMessageSessions.hasKey(sessionId) {
-                memory.unshift(self.systemMessageSessions.get(sessionId).clone());
+                MemoryChatMessage[] updatedMemory = 
+                    [self.systemMessageSessions.get(sessionId), ...memory];
+                return updatedMemory.clone();
             }
             return memory.clone();
         }
@@ -233,7 +235,7 @@ public isolated class MessageWindowChatMemory {
     }
 }
 
-isolated function callSummarizationModel(ModelProvider provider, string prompt) returns ChatAssistantMessage|Error {
+isolated function getSummaryFromModel(ModelProvider provider, string prompt) returns ChatAssistantMessage|Error {
     return provider->chat({role: USER, content: `${prompt}`});
 }
 
@@ -267,7 +269,7 @@ isolated function summarizeAndRebuildMemory(MemoryChatMessage[] memory, ROLE new
         : memory;
 
     MemoryChatMessage|Error summaryMessage = generateSummary(
-        sliceToSummarize, config.modelProvider, config.summarizationPrompt);
+        sliceToSummarize, config.modelProvider, config.prompt);
 
     if summaryMessage is Error {
         trimOldestMessage(memory);
@@ -292,6 +294,6 @@ isolated function generateSummary(MemoryChatMessage[] slicedMemory, ModelProvide
         Prompt summarizationPrompt) returns MemoryChatMessage|Error {
     string updatedPrompt = chatHistoryRegex.replace(stringifyPromptContent(
             summarizationPrompt), slicedMemory.toString());
-    ChatAssistantMessage summarizationModelResult = check callSummarizationModel(provider, updatedPrompt);
+    ChatAssistantMessage summarizationModelResult = check getSummaryFromModel(provider, updatedPrompt);
     return {role: USER, content: string `${SUMMARY_PREFIX} ${summarizationModelResult.content.toString()}`};
 }
