@@ -10,11 +10,11 @@ observabilityIncluded = true
 groupId = "io.ballerina.stdlib"
 artifactId = "ai-native"
 version = "1.5.4"
-path = "../../../../../../../native/build/libs/ai-native-1.5.4-SNAPSHOT.jar"
+path = "../../../../../../../native/build/libs/ai-native-1.5.4.jar"
 
 [[platform.java21.dependency]]
 groupId = "io.ballerina.stdlib"
 artifactId = "ai-native"
 version = "1.5.4"
-path = "../../../../../../../native/build/libs/ai-native-1.5.4-SNAPSHOT-tests.jar"
+path = "../../../../../../../native/build/libs/ai-native-1.5.4-tests.jar"
 testOnly = true
