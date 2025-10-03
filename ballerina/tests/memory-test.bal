@@ -1,3 +1,4 @@
+import ballerina/io;
 import ballerina/test;
 
 @test:Config {}
@@ -40,6 +41,7 @@ function testUpdateExceedMemorySize() returns error? {
     ChatUserMessage userMessage2 = {role: "user", content: "Add the numbers [2,3,4,5]"};
     _ = check chatMemory.update(DEFAULT_SESSION_ID, userMessage2);
     ChatMessage[] history = check chatMemory.get(DEFAULT_SESSION_ID);
+    io:println("History: ", history);
     assertChatMessageEquals(history[0], systemMessage);
     assertChatMessageEquals(history[1], assistantMessage);
     test:assertEquals(history.length(), 3);
