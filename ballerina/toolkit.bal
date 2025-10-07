@@ -121,9 +121,14 @@ public type BaseToolKit distinct object {
     public isolated function getTools() returns ToolConfig[];
 };
 
+# Represents a base type for MCP toolkits.
+public type McpBaseToolKit distinct isolated object {
+    *BaseToolKit;
+};
+
 # Represents a toolkit for interacting with an MCP server, invoking tools via the MCP protocol.
 public isolated class McpToolKit {
-    *BaseToolKit;
+    *McpBaseToolKit;
     private final mcp:StreamableHttpClient mcpClient;
     private final ToolConfig[] & readonly tools;
 
@@ -358,3 +363,17 @@ isolated function getInputSchemaValues(mcp:ToolDefinition tool) returns map<json
     }
     return inputSchema;
 };
+
+public isolated function getPermittedMcpToolConfigs(mcp:StreamableHttpClient mcpClient, mcp:Implementation info,
+        map<FunctionTool> permitedTools) returns ToolConfig[]|error {
+    _ = check mcpClient->initialize(info);
+    mcp:ListToolsResult listTools = check mcpClient->listTools();
+    return from mcp:ToolDefinition tool in listTools.tools
+        where permitedTools.hasKey(tool.name)
+        select {
+            name: tool.name,
+            description: tool.description ?: "",
+            parameters: (<map<json>>tool.inputSchema).cloneReadOnly(),
+            caller: permitedTools.get(tool.name)
+        };
+}
