@@ -4,6 +4,16 @@ This file documents all significant changes made to the Ballerina AI package acr
 
 ## [Unreleased]
 
+## [1.5.4] - 2025-10-03
+- This release upgrades the MCP dependency to the stable 1.0.0 version
+
+## [1.5.3] - 2025-09-22
+
+### Fixed
+- [Reflect MCP Client Initialization Decoupling](https://github.com/ballerina-platform/ballerina-library/issues/8178)
+
+## [1.5.2] - 2025-09-10
+
 ### Added
 - [Add Support for Markdown and HTML in TextDataLoader](https://github.com/ballerina-platform/ballerina-library/issues/8228)
 
