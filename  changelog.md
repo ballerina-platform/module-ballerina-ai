@@ -4,6 +4,9 @@ This file documents all significant changes made to the Ballerina AI package acr
 
 ## [Unreleased]
 
+## [1.5.4] - 2025-10-03
+- This release upgrades the MCP dependency to the stable 1.0.0 version
+
 ## [1.5.3] - 2025-09-22
 
 ### Fixed
