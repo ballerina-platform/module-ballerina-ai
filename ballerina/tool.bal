@@ -60,7 +60,7 @@ public isolated class ToolStore {
                 toolList.push(toolConfig);
             } else if tool is BaseToolKit {
                 ToolConfig[] toolsFromToolKit = tool.getTools(); // TODO remove this after Ballerina fixes nullpointer exception
-                if tool is McpToolKit {
+                if tool is McpBaseToolKit {
                     foreach ToolConfig element in toolsFromToolKit {
                         lock {
                             self.mcpTools[element.name] = ();
