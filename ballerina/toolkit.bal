@@ -365,15 +365,15 @@ isolated function getInputSchemaValues(mcp:ToolDefinition tool) returns map<json
 };
 
 public isolated function getPermittedMcpToolConfigs(mcp:StreamableHttpClient mcpClient, mcp:Implementation info,
-        map<FunctionTool> permitedTools) returns ToolConfig[]|error {
+        map<FunctionTool> permittedTools) returns ToolConfig[]|error {
     _ = check mcpClient->initialize(info);
     mcp:ListToolsResult listTools = check mcpClient->listTools();
     return from mcp:ToolDefinition tool in listTools.tools
-        where permitedTools.hasKey(tool.name)
+        where permittedTools.hasKey(tool.name)
         select {
             name: tool.name,
             description: tool.description ?: "",
             parameters: (<map<json>>tool.inputSchema).cloneReadOnly(),
-            caller: permitedTools.get(tool.name)
+            caller: permittedTools.get(tool.name)
         };
 }
