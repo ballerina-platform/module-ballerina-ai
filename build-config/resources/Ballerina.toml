@@ -11,6 +11,9 @@ repository = "https://github.com/ballerina-platform/module-ballerina-ai"
 [platform.java21]
 graalvmCompatible = true
 
+[build-options]
+graalvmBuildOptions = "-H:+AllowDeprecatedBuilderClassesOnImageClasspath"
+
 [[platform.java21.dependency]]
 groupId = "io.ballerina.stdlib"
 artifactId = "ai-native"
@@ -23,6 +26,12 @@ artifactId = "ai-native"
 version = "@toml.version@"
 path = "../native/build/libs/ai-native-@project.version@-tests.jar"
 testOnly = true
+
+[[platform.java21.dependency]]
+groupId = "io.ballerina.stdlib"
+artifactId = "observability-native"
+version = "@toml.version@"
+path = "../observability-native/build/libs/observability-native-@project.version@.jar"
 
 [[platform.java21.dependency]]
 groupId = "dev.langchain4j"
