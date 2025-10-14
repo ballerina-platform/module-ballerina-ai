@@ -151,3 +151,58 @@ function testCustomMcpToolKitWithPermittedTools() returns error? {
     };
     test:assertEquals((check output.value).toJson(), expectedResult);
 }
+
+isolated class CustomMcpToolKit2 {
+    *McpBaseToolKit;
+    private final mcp:StreamableHttpClient mcpClient;
+    private final readonly & ToolConfig[] tools;
+
+    public isolated function init(string serverUrl = "http://localhost:3000/mcp",
+            mcp:Implementation info = {name: "MCP", version: "1.0.0"},
+            *mcp:StreamableHttpClientTransportConfig config) returns Error? {
+        do {
+            self.mcpClient = check new mcp:StreamableHttpClient(serverUrl, config);
+            self.tools = check getPermittedMcpToolConfigs(self.mcpClient, info, self.callTool).cloneReadOnly();
+        } on fail error e {
+            return error Error("Failed to initialize MCP toolkit", e);
+        }
+    }
+
+    public isolated function getTools() returns ToolConfig[] => self.tools;
+
+    @AgentTool
+    public isolated function callTool(mcp:CallToolParams params) returns mcp:CallToolResult|error {
+        return self.mcpClient->callTool(params);
+    }
+}
+
+@test:Config {
+    groups: ["mcp"]
+}
+function testCustomMcpToolKitWithAllToolsPermitted() returns error? {
+    CustomMcpToolKit2 mcpToolKit = check new;
+    ToolConfig[] tools = mcpToolKit.getTools();
+    test:assertEquals(tools.length(), 2); // Test mcp server used for testing has 2 tools
+    test:assertEquals(tools[0].name, "single-greeting");
+
+    LlmToolResponse toolInput = {
+        name: "single-greeting",
+        arguments: {
+            "greetName": "John"
+        }
+    };
+    ToolStore toolStore = check new (mcpToolKit);
+    ToolOutput output = check toolStore.execute(toolInput);
+    if output.value is error {
+        test:assertFail("tool execution output is an error");
+    }
+    json expectedResult = {
+        "content": [
+            {
+                "type": "text",
+                "text": "Hey John! Welcome to Ballerina!"
+            }
+        ]
+    };
+    test:assertEquals((check output.value).toJson(), expectedResult);
+}
