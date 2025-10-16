@@ -4,6 +4,10 @@ This file documents all significant changes made to the Ballerina AI package acr
 
 ## [Unreleased]
 
+### Added
+- [Add `McpBaseToolKit` Type and `getPermittedMcpToolConfigs` Function](https://github.com/ballerina-platform/ballerina-library/issues/8328)
+
+
 ## [1.5.4] - 2025-10-03
 - This release upgrades the MCP dependency to the stable 1.0.0 version
 

@@ -121,9 +121,14 @@ public type BaseToolKit distinct object {
     public isolated function getTools() returns ToolConfig[];
 };
 
+# Represents a base type for MCP toolkits.
+public type McpBaseToolKit distinct isolated object {
+    *BaseToolKit;
+};
+
 # Represents a toolkit for interacting with an MCP server, invoking tools via the MCP protocol.
 public isolated class McpToolKit {
-    *BaseToolKit;
+    *McpBaseToolKit;
     private final mcp:StreamableHttpClient mcpClient;
     private final ToolConfig[] & readonly tools;
 
@@ -358,3 +363,38 @@ isolated function getInputSchemaValues(mcp:ToolDefinition tool) returns map<json
     }
     return inputSchema;
 };
+
+# Constructs the list of permitted MCP tool configurations by querying the MCP server.
+#
+# This function initializes the MCP client using the provided implementation information
+# and retrieves the list of tools permitted for use. Each permitted tool is then associated
+# with a corresponding MCP function tool dispatcher.
+#
+# A tool dispatcher is a function with the following signature:
+# ```ballerina
+# @ai:AgentTool
+# isolated function (mcp:CallToolParams) returns mcp:CallToolResult|error;
+# ```
+#
+# + mcpClient - The MCP client instance used to query the MCP server
+# + info - The implementation information used to initialize the client
+# + permittedTools - A map of tool names to their respective MCP function tool dispatchers,
+# or a single dispatcher if all tools are permitted
+# + return - An array of tool configurations or an error if the operation fails
+public isolated function getPermittedMcpToolConfigs(mcp:StreamableHttpClient mcpClient, mcp:Implementation info,
+        map<FunctionTool>|FunctionTool permittedTools) returns ToolConfig[]|Error {
+    do {
+        _ = check mcpClient->initialize(info);
+        mcp:ListToolsResult listTools = check mcpClient->listTools();
+        return from mcp:ToolDefinition tool in listTools.tools
+            where permittedTools is FunctionTool || permittedTools.hasKey(tool.name)
+            select {
+                name: tool.name,
+                description: tool.description ?: "",
+                parameters: (<map<json>>tool.inputSchema).cloneReadOnly(),
+                caller: permittedTools is FunctionTool ? permittedTools : permittedTools.get(tool.name)
+            };
+    } on fail error e {
+        return error Error("failed to generate permitted MCP tool configurations", e);
+    }
+}
