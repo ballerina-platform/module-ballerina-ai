@@ -1,0 +1,380 @@
+// Copyright (c) 2025 WSO2 LLC (http://www.wso2.com).
+//
+// WSO2 LLC. licenses this file to you under the Apache License,
+// Version 2.0 (the "License"); you may not use this file except
+// in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing,
+// software distributed under the License is distributed on an
+// "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+// KIND, either express or implied.  See the License for the
+// specific language governing permissions and limitations
+// under the License.
+
+# Represents a short-term memory store that retains a fixed number of recent messages by a key.
+public type ShortTermMemoryStore isolated object {
+
+    # Retrieves all stored chat messages for a given key.
+    # 
+    # + key - The key associated with the memory
+    # + return - A copy of the messages, or an `ai:Error`
+    public isolated function get(string key) returns ChatMessage[]|MemoryError;
+
+    # Adds a chat message to the memory store for a given key.
+    # 
+    # + key - The key associated with the memory
+    # + message - The `ChatMessage` message to store
+    # + return - nil on success, or an `ai:Error` if the operation fails
+    public isolated function put(string key, ChatMessage message) returns MemoryError?;
+
+    # Removes all stored messages for a given key.
+    # 
+    # + key - The key associated with the memory
+    # + count - Optional number of messages to remove, starting from the first message in; 
+    #               if not provided, removes all messages
+    # + return - nil on success, or an `ai:Error` if the operation fails
+    public isolated function remove(string key, int? count = ()) returns MemoryError?;
+
+    # Checks if the memory store is full for a given key.
+    # 
+    # + key - The key associated with the memory
+    # + return - true if the memory store is full, false otherwise
+    public isolated function isFull(string key) returns boolean;
+};
+
+# Provides an in-memory chat message store.
+public isolated class InMemoryShortTermMemoryStore {
+    *ShortTermMemoryStore;
+
+    private final int size;
+    private final map<MemoryChatSystemMessage> systemMessages = {};
+    private final map<MemoryChatMessage[]> messages = {};
+
+    # Initializes a new in-memory store.
+    # 
+    # + size - The maximum capacity for stored messages
+    public isolated function init(int size = 10) returns MemoryError? {
+        if size < 3 {
+            return error("Size must be at least 3 to accommodate system and user messages.");
+        }
+
+        self.size = size;
+    }
+
+    # Retrieves a copy of all stored messages, with an optional system prompt.
+    #
+    # + key - The key associated with the memory
+    # + return - A copy of the messages, or `ai:Error` if the operation fails
+    public isolated function get(string key) returns ChatMessage[]|MemoryError {
+        lock {
+            MemoryChatMessage[] messages = [];
+
+            if self.systemMessages.hasKey(key) {
+                messages.push(self.systemMessages.get(key));
+            }
+
+            if self.messages.hasKey(key) {
+                messages.push(...self.messages.get(key));
+            }
+            
+            return messages.clone();
+        }
+    }
+
+    # Adds a message to the window.
+    #
+    # + key - The key associated with the memory
+    # + message - The `ChatMessage` message to store
+    # + return - nil on success, or `ai:Error` if the operation fails 
+    public isolated function put(string key, ChatMessage message) returns MemoryError? {
+        final readonly & MemoryChatMessage newMessage = check mapToMemoryChatMessage(message);
+        lock {
+            if newMessage is MemoryChatSystemMessage {
+                self.systemMessages[key] = newMessage;
+                return;
+            }
+
+            if !self.messages.hasKey(key) {
+                self.messages[key] = [newMessage];
+                return;
+            }
+            
+            MemoryChatMessage[] messages = self.messages.get(key);
+            messages.push(newMessage);
+        }
+    }
+
+    # Removes all messages from memory.
+    #
+    # + key - The key associated with the memory
+    # + count - Optional number of messages to remove, starting from the first message in; 
+    #               if not provided, removes all messages
+    # + return - nil on success, or an `ai:Error` if the operation fails 
+    public isolated function remove(string key, int? count = ()) returns MemoryError? {
+        lock {
+            if count is () {
+                if self.systemMessages.hasKey(key) {
+                    _ = self.systemMessages.remove(key);
+                }
+
+                if self.messages.hasKey(key) {
+                    self.messages.get(key).removeAll();
+                }
+                return;
+            }
+
+            // If a count is provided, remove that many user messages from the start.
+            if count <= 0 {
+                return error("Count must be a positive integer.");
+            }
+
+            if !self.messages.hasKey(key) {
+                return;
+            }
+
+            MemoryChatMessage[] messages = self.messages.get(key);
+            int countToRemove = count < messages.length() ? count : messages.length();
+
+            foreach int index in 0 ..< countToRemove {
+                _ = messages.shift();
+            }
+        }
+    }
+
+    # Checks if the memory store is full for a given key.
+    # 
+    # + key - The key associated with the memory
+    # + return - true if the memory store is full, false otherwise
+    public isolated function isFull(string key) returns boolean {
+        lock {
+            if !self.messages.hasKey(key) {
+                return false;
+            }
+
+            return self.messages.get(key).length() == self.size;
+        }
+    }
+}
+
+final readonly & Prompt defaultSummarizationPrompt = `
+    You are an expert at summarizing conversations. You will summarize a chat history between a 
+    user and an AI agent to create a concise summary that preserves the most important information.
+    
+    Before coming up with the summary, think through:
+    - the main topics, questions, or issues discussed in the chat history
+    - key information, decisions, or conclusions that should be preserved
+    - what details can be omitted or condensed
+    - how the summary can be structured to be useful for future reference
+
+    Prioritize:
+    - the most recent user request or question to ensure the summary reflects the immediate context
+    - key decisions or conclusions reached during the conversation
+    - critical context that affects ongoing conversations
+    - unresolved issues that may need follow-up
+    - specific details that are likely to be referenced again
+    
+    Expected structure:
+    - Use clear, concise sentences
+    - Group related topics together
+    - Maintain chronological order when the sequence of events matters.`;
+
+# Represents configuration to trim messages when overflow occurs.
+public type OverflowTrimConfiguration record {|
+    # Number of messages to trim when overflow occurs.
+    int trimCount = 1;
+|};
+
+# Represents configuration to summarize messages when overflow occurs.
+public type OverflowSummarizationConfiguration record {|
+    # The model to use for summarization; if not provided, the default model is used.
+    ModelProvider model?;
+    # The prompt to use for summarization; if not provided, a default prompt is used.
+    Prompt prompt = defaultSummarizationPrompt;
+|};
+
+# Represents configuration for handling overflow in short-term memory.
+public type OverflowConfiguration OverflowTrimConfiguration|OverflowSummarizationConfiguration;
+
+type OverflowHandler isolated function (
+    ChatMessage[] messages, ROLE newMessageRole) returns ChatMessage[]|MemoryError;
+
+type OverflowStrategy OverflowTrimConfiguration|OverflowHandler;
+
+# Represents short-term memory for agents.
+public isolated class ShortTermMemory {
+    *Memory;
+
+    private final OverflowStrategy overflowStrategy;
+    // This should be final, but is not final intentionally, to enforce using locks.
+    private ShortTermMemoryStore store;
+
+    # Initializes short-term memory with an optional store and overflow configuration.
+    # 
+    # + store - The memory store to use; if not provided, an in-memory store is used
+    # + overflowConfiguration - The strategy to handle overflow; if not provided, trimming is used
+    # + return - nil on success, or an `ai:MemoryError` error if the initialization fails
+    public isolated function init(ShortTermMemoryStore? store = (), 
+                                  OverflowConfiguration overflowConfiguration = <OverflowTrimConfiguration> {}) 
+                            returns MemoryError? {
+        do {
+            self.store = store ?: check new InMemoryShortTermMemoryStore();
+
+            if overflowConfiguration is OverflowTrimConfiguration {
+                self.overflowStrategy = overflowConfiguration.cloneReadOnly();
+            } else {
+                final ModelProvider model = overflowConfiguration.model ?: check getDefaultModelProvider();
+                final Prompt prompt = overflowConfiguration.prompt;
+                final string[] & readonly strings = prompt.strings;
+                final anydata[] & readonly insertions = prompt.insertions.cloneReadOnly();
+                self.overflowStrategy = isolated function (
+                        ChatMessage[] messages, ROLE newMessageRole) returns ChatMessage[]|MemoryError {
+                    return handleOverflow(model, createPrompt(strings, insertions), messages, newMessageRole);
+                };
+            }
+        } on fail error e {
+            return error("Failed to initialize short term memory: " + e.message(), e);
+        }
+    }
+
+    # Retrieves all stored chat messages.
+    #
+    # + key - The key associated with the memory
+    # + return - An array of messages or an `ai:MemoryError` error if the operation fails
+    public isolated function get(string key) returns ChatMessage[]|MemoryError {
+        lock {
+            return self.store.get(key);
+        }
+    }
+
+    # Adds a chat message to the memory, handling overflow as configured.
+    #
+    # + key - The key associated with the memory
+    # + message - The message to store
+    # + return - nil on success, or an `ai:MemoryError` error if the operation fails 
+    public isolated function update(string key, ChatMessage message) returns MemoryError? {
+        final string|([string[], anydata[]] & readonly)? content = let var messageContent = message.content in 
+                messageContent is string ? messageContent : 
+                    messageContent is () ? () :
+                    [messageContent.strings, messageContent.insertions.cloneReadOnly()];
+        lock {
+            if self.store.isFull(key) {
+                final OverflowStrategy overflowStrategy = self.overflowStrategy;
+
+                if overflowStrategy is OverflowTrimConfiguration {
+                    check self.store.remove(key, overflowStrategy.trimCount);
+                } else {
+                    ChatMessage[] updatedMessages = 
+                        check overflowStrategy(check self.store.get(key), message.role);
+                    check self.store.remove(key);
+                    foreach ChatMessage updatedMessage in updatedMessages {
+                        check self.store.put(key, updatedMessage);
+                    }
+                }
+            }
+
+            if message is ChatUserMessage {
+                return self.store.put(key, <ChatUserMessage> {
+                    role: USER, 
+                    content: getPromptContent(<string|([string[], anydata[]] & readonly)> content),
+                    name: message.name
+                });
+            }
+
+            if message is ChatSystemMessage {
+                return self.store.put(key, <ChatSystemMessage> {
+                    role: SYSTEM,
+                    content: getPromptContent(<string|([string[], anydata[]] & readonly)> content),
+                    name: message.name
+                });
+            }
+
+            if message is ChatAssistantMessage {
+                return self.store.put(key, <ChatAssistantMessage> {
+                    role: ASSISTANT,
+                    content: <string?> content,
+                    name: message.name,
+                    toolCalls: message.toolCalls.clone()
+                });
+            }
+
+            if message is ChatFunctionMessage {
+                return self.store.put(key, <ChatFunctionMessage> {
+                    role: FUNCTION,
+                    content: <string?> content,
+                    name: <string> message.name,
+                    id: message.id
+                });
+            }
+
+            panic error("Unexpected message type: " + (typeof message).toBalString());
+        }
+    }
+
+    # Deletes all messages stored against a key.
+    # 
+    # + key - The key associated with the memory
+    # + return - nil on success, or an `ai:MemoryError` error if the operation fails
+    public isolated function delete(string key) returns MemoryError? {
+        lock {
+            return self.store.remove(key);
+        }
+    }
+}
+
+isolated function handleOverflow(
+            ModelProvider model, Prompt & readonly prompt, ChatMessage[] memory, ROLE newMessageRole) 
+        returns ChatMessage[]|MemoryError {
+    int memoryLength = memory.length();
+    if memoryLength == 0 {
+        return [];
+    }
+
+    int memoryLastIndex = memoryLength - 1;
+
+    ChatMessage lastMessage = memory[memoryLastIndex];
+    ROLE lastMessageRole = lastMessage.role;
+
+    MemoryChatMessage[] memoryChatMessages = check mapToMemoryChatMessages(memory);
+    boolean isLastMessageFromAI = lastMessageRole != USER && newMessageRole == USER;
+    MemoryChatMessage[] sliceToSummarize = isLastMessageFromAI ? 
+        memoryChatMessages.slice(0, memoryLastIndex) : memoryChatMessages;
+
+    MemoryChatMessage|Error summaryMessage = callModelToHandleOverflow
+    (sliceToSummarize, model, prompt);
+    if summaryMessage is Error {
+        return error("Failed to generate summary: " + summaryMessage.message(), summaryMessage);
+    }
+
+    ChatMessage[] updatedMessages = [summaryMessage];
+    if isLastMessageFromAI {
+        updatedMessages.push(lastMessage);
+    }
+    return updatedMessages;
+}
+
+isolated function callModelToHandleOverflow(MemoryChatMessage[] memorySlice, ModelProvider model, Prompt prompt) 
+        returns MemoryChatMessage|Error {
+    return model->chat({
+        role: USER, 
+        content: `${toString(prompt)} 
+            
+            The chat history to summarize: ${memorySlice.toString()}`
+    });
+}
+
+isolated function toString(Prompt prompt) returns string {
+    string[] & readonly strings = prompt.strings;
+    anydata[] insertions = prompt.insertions;
+
+    string promptString = strings[0];
+    foreach int i in 0 ..< insertions.length() {
+        promptString += insertions[i].toJsonString() + strings[i + 1];
+    }
+    return promptString;
+}
+
+isolated function getPromptContent(string|([string[], anydata[]] & readonly) content) returns string|Prompt => 
+    content is string ? content : createPrompt(content[0], content[1]);

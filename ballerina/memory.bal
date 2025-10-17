@@ -72,7 +72,7 @@ public isolated class MessageWindowChatMemory {
     # + message - The `ChatMessage` to store or use as system prompt
     # + return - nil on success, or an `ai:Error` if the operation fails 
     public isolated function update(string sessionId, ChatMessage message) returns MemoryError? {
-        readonly & MemoryChatMessage newMessage = check self.mapToMemoryChatMessage(message);
+        readonly & MemoryChatMessage newMessage = check mapToMemoryChatMessage(message);
         lock {
             self.createSessionIfNotExist(sessionId);
             MemoryChatMessage[] memory = self.sessions.get(sessionId);
@@ -85,27 +85,6 @@ public isolated class MessageWindowChatMemory {
             }
             memory.push(newMessage);
         }
-    }
-
-    private isolated function mapToMemoryChatMessage(ChatMessage message) returns readonly & MemoryChatMessage|MemoryError {
-        if message is ChatAssistantMessage|ChatFunctionMessage {
-            return message.cloneReadOnly();
-        }
-        final Prompt|string content = message.content;
-        readonly & Prompt|string memoryContent;
-        if content is Prompt {
-            memoryContent = createPrompt(content.strings.cloneReadOnly(), content.insertions.cloneReadOnly());
-        } else {
-            memoryContent = content;
-        }
-
-        if message is ChatUserMessage {
-            return {role: message.role, content: memoryContent, name: message.name};
-        }
-        if message is ChatSystemMessage {
-            return {role: message.role, content: memoryContent, name: message.name};
-        }
-        return error MemoryError("Invalid message format found");
     }
 
     # Removes all messages from the memory.
@@ -139,3 +118,27 @@ returns readonly & Prompt =>
     public final string[] & readonly strings = strings;
     public final anydata[] & readonly insertions = insertions.cloneReadOnly();
 };
+
+isolated function mapToMemoryChatMessages(ChatMessage[] messages) returns readonly & MemoryChatMessage[]|MemoryError =>
+    from ChatMessage message in messages select check mapToMemoryChatMessage(message);
+
+isolated function mapToMemoryChatMessage(ChatMessage message) returns readonly & MemoryChatMessage|MemoryError {
+    if message is ChatAssistantMessage|ChatFunctionMessage {
+        return message.cloneReadOnly();
+    }
+    final Prompt|string content = message.content;
+    readonly & Prompt|string memoryContent;
+    if content is Prompt {
+        memoryContent = createPrompt(content.strings, content.insertions.cloneReadOnly());
+    } else {
+        memoryContent = content;
+    }
+
+    if message is ChatUserMessage {
+        return {role: message.role, content: memoryContent, name: message.name};
+    }
+    if message is ChatSystemMessage {
+        return {role: message.role, content: memoryContent, name: message.name};
+    }
+    return error MemoryError("Invalid message format found");
+}
