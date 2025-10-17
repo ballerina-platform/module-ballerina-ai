@@ -26,6 +26,7 @@ dependencies = [
 	{org = "ballerina", name = "math.vector"},
 	{org = "ballerina", name = "mcp"},
 	{org = "ballerina", name = "mime"},
+	{org = "ballerina", name = "observe"},
 	{org = "ballerina", name = "time"},
 	{org = "ballerina", name = "url"},
 	{org = "ballerina", name = "uuid"},
@@ -33,7 +34,8 @@ dependencies = [
 ]
 modules = [
 	{org = "ballerina", packageName = "ai", moduleName = "ai"},
-	{org = "ballerina", packageName = "ai", moduleName = "ai.intelligence"}
+	{org = "ballerina", packageName = "ai", moduleName = "ai.intelligence"},
+	{org = "ballerina", packageName = "ai", moduleName = "ai.observe"}
 ]
 
 [[package]]
@@ -110,7 +112,7 @@ modules = [
 [[package]]
 org = "ballerina"
 name = "data.xmldata"
-version = "1.5.0"
+version = "1.5.2"
 dependencies = [
 	{org = "ballerina", name = "jballerina.java"},
 	{org = "ballerina", name = "lang.object"}
@@ -287,7 +289,7 @@ dependencies = [
 [[package]]
 org = "ballerina"
 name = "log"
-version = "2.13.0"
+version = "2.12.0"
 dependencies = [
 	{org = "ballerina", name = "io"},
 	{org = "ballerina", name = "jballerina.java"},
@@ -303,7 +305,7 @@ version = "1.2.0"
 [[package]]
 org = "ballerina"
 name = "mcp"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
 	{org = "ballerina", name = "http"},
 	{org = "ballerina", name = "jballerina.java"},
