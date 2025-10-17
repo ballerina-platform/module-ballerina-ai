@@ -58,7 +58,7 @@ public isolated class MessageWindowChatMemory {
     public isolated function get(string sessionId) returns ChatMessage[]|MemoryError {
         lock {
             self.createSessionIfNotExist(sessionId);
-            MemoryChatMessage[] memory = self.sessions.get(sessionId);
+            MemoryChatMessage[] memory = self.sessions.get(sessionId).clone();
             if self.systemMessageSessions.hasKey(sessionId) {
                 memory.unshift(self.systemMessageSessions.get(sessionId).clone());
             }
