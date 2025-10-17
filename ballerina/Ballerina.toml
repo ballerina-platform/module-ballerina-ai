@@ -8,6 +8,11 @@ authors = ["Ballerina"]
 keywords = ["AI/Agent", "Cost/Freemium", "Agent", "AI"]
 repository = "https://github.com/ballerina-platform/module-ballerina-ai"
 
+[[package.modules]]
+name = "ai.observe"
+description="This module provides an API for adding observability to AI applications."
+export=true
+
 [platform.java21]
 graalvmCompatible = true
 
