@@ -20,7 +20,7 @@ public type ShortTermMemoryStore isolated object {
     # Retrieves all stored chat messages for a given key.
     # 
     # + key - The key associated with the memory
-    # + return - A copy of the messages, or an `ai:Error`
+    # + return - A copy of the messages, or an `ai:MemoryError` error if the operation fails
     public isolated function get(string key) returns ChatMessage[]|MemoryError;
 
     # Adds a chat message to the memory store for a given key.
@@ -30,11 +30,11 @@ public type ShortTermMemoryStore isolated object {
     # + return - nil on success, or an `ai:Error` if the operation fails
     public isolated function put(string key, ChatMessage message) returns MemoryError?;
 
-    # Removes all stored messages for a given key.
+    # Removes stored messages for a given key.
     # 
     # + key - The key associated with the memory
-    # + count - Optional number of messages to remove, starting from the first message in; 
-    #               if not provided, removes all messages
+    # + count - Optional number of messages to remove, starting from the first non-system message in; 
+    #               if not provided, removes all messages including the system message
     # + return - nil on success, or an `ai:Error` if the operation fails
     public isolated function remove(string key, int? count = ()) returns MemoryError?;
 
@@ -58,7 +58,7 @@ public isolated class InMemoryShortTermMemoryStore {
     # + size - The maximum capacity for stored messages
     public isolated function init(int size = 10) returns MemoryError? {
         if size < 3 {
-            return error("Size must be at least 3 to accommodate system and user messages.");
+            return error("Size must be at least 3");
         }
 
         self.size = size;
@@ -67,7 +67,7 @@ public isolated class InMemoryShortTermMemoryStore {
     # Retrieves a copy of all stored messages, with an optional system prompt.
     #
     # + key - The key associated with the memory
-    # + return - A copy of the messages, or `ai:Error` if the operation fails
+    # + return - A copy of the messages, or an `ai:MemoryError` error if the operation fails
     public isolated function get(string key) returns ChatMessage[]|MemoryError {
         lock {
             MemoryChatMessage[] messages = [];
@@ -88,7 +88,7 @@ public isolated class InMemoryShortTermMemoryStore {
     #
     # + key - The key associated with the memory
     # + message - The `ChatMessage` message to store
-    # + return - nil on success, or `ai:Error` if the operation fails 
+    # + return - nil on success, or `ai:MemoryError` error if the operation fails 
     public isolated function put(string key, ChatMessage message) returns MemoryError? {
         final readonly & MemoryChatMessage newMessage = check mapToMemoryChatMessage(message);
         lock {
@@ -107,12 +107,12 @@ public isolated class InMemoryShortTermMemoryStore {
         }
     }
 
-    # Removes all messages from memory.
-    #
+    # Removes stored messages for a given key.
+    # 
     # + key - The key associated with the memory
-    # + count - Optional number of messages to remove, starting from the first message in; 
-    #               if not provided, removes all messages
-    # + return - nil on success, or an `ai:Error` if the operation fails 
+    # + count - Optional number of messages to remove, starting from the first non-system message in; 
+    #               if not provided, removes all messages including the system message
+    # + return - nil on success, or an `ai:MemoryError` error if the operation fails 
     public isolated function remove(string key, int? count = ()) returns MemoryError? {
         lock {
             if count is () {
@@ -332,6 +332,11 @@ isolated function handleOverflow(
         return [];
     }
 
+    // Assumes a single system message at the start, if at all.
+    // Not ideal, but since the interface does not expose system messages separately, no other option right now.
+    ChatMessage firstMessage = memory[0];
+    ChatSystemMessage? systemMessage = firstMessage is ChatSystemMessage ? firstMessage : ();
+
     int memoryLastIndex = memoryLength - 1;
 
     ChatMessage lastMessage = memory[memoryLastIndex];
@@ -339,16 +344,23 @@ isolated function handleOverflow(
 
     MemoryChatMessage[] memoryChatMessages = check mapToMemoryChatMessages(memory);
     boolean isLastMessageFromAI = lastMessageRole != USER && newMessageRole == USER;
-    MemoryChatMessage[] sliceToSummarize = isLastMessageFromAI ? 
-        memoryChatMessages.slice(0, memoryLastIndex) : memoryChatMessages;
 
-    MemoryChatMessage|Error summaryMessage = callModelToHandleOverflow
-    (sliceToSummarize, model, prompt);
+    int startIndex = systemMessage is () ? 0 : 1;
+    int endIndex = isLastMessageFromAI ? memoryLastIndex : memoryLength;
+
+    MemoryChatMessage[] sliceToSummarize = startIndex != 0 || endIndex != memoryLength ? 
+        memoryChatMessages.slice(startIndex, endIndex) : memoryChatMessages;
+
+    MemoryChatMessage|Error summaryMessage = callModelToHandleOverflow(sliceToSummarize, model, prompt);
     if summaryMessage is Error {
         return error("Failed to generate summary: " + summaryMessage.message(), summaryMessage);
     }
 
     ChatMessage[] updatedMessages = [summaryMessage];
+    if systemMessage is ChatSystemMessage {
+        updatedMessages.unshift(systemMessage);
+    }
+
     if isLastMessageFromAI {
         updatedMessages.push(lastMessage);
     }
