@@ -30,6 +30,8 @@ type PromptParts record {|
 
 type MemoryChatMessage MemoryChatUserMessage|MemoryChatSystemMessage|ChatAssistantMessage|ChatFunctionMessage;
 
+type MemoryChatInteractiveMessage MemoryChatUserMessage|ChatAssistantMessage|ChatFunctionMessage;
+
 type MemoryChatUserMessage readonly & record {|
     *ChatUserMessage;
 |};
@@ -119,26 +121,33 @@ returns readonly & Prompt =>
     public final anydata[] & readonly insertions = insertions.cloneReadOnly();
 };
 
-isolated function mapToMemoryChatMessages(ChatMessage[] messages) returns readonly & MemoryChatMessage[]|MemoryError =>
-    from ChatMessage message in messages select check mapToMemoryChatMessage(message);
+isolated function mapToMemoryChatInteractiveMessages(ChatInteractiveMessage[] messages) returns 
+        (readonly & MemoryChatInteractiveMessage[])|MemoryError =>
+    from ChatMessage message in messages select check mapToMemoryChatInteractiveMessage(message);
 
 isolated function mapToMemoryChatMessage(ChatMessage message) returns readonly & MemoryChatMessage|MemoryError {
+    if message is ChatSystemMessage {
+        final Prompt|string content = message.content;
+        readonly & Prompt|string memoryContent = 
+            getPromptContent(content is string ? content : [content.strings, content.insertions.cloneReadOnly()]);
+        return {role: message.role, content: memoryContent, name: message.name};
+    }
+
+    if message !is ChatInteractiveMessage {
+        return error MemoryError("Invalid message format found");
+    }
+
+    return mapToMemoryChatInteractiveMessage(message);
+}
+
+isolated function mapToMemoryChatInteractiveMessage(ChatInteractiveMessage message) returns 
+        readonly & MemoryChatInteractiveMessage|MemoryError {
     if message is ChatAssistantMessage|ChatFunctionMessage {
         return message.cloneReadOnly();
     }
     final Prompt|string content = message.content;
-    readonly & Prompt|string memoryContent;
-    if content is Prompt {
-        memoryContent = createPrompt(content.strings, content.insertions.cloneReadOnly());
-    } else {
-        memoryContent = content;
-    }
+    readonly & Prompt|string memoryContent = 
+        getPromptContent(content is string ? content : [content.strings, content.insertions.cloneReadOnly()]);
 
-    if message is ChatUserMessage {
-        return {role: message.role, content: memoryContent, name: message.name};
-    }
-    if message is ChatSystemMessage {
-        return {role: message.role, content: memoryContent, name: message.name};
-    }
-    return error MemoryError("Invalid message format found");
+    return {role: message.role, content: memoryContent, name: message.name};
 }

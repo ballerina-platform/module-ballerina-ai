@@ -54,7 +54,7 @@ public type OverflowSummarizationConfiguration record {|
 public type OverflowConfiguration OverflowTrimConfiguration|OverflowSummarizationConfiguration;
 
 type OverflowHandler isolated function (
-    ChatMessage[] messages, ROLE newMessageRole) returns ChatMessage[]|MemoryError;
+    ChatInteractiveMessage[] messages, ROLE newMessageRole) returns ChatInteractiveMessage[]|MemoryError;
 
 type OverflowStrategy OverflowTrimConfiguration|OverflowHandler;
 
@@ -85,7 +85,7 @@ public isolated class ShortTermMemory {
                 final string[] & readonly strings = prompt.strings;
                 final anydata[] & readonly insertions = prompt.insertions.cloneReadOnly();
                 self.overflowStrategy = isolated function (
-                        ChatMessage[] messages, ROLE newMessageRole) returns ChatMessage[]|MemoryError {
+                        ChatInteractiveMessage[] messages, ROLE newMessageRole) returns ChatInteractiveMessage[]|MemoryError {
                     return handleOverflow(model, createPrompt(strings, insertions), messages, newMessageRole);
                 };
             }
@@ -100,7 +100,15 @@ public isolated class ShortTermMemory {
     # + return - An array of messages or an `ai:MemoryError` error if the operation fails
     public isolated function get(string key) returns ChatMessage[]|MemoryError {
         lock {
-            return self.store.get(key);
+            final ChatSystemMessage? chatSystemMessage = check self.store.getChatSystemMessage(key);
+
+            if chatSystemMessage is () {
+                return self.store.get(key);
+            }
+
+            (MemoryChatMessage & readonly)[] chatMessages = [check mapToMemoryChatMessage(chatSystemMessage)];
+            chatMessages.push(...check mapToMemoryChatInteractiveMessages(check self.store.get(key)));
+            return chatMessages.cloneReadOnly();
         }
     }
 
@@ -174,48 +182,39 @@ public isolated class ShortTermMemory {
     # + return - nil on success, or an `ai:MemoryError` error if the operation fails
     public isolated function delete(string key) returns MemoryError? {
         lock {
+            check self.store.removeChatSystemMessage(key);
             return self.store.remove(key);
         }
     }
 }
 
 isolated function handleOverflow(
-            ModelProvider model, Prompt & readonly prompt, ChatMessage[] memory, ROLE newMessageRole) 
-        returns ChatMessage[]|MemoryError {
+            ModelProvider model, Prompt & readonly prompt, ChatInteractiveMessage[] memory, ROLE newMessageRole) 
+        returns ChatInteractiveMessage[]|MemoryError {
     int memoryLength = memory.length();
     if memoryLength == 0 {
         return [];
     }
 
-    // Assumes a single system message at the start, if at all.
-    // Not ideal, but since the interface does not expose system messages separately, no other option right now.
-    ChatMessage firstMessage = memory[0];
-    ChatSystemMessage? systemMessage = firstMessage is ChatSystemMessage ? firstMessage : ();
-
     int memoryLastIndex = memoryLength - 1;
 
-    ChatMessage lastMessage = memory[memoryLastIndex];
+    ChatInteractiveMessage lastMessage = memory[memoryLastIndex];
     ROLE lastMessageRole = lastMessage.role;
 
-    MemoryChatMessage[] memoryChatMessages = check mapToMemoryChatMessages(memory);
+    MemoryChatInteractiveMessage[] memoryChatMessages = check mapToMemoryChatInteractiveMessages(memory);
     boolean isLastMessageFromAI = lastMessageRole != USER && newMessageRole == USER;
 
-    int startIndex = systemMessage is () ? 0 : 1;
     int endIndex = isLastMessageFromAI ? memoryLastIndex : memoryLength;
 
-    MemoryChatMessage[] sliceToSummarize = startIndex != 0 || endIndex != memoryLength ? 
-        memoryChatMessages.slice(startIndex, endIndex) : memoryChatMessages;
+    MemoryChatInteractiveMessage[] sliceToSummarize = endIndex != memoryLength ? 
+        memoryChatMessages.slice(0, endIndex) : memoryChatMessages;
 
-    MemoryChatMessage|Error summaryMessage = callModelToHandleOverflow(sliceToSummarize, model, prompt);
+    ChatAssistantMessage|Error summaryMessage = callModelToHandleOverflow(sliceToSummarize, model, prompt);
     if summaryMessage is Error {
         return error("Failed to generate summary: " + summaryMessage.message(), summaryMessage);
     }
 
-    ChatMessage[] updatedMessages = [summaryMessage];
-    if systemMessage is ChatSystemMessage {
-        updatedMessages.unshift(systemMessage);
-    }
-
+    ChatInteractiveMessage[] updatedMessages = [summaryMessage];
     if isLastMessageFromAI {
         updatedMessages.push(lastMessage);
     }
@@ -223,7 +222,7 @@ isolated function handleOverflow(
 }
 
 isolated function callModelToHandleOverflow(MemoryChatMessage[] memorySlice, ModelProvider model, Prompt prompt) 
-        returns MemoryChatMessage|Error {
+        returns ChatAssistantMessage|Error {
     return model->chat({
         role: USER, 
         content: `${toString(prompt)} 
@@ -243,5 +242,5 @@ isolated function toString(Prompt prompt) returns string {
     return promptString;
 }
 
-isolated function getPromptContent(string|([string[], anydata[]] & readonly) content) returns string|Prompt => 
+isolated function getPromptContent(string|([string[], anydata[]] & readonly) content) returns string|(Prompt & readonly) => 
     content is string ? content : createPrompt(content[0], content[1]);
