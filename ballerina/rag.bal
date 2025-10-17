@@ -14,6 +14,10 @@
 // specific language governing permissions and limitations
 // under the License.
 
+import ai.observe;
+
+import ballerina/uuid;
+
 final Wso2ModelProvider? defaultModelProvider;
 final Wso2EmbeddingProvider? defaultEmbeddingProvider;
 
@@ -89,6 +93,8 @@ public type KnowledgeBase distinct isolated object {
     public isolated function deleteByFilter(MetadataFilters filters) returns Error?;
 };
 
+const string VECTOR_KNOWLDEGE_BASE = "VectorKnowledgeBase";
+
 # Represents a vector knowledge base for managing chunk indexing and retrieval operations.
 # The `VectorKnowledgeBase` handles converting chunks to embeddings,
 # storing them in a vector store, and enabling retrieval through a `Retriever`.
@@ -98,6 +104,7 @@ public distinct isolated class VectorKnowledgeBase {
     private final EmbeddingProvider embeddingModel;
     private final Retriever retriever;
     private final Chunker|AUTO|DISABLE chunker;
+    private final string id = uuid:createRandomUuid();
 
     # Initializes a new `VectorKnowledgeBase` instance.
     #
@@ -108,10 +115,13 @@ public distinct isolated class VectorKnowledgeBase {
     # Otherwise, the specified chunker will be used.
     public isolated function init(VectorStore vectorStore, EmbeddingProvider embeddingModel,
             Chunker|AUTO|DISABLE chunker = AUTO) {
+        observe:CreateKnowledgeBaseSpan span = observe:createCreateKnowledgeBaseSpan(VECTOR_KNOWLDEGE_BASE);
+        span.addId(self.id);
         self.vectorStore = vectorStore;
         self.embeddingModel = embeddingModel;
         self.retriever = new VectorRetriever(vectorStore, embeddingModel);
         self.chunker = chunker;
+        span.close();
     }
 
     # Indexes a collection of chunks.
@@ -122,14 +132,24 @@ public distinct isolated class VectorKnowledgeBase {
     # The configured chunker will further split any provided documents or chunks before indexing.
     # + return - An `ai:Error` if indexing fails; otherwise, `nil`
     public isolated function ingest(Document|Document[]|Chunk[] documents) returns Error? {
-        Chunk[] chunks = check self.chunk(documents);
-        Embedding[] embeddings = check self.embeddingModel->batchEmbed(chunks);
-        if chunks.length() != embeddings.length() {
-            return error Error("Mismatch between number of chunks and embeddings generated");
+        observe:KnowledgeBaseIngestSpan span = observe:createKnowledgeBaseIngestSpan(VECTOR_KNOWLDEGE_BASE);
+        do {
+            span.addId(self.id);
+            Chunk[] chunks = check self.chunk(documents);
+            span.addInputChunks(chunks.toJson());
+
+            Embedding[] embeddings = check self.embeddingModel->batchEmbed(chunks);
+            if chunks.length() != embeddings.length() {
+                check error Error("Mismatch between number of chunks and embeddings generated");
+            }
+            VectorEntry[] entries = from [int, Chunk] [i, chunk] in chunks.enumerate()
+                select {chunk, embedding: embeddings[i]};
+            check self.vectorStore.add(entries);
+            span.close();
+        } on fail Error err {
+            span.close(err);
+            return err;
         }
-        VectorEntry[] entries = from [int, Chunk] [i, chunk] in chunks.enumerate()
-            select {chunk, embedding: embeddings[i]};
-        check self.vectorStore.add(entries);
     }
 
     private isolated function chunk(Document|Document[]|Chunk[] input) returns Chunk[]|Error {
@@ -154,7 +174,22 @@ public distinct isolated class VectorKnowledgeBase {
     # + filters - Optional metadata filters to apply during retrieval
     # + return - An array of matching chunks with similarity scores, or an `ai:Error` if retrieval fails
     public isolated function retrieve(string query, int topK = 10, MetadataFilters? filters = ()) returns QueryMatch[]|Error {
-        return self.retriever.retrieve(query, topK, filters);
+        observe:KnowledgeBaseRetrieveSpan span = observe:createKnowledgeBaseRetrieveSpan(VECTOR_KNOWLDEGE_BASE);
+        span.addId(self.id);
+        if filters is MetadataFilters {
+            span.addInputQuery(query);
+        }
+        span.addLimit(topK);
+        span.addFilter(filters.toJson());
+
+        QueryMatch[]|Error queryMatch = self.retriever.retrieve(query, topK, filters);
+
+        if queryMatch is Error {
+            span.close(queryMatch);
+            return queryMatch;
+        }
+        span.close();
+        return queryMatch;
     }
 
     # Deletes chunks that match the given metadata filters.

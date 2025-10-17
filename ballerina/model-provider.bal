@@ -15,6 +15,8 @@
 // under the License.
 
 import ai.intelligence;
+import ai.observe;
+
 import ballerina/jballerina.java;
 
 # Roles for the chat messages.
@@ -115,7 +117,7 @@ public type ModelProvider distinct isolated client object {
     # + return - Function to be called, chat response or an error in-case of failures
     isolated remote function chat(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [], string? stop = ())
         returns ChatAssistantMessage|Error;
-    
+
     # Sends a chat request to the model and generates a value that belongs to the type
     # corresponding to the type descriptor argument.
     #
@@ -194,6 +196,16 @@ public isolated distinct client class Wso2ModelProvider {
     # + return - Function to be called, chat response or an error in-case of failures
     isolated remote function chat(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools, string? stop = ())
     returns ChatAssistantMessage|Error {
+        observe:ChatSpan span = observe:createChatSpan("gpt-4o-mini");
+        span.addProvider("WSO2");
+        span.addOutputType(observe:TEXT);
+        if stop is string {
+            span.addStopSequence(stop);
+        }
+        span.addTemperature(self.temperature);
+        span.addInputMessages(convertMessageToJson(messages));
+        span.addTools(tools);
+
         intelligence:CreateChatCompletionRequest request = {
             stop,
             messages: self.mapToChatCompletionRequestMessage(messages),
@@ -204,24 +216,47 @@ public isolated distinct client class Wso2ModelProvider {
         }
         intelligence:CreateChatCompletionResponse|error response = self.llmClient->/chat/completions.post(request);
         if response is error {
-            return error LlmConnectionError("Error while connecting to the model", response);
+            Error err = error LlmConnectionError("Error while connecting to the model", response);
+            span.close(err);
+            return err;
         }
         if response.choices.length() == 0 {
-            return error LlmInvalidResponseError("Empty response from the model when using function call API");
+            Error err = error LlmInvalidResponseError("Empty response from the model when using function call API");
+            span.close(err);
+            return err;
         }
         intelligence:ChatCompletionResponseMessage? message = response.choices[0].message;
+
+        string|int? responseId = response["id"];
+        if responseId is string {
+            span.addResponseId(responseId);
+        }
+        int? inputTokens = response.usage?.promptTokens;
+        if inputTokens is int {
+            span.addInputTokenCount(inputTokens);
+        }
+        int? outputTokens = response.usage?.completionTokens;
+        if outputTokens is int {
+            span.addOutputTokenCount(outputTokens);
+        }
+        string? finishReason = response.choices[0].finishReason;
+        if finishReason is string {
+            span.addFinishReason(finishReason);
+        }
+
         ChatAssistantMessage chatAssistantMessage = {role: ASSISTANT, content: message?.content};
         intelligence:ChatCompletionFunctionCall? functionCall = message?.functionCall;
         if functionCall is intelligence:ChatCompletionFunctionCall {
             chatAssistantMessage.toolCalls = [check self.mapToFunctionCall(functionCall)];
         }
+        span.addOutputMessages(chatAssistantMessage);
+        span.close();
         return chatAssistantMessage;
     }
 
-
     # Sends a chat request to the model and generates a value that belongs to the type
     # corresponding to the type descriptor argument.
-    # 
+    #
     # + prompt - The prompt to use in the chat messages
     # + td - Type descriptor specifying the expected return type format
     # + return - Generates a value that belongs to the type, or an error if generation fails
@@ -280,4 +315,15 @@ public isolated distinct client class Wso2ModelProvider {
         role: message.role,
         "content": getChatMessageStringContent(message.content)
     };
+}
+
+isolated function convertMessageToJson(ChatMessage[]|ChatMessage messages) returns json {
+    if messages is ChatMessage[] {
+        return messages.'map(msg => msg is ChatUserMessage|ChatSystemMessage ? convertMessageToJson(msg) : msg);
+    }
+    if messages is ChatUserMessage|ChatSystemMessage {
+
+    }
+    return messages !is ChatUserMessage|ChatSystemMessage ? messages :
+        {role: messages.role, content: getChatMessageStringContent(messages.content), name: messages.name};
 }
