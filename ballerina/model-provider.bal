@@ -246,11 +246,17 @@ public isolated distinct client class Wso2ModelProvider {
 
         ChatAssistantMessage chatAssistantMessage = {role: ASSISTANT, content: message?.content};
         intelligence:ChatCompletionFunctionCall? functionCall = message?.functionCall;
-        if functionCall is intelligence:ChatCompletionFunctionCall {
-            chatAssistantMessage.toolCalls = [check self.mapToFunctionCall(functionCall)];
+        if functionCall is () {
+            span.addOutputMessages(chatAssistantMessage);
+            span.close();
+            return chatAssistantMessage;
         }
-        span.addOutputMessages(chatAssistantMessage);
-        span.close();
+        FunctionCall|Error toolCall = check self.mapToFunctionCall(functionCall);
+        if toolCall is Error {
+            span.close(toolCall);
+            return toolCall;
+        }
+        chatAssistantMessage.toolCalls = [toolCall];
         return chatAssistantMessage;
     }
 
