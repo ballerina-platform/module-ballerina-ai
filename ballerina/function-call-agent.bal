@@ -35,10 +35,10 @@ isolated distinct class FunctionCallAgent {
     # + tools - Tools to be used by the agent
     # + memory - The memory associated with the agent.
     isolated function init(ModelProvider model, (BaseToolKit|ToolConfig|FunctionTool)[] tools,
-            Memory? memory = new MessageWindowChatMemory()) returns Error? {
+            Memory? memory = ()) returns Error? {
         self.toolStore = check new (...tools);
         self.model = model;
-        self.memory = memory is Memory ? memory : new MessageWindowChatMemory();
+        self.memory = memory ?: check new ShortTermMemory();
         self.stateless = memory is ();
     }
 
