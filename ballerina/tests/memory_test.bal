@@ -14,6 +14,39 @@ final readonly & ChatAssistantMessage K1M4 = {role: ASSISTANT,
 const ChatUserMessage K2M1 = {role: USER, content: "Hello, my name is Bob."};
 
 @test:Config
+function testBasicShortTermMemory() returns error? {
+    Memory memory = check new ShortTermMemory();
+
+    check memory.update(K1, K1SM1);
+    check memory.update(K1, K1M1);
+    check memory.update(K2, K2M1);
+
+    ChatMessage[] k1CurrentMemory = check memory.get(K1);
+    test:assertEquals(k1CurrentMemory.length(), 2);
+    assertChatMessageEquals(k1CurrentMemory[0], K1SM1);
+    assertChatMessageEquals(k1CurrentMemory[1], K1M1);
+
+    ChatMessage[] k2CurrentMemory = check memory.get(K2);
+    test:assertEquals(k2CurrentMemory.length(), 1);
+    assertChatMessageEquals(k2CurrentMemory[0], K2M1);
+
+    // Check removal of all messages for a key.
+    check memory.delete(K1);
+    k1CurrentMemory = check memory.get(K1);
+    test:assertEquals(k1CurrentMemory.length(), 0);
+
+    k2CurrentMemory = check memory.get(K2);
+    test:assertEquals(k2CurrentMemory.length(), 1);
+    assertChatMessageEquals(k2CurrentMemory[0], K2M1);
+
+    // Add more messages to K1 after deletion.
+    check memory.update(K1, k1m2);
+    k1CurrentMemory = check memory.get(K1);
+    test:assertEquals(k1CurrentMemory.length(), 1);
+    assertChatMessageEquals(k1CurrentMemory[0], k1m2);
+}
+
+@test:Config
 function testShortTermMemoryWithInMemoryStoreTrimmingOnOverflow() returns error? {
     InMemoryShortTermMemoryStore store = check new (3);
     Memory memory = check new ShortTermMemory(store);
