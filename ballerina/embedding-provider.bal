@@ -15,6 +15,7 @@
 // under the License.
 
 import ai.intelligence;
+import ai.observe;
 
 # Represents an embedding provider that converts chunk into vector embeddings for similarity search.
 public type EmbeddingProvider distinct isolated client object {
@@ -75,18 +76,37 @@ public distinct isolated client class Wso2EmbeddingProvider {
     # + chunk - The data to embed
     # + return - Embedding representation of the chunk content or an `ai:Error` if the embedding service fails
     isolated remote function embed(Chunk chunk) returns Embedding|Error {
+        observe:EmbeddingSpan span = observe:createEmbeddingSpan("text-embedding-3-small");
+        span.addProvider("WSO2");
+
         if chunk !is TextChunk|TextDocument {
-            return error Error("Unsupported chunk type. only 'ai:TextChunk|ai:TextDocument' is supported");
+            Error err = error Error("Unsupported chunk type. only 'ai:TextChunk|ai:TextDocument' is supported");
+            span.close(err);
+            return err;
         }
+
         intelligence:EmbeddingRequest request = {input: chunk.content};
+        span.addInputContent(chunk.content);
         intelligence:EmbeddingResponse|error response = self.embeddingClient->/embeddings.post(request);
         if response is error {
-            return error Error("Error generating embedding for provided chunk", response);
+            Error err = error Error("Error generating embedding for provided chunk", response);
+            span.close(err);
+            return err;
         }
+
+        int? inputTokens = response.usage?.promptTokens;
+        if inputTokens is int {
+            span.addInputTokenCount(inputTokens);
+        }
+
         intelligence:EmbeddingResponse_data[] responseData = response.data;
         if responseData.length() == 0 {
-            return error Error("No embeddings generated for the provided chunk");
+            Error err = error Error("No embeddings generated for the provided chunk");
+            span.close(err);
+            return err;
         }
+
+        span.close();
         return responseData[0].embedding;
     }
 
@@ -95,18 +115,37 @@ public distinct isolated client class Wso2EmbeddingProvider {
     # + chunks - The array of chunks to be converted into embeddings
     # + return - An array of embeddings on success, or an `ai:Error`
     isolated remote function batchEmbed(Chunk[] chunks) returns Embedding[]|Error {
+        observe:EmbeddingSpan span = observe:createEmbeddingSpan("text-embedding-3-small");
+        span.addProvider("WSO2");
+
         if !isAllTextChunks(chunks) {
-            return error Error("Unsupported chunk type. Expected elements of type 'ai:TextChunk|ai:TextDocument'.");
+            Error err = error Error("Unsupported chunk type. Expected elements of type 'ai:TextChunk|ai:TextDocument'.");
+            span.close(err);
+            return err;
         }
-        intelligence:EmbeddingRequest request = {input: chunks.map(chunk => chunk.content.toString())};
-        intelligence:EmbeddingResponse|error response = self.embeddingClient->/embeddings.post(request);
+        string[] input = chunks.map(chunk => chunk.content.toString());
+        span.addInputContent(input);
+
+        intelligence:EmbeddingResponse|error response = self.embeddingClient->/embeddings.post({input});
         if response is error {
-            return error Error("Error generating embedding for provided chunk", response);
+            Error err = error Error("Error generating embedding for provided chunk", response);
+            span.close(err);
+            return err;
         }
+
+        int? inputTokens = response.usage?.promptTokens;
+        if inputTokens is int {
+            span.addInputTokenCount(inputTokens);
+        }
+
         intelligence:EmbeddingResponse_data[] responseData = response.data;
         if responseData.length() == 0 {
-            return error Error("No embeddings generated for the provided chunk");
+            Error err = error Error("No embeddings generated for the provided chunk");
+            span.close(err);
+            return err;
         }
+
+        span.close();
         return responseData.map(data => data.embedding);
     }
 }

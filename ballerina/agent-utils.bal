@@ -14,6 +14,8 @@
 // specific language governing permissions and limitations
 // under the License.
 
+import ai.observe;
+
 import ballerina/io;
 import ballerina/log;
 
@@ -174,6 +176,20 @@ class Executor {
         anydata observation;
         ExecutionResult|ExecutionError executionResult;
         if parsedOutput is LlmToolResponse {
+            string toolName = parsedOutput.name;
+            observe:ExecuteToolSpan span = observe:createExecuteToolSpan(toolName);
+            string? toolCallId = parsedOutput.id;
+            if toolCallId is string {
+                span.addId(toolCallId);
+            }
+            string? toolDescription = self.agent.toolStore.getToolDescription(toolName);
+            if toolDescription is string {
+                span.addDescription(toolDescription);
+
+            }
+            span.addType(self.agent.toolStore.isMcpTool(toolName) ? observe:EXTENTION : observe:FUNCTION);
+            span.addArguments(parsedOutput.arguments);
+
             ToolOutput|ToolExecutionError|LlmInvalidGenerationError output = self.agent.toolStore.execute(parsedOutput,
                 self.progress.context);
             if output is Error {
@@ -189,6 +205,9 @@ class Executor {
                     'error: output,
                     observation: observation.toString()
                 };
+
+                Error toolExecutionError = error Error(observation.toString(), details = {parsedOutput});
+                span.close(toolExecutionError);
             } else {
                 anydata|error value = output.value;
                 observation = value is error ? value.toString() : value;
@@ -196,6 +215,9 @@ class Executor {
                     tool: parsedOutput,
                     observation: value
                 };
+
+                span.addOutput(observation);
+                span.close();
             }
         } else {
             observation = "Tool extraction failed due to invalid JSON_BLOB. Retry with correct JSON_BLOB.";

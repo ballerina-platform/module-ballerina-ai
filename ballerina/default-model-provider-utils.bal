@@ -15,6 +15,7 @@
 // under the License.
 
 import ai.intelligence;
+import ai.observe;
 
 import ballerina/constraint;
 import ballerina/data.jsondata;
@@ -98,17 +99,22 @@ isolated function getGetResultsToolChoice() returns intelligence:ChatCompletionN
     }
 };
 
-isolated function getGetResultsTool(map<json> parameters) returns intelligence:ChatCompletionTool[]|error =>
-    [
-    {
-        'type: FUNCTION,
-        'function: {
-            name: GET_RESULTS_TOOL,
-            parameters: check parameters.cloneWithType(),
-            description: "Tool to call with the response from a large language model (LLM) for a user prompt."
-        }
+isolated function getGetResultsTool(map<json> parameters) returns intelligence:ChatCompletionTool[]|Error {
+    intelligence:ChatCompletionFunctionParameters|error toolParams = parameters.cloneWithType();
+    if toolParams is error {
+        return error("Error in generated schema: " + toolParams.message());
     }
-];
+    return [
+        {
+            'type: FUNCTION,
+            'function: {
+                name: GET_RESULTS_TOOL,
+                parameters: toolParams,
+                description: "Tool to call with the response from a large language model (LLM) for a user prompt."
+            }
+        }
+    ];
+}
 
 isolated function generateChatCreationContent(Prompt prompt) returns DocumentContentPart[]|Error {
     string[] & readonly strings = prompt.strings;
@@ -208,30 +214,57 @@ isolated function handleParseResponseError(error chatResponseError) returns erro
 isolated function generateLlmResponse(intelligence:Client llmClient, decimal temperature,
         GeneratorConfig generatorConfig, Prompt prompt,
         typedesc<json> expectedResponseTypedesc) returns anydata|Error {
-    DocumentContentPart[] content = check generateChatCreationContent(prompt);
-    ResponseSchema responseSchema = check getExpectedResponseSchema(expectedResponseTypedesc);
-    intelligence:ChatCompletionTool[]|error tools = getGetResultsTool(responseSchema.schema);
-    if tools is error {
-        return error("Error in generated schema: " + tools.message());
+    observe:GenerateContentSpan span = observe:createGenerateContentSpan("gpt-4o-mini");
+    span.addTemperature(temperature);
+
+    do {
+        DocumentContentPart[] content = check generateChatCreationContent(prompt);
+        ResponseSchema responseSchema = check getExpectedResponseSchema(expectedResponseTypedesc);
+        intelligence:ChatCompletionTool[] tools = check getGetResultsTool(responseSchema.schema);
+
+        intelligence:CreateChatCompletionRequest request = {
+            messages: [{role: USER, "content": content}],
+            tools,
+            toolChoice: getGetResultsToolChoice(),
+            temperature
+        };
+        span.addInputMessages(request.messages.toJson());
+
+        [int, decimal] [count, interval] = check getRetryConfigValues(generatorConfig);
+        anydata response = check getLlMResponse(llmClient, request, expectedResponseTypedesc,
+                responseSchema.isOriginallyJsonObject, count, interval);
+
+        // The `span` object created above might be closed within the getLlMResponse method,
+        // and a new span could be created during a retry operation.
+        // Therefore, close the most recently created span.
+        observe:AiSpan? currentSpan = observe:getCurrentAiSpan();
+        if currentSpan is observe:GenerateContentSpan {
+            currentSpan.addOutputMessages(response.toJson());
+            currentSpan.close();
+        }
+        return response;
+    } on fail Error err {
+        observe:AiSpan? currentSpan = observe:getCurrentAiSpan();
+        if currentSpan is observe:GenerateContentSpan {
+            currentSpan.close(err);
+        }
+        return err;
     }
-
-    intelligence:CreateChatCompletionRequest request = {
-        messages: [{role: USER, "content": content}],
-        tools,
-        toolChoice: getGetResultsToolChoice(),
-        temperature
-    };
-
-    [int, decimal] [count, interval] = check getRetryConfigValues(generatorConfig);
-
-    return getLlMResponse(llmClient, request, expectedResponseTypedesc, responseSchema.isOriginallyJsonObject,
-            count, interval);
 }
 
 isolated function getLlMResponse(intelligence:Client llmClient,
         intelligence:CreateChatCompletionRequest request,
         typedesc<anydata> expectedResponseTypedesc,
         boolean isOriginallyJsonObject, int retryCount, decimal retryInterval) returns anydata|Error {
+
+    observe:AiSpan? currentSpan = observe:getCurrentAiSpan();
+    if currentSpan is observe:GenerateContentSpan {
+        decimal? temperature = request?.temperature;
+        if temperature is decimal {
+            currentSpan.addTemperature(temperature);
+        }
+    }
+
     intelligence:CreateChatCompletionResponse|error response = llmClient->/chat/completions.post(request);
     if response is error {
         return error("LLM call failed: " + response.message(), detail = response.detail(), cause = response.cause());
@@ -244,8 +277,28 @@ isolated function getLlMResponse(intelligence:Client llmClient,
         intelligence:ChatCompletionResponseMessage message?;
     }[] choices = response.choices;
 
-    if choices.length() == 0 {
-        return error("No completion choices");
+    if currentSpan is observe:GenerateContentSpan {
+        string? responseId = response["id"];
+        if responseId is string {
+            currentSpan.addResponseId(responseId);
+        }
+        int? inputTokens = response.usage?.promptTokens;
+        if inputTokens is int {
+            currentSpan.addInputTokenCount(inputTokens);
+        }
+        int? outputTokens = response.usage?.completionTokens;
+        if outputTokens is int {
+            currentSpan.addOutputTokenCount(outputTokens);
+        }
+        if choices.length() == 0 {
+            Error err = error("No completion choices");
+            currentSpan.close(err);
+            return err;
+        }
+        string? finishReason = choices[0].finishReason;
+        if finishReason is string {
+            currentSpan.addFinishReason(finishReason);
+        }
     }
 
     intelligence:ChatCompletionResponseMessage? message = choices[0].message;
@@ -281,8 +334,14 @@ isolated function getLlMResponse(intelligence:Client llmClient,
             role: USER,
             "content": repairMessage
         });
+        // Close the previously created span since the operation has already failed.
+        if currentSpan is observe:GenerateContentSpan {
+            currentSpan.close(result);
+        }
         runtime:sleep(retryInterval);
 
+        // Create a new span for the retry operation.
+        observe:GenerateContentSpan _ = observe:createGenerateContentSpan("gpt-4o-mini");
         return getLlMResponse(llmClient, request, expectedResponseTypedesc, isOriginallyJsonObject,
                 retryCount - 1, retryInterval);
     }
