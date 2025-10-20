@@ -53,8 +53,7 @@ public type OverflowSummarizationConfiguration record {|
 # Represents configuration for handling overflow in short-term memory.
 public type OverflowConfiguration OverflowTrimConfiguration|OverflowSummarizationConfiguration;
 
-type OverflowHandler isolated function (
-    ChatInteractiveMessage[] messages, ROLE newMessageRole) returns ChatInteractiveMessage[]|MemoryError;
+type OverflowHandler isolated function (ChatInteractiveMessage[] messages) returns ChatInteractiveMessage[]|MemoryError;
 
 type OverflowStrategy OverflowTrimConfiguration|OverflowHandler;
 
@@ -85,8 +84,8 @@ public isolated class ShortTermMemory {
                 final string[] & readonly strings = prompt.strings;
                 final anydata[] & readonly insertions = prompt.insertions.cloneReadOnly();
                 self.overflowStrategy = isolated function (
-                        ChatInteractiveMessage[] messages, ROLE newMessageRole) returns ChatInteractiveMessage[]|MemoryError {
-                    return handleOverflow(model, createPrompt(strings, insertions), messages, newMessageRole);
+                        ChatInteractiveMessage[] messages) returns ChatInteractiveMessage[]|MemoryError {
+                    return handleOverflow(model, createPrompt(strings, insertions), messages);
                 };
             }
         } on fail error e {
@@ -137,8 +136,7 @@ public isolated class ShortTermMemory {
                 if overflowStrategy is OverflowTrimConfiguration {
                     check self.store.remove(key, overflowStrategy.trimCount);
                 } else {
-                    ChatMessage[] updatedMessages = 
-                        check overflowStrategy(check self.store.get(key), message.role);
+                    ChatMessage[] updatedMessages = check overflowStrategy(check self.store.get(key));
                     check self.store.remove(key);
                     foreach ChatMessage updatedMessage in updatedMessages {
                         check self.store.put(key, updatedMessage);
@@ -189,7 +187,7 @@ public isolated class ShortTermMemory {
 }
 
 isolated function handleOverflow(
-            ModelProvider model, Prompt & readonly prompt, ChatInteractiveMessage[] memory, ROLE newMessageRole) 
+            ModelProvider model, Prompt & readonly prompt, ChatInteractiveMessage[] memory) 
         returns ChatInteractiveMessage[]|MemoryError {
     int memoryLength = memory.length();
     if memoryLength == 0 {
@@ -199,15 +197,15 @@ isolated function handleOverflow(
     int memoryLastIndex = memoryLength - 1;
 
     ChatInteractiveMessage lastMessage = memory[memoryLastIndex];
-    ROLE lastMessageRole = lastMessage.role;
 
     MemoryChatInteractiveMessage[] memoryChatMessages = check mapToMemoryChatInteractiveMessages(memory);
-    boolean isLastMessageFromAI = lastMessageRole != USER && newMessageRole == USER;
+    
+    // Since we add the summary as an assistant message, we only summarize up to the last user message,
+    // to maintain an interactive flow.
+    boolean isLastMessageFromUser = lastMessage.role == USER;
 
-    int endIndex = isLastMessageFromAI ? memoryLastIndex : memoryLength;
-
-    MemoryChatInteractiveMessage[] sliceToSummarize = endIndex != memoryLength ? 
-        memoryChatMessages.slice(0, endIndex) : memoryChatMessages;
+    MemoryChatInteractiveMessage[] sliceToSummarize = isLastMessageFromUser ? 
+        memoryChatMessages.slice(0, memoryLastIndex) : memoryChatMessages;
 
     ChatAssistantMessage|Error summaryMessage = callModelToHandleOverflow(sliceToSummarize, model, prompt);
     if summaryMessage is Error {
@@ -215,7 +213,7 @@ isolated function handleOverflow(
     }
 
     ChatInteractiveMessage[] updatedMessages = [summaryMessage];
-    if isLastMessageFromAI {
+    if isLastMessageFromUser {
         updatedMessages.push(lastMessage);
     }
     return updatedMessages;

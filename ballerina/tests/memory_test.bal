@@ -114,17 +114,14 @@ const CHAT_METHOD = "chat";
 function testShortTermMemoryWithSummarizationOnOverflow1() returns error? {
     final readonly & ChatAssistantMessage memorySummaryMessage = {
         role: ASSISTANT,
-        content: string `"**Summary of Chat History:**
-                1. **User Inquiry:** The user asked the AI about their tasks for the day.
-                
-                2. **AI Response:** The AI checked the user's task list.
+        content: string `The user inquired about their tasks for the day. The AI assistant retrieved and 
+            listed the user's tasks, which are:
 
-                3. **Tasks Listed:**
-                - **Completed Tasks:**
-                    - Buy groceries (due by 2025-10-19)
-                - **Pending Tasks:**
-                    - Finish the project report (due by 2025-10-20)
-                    - Call Alice (due by 2025-10-21)`
+            1. **Buy groceries** - Completed
+            2. **Finish the project report** - Due by October 20, 2025
+            3. **Call Alice** - Due by October 21, 2025
+
+            The assistant offered further assistance if needed.`
     };
 
     final readonly & ChatSystemMessage ksm1 = {
@@ -175,7 +172,7 @@ function testShortTermMemoryWithSummarizationOnOverflow1() returns error? {
         isolated remote function chat(
                 ChatMessage[]|ChatUserMessage messages, 
                 ChatCompletionFunctions[] tools, string? stop) returns ChatAssistantMessage|Error {
-            assertSummarizationRequestChatMessages(messages, [km1, km2, km3]);
+            assertSummarizationRequestChatMessages(messages, [km1, km2, km3, km4]);
             return memorySummaryMessage;                    
         }
 
@@ -212,11 +209,10 @@ function testShortTermMemoryWithSummarizationOnOverflow1() returns error? {
     check memory.update(k, km5);
 
     k3CurrentMemory = check memory.get(k);    
-    test:assertEquals(k3CurrentMemory.length(), 4);
+    test:assertEquals(k3CurrentMemory.length(), 3);
     assertChatMessageEquals(k3CurrentMemory[0], ksm1);
     assertChatMessageEquals(k3CurrentMemory[1], memorySummaryMessage);
-    assertChatMessageEquals(k3CurrentMemory[2], km4);
-    assertChatMessageEquals(k3CurrentMemory[3], km5);
+    assertChatMessageEquals(k3CurrentMemory[2], km5);
 }
 
 isolated function assertSummarizationRequestChatMessages(
@@ -259,20 +255,10 @@ function testShortTermMemoryWithSummarizationOnOverflow2() returns error? {
                     - Call Alice (due by 2025-10-21)`
     };
 
-    InMemoryShortTermMemoryStore store = check new (3);
-    ModelProvider model = isolated client object {
-        isolated remote function chat(
-                ChatMessage[]|ChatUserMessage messages, 
-                ChatCompletionFunctions[] tools, string? stop) returns ChatAssistantMessage|Error => 
-                    memorySummaryMessage;
-
-        isolated remote function generate(Prompt prompt, typedesc<anydata> td) returns td|Error = external;
-    };
-
     Memory memory = check new ShortTermMemory(
-        store,
+        check new InMemoryShortTermMemoryStore(3),
         overflowConfiguration = {
-            model
+            model: new MockSummarizerModel(memorySummaryMessage)
         }
     );
     
@@ -325,4 +311,77 @@ function testShortTermMemoryWithSummarizationOnOverflow2() returns error? {
     test:assertEquals(k3CurrentMemory.length(), 2);
     assertChatMessageEquals(k3CurrentMemory[0], memorySummaryMessage);
     assertChatMessageEquals(k3CurrentMemory[1], km4);
+}
+
+// Tests preserving the last user message when summarizing on overflow.
+@test:Config
+function testShortTermMemoryWithSummarizationOnOverflow3() returns error? {
+    final readonly & ChatAssistantMessage memorySummaryMessage = {
+        role: ASSISTANT,
+        content: string `Joy asked the AI for a book recommendation. The AI responded 
+            by asking for Joy's preferred genre to provide a suitable suggestion.`
+    };
+
+    Memory memory = check new ShortTermMemory(
+        check new InMemoryShortTermMemoryStore(3),
+        overflowConfiguration = {
+            model: new MockSummarizerModel(memorySummaryMessage)
+        }
+    );
+    
+    final string k = "key";
+
+    ChatUserMessage km1 = {
+        role: USER,
+        content: "Hello, I'm Joy. Can you recommend me a good book to read?"
+    };
+    check memory.update(k, km1);
+    
+    ChatAssistantMessage km2 = {
+        role: ASSISTANT,
+        content: "Hi Joy! Sure, what genre are you interested in?"
+    };
+    check memory.update(k, km2);
+
+    ChatUserMessage km3 = {
+        role: USER,
+        content: "I enjoy science fiction and fantasy."
+    };
+    check memory.update(k, km3);
+
+    ChatMessage[] k3CurrentMemory = check memory.get(k);
+    test:assertEquals(k3CurrentMemory.length(), 3);
+    assertChatMessageEquals(k3CurrentMemory[0], km1);
+    assertChatMessageEquals(k3CurrentMemory[1], km2);
+    assertChatMessageEquals(k3CurrentMemory[2], km3);
+
+    ChatAssistantMessage km4 = {
+        role: ASSISTANT,
+        content: string `Great choices! I recommend Arthur C. Clarke's '2001: A Space Odyssey' 
+            for science fiction and J.R.R. Tolkien's 'The Hobbit' for fantasy.`
+    };
+    check memory.update(k, km4);
+
+    k3CurrentMemory = check memory.get(k);
+    test:assertEquals(k3CurrentMemory.length(), 3);
+    assertChatMessageEquals(k3CurrentMemory[0], memorySummaryMessage);
+    assertChatMessageEquals(k3CurrentMemory[1], km3);
+    assertChatMessageEquals(k3CurrentMemory[2], km4);
+}
+
+isolated client class MockSummarizerModel {
+    *ModelProvider;
+
+    final readonly & ChatAssistantMessage memorySummaryMessage;
+
+    isolated function init(readonly & ChatAssistantMessage memorySummaryMessage) {
+        self.memorySummaryMessage = memorySummaryMessage;
+    }
+
+    isolated remote function chat(
+            ChatMessage[]|ChatUserMessage messages, 
+            ChatCompletionFunctions[] tools, string? stop) returns ChatAssistantMessage|Error => 
+                self.memorySummaryMessage;
+
+    isolated remote function generate(Prompt prompt, typedesc<anydata> td) returns td|Error = external;
 }
