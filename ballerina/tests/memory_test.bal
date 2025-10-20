@@ -188,7 +188,7 @@ function testShortTermMemoryWithSummarizationOnOverflow1() returns error? {
         isolated remote function chat(
                 ChatMessage[]|ChatUserMessage messages, 
                 ChatCompletionFunctions[] tools, string? stop) returns ChatAssistantMessage|Error {
-            assertSummarizationRequestChatMessages(messages, [km1, km2, km3, km4]);
+            assertSummarizationRequestChatMessages(messages, [km1, km2, km3, km4], defaultSummarizationPrompt);
             return memorySummaryMessage;                    
         }
 
@@ -229,29 +229,6 @@ function testShortTermMemoryWithSummarizationOnOverflow1() returns error? {
     assertChatMessageEquals(k3CurrentMemory[0], ksm1);
     assertChatMessageEquals(k3CurrentMemory[1], memorySummaryMessage);
     assertChatMessageEquals(k3CurrentMemory[2], km5);
-}
-
-isolated function assertSummarizationRequestChatMessages(
-        ChatMessage[]|ChatUserMessage messages, ChatInteractiveMessage[] expectedHistory) {
-    if messages is ChatUserMessage {
-        test:assertFail("Expected ChatMessage[] but found ChatUserMessage");
-    }
-    test:assertEquals(messages.length(), 2);
-    
-    ChatMessage message0 = messages[0];
-    if message0 !is ChatSystemMessage {
-        test:assertFail("Expected first message to be ChatSystemMessage");
-    }
-    string|Prompt prompt = message0.content;
-    test:assertEquals(prompt is string ? prompt : toString(prompt), toString(defaultSummarizationPrompt));
-
-    ChatMessage message1 = messages[1];
-    if message1 !is ChatUserMessage {
-        test:assertFail("Expected first message to be ChatUserMessage");
-    }
-    prompt = message1.content;
-    test:assertEquals(prompt is string? ? prompt : toString(prompt), 
-                        toString(`Summarize this chat history: ${expectedHistory.toString()}`));
 }
 
 @test:Config
@@ -383,6 +360,118 @@ function testShortTermMemoryWithSummarizationOnOverflow3() returns error? {
     assertChatMessageEquals(k3CurrentMemory[0], memorySummaryMessage);
     assertChatMessageEquals(k3CurrentMemory[1], km3);
     assertChatMessageEquals(k3CurrentMemory[2], km4);
+}
+
+@test:Config
+function testOverridingSummarizationPrompt() returns error? {
+    final readonly & Prompt customSummarizationPrompt = `Summarize the following conversation in brief: `;
+    
+    final readonly & ChatAssistantMessage mockSummaryMessage = {
+        role: ASSISTANT,
+        content: string `The user asked about their tasks for the day, and the assistant responded by 
+        listing one task: to buy groceries, which is due by October 19, 2025, and is not yet completed.`
+    };
+
+    final string k = "key";
+
+    final readonly & ChatUserMessage km1 = {
+        role: USER, 
+        content: "Hello, what do I have on my plate today?"
+    };
+
+    final readonly & ChatAssistantMessage km2 = {
+        role: ASSISTANT,
+        toolCalls: [
+            {
+                name: "listTasks",
+                arguments: {}
+            }
+        ]
+    };
+
+    final readonly & ChatFunctionMessage km3 = {
+        role: FUNCTION,
+        name: "listTasks",
+        content: "[{\"description\":\"Buy groceries\",\"dueBy\":\"2025-10-19\",\"completed\":false}]"
+    };
+
+    ModelProvider model = isolated client object {
+        isolated remote function chat(
+                ChatMessage[]|ChatUserMessage messages, 
+                ChatCompletionFunctions[] tools, string? stop) returns ChatAssistantMessage|Error {
+            assertSummarizationRequestChatMessages(messages, [km1, km2, km3], customSummarizationPrompt);
+            return mockSummaryMessage;                    
+        }
+
+        isolated remote function generate(Prompt prompt, typedesc<anydata> td) returns td|Error = external;
+    };
+
+    Memory memory = check new ShortTermMemory(
+        check new InMemoryShortTermMemoryStore(3),
+        overflowConfiguration = {
+            model,
+            prompt: customSummarizationPrompt
+        }
+    );
+
+    check memory.update(k, km1);
+    check memory.update(k, km2);
+    check memory.update(k, km3);
+
+    final readonly & ChatAssistantMessage km4 = {
+        role: ASSISTANT,
+        content: "You have one pending task: Buy groceries."
+    };
+    check memory.update(k, km4);
+
+    ChatMessage[] k3CurrentMemory = check memory.get(k);
+    test:assertEquals(k3CurrentMemory.length(), 2);
+    assertChatMessageEquals(k3CurrentMemory[0], mockSummaryMessage);
+    assertChatMessageEquals(k3CurrentMemory[1], km4);
+}
+
+@test:Config
+function testDefaultingToTheDefaultModelForSummarization() returns error? {
+    Memory|MemoryError memory = new ShortTermMemory(
+        check new InMemoryShortTermMemoryStore(3),
+        overflowConfiguration = {
+            prompt: `Summarize the following conversation briefly`
+            // No model provided here, should default to the default model.
+            // Since the model is not configured, should error out.
+        }
+    );
+
+    if memory is Memory {
+        test:assertFail("Expected 'MemoryError' but found 'Memory'");
+    }
+
+    test:assertEquals(memory.message(), 
+        "Failed to initialize short term memory: The `ballerina.ai.wso2ProviderConfig` is not configured correctly. " +
+            "Ensure values are configured for the WSO2 model provider configurable variable");
+}
+
+isolated function assertSummarizationRequestChatMessages(ChatMessage[]|ChatUserMessage messages, 
+                                                         ChatInteractiveMessage[] expectedHistory,
+                                                         Prompt summarizationPrompt) {
+    if messages is ChatUserMessage {
+        test:assertFail("Expected ChatMessage[] but found ChatUserMessage");
+    }
+    test:assertEquals(messages.length(), 2);
+    
+    ChatMessage message0 = messages[0];
+    if message0 !is ChatSystemMessage {
+        test:assertFail("Expected first message to be ChatSystemMessage");
+    }
+    string|Prompt prompt = message0.content;
+    test:assertEquals(prompt is string ? prompt : toString(prompt), toString(summarizationPrompt));
+
+    ChatMessage message1 = messages[1];
+    if message1 !is ChatUserMessage {
+        test:assertFail("Expected first message to be ChatUserMessage");
+    }
+    prompt = message1.content;
+    test:assertEquals(prompt is string? ? prompt : toString(prompt), 
+                        toString(`Summarize this chat history: ${expectedHistory.toString()}`));
 }
 
 isolated client class MockSummarizerModel {
