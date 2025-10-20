@@ -240,6 +240,7 @@ isolated function generateLlmResponse(intelligence:Client llmClient, decimal tem
         observe:AiSpan? currentSpan = observe:getCurrentAiSpan();
         if currentSpan is observe:GenerateContentSpan {
             currentSpan.addOutputMessages(response.toJson());
+            currentSpan.addOutputType(observe:JSON);
             currentSpan.close();
         }
         return response;

@@ -198,7 +198,6 @@ public isolated distinct client class Wso2ModelProvider {
     returns ChatAssistantMessage|Error {
         observe:ChatSpan span = observe:createChatSpan("gpt-4o-mini");
         span.addProvider("WSO2");
-        span.addOutputType(observe:TEXT);
         if stop is string {
             span.addStopSequence(stop);
         }
@@ -256,6 +255,7 @@ public isolated distinct client class Wso2ModelProvider {
             span.close(toolCall);
             return toolCall;
         }
+        span.addOutputType(observe:TEXT);
         chatAssistantMessage.toolCalls = [toolCall];
         return chatAssistantMessage;
     }
