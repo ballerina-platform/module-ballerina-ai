@@ -123,6 +123,14 @@ public isolated class ShortTermMemory {
                     messageContent is () ? () :
                     [messageContent.strings, messageContent.insertions.cloneReadOnly()];
         lock {
+            if message is ChatSystemMessage {
+                return self.store.put(key, <ChatSystemMessage> {
+                    role: SYSTEM,
+                    content: getPromptContent(<string|([string[], anydata[]] & readonly)> content),
+                    name: message.name
+                });
+            }
+
             if self.store.isFull(key) {
                 final OverflowStrategy overflowStrategy = self.overflowStrategy;
 
@@ -141,14 +149,6 @@ public isolated class ShortTermMemory {
             if message is ChatUserMessage {
                 return self.store.put(key, <ChatUserMessage> {
                     role: USER, 
-                    content: getPromptContent(<string|([string[], anydata[]] & readonly)> content),
-                    name: message.name
-                });
-            }
-
-            if message is ChatSystemMessage {
-                return self.store.put(key, <ChatSystemMessage> {
-                    role: SYSTEM,
                     content: getPromptContent(<string|([string[], anydata[]] & readonly)> content),
                     name: message.name
                 });
