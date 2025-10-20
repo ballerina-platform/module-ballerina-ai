@@ -204,7 +204,6 @@ public isolated distinct client class Wso2ModelProvider {
         }
         span.addTemperature(self.temperature);
         span.addInputMessages(convertMessageToJson(messages));
-        span.addTools(tools);
 
         intelligence:CreateChatCompletionRequest request = {
             stop,
@@ -213,6 +212,7 @@ public isolated distinct client class Wso2ModelProvider {
         };
         if tools.length() > 0 {
             request.functions = tools;
+            span.addTools(tools);
         }
         intelligence:CreateChatCompletionResponse|error response = self.llmClient->/chat/completions.post(request);
         if response is error {
