@@ -127,12 +127,57 @@ function testShortTermMemoryWithSummarizationOnOverflow1() returns error? {
                     - Call Alice (due by 2025-10-21)`
     };
 
+    final readonly & ChatSystemMessage ksm1 = {
+        role: SYSTEM, 
+        content: string `
+            # Role  
+            Task Assistant  
+
+            # Instructions  
+            You are a helpful assistant that guides users with their todo lists.`
+    };
+
+    final readonly & ChatUserMessage km1 = {
+        role: USER, 
+        content: "Hello, what do I have on my plate today?"
+    };
+
+    final readonly & ChatAssistantMessage km2 = {
+        role: ASSISTANT,
+        toolCalls: [
+            {
+                name: "listTasks",
+                arguments: {}
+            }
+        ]
+    };
+
+    final readonly & ChatFunctionMessage km3 = {
+        role: FUNCTION,
+        name: "listTasks",
+        content: "[{\"description\":\"Buy groceries\",\"dueBy\":\"2025-10-19\",\"completed\":true}," +
+            "{\"description\":\"Finish the project report\",\"dueBy\":\"2025-10-20\",\"completed\":false}," +
+            "{\"description\":\"Call Alice\",\"dueBy\":\"2025-10-21\",\"completed\":false}]"
+    };
+
+    final readonly & ChatAssistantMessage km4 = {
+        role: ASSISTANT,
+        content: string `
+            Today, you have the following task on your plate:
+
+            1. **Finish the project report** - Due by **October 20, 2025**.
+
+            Let me know if you need help with anything!`
+    };
+
     InMemoryShortTermMemoryStore store = check new (4);
     ModelProvider model = isolated client object {
         isolated remote function chat(
                 ChatMessage[]|ChatUserMessage messages, 
-                ChatCompletionFunctions[] tools, string? stop) returns ChatAssistantMessage|Error => 
-                    memorySummaryMessage;
+                ChatCompletionFunctions[] tools, string? stop) returns ChatAssistantMessage|Error {
+            assertSummarizationRequestChatMessages(messages, [km1, km2, km3]);
+            return memorySummaryMessage;                    
+        }
 
         isolated remote function generate(Prompt prompt, typedesc<anydata> td) returns td|Error = external;
     };
@@ -145,52 +190,11 @@ function testShortTermMemoryWithSummarizationOnOverflow1() returns error? {
     );
     
     final string k = "key";
-    final readonly & ChatSystemMessage ksm1 = {
-        role: SYSTEM, 
-        content: string `
-            # Role  
-            Task Assistant  
 
-            # Instructions  
-            You are a helpful assistant that guides users with their todo lists.`
-    };
     check memory.update(k, ksm1);
-
-    final readonly & ChatUserMessage km1 = {
-        role: USER, 
-        content: "Hello, what do I have on my plate today?"
-    };
     check memory.update(k, km1);
-
-    final readonly & ChatAssistantMessage km2 = {
-        role: ASSISTANT,
-        toolCalls: [
-            {
-                name: "listTasks",
-                arguments: {}
-            }
-        ]
-    };
     check memory.update(k, km2);
-
-    final readonly & ChatFunctionMessage km3 = {
-        role: FUNCTION,
-        name: "listTasks",
-        content: "[{\"description\":\"Buy groceries\",\"dueBy\":\"2025-10-19\",\"completed\":true}," +
-            "{\"description\":\"Finish the project report\",\"dueBy\":\"2025-10-20\",\"completed\":false}," +
-            "{\"description\":\"Call Alice\",\"dueBy\":\"2025-10-21\",\"completed\":false}]"
-    };
     check memory.update(k, km3);
-
-    final readonly & ChatAssistantMessage km4 = {
-        role: ASSISTANT,
-        content: string `
-            Today, you have the following task on your plate:
-
-            1. **Finish the project report** - Due by **October 20, 2025**.
-
-            Let me know if you need help with anything!`
-    };
     check memory.update(k, km4);
 
     ChatMessage[] k3CurrentMemory = check memory.get(k);
@@ -213,6 +217,29 @@ function testShortTermMemoryWithSummarizationOnOverflow1() returns error? {
     assertChatMessageEquals(k3CurrentMemory[1], memorySummaryMessage);
     assertChatMessageEquals(k3CurrentMemory[2], km4);
     assertChatMessageEquals(k3CurrentMemory[3], km5);
+}
+
+isolated function assertSummarizationRequestChatMessages(
+        ChatMessage[]|ChatUserMessage messages, ChatInteractiveMessage[] expectedHistory) {
+    if messages is ChatUserMessage {
+        test:assertFail("Expected ChatMessage[] but found ChatUserMessage");
+    }
+    test:assertEquals(messages.length(), 2);
+    
+    ChatMessage message0 = messages[0];
+    if message0 !is ChatSystemMessage {
+        test:assertFail("Expected first message to be ChatSystemMessage");
+    }
+    string|Prompt prompt = message0.content;
+    test:assertEquals(prompt is string ? prompt : toString(prompt), toString(defaultSummarizationPrompt));
+
+    ChatMessage message1 = messages[1];
+    if message1 !is ChatUserMessage {
+        test:assertFail("Expected first message to be ChatUserMessage");
+    }
+    prompt = message1.content;
+    test:assertEquals(prompt is string? ? prompt : toString(prompt), 
+                        toString(`Summarize this chat history: ${expectedHistory.toString()}`));
 }
 
 @test:Config

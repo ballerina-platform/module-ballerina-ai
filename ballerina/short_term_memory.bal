@@ -223,12 +223,16 @@ isolated function handleOverflow(
 
 isolated function callModelToHandleOverflow(MemoryChatMessage[] memorySlice, ModelProvider model, Prompt prompt) 
         returns ChatAssistantMessage|Error {
-    return model->chat({
-        role: USER, 
-        content: `${toString(prompt)} 
-            
-            The chat history to summarize: ${memorySlice.toString()}`
-    });
+    return model->chat([
+        {
+            role: SYSTEM,
+            content: prompt
+        },
+        {
+            role: USER, 
+            content: `Summarize this chat history: ${memorySlice.toString()}`
+        }
+    ]);
 }
 
 isolated function toString(Prompt prompt) returns string {
