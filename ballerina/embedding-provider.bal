@@ -93,7 +93,7 @@ public distinct isolated client class Wso2EmbeddingProvider {
             span.close(err);
             return err;
         }
-
+        span.addResponseModel(response.model);
         int? inputTokens = response.usage?.promptTokens;
         if inputTokens is int {
             span.addInputTokenCount(inputTokens);
@@ -132,7 +132,7 @@ public distinct isolated client class Wso2EmbeddingProvider {
             span.close(err);
             return err;
         }
-
+        span.addResponseModel(response.model);
         int? inputTokens = response.usage?.promptTokens;
         if inputTokens is int {
             span.addInputTokenCount(inputTokens);
