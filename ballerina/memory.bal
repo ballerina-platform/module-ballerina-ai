@@ -41,6 +41,11 @@ type MemoryChatSystemMessage readonly & record {|
 |};
 
 # Provides an in-memory chat message window with a limit on stored messages.
+# 
+# # Deprecated
+# This class is deprecated and will be removed in future releases.
+# Use the type `ShortTermMemory` instead.
+@deprecated
 public isolated class MessageWindowChatMemory {
     *Memory;
     private final int size;
