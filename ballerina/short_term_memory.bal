@@ -117,17 +117,10 @@ public isolated class ShortTermMemory {
     # + message - The message to store
     # + return - nil on success, or an `ai:MemoryError` error if the operation fails 
     public isolated function update(string key, ChatMessage message) returns MemoryError? {
-        final string|([string[], anydata[]] & readonly)? content = let var messageContent = message.content in 
-                messageContent is string ? messageContent : 
-                    messageContent is () ? () :
-                    [messageContent.strings, messageContent.insertions.cloneReadOnly()];
+        final readonly &  MemoryChatMessage memoryChatMessage = check mapToMemoryChatMessage(message);
         lock {
-            if message is ChatSystemMessage {
-                return self.store.put(key, <ChatSystemMessage> {
-                    role: SYSTEM,
-                    content: getPromptContent(<string|([string[], anydata[]] & readonly)> content),
-                    name: message.name
-                });
+            if memoryChatMessage is ChatSystemMessage {
+                return self.store.put(key, memoryChatMessage);
             }
 
             if self.store.isFull(key) {
@@ -144,33 +137,7 @@ public isolated class ShortTermMemory {
                 }
             }
 
-            if message is ChatUserMessage {
-                return self.store.put(key, <ChatUserMessage> {
-                    role: USER, 
-                    content: getPromptContent(<string|([string[], anydata[]] & readonly)> content),
-                    name: message.name
-                });
-            }
-
-            if message is ChatAssistantMessage {
-                return self.store.put(key, <ChatAssistantMessage> {
-                    role: ASSISTANT,
-                    content: <string?> content,
-                    name: message.name,
-                    toolCalls: message.toolCalls.clone()
-                });
-            }
-
-            if message is ChatFunctionMessage {
-                return self.store.put(key, <ChatFunctionMessage> {
-                    role: FUNCTION,
-                    content: <string?> content,
-                    name: <string> message.name,
-                    id: message.id
-                });
-            }
-
-            panic error("Unexpected message type: " + (typeof message).toBalString());
+            return self.store.put(key, memoryChatMessage);
         }
     }
 

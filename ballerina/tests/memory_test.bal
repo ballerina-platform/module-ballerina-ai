@@ -470,7 +470,7 @@ isolated function assertSummarizationRequestChatMessages(ChatMessage[]|ChatUserM
         test:assertFail("Expected first message to be ChatUserMessage");
     }
     prompt = message1.content;
-    test:assertEquals(prompt is string? ? prompt : toString(prompt), 
+    test:assertEquals(prompt is string ? prompt : toString(prompt), 
                         toString(`Summarize this chat history: ${expectedHistory.toString()}`));
 }
 
