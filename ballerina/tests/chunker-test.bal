@@ -966,6 +966,62 @@ function testMarkdownChunkerClassWithVeryLongContent() returns error? {
 }
 
 @test:Config {}
+function testMarkdownChunkerPrevFieldValidation() returns error? {
+    // Create a very long code block that will trigger breakUpChunk
+    string veryLongCodeBlock = "```java\n" +
+        "public class VeryLongClass {\n" +
+        "    private String veryLongFieldName = \"This is a very long field value that will definitely exceed the maximum chunk size limit and force the system to break it up into smaller pieces\";\n" +
+        "    \n" +
+        "    public void veryLongMethodName() {\n" +
+        "        System.out.println(\"This is a very long method that contains multiple statements and will definitely exceed the maximum chunk size limit\");\n" +
+        "        System.out.println(\"This is another very long statement that will help ensure the code block is large enough to trigger breakUpChunk\");\n" +
+        "        System.out.println(\"This is yet another very long statement that will help ensure the code block is large enough to trigger breakUpChunk\");\n" +
+        "        System.out.println(\"This is the final very long statement that will help ensure the code block is large enough to trigger breakUpChunk\");\n" +
+        "    }\n" +
+        "}\n" +
+        "```";
+
+    string markdownContent = "# Test Document\n\n" + veryLongCodeBlock;
+
+    TextDocument doc = {content: markdownContent};
+    // Use a small chunk size to force breaking the code block
+    MarkdownChunker chunker = new (30, 5, CODE_BLOCK);
+    Chunk[] chunks = check chunker.chunk(doc);
+
+    test:assertTrue(chunks.length() > 1, msg = "Should produce multiple chunks when code block is too long");
+
+    // Find chunks that have prev field (these are from breakUpChunk)
+    int chunksWithPrev = 0;
+    foreach [int, Chunk] [i, chunk] in chunks.enumerate() {
+        if (chunk.metadata is Metadata) {
+            Metadata metadata = <Metadata>chunk.metadata;
+            int? prev = metadata.prev;
+            if (prev is int) {
+                chunksWithPrev += 1;
+
+                // Verify prev field is a valid integer
+                test:assertTrue(prev >= 0, msg = "Prev field should be a non-negative integer");
+
+                // Verify that the prev field points to a valid chunk ID
+                boolean foundPrevChunk = false;
+                foreach Chunk otherChunk in chunks {
+                    Metadata? otherMetadata = otherChunk.metadata;
+                    if (otherMetadata is Metadata) {
+                        int? otherId = otherMetadata.id;
+                        if (otherId is int && otherId == prev) {
+                            foundPrevChunk = true;
+                            break;
+                        }
+                    }
+                }
+                test:assertTrue(foundPrevChunk, msg = "Prev field should point to a valid chunk ID");
+            }
+        }
+    }
+    test:assertTrue(chunksWithPrev > 0, msg = "Should have at least some chunks with prev field from breakUpChunk");
+}
+
+@test:Config {}
 function simpleHTMLChunking() returns error? {
     TextDocument doc = {content: "<p>test</p>"};
     Chunk[] chunks = check chunkHtmlDocument(doc, 100, 40);
@@ -1474,15 +1530,15 @@ function testHtmlChunkerHeaderMetadataExtraction() returns error? {
         if (chunkContent.indexOf("<h1>Main Title</h1>") >= 0) {
             test:assertTrue(chunkContent.indexOf("Main Title") >= 0,
                     msg = "H1 chunk should contain extracted heading text");
-            
+
             // Verify h1 header metadata is set
             if (chunk.metadata is Metadata) {
                 Metadata metadata = <Metadata>chunk.metadata;
-                test:assertTrue(metadata.header1 is string, 
-                    msg = "H1 chunk should have header1 metadata");
+                test:assertTrue(metadata.header1 is string,
+                        msg = "H1 chunk should have header1 metadata");
                 if (metadata.header1 is string) {
                     test:assertEquals(<string>metadata.header1, "Main Title",
-                        msg = "H1 metadata should contain correct header text");
+                            msg = "H1 metadata should contain correct header text");
                 }
             } else {
                 test:assertFail("H1 chunk should have metadata");
@@ -1492,15 +1548,15 @@ function testHtmlChunkerHeaderMetadataExtraction() returns error? {
         if (chunkContent.indexOf("<h2>Section 1</h2>") >= 0) {
             test:assertTrue(chunkContent.indexOf("Section 1") >= 0,
                     msg = "First H2 chunk should contain extracted heading text");
-            
+
             // Verify h2 header metadata is set
             if (chunk.metadata is Metadata) {
                 Metadata metadata = <Metadata>chunk.metadata;
                 test:assertTrue(metadata.header2 is string,
-                    msg = "H2 chunk should have header2 metadata");
+                        msg = "H2 chunk should have header2 metadata");
                 if (metadata.header2 is string) {
                     test:assertEquals(<string>metadata.header2, "Section 1",
-                        msg = "H2 metadata should contain correct header text");
+                            msg = "H2 metadata should contain correct header text");
                 }
             } else {
                 test:assertFail("First H2 chunk should have metadata");
@@ -1510,7 +1566,7 @@ function testHtmlChunkerHeaderMetadataExtraction() returns error? {
         if (chunkContent.indexOf("<h2>Section 2</h2>") >= 0) {
             test:assertTrue(chunkContent.indexOf("Section 2") >= 0,
                     msg = "Second H2 chunk should contain extracted heading text");
-            
+
             // Verify h2 header metadata is set
             if (chunk.metadata is Metadata) {
                 Metadata metadata = <Metadata>chunk.metadata;
