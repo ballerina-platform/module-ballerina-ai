@@ -17,13 +17,6 @@
 # Represents a short-term memory store that retains a fixed number of recent messages by a key.
 public type ShortTermMemoryStore isolated object {
 
-    # Retrieves all stored interactive chat messages (i.e., all chat messages except the system
-    # message) for a given key.
-    # 
-    # + key - The key associated with the memory
-    # + return - A copy of the messages, or an `ai:MemoryError` error if the operation fails
-    public isolated function get(string key) returns ChatInteractiveMessage[]|MemoryError;
-
     # Retrieves the system message, if it was provided, for a given key.
     # 
     # + key - The key associated with the memory
@@ -31,12 +24,33 @@ public type ShortTermMemoryStore isolated object {
     # `ai:MemoryError` error if the operation fails
     public isolated function getChatSystemMessage(string key) returns ChatSystemMessage|MemoryError?;
 
+    # Retrieves all stored interactive chat messages (i.e., all chat messages except the system
+    # message) for a given key.
+    # 
+    # + key - The key associated with the memory
+    # + return - A copy of the messages, or an `ai:MemoryError` error if the operation fails
+    public isolated function getChatInteractiveMessages(string key) returns ChatInteractiveMessage[]|MemoryError;
+
+    # Retrieves all stored chat messages for a given key.
+    # 
+    # + key - The key associated with the memory
+    # + return - A copy of the messages, or an `ai:MemoryError` error if the operation fails
+    public isolated function getAll(string key) 
+        returns [ChatSystemMessage, ChatInteractiveMessage...]|ChatInteractiveMessage[]|MemoryError;
+
     # Adds a chat message to the memory store for a given key.
     # 
     # + key - The key associated with the memory
     # + message - The `ChatMessage` message to store
-    # + return - nil on success, or an `ai:Error` if the operation fails
+    # + return - nil on success, or an `ai:MemoryError` if the operation fails
     public isolated function put(string key, ChatMessage message) returns MemoryError?;
+
+    # Removes the system chat message, if specified, for a given key.
+    # 
+    # + key - The key associated with the memory
+    # + return - nil on success or if there is no system chat message against the key, 
+    #       or an `ai:MemoryError` if the operation fails
+    public isolated function removeChatSystemMessage(string key) returns MemoryError?;
 
     # Removes all stored interactive chat messages (i.e., all chat messages except the system
     # message) for a given key.
@@ -44,15 +58,14 @@ public type ShortTermMemoryStore isolated object {
     # + key - The key associated with the memory
     # + count - Optional number of messages to remove, starting from the first interactive message in; 
     #               if not provided, removes all messages
-    # + return - nil on success, or an `ai:Error` if the operation fails
-    public isolated function remove(string key, int? count = ()) returns MemoryError?;
+    # + return - nil on success, or an `ai:MemoryError` if the operation fails
+    public isolated function removeChatInteractiveMessages(string key, int? count = ()) returns MemoryError?;
 
-    # Removes the system chat message, if specified, for a given key.
+    # Removes all stored chat messages for a given key.
     # 
     # + key - The key associated with the memory
-    # + return - nil on success or if there is no system chat message against the key, 
-    #       or an `ai:Error` if the operation fails
-    public isolated function removeChatSystemMessage(string key) returns MemoryError?;
+    # + return - nil on success, or an `ai:MemoryError` if the operation fails
+    public isolated function removeAll(string key) returns MemoryError?;
 
     # Checks if the memory store is full for a given key.
     # 
@@ -80,19 +93,6 @@ public isolated class InMemoryShortTermMemoryStore {
         self.size = size;
     }
 
-    # Retrieves a copy of all stored messages, with an optional system prompt.
-    #
-    # + key - The key associated with the memory
-    # + return - A copy of the messages or an empty array if there are no messages yet
-    public isolated function get(string key) returns ChatInteractiveMessage[] {
-        lock {
-            if self.messages.hasKey(key) {
-                return self.messages.get(key).clone();
-            }
-            return [];
-        }
-    }
-
     # Retrieves the system message, if it was provided, for a given key.
     # 
     # + key - The key associated with the memory
@@ -104,6 +104,32 @@ public isolated class InMemoryShortTermMemoryStore {
             }
             return;
         }
+    }
+
+    # Retrieves a copy of all stored messages, with an optional system prompt.
+    #
+    # + key - The key associated with the memory
+    # + return - A copy of the messages or an empty array if there are no messages yet
+    public isolated function getChatInteractiveMessages(string key) returns ChatInteractiveMessage[] {
+        lock {
+            if self.messages.hasKey(key) {
+                return self.messages.get(key).clone();
+            }
+            return [];
+        }
+    }
+
+    # Retrieves all stored chat messages for a given key.
+    # 
+    # + key - The key associated with the memory
+    # + return - A copy of the messages, or an `ai:MemoryError` error if the operation fails
+    public isolated function getAll(string key) 
+            returns [ChatSystemMessage, ChatInteractiveMessage...]|ChatInteractiveMessage[]|MemoryError {
+        ChatSystemMessage? chatSystemMessage = self.getChatSystemMessage(key);
+        if chatSystemMessage is MemoryChatSystemMessage {
+            return [chatSystemMessage, ...self.getChatInteractiveMessages(key)];
+        }
+        return self.getChatInteractiveMessages(key);
     }
 
     # Adds a message to the window.
@@ -129,13 +155,24 @@ public isolated class InMemoryShortTermMemoryStore {
         }
     }
 
+    # Removes the system chat message, if specified, for a given key.
+    # 
+    # + key - The key associated with the memory
+    public isolated function removeChatSystemMessage(string key) {
+        lock {
+            if self.systemMessages.hasKey(key) {
+                _ = self.systemMessages.remove(key);
+            }
+        }
+    }
+
     # Removes stored messages for a given key.
     # 
     # + key - The key associated with the memory
     # + count - Optional number of messages to remove, starting from the first non-system message in; 
     #               if not provided, removes all messages including the system message
     # + return - nil on success, or an `ai:MemoryError` error if the operation fails 
-    public isolated function remove(string key, int? count = ()) returns MemoryError? {
+    public isolated function removeChatInteractiveMessages(string key, int? count = ()) returns MemoryError? {
         lock {
             // Handle invalid count values.
             if count <= 0 {
@@ -161,13 +198,18 @@ public isolated class InMemoryShortTermMemoryStore {
         }
     }
 
-    # Removes the system chat message, if specified, for a given key.
+    # Removes all stored chat messages for a given key.
     # 
     # + key - The key associated with the memory
-    public isolated function removeChatSystemMessage(string key) {
+    # + return - nil on success, or an `ai:MemoryError` if the operation fails
+    public isolated function removeAll(string key) returns MemoryError? {
         lock {
             if self.systemMessages.hasKey(key) {
                 _ = self.systemMessages.remove(key);
+            }
+
+            if self.messages.hasKey(key) {
+                self.messages.get(key).removeAll();
             }
         }
     }

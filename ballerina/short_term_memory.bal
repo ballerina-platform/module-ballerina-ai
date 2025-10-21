@@ -99,15 +99,7 @@ public isolated class ShortTermMemory {
     # + return - An array of messages or an `ai:MemoryError` error if the operation fails
     public isolated function get(string key) returns ChatMessage[]|MemoryError {
         lock {
-            final ChatSystemMessage? chatSystemMessage = check self.store.getChatSystemMessage(key);
-
-            if chatSystemMessage is () {
-                return self.store.get(key);
-            }
-
-            (MemoryChatMessage & readonly)[] chatMessages = [check mapToMemoryChatMessage(chatSystemMessage)];
-            chatMessages.push(...check mapToMemoryChatInteractiveMessages(check self.store.get(key)));
-            return chatMessages.cloneReadOnly();
+            return self.store.getAll(key);
         }
     }
 
@@ -127,10 +119,10 @@ public isolated class ShortTermMemory {
                 final OverflowStrategy overflowStrategy = self.overflowStrategy;
 
                 if overflowStrategy is OverflowTrimConfiguration {
-                    check self.store.remove(key, overflowStrategy.trimCount);
+                    check self.store.removeChatInteractiveMessages(key, overflowStrategy.trimCount);
                 } else {
-                    ChatMessage[] updatedMessages = check overflowStrategy(check self.store.get(key));
-                    check self.store.remove(key);
+                    ChatMessage[] updatedMessages = check overflowStrategy(check self.store.getChatInteractiveMessages(key));
+                    check self.store.removeChatInteractiveMessages(key);
                     foreach ChatMessage updatedMessage in updatedMessages {
                         check self.store.put(key, updatedMessage);
                     }
@@ -147,8 +139,7 @@ public isolated class ShortTermMemory {
     # + return - nil on success, or an `ai:MemoryError` error if the operation fails
     public isolated function delete(string key) returns MemoryError? {
         lock {
-            check self.store.removeChatSystemMessage(key);
-            return self.store.remove(key);
+            return self.store.removeAll(key);
         }
     }
 }
