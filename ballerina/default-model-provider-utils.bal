@@ -216,6 +216,7 @@ isolated function generateLlmResponse(intelligence:Client llmClient, decimal tem
         typedesc<json> expectedResponseTypedesc) returns anydata|Error {
     observe:GenerateContentSpan span = observe:createGenerateContentSpan("gpt-4o-mini");
     span.addTemperature(temperature);
+    span.addProvider("WSO2");
 
     do {
         DocumentContentPart[] content = check generateChatCreationContent(prompt);
