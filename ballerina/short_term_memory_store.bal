@@ -70,8 +70,8 @@ public type ShortTermMemoryStore isolated object {
     # Checks if the memory store is full for a given key.
     # 
     # + key - The key associated with the memory
-    # + return - true if the memory store is full, false otherwise
-    public isolated function isFull(string key) returns boolean;
+    # + return - true if the memory store is full, false otherwise, or an `ai:MemoryError` error if the operation fails
+    public isolated function isFull(string key) returns boolean|MemoryError;
 };
 
 # Provides an in-memory chat message store.

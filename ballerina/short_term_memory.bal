@@ -115,7 +115,7 @@ public isolated class ShortTermMemory {
                 return self.store.put(key, memoryChatMessage);
             }
 
-            if self.store.isFull(key) {
+            if check self.store.isFull(key) {
                 final OverflowStrategy overflowStrategy = self.overflowStrategy;
 
                 if overflowStrategy is OverflowTrimConfiguration {
