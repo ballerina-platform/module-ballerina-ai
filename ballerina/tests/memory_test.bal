@@ -450,6 +450,69 @@ function testDefaultingToTheDefaultModelForSummarization() returns error? {
             "Ensure values are configured for the WSO2 model provider configurable variable");
 }
 
+@test:Config
+function testSummarizationFailure() returns error? {
+    final string k = "key";
+
+    final readonly & ChatUserMessage km1 = {
+        role: USER, 
+        content: "Hello, what do I have on my plate today?"
+    };
+
+    final readonly & ChatAssistantMessage km2 = {
+        role: ASSISTANT,
+        toolCalls: [
+            {
+                name: "listTasks",
+                arguments: {}
+            }
+        ]
+    };
+
+    final readonly & ChatFunctionMessage km3 = {
+        role: FUNCTION,
+        name: "listTasks",
+        content: "[{\"description\":\"Buy groceries\",\"dueBy\":\"2025-10-19\",\"completed\":false}]"
+    };
+
+    ModelProvider model = isolated client object {
+        isolated remote function chat(
+                ChatMessage[]|ChatUserMessage messages, 
+                ChatCompletionFunctions[] tools, string? stop) returns ChatAssistantMessage|Error {
+            assertSummarizationRequestChatMessages(messages, [km1, km2, km3], defaultSummarizationPrompt);
+            return error("Simulated summarization failure");                    
+        }
+
+        isolated remote function generate(Prompt prompt, typedesc<anydata> td) returns td|Error = external;
+    };
+
+    Memory memory = check new ShortTermMemory(
+        check new InMemoryShortTermMemoryStore(3),
+        overflowConfiguration = {model}
+    );
+
+    check memory.update(k, km1);
+    check memory.update(k, km2);
+    check memory.update(k, km3);
+
+    final readonly & ChatAssistantMessage km4 = {
+        role: ASSISTANT,
+        content: "You have one pending task: Buy groceries."
+    };
+    MemoryError? err = memory.update(k, km4);
+    if err is () {
+        test:assertFail("Expected 'MemoryError' but found '()'");
+    }
+
+    test:assertEquals(err.message(), "Failed to generate summary: Simulated summarization failure");
+
+    ChatMessage[] k3CurrentMemory = check memory.get(k);
+    test:assertEquals(k3CurrentMemory.length(), 3);
+    assertChatMessageEquals(k3CurrentMemory[0], km1);
+    assertChatMessageEquals(k3CurrentMemory[1], km2);
+    assertChatMessageEquals(k3CurrentMemory[2], km3);
+}
+
 isolated function assertSummarizationRequestChatMessages(ChatMessage[]|ChatUserMessage messages, 
                                                          ChatInteractiveMessage[] expectedHistory,
                                                          Prompt summarizationPrompt) {

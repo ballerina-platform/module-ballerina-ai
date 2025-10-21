@@ -74,7 +74,7 @@ public isolated class InMemoryShortTermMemoryStore {
     # + size - The maximum capacity for stored messages
     public isolated function init(int size = 10) returns MemoryError? {
         if size < 3 {
-            return error("Size must be at least 3");
+            return error("Failed to initialize in-memory short term memory store: Size must be at least 3");
         }
 
         self.size = size;
@@ -137,6 +137,11 @@ public isolated class InMemoryShortTermMemoryStore {
     # + return - nil on success, or an `ai:MemoryError` error if the operation fails 
     public isolated function remove(string key, int? count = ()) returns MemoryError? {
         lock {
+            // Handle invalid count values.
+            if count <= 0 {
+                return error("Count to remove must be nil or a positive integer.");
+            }
+
             if !self.messages.hasKey(key) {
                 return;
             }
@@ -145,12 +150,8 @@ public isolated class InMemoryShortTermMemoryStore {
                 self.messages.get(key).removeAll();
                 return;
             }
-
-            // If a count is provided, remove that many user messages from the start.
-            if count <= 0 {
-                return error("Count must be a positive integer.");
-            }
             
+            // If a count is provided, remove that many user messages from the start.
             MemoryChatMessage[] messages = self.messages.get(key);
             int countToRemove = count < messages.length() ? count : messages.length();
 
