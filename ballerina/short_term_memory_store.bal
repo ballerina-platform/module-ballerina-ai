@@ -175,7 +175,7 @@ public isolated class InMemoryShortTermMemoryStore {
     public isolated function removeChatInteractiveMessages(string key, int? count = ()) returns MemoryError? {
         lock {
             // Handle invalid count values.
-            if count <= 0 {
+            if count is int && count <= 0 {
                 return error("Count to remove must be nil or a positive integer.");
             }
 

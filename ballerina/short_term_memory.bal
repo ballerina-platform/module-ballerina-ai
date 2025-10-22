@@ -202,6 +202,3 @@ isolated function toString(Prompt prompt) returns string {
     }
     return promptString;
 }
-
-isolated function getPromptContent(string|([string[], anydata[]] & readonly) content) returns string|(Prompt & readonly) => 
-    content is string ? content : createPrompt(content[0], content[1]);

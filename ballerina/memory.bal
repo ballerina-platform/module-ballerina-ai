@@ -156,3 +156,6 @@ isolated function mapToMemoryChatInteractiveMessage(ChatInteractiveMessage messa
 
     return {role: message.role, content: memoryContent, name: message.name};
 }
+
+isolated function getPromptContent(string|([string[], anydata[]] & readonly) content) returns string|(Prompt & readonly) => 
+    content is string ? content : createPrompt(content[0], content[1]);
