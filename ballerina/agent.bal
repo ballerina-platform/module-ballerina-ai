@@ -63,9 +63,10 @@ public type AgentConfiguration record {|
     @display {label: "Verbose"}
     boolean verbose = false;
 
-    # The memory used by the agent to store and manage conversation history
+    # The memory used by the agent to store and manage conversation history.
+    # Defaults to use an in-memory message store that trims on overflow, if unspecified.
     @display {label: "Memory"}
-    Memory? memory = new MessageWindowChatMemory();
+    Memory? memory?;
 |};
 
 # Represents an agent.
@@ -83,7 +84,9 @@ public isolated distinct class Agent {
         self.maxIter = maxIter is INFER_TOOL_COUNT ? config.tools.length() + 1 : maxIter;
         self.verbose = config.verbose;
         self.systemPrompt = config.systemPrompt.cloneReadOnly();
-        self.functionCallAgent = check new FunctionCallAgent(config.model, config.tools, config.memory);
+        
+        Memory? memory = config.hasKey("memory") ? config?.memory : check new ShortTermMemory();
+        self.functionCallAgent = check new FunctionCallAgent(config.model, config.tools, memory);
     }
 
     # Executes the agent for a given user query.
