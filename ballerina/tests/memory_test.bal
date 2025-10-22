@@ -104,7 +104,7 @@ function testShortTermMemoryWithInMemoryStoreTrimmingOnOverflow() returns error?
 @test:Config
 function testShortTermMemoryWithInMemoryStoreCustomTrimmingOnOverflow() returns error? {
     InMemoryShortTermMemoryStore store = check new (3);
-    Memory memory = check new ShortTermMemory(store, <OverflowTrimConfiguration>{trimCount: 3});
+    Memory memory = check new ShortTermMemory(store, <TrimOverflowHandlerConfiguration>{trimCount: 3});
 
     check memory.update(K1, K1M1);
     check memory.update(K1, k1m2);

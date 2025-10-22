@@ -37,31 +37,32 @@ final readonly & Prompt defaultSummarizationPrompt = `
     - Maintain chronological order when the sequence of events matters.`;
 
 # Represents configuration to trim messages when overflow occurs.
-public type OverflowTrimConfiguration record {|
+public type TrimOverflowHandlerConfiguration record {|
     # Number of messages to trim when overflow occurs.
     int trimCount = 1;
 |};
 
-# Represents configuration to summarize messages when overflow occurs.
-public type OverflowSummarizationConfiguration record {|
-    # The model to use for summarization; if not provided, the default model is used.
+# Represents configuration to handle messages using a model when overflow occurs.
+public type ModelAssistedOverflowHandlerConfiguration record {|
+    # The model to use; if not provided, the default model is used.
     ModelProvider model?;
-    # The prompt to use for summarization; if not provided, a default prompt is used.
+    # The prompt to use; if not provided, a default summarization prompt is used.
     Prompt prompt = defaultSummarizationPrompt;
 |};
 
 # Represents configuration for handling overflow in short-term memory.
-public type OverflowConfiguration OverflowTrimConfiguration|OverflowSummarizationConfiguration;
+public type OverflowHandlerConfiguration TrimOverflowHandlerConfiguration|ModelAssistedOverflowHandlerConfiguration;
 
-type OverflowHandler isolated function (ChatInteractiveMessage[] messages) returns ChatInteractiveMessage[]|MemoryError;
+type OverflowHandlerFunction isolated function (
+        ChatInteractiveMessage[] messages) returns ChatInteractiveMessage[]|MemoryError;
 
-type OverflowStrategy OverflowTrimConfiguration|OverflowHandler;
+type OverflowHandler TrimOverflowHandlerConfiguration|OverflowHandlerFunction;
 
 # Represents short-term memory for agents.
 public isolated class ShortTermMemory {
     *Memory;
 
-    private final OverflowStrategy overflowStrategy;
+    private final OverflowHandler overflowHandler;
     // This should be final, but is not final intentionally, to enforce using locks.
     private ShortTermMemoryStore store;
 
@@ -71,19 +72,19 @@ public isolated class ShortTermMemory {
     # + overflowConfiguration - The strategy to handle overflow; if not provided, trimming is used
     # + return - nil on success, or an `ai:MemoryError` error if the initialization fails
     public isolated function init(ShortTermMemoryStore? store = (), 
-                                  OverflowConfiguration overflowConfiguration = <OverflowTrimConfiguration> {}) 
+                                  OverflowHandlerConfiguration overflowConfiguration = <TrimOverflowHandlerConfiguration> {}) 
                             returns MemoryError? {
         do {
             self.store = store ?: check new InMemoryShortTermMemoryStore();
 
-            if overflowConfiguration is OverflowTrimConfiguration {
-                self.overflowStrategy = overflowConfiguration.cloneReadOnly();
+            if overflowConfiguration is TrimOverflowHandlerConfiguration {
+                self.overflowHandler = overflowConfiguration.cloneReadOnly();
             } else {
                 final ModelProvider model = overflowConfiguration.model ?: check getDefaultModelProvider();
                 final Prompt prompt = overflowConfiguration.prompt;
                 final string[] & readonly strings = prompt.strings;
                 final anydata[] & readonly insertions = prompt.insertions.cloneReadOnly();
-                self.overflowStrategy = isolated function (
+                self.overflowHandler = isolated function (
                         ChatInteractiveMessage[] messages) returns ChatInteractiveMessage[]|MemoryError {
                     return handleOverflow(model, createPrompt(strings, insertions), messages);
                 };
@@ -116,12 +117,12 @@ public isolated class ShortTermMemory {
             }
 
             if check self.store.isFull(key) {
-                final OverflowStrategy overflowStrategy = self.overflowStrategy;
+                final OverflowHandler overflowHandler = self.overflowHandler;
 
-                if overflowStrategy is OverflowTrimConfiguration {
-                    check self.store.removeChatInteractiveMessages(key, overflowStrategy.trimCount);
+                if overflowHandler is TrimOverflowHandlerConfiguration {
+                    check self.store.removeChatInteractiveMessages(key, overflowHandler.trimCount);
                 } else {
-                    ChatMessage[] updatedMessages = check overflowStrategy(check self.store.getChatInteractiveMessages(key));
+                    ChatMessage[] updatedMessages = check overflowHandler(check self.store.getChatInteractiveMessages(key));
                     check self.store.removeChatInteractiveMessages(key);
                     foreach ChatMessage updatedMessage in updatedMessages {
                         check self.store.put(key, updatedMessage);
