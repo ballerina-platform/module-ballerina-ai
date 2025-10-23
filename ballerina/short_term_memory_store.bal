@@ -49,7 +49,7 @@ public type ShortTermMemoryStore isolated object {
     # 
     # + key - The key associated with the memory
     # + return - nil on success or if there is no system chat message against the key, 
-    #       or an `ai:MemoryError` if the operation fails
+    #       or an `ai:MemoryError` error if the operation fails
     public isolated function removeChatSystemMessage(string key) returns MemoryError?;
 
     # Removes all stored interactive chat messages (i.e., all chat messages except the system
@@ -58,13 +58,13 @@ public type ShortTermMemoryStore isolated object {
     # + key - The key associated with the memory
     # + count - Optional number of messages to remove, starting from the first interactive message in; 
     #               if not provided, removes all messages
-    # + return - nil on success, or an `ai:MemoryError` if the operation fails
+    # + return - nil on success, or an `ai:MemoryError` error if the operation fails
     public isolated function removeChatInteractiveMessages(string key, int? count = ()) returns MemoryError?;
 
     # Removes all stored chat messages for a given key.
     # 
     # + key - The key associated with the memory
-    # + return - nil on success, or an `ai:MemoryError` if the operation fails
+    # + return - nil on success, or an `ai:MemoryError` error if the operation fails
     public isolated function removeAll(string key) returns MemoryError?;
 
     # Checks if the memory store is full for a given key.
