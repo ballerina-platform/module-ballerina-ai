@@ -184,13 +184,11 @@ isolated class BaseSpanImp {
         }
 
         if err is () {
-            addOtherTags("otel.status_code", OK, spanId);
             finishSpan(spanId);
             return;
         }
-        recordError(err, spanId);
         removeCurrentAiSpan();
-        finishSpan(spanId);
+        finishSpan(spanId, err);
     }
 }
 
@@ -213,20 +211,19 @@ isolated function removeCurrentAiSpan() {
     }
 }
 
-isolated function finishSpan(int spanId) {
+isolated function finishSpan(int spanId, error? err = ()) {
     if !observe:isTracingEnabled() {
         return;
     }
-    error? result = observe:finishSpan(spanId);
+    error? result;
+    if err is error {
+        result = observe:finishSpanWithError(spanId, err);
+    } else {
+        result = observe:finishSpan(spanId);
+    }
     if result is error {
         log:printError(string `failed to close span with ID '${spanId}'`, 'error = result);
     }
-}
-
-isolated function recordError(error err, int spanId) {
-    addOtherTags("error.type", getErrorType(err), spanId);
-    addOtherTags("error.description", err.message(), spanId);
-    addOtherTags("otel.status_code", ERROR, spanId);
 }
 
 isolated function getErrorType(error e) returns string {
