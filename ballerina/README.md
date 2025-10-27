@@ -69,7 +69,7 @@ Constraints for defining tools:
 The `ai` module manages memory for individual user sessions using the `Memory`. By default, agents are configured with a memory that has a predefined capacity. To create a stateless agent, set the `memory` to `()` when defining the agent. Additionally, you can customize the memory capacity or provide your own memory implementation. Here's how to initialize the default memory with a new capacity:
 
 ```ballerina
-final ai:Memory memory = new ai:MessageWindowChatMemory(20);
+final ai:Memory memory = check new ai:ShortTermMemory(check new ai:InMemoryShortTermMemoryStore(15));
 ```
 
 ### Step 6: Define the Agent

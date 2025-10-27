@@ -78,6 +78,10 @@ public type ChatFunctionMessage record {|
 # Chat message record.
 public type ChatMessage ChatUserMessage|ChatSystemMessage|ChatAssistantMessage|ChatFunctionMessage;
 
+# Interactive chat messages.
+# This is the type `ChatMessage` excluding the type `ChatSystemMessage`.
+public type ChatInteractiveMessage ChatUserMessage|ChatAssistantMessage|ChatFunctionMessage;
+
 # Function definitions for function calling API.
 public type ChatCompletionFunctions record {|
     # Name of the function

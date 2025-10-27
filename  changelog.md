@@ -5,8 +5,18 @@ This file documents all significant changes made to the Ballerina AI package acr
 ## [Unreleased]
 
 ### Added
-- [Add `McpBaseToolKit` Type and `getPermittedMcpToolConfigs` Function](https://github.com/ballerina-platform/ballerina-library/issues/8328)
 - [Add Tracing to AI Componets](https://github.com/ballerina-platform/ballerina-library/issues/8341)
+
+
+## [1.6.0] - 2025-10-23
+
+### Added
+- [Add `McpBaseToolKit` Type and `getPermittedMcpToolConfigs` Function](https://github.com/ballerina-platform/ballerina-library/issues/8328)
+- [Add support for configurable short-term memory with support for persistence and overflow handling](https://github.com/ballerina-platform/ballerina-library/issues/8375)
+
+### Fixed
+- [Inherent type violation in `prev` field](https://github.com/ballerina-platform/ballerina-library/issues/8380)
+
 
 ## [1.5.4] - 2025-10-03
 - This release upgrades the MCP dependency to the stable 1.0.0 version

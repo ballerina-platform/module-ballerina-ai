@@ -82,6 +82,6 @@ final ai:Agent personalAiAssistantAgent = check new (
     systemPrompt = systemPrompt,
     model = openAiModel,
     tools = [readEmails, sendEmail, getCalanderEvents, createCalanderEvent],
-    memory = new ai:MessageWindowChatMemory(20),
+    memory = check new ai:ShortTermMemory(check new ai:InMemoryShortTermMemoryStore(20)),
     verbose = true
 );

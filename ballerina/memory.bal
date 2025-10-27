@@ -30,6 +30,8 @@ type PromptParts record {|
 
 type MemoryChatMessage MemoryChatUserMessage|MemoryChatSystemMessage|ChatAssistantMessage|ChatFunctionMessage;
 
+type MemoryChatInteractiveMessage MemoryChatUserMessage|ChatAssistantMessage|ChatFunctionMessage;
+
 type MemoryChatUserMessage readonly & record {|
     *ChatUserMessage;
 |};
@@ -39,6 +41,11 @@ type MemoryChatSystemMessage readonly & record {|
 |};
 
 # Provides an in-memory chat message window with a limit on stored messages.
+# 
+# # Deprecated
+# This class is deprecated and will be removed in future releases.
+# Use the type `ShortTermMemory` instead.
+@deprecated
 public isolated class MessageWindowChatMemory {
     *Memory;
     private final int size;
@@ -72,7 +79,7 @@ public isolated class MessageWindowChatMemory {
     # + message - The `ChatMessage` to store or use as system prompt
     # + return - nil on success, or an `ai:Error` if the operation fails 
     public isolated function update(string sessionId, ChatMessage message) returns MemoryError? {
-        readonly & MemoryChatMessage newMessage = check self.mapToMemoryChatMessage(message);
+        readonly & MemoryChatMessage newMessage = check mapToMemoryChatMessage(message);
         lock {
             self.createSessionIfNotExist(sessionId);
             MemoryChatMessage[] memory = self.sessions.get(sessionId);
@@ -85,27 +92,6 @@ public isolated class MessageWindowChatMemory {
             }
             memory.push(newMessage);
         }
-    }
-
-    private isolated function mapToMemoryChatMessage(ChatMessage message) returns readonly & MemoryChatMessage|MemoryError {
-        if message is ChatAssistantMessage|ChatFunctionMessage {
-            return message.cloneReadOnly();
-        }
-        final Prompt|string content = message.content;
-        readonly & Prompt|string memoryContent;
-        if content is Prompt {
-            memoryContent = createPrompt(content.strings.cloneReadOnly(), content.insertions.cloneReadOnly());
-        } else {
-            memoryContent = content;
-        }
-
-        if message is ChatUserMessage {
-            return {role: message.role, content: memoryContent, name: message.name};
-        }
-        if message is ChatSystemMessage {
-            return {role: message.role, content: memoryContent, name: message.name};
-        }
-        return error MemoryError("Invalid message format found");
     }
 
     # Removes all messages from the memory.
@@ -139,3 +125,37 @@ returns readonly & Prompt =>
     public final string[] & readonly strings = strings;
     public final anydata[] & readonly insertions = insertions.cloneReadOnly();
 };
+
+isolated function mapToMemoryChatInteractiveMessages(ChatInteractiveMessage[] messages) returns 
+        (readonly & MemoryChatInteractiveMessage[])|MemoryError =>
+    from ChatMessage message in messages select check mapToMemoryChatInteractiveMessage(message);
+
+isolated function mapToMemoryChatMessage(ChatMessage message) returns readonly & MemoryChatMessage|MemoryError {
+    if message is ChatSystemMessage {
+        final Prompt|string content = message.content;
+        readonly & Prompt|string memoryContent = 
+            getPromptContent(content is string ? content : [content.strings, content.insertions.cloneReadOnly()]);
+        return {role: message.role, content: memoryContent, name: message.name};
+    }
+
+    if message !is ChatInteractiveMessage {
+        return error MemoryError("Invalid message format found");
+    }
+
+    return mapToMemoryChatInteractiveMessage(message);
+}
+
+isolated function mapToMemoryChatInteractiveMessage(ChatInteractiveMessage message) returns 
+        readonly & MemoryChatInteractiveMessage|MemoryError {
+    if message is ChatAssistantMessage|ChatFunctionMessage {
+        return message.cloneReadOnly();
+    }
+    final Prompt|string content = message.content;
+    readonly & Prompt|string memoryContent = 
+        getPromptContent(content is string ? content : [content.strings, content.insertions.cloneReadOnly()]);
+
+    return {role: message.role, content: memoryContent, name: message.name};
+}
+
+isolated function getPromptContent(string|([string[], anydata[]] & readonly) content) returns string|(Prompt & readonly) => 
+    content is string ? content : createPrompt(content[0], content[1]);

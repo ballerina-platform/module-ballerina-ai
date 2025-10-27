@@ -40,6 +40,7 @@ import io.ballerina.runtime.api.values.BTypedesc;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -52,6 +53,9 @@ public class Chunkers {
     private static final String CONTENT_FIELD_NAME = "content";
     private static final String METADATA_FIELD_NAME = "metadata";
     private static final String INDEX_FIELD_NAME = "index";
+    private static final String ID_FIELD_NAME = "id";
+    private static final String PREV_FIELD_NAME = "prev";
+    private static final Set<String> INTEGER_FIELDS = Set.of(INDEX_FIELD_NAME, ID_FIELD_NAME, PREV_FIELD_NAME);
 
     public static Object chunkTextDocument(BMap<BString, Object> document, int chunkSize, int maxOverlapSize,
                                            BString chunkStrategy, BTypedesc textChunkType) {
@@ -144,7 +148,7 @@ public class Chunkers {
         for (Map.Entry<String, Object> entry : metadata.toMap().entrySet()) {
             BString key = StringUtils.fromString(entry.getKey());
             Object value = entry.getValue();
-            if (INDEX_FIELD_NAME.equals(entry.getKey()) && value instanceof String stringValue) {
+            if (INTEGER_FIELDS.contains(entry.getKey()) && value instanceof String stringValue) {
                 existingMetadata.put(key, Integer.parseInt(stringValue));
             } else if (value instanceof String strVal) {
                 existingMetadata.put(key, StringUtils.fromString(strVal));
