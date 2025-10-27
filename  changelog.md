@@ -4,6 +4,8 @@ This file documents all significant changes made to the Ballerina AI package acr
 
 ## [Unreleased]
 
+## [1.6.0] - 2025-10-23
+
 ### Added
 - [Add `McpBaseToolKit` Type and `getPermittedMcpToolConfigs` Function](https://github.com/ballerina-platform/ballerina-library/issues/8328)
 - [Add support for configurable short-term memory with support for persistence and overflow handling](https://github.com/ballerina-platform/ballerina-library/issues/8375)
