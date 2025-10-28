@@ -14,48 +14,15 @@
 // specific language governing permissions and limitations
 // under the License.
 
-import ballerina/http;
 import ballerina/ai;
-import ballerina/jballerina.java;
+import ballerina/http;
 
-isolated client class ProviderImpl {
-    *ai:ModelProvider;
+listener ai:Listener chatListener = new (check http:getDefaultListener());
 
-    isolated remote function chat(ai:ChatMessage[]|ai:ChatUserMessage messages, ai:ChatCompletionFunctions[] tools, string? stop)
-        returns ai:ChatAssistantMessage|ai:LlmError {
-        return {role: ai:ASSISTANT};
-    }
-
-    isolated remote function generate(ai:Prompt prompt, typedesc<anydata> td = <>) returns td|ai:Error = @java:Method {
-        'class: "io.ballerina.lib.ai.MockGenerator"
-    } external;
-}
-
-final ai:ModelProvider model = new ProviderImpl();
-final ai:Agent agent = check new (
-    systemPrompt = {
-        role: "Math Tutor",
-        instructions: "You are a school tutor assistant. " +
-        "Provide answers to students' questions so they can compare their answers. " +
-        "Use the tools when there is query related to math"
-    },
-    model = model,
-    tools = [sum, mult, sqrt],
-    verbose = true
-);
-
-@ai:AgentTool
-isolated function sum(decimal a, decimal b) returns decimal => a + b;
-
-@ai:AgentTool
-isolated function mult(decimal a, decimal b) returns decimal => a * b;
-
-@ai:AgentTool
-isolated function sqrt(float a) returns float => a.sqrt();
-
-service /api/v1 on new ai:Listener(9090) {
+service /chatService on chatListener {
     resource function post chat(@http:Payload ai:ChatReqMessage request) returns ai:ChatRespMessage|error {
-        string response = check agent.run(request.message, sessionId = request.sessionId);
-        return {message: response};
+        return {
+            message: request.sessionId + ": " + request.message
+        };
     }
 }

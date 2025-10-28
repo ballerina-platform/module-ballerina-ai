@@ -33,26 +33,32 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 
 public class OpenAPIGeneratorTest {
-   private static final Path RESOURCE_DIRECTORY = Paths.get("src", "test", "resources",
+    private static final Path RESOURCE_DIRECTORY = Paths.get("src", "test", "resources",
             "ballerina_sources", "openapi_tests").toAbsolutePath();
     private static final Path DISTRIBUTION_PATH = Paths.get("../", "target", "ballerina-runtime").toAbsolutePath();
 
     @Test
     public void testOpenAPIGenerationForListenerVariable() {
-        String packagePath = "01_sample";
-        DiagnosticResult diagnosticResult = getDiagnosticResult(packagePath);
-        Assert.assertEquals(diagnosticResult.errorCount(), 0);
-        Assert.assertTrue(Files.exists(RESOURCE_DIRECTORY.resolve(packagePath +
-                "/target/openapi/chatService_openapi.yaml")));
+        String[] packagePaths = {
+                "01_sample", "02_sample", "03_sample", "04_sample",
+                "05_sample", "06_sample", "07_sample", "08_sample",
+                "09_sample"
+        };
+        for (String packagePath : packagePaths) {
+            DiagnosticResult diagnosticResult = getDiagnosticResult(packagePath);
+            Assert.assertEquals(diagnosticResult.errorCount(), 0, "Expected no errors for package: " + packagePath);
+            Path openApiFile = RESOURCE_DIRECTORY.resolve(packagePath + "/target/openapi/chatService_openapi.yaml");
+            Assert.assertTrue(Files.exists(openApiFile), "OpenAPI file not generated for package: " + packagePath);
+        }
     }
 
     @Test
     public void testOpenAPIGenerationForAnonymousListener() {
-        String packagePath = "02_sample";
+        String packagePath = "10_sample";
         DiagnosticResult diagnosticResult = getDiagnosticResult(packagePath);
         Assert.assertEquals(diagnosticResult.errorCount(), 0);
-        Assert.assertTrue(Files.exists(RESOURCE_DIRECTORY.resolve(packagePath +
-                "/target/openapi/api_v1_openapi.yaml")));
+        Assert.assertTrue(Files
+                .exists(RESOURCE_DIRECTORY.resolve(packagePath + "/target/openapi/api_v1_openapi.yaml")));
     }
 
     private DiagnosticResult getDiagnosticResult(String path) {
