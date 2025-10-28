@@ -139,25 +139,24 @@ public class OpenAPIGenerator implements AnalysisTask<SyntaxNodeAnalysisContext>
             return;
         }
         extractServiceNodes(syntaxTree.rootNode(), services, semanticModel);
-        ListenerVisitor listenerVisitor = extractListenersFromProject(project);
+        ListenerVisitor listenerVisitor = extractListenersFromDefaultModule(project);
         Set<ListenerDeclarationNode> listeners = listenerVisitor.getListenerDeclarationNodes();
 
         OpenAPI chatServiceSchema = ChatServiceOpenAPISchema.generate();
         ServersMapper serversMapper = new ServersMapper(chatServiceSchema, listeners, serviceNode, semanticModel);
         serversMapper.setServers();
+        diagnostics.addAll(serversMapper.getDiagnostics());
 
         String fileName = constructFileName(syntaxTree, services, serviceSymbol.get());
         writeOpenAPIYaml(outPath, chatServiceSchema, fileName, diagnostics);
     }
 
-    public static ListenerVisitor extractListenersFromProject(Project project) {
+    public static ListenerVisitor extractListenersFromDefaultModule(Project project) {
         ListenerVisitor listenerVisitor = new ListenerVisitor();
-        project.currentPackage().moduleIds().forEach((moduleId) -> {
-            Module module = project.currentPackage().module(moduleId);
-            module.documentIds().forEach((documentId) -> {
-                SyntaxTree syntaxTreeDoc = module.document(documentId).syntaxTree();
-                syntaxTreeDoc.rootNode().accept(listenerVisitor);
-            });
+        Module module = project.currentPackage().module(project.currentPackage().getDefaultModule().moduleId());
+        module.documentIds().forEach((documentId) -> {
+            SyntaxTree syntaxTreeDoc = module.document(documentId).syntaxTree();
+            syntaxTreeDoc.rootNode().accept(listenerVisitor);
         });
         return listenerVisitor;
     }
@@ -257,7 +256,7 @@ public class OpenAPIGenerator implements AnalysisTask<SyntaxNodeAnalysisContext>
         return DiagnosticFactory.createDiagnostic(diagnosticInfo, location);
     }
 
-    private static class NullLocation implements Location {
+    public static class NullLocation implements Location {
         @Override
         public LineRange lineRange() {
             LinePosition from = LinePosition.from(0, 0);

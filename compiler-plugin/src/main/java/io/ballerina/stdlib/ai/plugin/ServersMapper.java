@@ -40,6 +40,9 @@ import io.ballerina.compiler.syntax.tree.ServiceDeclarationNode;
 import io.ballerina.compiler.syntax.tree.SpecificFieldNode;
 import io.ballerina.compiler.syntax.tree.SyntaxKind;
 import io.ballerina.openapi.service.mapper.utils.MapperCommonUtils;
+import io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic;
+import io.ballerina.tools.diagnostics.Diagnostic;
+import io.ballerina.tools.diagnostics.Location;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.servers.Server;
 import io.swagger.v3.oas.models.servers.ServerVariable;
@@ -53,6 +56,11 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+
+import static io.ballerina.stdlib.ai.plugin.OpenAPIGenerator.NullLocation;
+import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.UNABLE_TO_OBTAIN_VALID_SERVER_PORT;
+import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.UNABLE_TO_OBTAIN_VALID_SERVER_PORT_FROM_EXPRESSION;
+import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.getDiagnostic;
 
 /**
  * Maps Ballerina service listeners to OpenAPI {@link Server} definitions by extracting host and port information.
@@ -72,6 +80,7 @@ public class ServersMapper {
     private final Map<String, ListenerDeclarationNode> endpoints;
     private final ServiceDeclarationNode service;
     private final SemanticModel semanticModel;
+    private final List<Diagnostic> diagnostics = new ArrayList<>();
 
     public ServersMapper(OpenAPI openAPI, Set<ListenerDeclarationNode> endpoints,
                          ServiceDeclarationNode service, SemanticModel semanticModel) {
@@ -206,7 +215,7 @@ public class ServersMapper {
      * </ul>
      * <p>
      * For any unhandled or unexpected listener patterns, a default server instance is generated using
-     * the provided base path and default host/port values.
+     * the provided base path and default host/port values along with a warning message.
      *
      * @param basePath   the absolute base path of the service (used as the path component of the server URL)
      * @param argListOpt the optional list of listener constructor arguments extracted from the syntax tree
@@ -283,12 +292,23 @@ public class ServersMapper {
         } else if (functionArgumentNode instanceof PositionalArgumentNode positionalArgumentNode) {
             text = positionalArgumentNode.expression().toSourceCode().trim();
         }
-        return text.matches("\\d+") ? text : null;
+        if (text.matches(".*http:getDefaultListener.*$")) {
+            return DEFAULT_HTTP_PORT;
+        }
+        if (text.matches("\\d+")) {
+            return text;
+        }
+        addDiagnosticWarning(UNABLE_TO_OBTAIN_VALID_SERVER_PORT_FROM_EXPRESSION,
+                functionArgumentNode.location(),
+                functionArgumentNode.toSourceCode().strip(), DEFAULT_HTTP_PORT);
+        return DEFAULT_HTTP_PORT;
     }
 
-    private static Server buildServer(String basePath, String port, String host, ServerVariables serverVars) {
-        port = port == null ? DEFAULT_HTTP_PORT : port;
-
+    private Server buildServer(String basePath, String port, String host, ServerVariables serverVars) {
+        if (port == null) {
+            addDiagnosticWarning(UNABLE_TO_OBTAIN_VALID_SERVER_PORT, new NullLocation(), DEFAULT_HTTP_PORT);
+            port = DEFAULT_HTTP_PORT;
+        }
         ServerVariable serverVar = new ServerVariable();
         serverVar._default(host != null ? host : (port.equals(PORT_443) ? HTTPS_LOCALHOST : HTTP_LOCALHOST));
 
@@ -304,8 +324,13 @@ public class ServersMapper {
         return server;
     }
 
-    private static Server getDefaultServerWithBasePath(String basePath) {
-        return buildServer(basePath, DEFAULT_HTTP_PORT, null, new ServerVariables());
+    private void addDiagnosticWarning(CompilationDiagnostic compilationDiagnostic, Location location, Object... args) {
+        Diagnostic diagnostic = getDiagnostic(compilationDiagnostic, location, args);
+        this.diagnostics.add(diagnostic);
+    }
+
+    private Server getDefaultServerWithBasePath(String basePath) {
+        return buildServer(basePath, null, null, new ServerVariables());
     }
 
     private String getServiceBasePath() {
@@ -314,5 +339,9 @@ public class ServersMapper {
             path.append(MapperCommonUtils.unescapeIdentifier(node.toString()));
         }
         return path.toString().trim();
+    }
+
+    public List<Diagnostic> getDiagnostics() {
+        return Collections.unmodifiableList(this.diagnostics);
     }
 }
