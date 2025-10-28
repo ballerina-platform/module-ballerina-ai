@@ -4,6 +4,9 @@ This file documents all significant changes made to the Ballerina AI package acr
 
 ## [Unreleased]
 
+### Fixed
+- [Fix OpenAPI Specification Generation Failure for `ai:ChatService`](https://github.com/wso2/product-ballerina-integrator/issues/1634)
+
 ## [1.6.0] - 2025-10-23
 
 ### Added
