@@ -24,20 +24,17 @@ import io.ballerina.compiler.api.symbols.ServiceDeclarationSymbol;
 import io.ballerina.compiler.api.symbols.Symbol;
 import io.ballerina.compiler.api.symbols.SymbolKind;
 import io.ballerina.compiler.api.symbols.TypeSymbol;
+import io.ballerina.compiler.syntax.tree.ListenerDeclarationNode;
 import io.ballerina.compiler.syntax.tree.ModulePartNode;
 import io.ballerina.compiler.syntax.tree.Node;
 import io.ballerina.compiler.syntax.tree.ServiceDeclarationNode;
 import io.ballerina.compiler.syntax.tree.SyntaxKind;
 import io.ballerina.compiler.syntax.tree.SyntaxTree;
-import io.ballerina.openapi.service.mapper.ServiceToOpenAPIMapper;
-import io.ballerina.openapi.service.mapper.diagnostic.DiagnosticMessages;
 import io.ballerina.openapi.service.mapper.diagnostic.ExceptionDiagnostic;
 import io.ballerina.openapi.service.mapper.diagnostic.OpenAPIMapperDiagnostic;
-import io.ballerina.openapi.service.mapper.model.OASGenerationMetaInfo;
-import io.ballerina.openapi.service.mapper.model.OASResult;
 import io.ballerina.openapi.service.mapper.model.ServiceDeclaration;
-import io.ballerina.openapi.service.mapper.model.ServiceNode;
 import io.ballerina.projects.BuildOptions;
+import io.ballerina.projects.Module;
 import io.ballerina.projects.Package;
 import io.ballerina.projects.Project;
 import io.ballerina.projects.plugins.AnalysisTask;
@@ -50,6 +47,8 @@ import io.ballerina.tools.diagnostics.Location;
 import io.ballerina.tools.text.LinePosition;
 import io.ballerina.tools.text.LineRange;
 import io.ballerina.tools.text.TextRange;
+import io.swagger.v3.core.util.Yaml;
+import io.swagger.v3.oas.models.OpenAPI;
 
 import java.io.IOException;
 import java.io.PrintStream;
@@ -61,11 +60,13 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import static io.ballerina.openapi.service.mapper.Constants.HYPHEN;
 import static io.ballerina.openapi.service.mapper.Constants.OPENAPI_SUFFIX;
 import static io.ballerina.openapi.service.mapper.Constants.SLASH;
 import static io.ballerina.openapi.service.mapper.Constants.YAML_EXTENSION;
+import static io.ballerina.openapi.service.mapper.diagnostic.DiagnosticMessages.OAS_CONVERTOR_108;
 import static io.ballerina.openapi.service.mapper.utils.CodegenUtils.resolveContractFileName;
 import static io.ballerina.openapi.service.mapper.utils.CodegenUtils.writeFile;
 import static io.ballerina.openapi.service.mapper.utils.MapperCommonUtils.containErrors;
@@ -113,8 +114,6 @@ public class OpenAPIGenerator implements AnalysisTask<SyntaxNodeAnalysisContext>
         }
 
         Path outPath = project.targetDir();
-        Optional<Path> path = currentPackage.project().documentPath(context.documentId());
-        Path inputPath = path.orElse(null);
         ServiceDeclarationNode serviceNode = (ServiceDeclarationNode) context.node();
         Map<Integer, String> services = new HashMap<>();
         List<Diagnostic> diagnostics = new ArrayList<>();
@@ -123,8 +122,7 @@ public class OpenAPIGenerator implements AnalysisTask<SyntaxNodeAnalysisContext>
         if (containErrors(semanticModel.diagnostics())) {
             diagnostics.addAll(semanticModel.diagnostics());
         } else if (isAiAgentService(serviceNode, semanticModel)) {
-            generateOpenAPISpec(semanticModel, serviceNode, syntaxTree, services, inputPath, project, outPath,
-                    diagnostics);
+            generateOpenAPISpec(semanticModel, serviceNode, syntaxTree, services, project, outPath, diagnostics);
         }
         if (!diagnostics.isEmpty()) {
             for (Diagnostic diagnostic : diagnostics) {
@@ -134,22 +132,33 @@ public class OpenAPIGenerator implements AnalysisTask<SyntaxNodeAnalysisContext>
     }
 
     private void generateOpenAPISpec(SemanticModel semanticModel, ServiceDeclarationNode serviceNode,
-                                     SyntaxTree syntaxTree, Map<Integer, String> services, Path inputPath,
+                                     SyntaxTree syntaxTree, Map<Integer, String> services,
                                      Project project, Path outPath, List<Diagnostic> diagnostics) {
         Optional<Symbol> serviceSymbol = semanticModel.symbol(serviceNode);
         if (serviceSymbol.isEmpty() || !(serviceSymbol.get() instanceof ServiceDeclarationSymbol)) {
             return;
         }
         extractServiceNodes(syntaxTree.rootNode(), services, semanticModel);
-        OASGenerationMetaInfo.OASGenerationMetaInfoBuilder builder =
-                new OASGenerationMetaInfo.OASGenerationMetaInfoBuilder();
-        ServiceNode service = new ServiceDeclaration(serviceNode, semanticModel);
-        builder.setServiceNode(service).setSemanticModel(semanticModel)
-                .setOpenApiFileName(services.get(serviceSymbol.get().hashCode()))
-                .setBallerinaFilePath(inputPath).setProject(project);
-        OASResult oasResult = ServiceToOpenAPIMapper.generateOAS(builder.build());
-        oasResult.setServiceName(constructFileName(syntaxTree, services, serviceSymbol.get()));
-        writeOpenAPIYaml(outPath, oasResult, diagnostics);
+        ListenerVisitor listenerVisitor = extractListenersFromDefaultModule(project);
+        Set<ListenerDeclarationNode> listeners = listenerVisitor.getListenerDeclarationNodes();
+
+        OpenAPI chatServiceSchema = ChatServiceOpenAPISchema.generate();
+        ServersMapper serversMapper = new ServersMapper(chatServiceSchema, listeners, serviceNode, semanticModel);
+        serversMapper.setServers();
+        diagnostics.addAll(serversMapper.getDiagnostics());
+
+        String fileName = constructFileName(syntaxTree, services, serviceSymbol.get());
+        writeOpenAPIYaml(outPath, chatServiceSchema, fileName, diagnostics);
+    }
+
+    public static ListenerVisitor extractListenersFromDefaultModule(Project project) {
+        ListenerVisitor listenerVisitor = new ListenerVisitor();
+        Module module = project.currentPackage().module(project.currentPackage().getDefaultModule().moduleId());
+        module.documentIds().forEach((documentId) -> {
+            SyntaxTree syntaxTreeDoc = module.document(documentId).syntaxTree();
+            syntaxTreeDoc.rootNode().accept(listenerVisitor);
+        });
+        return listenerVisitor;
     }
 
     public static boolean isAiAgentService(ServiceDeclarationNode serviceNode, SemanticModel semanticModel) {
@@ -179,8 +188,8 @@ public class OpenAPIGenerator implements AnalysisTask<SyntaxNodeAnalysisContext>
     /**
      * This util function is to construct the generated file name.
      *
-     * @param syntaxTree syntax tree for check the multiple services
-     * @param services   service map for maintain the file name with updated name
+     * @param syntaxTree    syntax tree for check the multiple services
+     * @param services      service map for maintain the file name with updated name
      * @param serviceSymbol symbol for taking the hash code of services
      */
     private String constructFileName(SyntaxTree syntaxTree, Map<Integer, String> services, Symbol serviceSymbol) {
@@ -188,29 +197,23 @@ public class OpenAPIGenerator implements AnalysisTask<SyntaxNodeAnalysisContext>
         String balFileName = syntaxTree.filePath().replaceAll(SLASH, UNDERSCORE).split("\\.")[0];
         if (fileName.equals(SLASH)) {
             return balFileName + OPENAPI_SUFFIX + YAML_EXTENSION;
-        } else if (fileName.contains(HYPHEN) && fileName.split(HYPHEN)[0].equals(SLASH) || fileName.isBlank()) {
+        }
+        if (fileName.contains(HYPHEN) && fileName.split(HYPHEN)[0].equals(SLASH) || fileName.isBlank()) {
             return balFileName + UNDERSCORE + serviceSymbol.hashCode() + OPENAPI_SUFFIX + YAML_EXTENSION;
         }
         return fileName + OPENAPI_SUFFIX + YAML_EXTENSION;
     }
 
-    private void writeOpenAPIYaml(Path outPath, OASResult oasResult, List<Diagnostic> diagnostics) {
-        if (oasResult.getYaml().isPresent()) {
+    private void writeOpenAPIYaml(Path outPath, OpenAPI openAPI, String serviceName, List<Diagnostic> diagnostics) {
+        String yamlOpenApiSpec = Yaml.pretty(openAPI);
+        if (yamlOpenApiSpec != null) {
             try {
                 // Create openapi directory if not exists in the path. If exists do not throw an error
                 Files.createDirectories(Paths.get(outPath + OAS_PATH_SEPARATOR + OPENAPI));
-                String serviceName = oasResult.getServiceName();
-                String fileName = resolveContractFileName(outPath.resolve(OPENAPI),
-                        serviceName, false);
-                writeFile(outPath.resolve(OPENAPI + OAS_PATH_SEPARATOR + fileName), oasResult.getYaml().get());
+                String fileName = resolveContractFileName(outPath.resolve(OPENAPI), serviceName, false);
+                writeFile(outPath.resolve(OPENAPI + OAS_PATH_SEPARATOR + fileName), yamlOpenApiSpec);
             } catch (IOException e) {
-                ExceptionDiagnostic diagnostic = new ExceptionDiagnostic(DiagnosticMessages.OAS_CONVERTOR_108,
-                        e.toString());
-                diagnostics.add(getDiagnostics(diagnostic));
-            }
-        }
-        if (!oasResult.getDiagnostics().isEmpty()) {
-            for (OpenAPIMapperDiagnostic diagnostic : oasResult.getDiagnostics()) {
+                ExceptionDiagnostic diagnostic = new ExceptionDiagnostic(OAS_CONVERTOR_108, e.toString());
                 diagnostics.add(getDiagnostics(diagnostic));
             }
         }
@@ -253,7 +256,7 @@ public class OpenAPIGenerator implements AnalysisTask<SyntaxNodeAnalysisContext>
         return DiagnosticFactory.createDiagnostic(diagnosticInfo, location);
     }
 
-    private static class NullLocation implements Location {
+    public static class NullLocation implements Location {
         @Override
         public LineRange lineRange() {
             LinePosition from = LinePosition.from(0, 0);

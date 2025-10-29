@@ -25,34 +25,81 @@ import io.ballerina.projects.ProjectEnvironmentBuilder;
 import io.ballerina.projects.directory.BuildProject;
 import io.ballerina.projects.environment.Environment;
 import io.ballerina.projects.environment.EnvironmentBuilder;
+import io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic;
+import io.ballerina.tools.diagnostics.Diagnostic;
+import io.ballerina.tools.diagnostics.DiagnosticSeverity;
+import io.ballerina.tools.diagnostics.Location;
 import org.testng.Assert;
 import org.testng.annotations.Test;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.text.MessageFormat;
+import java.util.Iterator;
+
+import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.UNABLE_TO_OBTAIN_VALID_SERVER_PORT_FROM_EXPRESSION;
 
 public class OpenAPIGeneratorTest {
-   private static final Path RESOURCE_DIRECTORY = Paths.get("src", "test", "resources",
+    private static final Path RESOURCE_DIRECTORY = Paths.get("src", "test", "resources",
             "ballerina_sources", "openapi_tests").toAbsolutePath();
     private static final Path DISTRIBUTION_PATH = Paths.get("../", "target", "ballerina-runtime").toAbsolutePath();
 
     @Test
     public void testOpenAPIGenerationForListenerVariable() {
-        String packagePath = "01_sample";
-        DiagnosticResult diagnosticResult = getDiagnosticResult(packagePath);
-        Assert.assertEquals(diagnosticResult.errorCount(), 0);
-        Assert.assertTrue(Files.exists(RESOURCE_DIRECTORY.resolve(packagePath +
-                "/target/openapi/chatService_openapi.yaml")));
+        String[] packagePaths = {
+                "01_sample", "02_sample", "03_sample", "04_sample",
+                "05_sample", "06_sample", "07_sample", "08_sample",
+                "09_sample"
+        };
+        for (String packagePath : packagePaths) {
+            DiagnosticResult diagnosticResult = getDiagnosticResult(packagePath);
+            Assert.assertEquals(diagnosticResult.errorCount(), 0, "Expected no errors for package: " + packagePath);
+            Path openApiFile = RESOURCE_DIRECTORY.resolve(packagePath + "/target/openapi/chatService_openapi.yaml");
+            Assert.assertTrue(Files.exists(openApiFile), "OpenAPI file not generated for package: " + packagePath);
+        }
     }
 
     @Test
     public void testOpenAPIGenerationForAnonymousListener() {
-        String packagePath = "02_sample";
+        String packagePath = "10_sample";
         DiagnosticResult diagnosticResult = getDiagnosticResult(packagePath);
         Assert.assertEquals(diagnosticResult.errorCount(), 0);
-        Assert.assertTrue(Files.exists(RESOURCE_DIRECTORY.resolve(packagePath +
-                "/target/openapi/api_v1_openapi.yaml")));
+        Assert.assertTrue(Files
+                .exists(RESOURCE_DIRECTORY.resolve(packagePath + "/target/openapi/api_v1_openapi.yaml")));
+    }
+
+    @Test
+    public void testOpenAPIGenerationEmitsWarningForPortVariable() {
+        String[] packagePaths = {"11_sample", "12_sample"};
+        for (String packagePath : packagePaths) {
+            DiagnosticResult diagnosticResult = getDiagnosticResult(packagePath);
+            Assert.assertEquals(diagnosticResult.warningCount(), 1);
+
+            Iterator<Diagnostic> diagnosticIterator = diagnosticResult.warnings().iterator();
+            Diagnostic diagnostic = diagnosticIterator.next();
+            String message = getWarningMessage(UNABLE_TO_OBTAIN_VALID_SERVER_PORT_FROM_EXPRESSION, "port", "9090");
+            assertWarningMessage(diagnostic, message, 22, 44);
+
+            Path openApiFile = RESOURCE_DIRECTORY.resolve(packagePath + "/target/openapi/chatService_openapi.yaml");
+            Assert.assertTrue(Files.exists(openApiFile), "OpenAPI file not generated for package: " + packagePath);
+        }
+    }
+
+    private String getWarningMessage(CompilationDiagnostic compilationDiagnostic, Object... args) {
+        return MessageFormat.format(compilationDiagnostic.getDiagnostic(), args);
+    }
+
+    private void assertWarningMessage(Diagnostic diagnostic, String message, int line, int column) {
+        Assert.assertEquals(diagnostic.diagnosticInfo().severity(), DiagnosticSeverity.WARNING);
+        Assert.assertEquals(diagnostic.message(), message);
+        assertWarningLocation(diagnostic.location(), line, column);
+    }
+
+    private void assertWarningLocation(Location location, int line, int column) {
+        // Compiler counts lines and columns from zero
+        Assert.assertEquals((location.lineRange().startLine().line() + 1), line);
+        Assert.assertEquals((location.lineRange().startLine().offset() + 1), column);
     }
 
     private DiagnosticResult getDiagnosticResult(String path) {
