@@ -1,0 +1,2 @@
+arize-phoenix-otel==0.13.1
+grpcio==1.66.1

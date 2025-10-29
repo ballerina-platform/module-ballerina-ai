@@ -77,6 +77,7 @@ release {
 task build {
     dependsOn(':ai-compiler-plugin:build')
     dependsOn(':ai-native:build')
+    dependsOn(':observability-native:shadowJar')
     dependsOn(':ai-ballerina:build')
     dependsOn(':ai-ballerina-tests:test')
     dependsOn(':ai-compiler-plugin-tests:test')
@@ -115,6 +116,7 @@ subprojects {
         ballerinaStdLibs "io.ballerina.stdlib:uuid-ballerina:${stdlibUuidVersion}"
         ballerinaStdLibs "io.ballerina.stdlib:mcp-ballerina:${stdlibMcpVersion}"
         ballerinaStdLibs "io.ballerina.stdlib:math.vector-ballerina:${stdlibMathVectorVersion}"
+        ballerinaStdLibs "io.ballerina.stdlib:jballerina.java.arrays-ballerina:${stdlibJavaArraysVersion}"
 
         ballerinaStdLibs "io.ballerina.stdlib:observe-ballerina:${observeVersion}"
         ballerinaStdLibs "io.ballerina:observe-ballerina:${observeInternalVersion}"

@@ -27,13 +27,238 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  call_stdlib_workflow:
-    name: Run StdLib Workflow
+  build-venvs:
     if: ${{ github.event_name != 'schedule' || (github.event_name == 'schedule' && github.repository_owner == 'ballerina-platform') }}
-    uses: ballerina-platform/ballerina-library/.github/workflows/build-with-bal-test-graalvm-template.yml@main
-    with:
-      lang_tag: ${{ inputs.lang_tag }}
-      lang_version: ${{ inputs.lang_version }}
-      native_image_options: ${{ inputs.native_image_options }}
-      additional_windows_build_flags: "-P disable=mcp,pdf"
-      additional_ubuntu_build_flags: "-P disable=pdf"
+    strategy:
+      matrix:
+        platform: [darwin, linux]
+        include:
+          - platform: darwin
+            os: macos-latest
+          - platform: linux
+            os: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Cache ${{ matrix.platform }} venv
+        id: cache-venv
+        uses: actions/cache@v4
+        with:
+          path: observability-native/src/main/resources/${{ matrix.platform }}-venv.zip
+          key: ${{ matrix.platform }}-venv-${{ hashFiles('venv-build-scripts/requirements.txt', 'gradle.properties') }}
+          restore-keys: |
+            ${{ matrix.platform }}-venv-
+
+      - name: Build ${{ matrix.platform }} venv
+        if: steps.cache-venv.outputs.cache-hit != 'true'
+        run: |
+          cd venv-build-scripts
+          chmod +x build-${{ matrix.platform }}.sh
+          ./build-${{ matrix.platform }}.sh
+
+      - name: Upload ${{ matrix.platform }} venv
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.platform }}-venv
+          path: observability-native/src/main/resources/${{ matrix.platform }}-venv.zip
+          retention-days: 1
+
+  ubuntu-build-with-bal-test-graalvm:
+    name: Build with bal test graalvm on Ubuntu
+    runs-on: ubuntu-latest
+    needs: build-venvs
+    if: ${{ (github.event_name != 'schedule' || (github.event_name == 'schedule' && github.repository_owner == 'ballerina-platform')) && (github.event_name != 'pull_request' || !contains(github.event.pull_request.labels.*.name, 'Skip GraalVM Check')) }}
+    concurrency:
+      group: ${{ github.head_ref }}-ubuntu-graalvm-build
+      cancel-in-progress: true
+
+    steps:
+      - name: Set up JDK 21
+        uses: actions/setup-java@v3
+        with:
+          distribution: "temurin"
+          java-version: "21"
+
+      - name: Checkout Ballerina Lang Repository
+        if: ${{ inputs.lang_version == '' && github.event_name != 'pull_request' }}
+        uses: actions/checkout@v3
+        with:
+          repository: "ballerina-platform/ballerina-lang"
+          ref: ${{ inputs.lang_tag || 'master' }}
+
+      - name: Set Ballerina Lang version
+        if: ${{ github.event_name != 'pull_request' }}
+        run: |
+          if ${{ inputs.lang_version != '' }}; then
+              LANG_VERSION=${{ inputs.lang_version }}
+          else
+              VERSION=$((grep -w 'version' | cut -d= -f2) < gradle.properties | rev | cut --complement -d- -f1 | rev)
+              LANG_VERSION=$VERSION-NATIVE
+          fi
+          echo "BALLERINA_LANG_VERSION=$LANG_VERSION" >> $GITHUB_ENV
+          echo "BALLERINA_LANG_VERSION: $LANG_VERSION"
+
+      - name: Build Ballerina Lang
+        if: ${{ inputs.lang_version == '' && github.event_name != 'pull_request' }}
+        run: |
+          perl -pi -e "s/^\s*version=.*/version=${{ env.BALLERINA_LANG_VERSION }}/" gradle.properties
+          ./gradlew build -x test publishToMavenLocal --scan --no-daemon
+
+      - name: Set up GraalVM
+        uses: graalvm/setup-graalvm@v1
+        with:
+          java-version: "21"
+          distribution: "graalvm-community"
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          set-java-home: "false"
+
+      - name: Check GraalVM installation
+        run: |
+          echo "GRAALVM_HOME: ${{ env.GRAALVM_HOME }}"
+          echo "JAVA_HOME: ${{ env.JAVA_HOME }}"
+          native-image --version
+
+      - name: Checkout Module Repository
+        uses: actions/checkout@v3
+
+      - name: Download venv artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: observability-native/src/main/resources/
+          pattern: "*-venv"
+          merge-multiple: true
+
+      - name: Set default native-image options
+        if: ${{  inputs.native_image_options != '' }}
+        run: |
+          CURRENT_DIR=$(pwd)
+          echo "NativeImageArgs = ${{ inputs.native_image_options }}" > default_native.properties
+          echo "NATIVE_IMAGE_CONFIG_FILE=$CURRENT_DIR/default_native.properties" >> $GITHUB_ENV
+          echo "NATIVE_IMAGE_CONFIG_FILE: $CURRENT_DIR/default_native.properties"
+
+      - name: Build with Gradle
+        env:
+          packageUser: ${{ github.actor }}
+          packagePAT: ${{ secrets.GITHUB_TOKEN }}
+          CLIENT_ID: ${{ secrets.CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.CLIENT_SECRET }}
+          REFRESH_TOKEN: ${{ secrets.REFRESH_TOKEN }}
+        run: |
+          if ${{ github.event_name != 'pull_request' }}; then
+              perl -pi -e "s/^\s*ballerinaLangVersion=.*/ballerinaLangVersion=${{ env.BALLERINA_LANG_VERSION }}/" gradle.properties
+          fi
+          ./gradlew build -PbalGraalVMTest -P disable=pdf
+
+  windows-build-with-bal-test-graalvm:
+    name: Build with bal test graalvm on Windows
+    runs-on: windows-latest
+    needs: build-venvs
+    if: ${{ (github.event_name != 'schedule' || (github.event_name == 'schedule' && github.repository_owner == 'ballerina-platform')) && (github.event_name != 'pull_request' || !contains(github.event.pull_request.labels.*.name, 'Skip GraalVM Check')) }}
+    concurrency:
+      group: ${{ github.head_ref }}-windows-graalvm-build
+      cancel-in-progress: true
+
+    steps:
+      - name: Set up JDK 21
+        uses: actions/setup-java@v3
+        with:
+          distribution: "temurin"
+          java-version: "21"
+
+      - name: Git configure long path & eol
+        run: |
+          git config --global core.longpaths true
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+
+      - name: Checkout Ballerina Lang Repository
+        if: ${{ inputs.lang_version == '' && github.event_name != 'pull_request' }}
+        uses: actions/checkout@v3
+        with:
+          repository: "ballerina-platform/ballerina-lang"
+          ref: ${{ inputs.lang_tag || 'master' }}
+
+      - name: Set Ballerina Lang version
+        if: ${{ github.event_name != 'pull_request' }}
+        run: |
+          if ("${{ inputs.lang_version }}" -eq "") {
+            $properties = convertfrom-stringdata (get-content ./gradle.properties -raw)
+            $LANG_VERSION = $properties.'version'.split("-",2)[0] + "-NATIVE"
+          } else {
+            $LANG_VERSION = "${{ inputs.lang_version }}"
+          }
+          "BALLERINA_LANG_VERSION=$LANG_VERSION" >> $env:GITHUB_ENV
+          Write-Output "BALLERINA_LANG_VERSION: $LANG_VERSION"
+
+      - name: Configure Pagefile
+        if: ${{ github.event_name != 'pull_request' }}
+        uses: al-cheb/configure-pagefile-action@v1.3
+        with:
+          minimum-size: 10GB
+          maximum-size: 16GB
+
+      - name: Get configured pagefile base size
+        if: ${{ github.event_name != 'pull_request' }}
+        run: (Get-CimInstance Win32_PageFileUsage).AllocatedBaseSize
+
+      - name: Build Ballerina Lang
+        if: ${{ inputs.lang_version == '' && github.event_name != 'pull_request' }}
+        run: |
+          perl -pi -e "s/^\s*version=.*/version=${{ env.BALLERINA_LANG_VERSION }}/" gradle.properties
+          ./gradlew.bat build -x test publishToMavenLocal --continue -x javadoc --stacktrace -scan --console=plain --no-daemon --no-parallel
+
+      - name: Set up GraalVM
+        uses: graalvm/setup-graalvm@v1
+        with:
+          java-version: "21"
+          distribution: "graalvm-community"
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          set-java-home: "false"
+
+      - name: Check GraalVM installation
+        run: |
+          Write-Output GRAALVM_HOME: "${{ env.GRAALVM_HOME }}"
+          Write-Output JAVA_HOME: "${{ env.JAVA_HOME }}"
+          native-image --version
+          git config --system core.longpaths true
+
+      - name: Checkout Module Repository
+        uses: actions/checkout@v3
+
+      - name: Download venv artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: observability-native/src/main/resources/
+          pattern: "*-venv"
+          merge-multiple: true
+
+      - name: Set default native-image options
+        if: ${{  inputs.native_image_options != '' }}
+        run: |
+          $CURRENT_DIR = (Get-Location).tostring()
+          $DEFAULT_PROPS = $CURRENT_DIR + "\" + "default_native.properties"
+          $create_file = New-Item $DEFAULT_PROPS
+          Set-Content $DEFAULT_PROPS "NativeImageArgs = ${{ inputs.native_image_options }}"
+          "NATIVE_IMAGE_CONFIG_FILE=$DEFAULT_PROPS" >> $env:GITHUB_ENV
+          Write-Output "NATIVE_IMAGE_CONFIG_FILE: $DEFAULT_PROPS"
+
+      - name: Set JAVA tool options
+        if: ${{ inputs.java_tool_options != '' }}
+        run: |
+          "JAVA_TOOL_OPTIONS=${{ inputs.java_tool_options }}" >> $env:GITHUB_ENV
+          Write-Output "JAVA_TOOL_OPTIONS=${{ inputs.java_tool_options }}"
+
+      - name: Build with Gradle
+        env:
+          packageUser: ${{ github.actor }}
+          packagePAT: ${{ secrets.GITHUB_TOKEN }}
+          CLIENT_ID: ${{ secrets.CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.CLIENT_SECRET }}
+          REFRESH_TOKEN: ${{ secrets.REFRESH_TOKEN }}
+        run: |
+          if (${{ github.event_name != 'pull_request' }}) {
+              perl -pi -e "s/^\s*ballerinaLangVersion=.*/ballerinaLangVersion=${{ env.BALLERINA_LANG_VERSION }}/" gradle.properties
+          }
+          ./gradlew.bat build -PbalGraalVMTest -P disable=mcp,pdf
