@@ -25,6 +25,7 @@ import io.ballerina.tools.diagnostics.DiagnosticSeverity;
 import io.ballerina.tools.diagnostics.Location;
 
 import static io.ballerina.tools.diagnostics.DiagnosticSeverity.ERROR;
+import static io.ballerina.tools.diagnostics.DiagnosticSeverity.WARNING;
 
 /**
  * Compilation errors in the Ballerina AI package.
@@ -35,7 +36,9 @@ public enum CompilationDiagnostic {
     XML_PARAMETER_NOT_SUPPORTED_BY_TOOL(DiagnosticMessage.ERROR_103, DiagnosticCode.AI_103, ERROR),
     INVALID_RETURN_TYPE_IN_TOOL(DiagnosticMessage.ERROR_104, DiagnosticCode.AI_104, ERROR),
     AGENT_MUST_BE_FINAL(DiagnosticMessage.ERROR_105, DiagnosticCode.AI_105, ERROR),
-    CONTEXT_PARAM_MUST_BE_FIRST(DiagnosticMessage.ERROR_106, DiagnosticCode.AI_106, ERROR);
+    CONTEXT_PARAM_MUST_BE_FIRST(DiagnosticMessage.ERROR_106, DiagnosticCode.AI_106, ERROR),
+    UNABLE_TO_OBTAIN_VALID_SERVER_PORT_FROM_EXPRESSION(DiagnosticMessage.WARNING_107, DiagnosticCode.AI_107, WARNING),
+    UNABLE_TO_OBTAIN_VALID_SERVER_PORT(DiagnosticMessage.WARNING_108, DiagnosticCode.AI_108, WARNING);
 
     private final String diagnostic;
     private final String diagnosticCode;

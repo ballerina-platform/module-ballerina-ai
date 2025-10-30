@@ -17,7 +17,7 @@
 import ballerina/ai;
 import ballerina/http;
 
-listener ai:Listener chatListener = new (9090);
+listener ai:Listener chatListener = new (8080);
 
 service /chatService on chatListener {
     resource function post chat(@http:Payload ai:ChatReqMessage request) returns ai:ChatRespMessage|error {

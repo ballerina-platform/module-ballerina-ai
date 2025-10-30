@@ -7,6 +7,10 @@ This file documents all significant changes made to the Ballerina AI package acr
 ### Added
 - [Add Tracing to AI Componets](https://github.com/ballerina-platform/ballerina-library/issues/8341)
 
+## [1.6.1] - 2025-10-29
+
+### Fixed
+- [Fix OpenAPI Specification Generation Failure for `ai:ChatService`](https://github.com/wso2/product-ballerina-integrator/issues/1634)
 
 ## [1.6.0] - 2025-10-23
 

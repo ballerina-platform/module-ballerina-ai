@@ -15,14 +15,13 @@
 // under the License.
 
 import ballerina/ai;
-import ballerina/http;
 
-listener ai:Listener chatListener = new (check http:getDefaultListener());
+type User record {|
+    Friend[] friends;
+|};
 
-service /chatService on chatListener {
-    resource function post chat(@http:Payload ai:ChatReqMessage request) returns ai:ChatRespMessage|error {
-        return {
-            message: request.sessionId + ": " + request.message
-        };
-    }
+type Friend User;
+
+@ai:AgentTool
+isolated function toolCyclicInput(User user) {
 }

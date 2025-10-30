@@ -15,14 +15,7 @@
 // under the License.
 
 import ballerina/ai;
-import ballerina/http;
 
-listener ai:Listener chatListener = new (check http:getDefaultListener());
-
-service /chatService on chatListener {
-    resource function post chat(@http:Payload ai:ChatReqMessage request) returns ai:ChatRespMessage|error {
-        return {
-            message: request.sessionId + ": " + request.message
-        };
-    }
+@ai:AgentTool
+isolated function toolWithContext(int a, ai:Context ctx) {
 }

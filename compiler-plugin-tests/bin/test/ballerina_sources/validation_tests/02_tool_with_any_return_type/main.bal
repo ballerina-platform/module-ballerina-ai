@@ -15,14 +15,27 @@
 // under the License.
 
 import ballerina/ai;
-import ballerina/http;
 
-listener ai:Listener chatListener = new (check http:getDefaultListener());
+class Data {
+    public int age = 12;
+}
 
-service /chatService on chatListener {
-    resource function post chat(@http:Payload ai:ChatReqMessage request) returns ai:ChatRespMessage|error {
-        return {
-            message: request.sessionId + ": " + request.message
-        };
-    }
+@ai:AgentTool
+isolated function toolReturningAny(string name) returns any {
+    return ();
+}
+
+@ai:AgentTool
+isolated function toolReturningInstance(string name) returns Data {
+    return new;
+}
+
+@ai:AgentTool
+isolated function toolReturningMapOfAny(string name) returns map<any> {
+    return {};
+}
+
+@ai:AgentTool
+isolated function toolReturningUnionOfAny(string name) returns Data|string {
+    return new;
 }

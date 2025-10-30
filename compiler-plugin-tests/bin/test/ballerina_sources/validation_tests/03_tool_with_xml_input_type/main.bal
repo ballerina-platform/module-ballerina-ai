@@ -15,14 +15,14 @@
 // under the License.
 
 import ballerina/ai;
-import ballerina/http;
 
-listener ai:Listener chatListener = new (check http:getDefaultListener());
+type XML xml;
 
-service /chatService on chatListener {
-    resource function post chat(@http:Payload ai:ChatReqMessage request) returns ai:ChatRespMessage|error {
-        return {
-            message: request.sessionId + ": " + request.message
-        };
-    }
+type Record record {|
+    XML 'field;
+|};
+
+@ai:AgentTool
+isolated function toolWithXml(xml one, XML two, map<XML> three, map<Record> four,
+        Record five, table<Record> six, string|Record seven) {
 }

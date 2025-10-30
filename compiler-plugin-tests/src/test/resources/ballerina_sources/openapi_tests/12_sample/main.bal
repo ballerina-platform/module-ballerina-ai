@@ -17,7 +17,10 @@
 import ballerina/ai;
 import ballerina/http;
 
-listener ai:Listener chatListener = new (check http:getDefaultListener());
+const port = 9999;
+
+listener http:Listener httpListener = new (port);
+listener ai:Listener chatListener = new (listenOn = httpListener);
 
 service /chatService on chatListener {
     resource function post chat(@http:Payload ai:ChatReqMessage request) returns ai:ChatRespMessage|error {
