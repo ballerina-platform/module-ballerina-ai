@@ -200,6 +200,7 @@ class Executor {
                 } else {
                     observation = "Tool execution failed. Retry with correct inputs.";
                 }
+                observation = string `${observation.toString()} <detail>${output.toString()}</detail>`;
                 executionResult = {
                     llmResponse,
                     'error: output,
