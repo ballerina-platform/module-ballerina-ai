@@ -7,6 +7,10 @@ This file documents all significant changes made to the Ballerina AI package acr
 ### Added
 - [Add Tracing to AI Componets](https://github.com/ballerina-platform/ballerina-library/issues/8341)
 
+### Updated
+- [Enhance Error Message with Additional Error Details on Tool Call Failure](https://github.com/ballerina-platform/ballerina-library/issues/8416)
+
+
 ### Fixed
 - [Fix Tool with Default Parameter Execution Failing when `ai:Context` is Present](https://github.com/ballerina-platform/ballerina-library/issues/8418)
 
