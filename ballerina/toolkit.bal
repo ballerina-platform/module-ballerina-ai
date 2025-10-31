@@ -143,7 +143,7 @@ public isolated class McpToolKit {
 
         mcp:StreamableHttpClient|mcp:ClientError mcpClient = new (serverUrl, config);
         if mcpClient is error {
-            log:printError("Failed to connect to MCP server",
+            log:printDebug("Failed to connect to MCP server",
                 mcpClient,
                 serverUrl = serverUrl
             );
@@ -153,7 +153,7 @@ public isolated class McpToolKit {
 
         mcp:ClientError? initializeRes = self.mcpClient->initialize(info);
         if initializeRes is error {
-            log:printError("Failed to initialize MCP client",
+            log:printDebug("Failed to initialize MCP client",
                 initializeRes,
                 serverUrl = serverUrl
             );
@@ -162,7 +162,7 @@ public isolated class McpToolKit {
 
         mcp:ListToolsResult|error listTools = self.mcpClient->listTools();
         if listTools is error {
-            log:printError("Failed to retrieve tools from MCP server",
+            log:printDebug("Failed to retrieve tools from MCP server",
                 listTools,
                 serverUrl = serverUrl
             );
@@ -309,7 +309,7 @@ public isolated class HttpServiceToolKit {
             );
             return extractResponsePayload(httpParameters.path, getResult);
         } on fail error e {
-            log:printWarn("HTTP request failed",
+            log:printDebug("HTTP request failed",
                 path = httpInput.path,
                 method = "GET",
                 errorMessage = e.message()
@@ -333,7 +333,7 @@ public isolated class HttpServiceToolKit {
             );
             return extractResponsePayload(httpParameters.path, postResult);
         } on fail error e {
-            log:printWarn("HTTP request failed",
+            log:printDebug("HTTP request failed",
                 path = httpInput.path,
                 method = "POST",
                 errorMessage = e.message()
@@ -357,7 +357,7 @@ public isolated class HttpServiceToolKit {
             );
             return extractResponsePayload(httpParameters.path, deleteResult);
         } on fail error e {
-            log:printWarn("HTTP request failed",
+            log:printDebug("HTTP request failed",
                 path = httpInput.path,
                 method = "DELETE",
                 errorMessage = e.message()
@@ -381,7 +381,7 @@ public isolated class HttpServiceToolKit {
             );
             return extractResponsePayload(httpParameters.path, putResult);
         } on fail error e {
-            log:printWarn("HTTP request failed",
+            log:printDebug("HTTP request failed",
                 path = httpInput.path,
                 method = "PUT",
                 errorMessage = e.message()
@@ -405,7 +405,7 @@ public isolated class HttpServiceToolKit {
             );
             return extractResponsePayload(httpParameters.path, patchResult);
         } on fail error e {
-            log:printWarn("HTTP request failed",
+            log:printDebug("HTTP request failed",
                 path = httpInput.path,
                 method = "PATCH",
                 errorMessage = e.message()
@@ -429,7 +429,7 @@ public isolated class HttpServiceToolKit {
             );
             return extractResponsePayload(httpParameters.path, headResult);
         } on fail error e {
-            log:printWarn("HTTP request failed",
+            log:printDebug("HTTP request failed",
                 path = httpInput.path,
                 method = "HEAD",
                 errorMessage = e.message()
@@ -453,7 +453,7 @@ public isolated class HttpServiceToolKit {
             );
             return extractResponsePayload(httpParameters.path, optionsResult);
         } on fail error e {
-            log:printWarn("HTTP request failed",
+            log:printDebug("HTTP request failed",
                 path = httpInput.path,
                 method = "OPTIONS",
                 errorMessage = e.message()

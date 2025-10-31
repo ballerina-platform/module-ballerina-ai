@@ -138,7 +138,7 @@ public isolated distinct class Agent {
             span.close();
             return answer;
         } on fail Error err {
-            log:printError("Agent execution failed",
+            log:printDebug("Agent execution failed",
                 err,
                 steps = executionTrace.steps.toString()
             );

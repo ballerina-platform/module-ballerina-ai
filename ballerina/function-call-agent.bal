@@ -73,7 +73,7 @@ isolated distinct class FunctionCallAgent {
         ChatMessage[] messages = createFunctionCallMessages(progress);
         ChatMessage[]|MemoryError additionalMessages = self.memory.get(sessionId);
         if additionalMessages is MemoryError {
-            log:printError("Failed to retrieve conversation history from memory",
+            log:printDebug("Failed to retrieve conversation history from memory",
                 additionalMessages,
                 sessionId = sessionId
             );

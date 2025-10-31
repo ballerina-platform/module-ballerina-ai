@@ -219,7 +219,7 @@ class Executor {
                     observation: observation.toString()
                 };
 
-                log:printError("Tool execution resulted in error",
+                log:printDebug("Tool execution resulted in error",
                     observation = observation.toString(),
                     sessionId = self.sessionId,
                     toolName = toolName
@@ -244,7 +244,7 @@ class Executor {
                 span.close();
             }
         } else {
-            log:printError("Failed to parse LLM response as valid tool or chat",
+            log:printDebug("Failed to parse LLM response as valid tool or chat",
                 sessionId = self.sessionId,
                 errorMessage = parsedOutput.message()
             );
@@ -318,7 +318,7 @@ isolated function run(BaseAgent agent, string instruction, string query, int max
         ChatMessage[] temporaryMemory = [];
         foreach ExecutionResult|LlmChatResponse|ExecutionError|Error step in iterator {
             if iter == maxIter {
-                log:printWarn("Maximum iterations reached without final answer",
+                log:printDebug("Maximum iterations reached without final answer",
                     iterations = iter,
                     stepsCompleted = steps.length(),
                     sessionId = sessionId
@@ -327,7 +327,7 @@ isolated function run(BaseAgent agent, string instruction, string query, int max
             }
             if step is Error {
                 error? cause = step.cause();
-                log:printError("Error occurred during agent iteration",
+                log:printDebug("Error occurred during agent iteration",
                     step,
                     iteration = iter,
                     sessionId = sessionId,
