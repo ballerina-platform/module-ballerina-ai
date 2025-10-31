@@ -100,6 +100,12 @@ isolated client distinct class MockLlm {
             ai:FunctionCall functionCall = {name: "searchImage", arguments: {searchQuery}};
             return {role: ai:ASSISTANT, toolCalls: [functionCall]};
         }
+        if query.toLowerAscii().includes("video") {
+            regexp:Span? span = re `'.*'`.find(query);
+            string searchQuery = span is () ? "No search query" : span.substring();
+            ai:FunctionCall functionCall = {name: "searchVideo", arguments: {searchQuery}};
+            return {role: ai:ASSISTANT, toolCalls: [functionCall]};
+        }
         if query.toLowerAscii().includes("search") {
             regexp:Span? span = re `'.*'`.find(query);
             string searchQuery = span is () ? "No search query" : span.substring();
@@ -154,7 +160,7 @@ isolated class SearchToolKit {
     *ai:BaseToolKit;
 
     public isolated function getTools() returns ai:ToolConfig[] {
-        return ai:getToolConfigs([self.searchDoc, self.searchImage]);
+        return ai:getToolConfigs([self.searchDoc, self.searchImage, self.searchVideo]);
     }
 
     @ai:AgentTool
@@ -170,5 +176,16 @@ isolated class SearchToolKit {
             return string `Answer is: ${imageUrl}`;
         }
         return string `Answer is: No image found for query ${searchQuery}`;
+    }
+
+    @ai:AgentTool
+    isolated function searchVideo(ai:Context ctx, string searchQuery, map<string>? properties = ()) 
+        returns string|error {
+        ctx.set("isVideoSearchToolExecuted", true);
+        if ctx.hasKey("videoUrl") {
+            string videoUrl = check ctx.getWithType("videoUrl");
+            return string `Answer is: ${videoUrl}`;
+        }
+        return string `Answer is: No video found for query ${searchQuery}`;
     }
 }

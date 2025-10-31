@@ -39,11 +39,15 @@ import io.ballerina.runtime.api.values.BTypedesc;
 
 import java.util.Arrays;
 import java.util.LinkedHashMap;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 import static io.ballerina.stdlib.ai.ModuleUtils.isModuleDefinedError;
 
 public class Utils {
+    private static final String CONTEXT_TYPE_NAME = "Context";
+    private static final String AI_MODULE_NAME = "ai";
+
     @SuppressWarnings("unused")
     public static BMap<BString, Object> getParameterTypes(BFunctionPointer functionPointer) {
         FunctionType functionType = (FunctionType) functionPointer.getType();
@@ -78,17 +82,21 @@ public class Utils {
 
     @SuppressWarnings("unused")
     public static BMap<BString, Object> getArgsWithDefaultsExcludingContext(Environment env,
-                                                                 BFunctionPointer functionPointer,
-                                                                 BMap<BString, Object> args) {
+                                                                            BFunctionPointer functionPointer,
+                                                                            BMap<BString, Object> args) {
         FunctionType functionType = (FunctionType) functionPointer.getType();
         Parameter[] parameters = functionType.getParameters();
         LinkedHashMap<String, Object> argsWithDefaultValues = new LinkedHashMap<>();
+        Optional<BString> contextParamName = Optional.empty();
+
         for (Parameter parameter : parameters) {
             // Tool parameters must be either anydata or ai:Context.
-            // Skip setting default values if parameter is ai:Context.
-            if (!parameter.type.isAnydata()) {
+            if (isContextType(parameter.type)) {
+                contextParamName = Optional.of(StringUtils.fromString(parameter.name));
+            } else if (!parameter.type.isAnydata()) {
                 continue;
             }
+
             BString parameterName = StringUtils.fromString(parameter.name);
             Object value = args.containsKey(parameterName) ? args.get(parameterName) :
                     getDefaultParameterValue(env, functionPointer, parameter, argsWithDefaultValues.values().toArray());
@@ -98,7 +106,14 @@ public class Utils {
         BMap<BString, Object> parametersWithDefaultValue = ValueCreator.createMapValue(anydataMapType);
         argsWithDefaultValues
                 .forEach((key, value) -> parametersWithDefaultValue.put(StringUtils.fromString(key), value));
+        // Skip setting default values for ai:Context parameter.
+        contextParamName.ifPresent(parametersWithDefaultValue::remove);
         return parametersWithDefaultValue;
+    }
+
+    private static boolean isContextType(Type paramType) {
+        return paramType.getName().equals(CONTEXT_TYPE_NAME)
+                && paramType.getPackage().getName().equals(AI_MODULE_NAME);
     }
 
     private static Object getDefaultParameterValue(Environment env, BFunctionPointer functionPointer,
@@ -134,3 +149,4 @@ public class Utils {
         }
     }
 }
+
