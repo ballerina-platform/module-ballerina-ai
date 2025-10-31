@@ -38,16 +38,22 @@ function testAgentToolExecution() returns error? {
 @test:Config
 function testAgentToolExecutionWithContext() returns error? {
     string imageUrl = "https://ballerina.io/images/ballerina.png";
-    
     ai:Context ctx = new;
     ctx.set("imageUrl", imageUrl);
     ctx.set("isImageSearchToolExecuted", false);
 
     string result = check agent.run("Search for a 'ballerina' image", context = ctx);
     test:assertEquals(result, string `Answer is: ${imageUrl}`);
-
     boolean isImageSearchToolExecuted = check ctx.getWithType("isImageSearchToolExecuted");
     test:assertTrue(isImageSearchToolExecuted);
+
+    string videoUrl = "https://ballerina.io/video/ballerina.mp4";
+    ctx.set("videoUrl", videoUrl);
+    ctx.set("isVideoSearchToolExecuted", false);
+    result = check agent.run("Search for a 'ballerina' video", context = ctx);
+    boolean isVideoSearchToolExecuted = check ctx.getWithType("isVideoSearchToolExecuted");
+    test:assertTrue(isVideoSearchToolExecuted);
+    test:assertEquals(result, string `Answer is: ${videoUrl}`);
 }
 
 @test:Config {
