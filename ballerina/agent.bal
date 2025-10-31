@@ -14,6 +14,10 @@
 // specific language governing permissions and limitations
 // under the License.
 
+import ai.observe;
+
+import ballerina/uuid;
+
 const INFER_TOOL_COUNT = "INFER_TOOL_COUNT";
 
 # Represents the system prompt given to the agent.
@@ -75,18 +79,30 @@ public isolated distinct class Agent {
     private final int maxIter;
     private final readonly & SystemPrompt systemPrompt;
     private final boolean verbose;
+    private final string uniqueId = uuid:createRandomUuid();
 
     # Initialize an Agent.
     #
     # + config - Configuration used to initialize an agent
     public isolated function init(@display {label: "Agent Configuration"} *AgentConfiguration config) returns Error? {
+        observe:CreateAgentSpan span = observe:createCreateAgentSpan(config.systemPrompt.role);
+        span.addId(self.uniqueId);
+        span.addSystemInstructions(getFomatedSystemPrompt(config.systemPrompt));
+
         INFER_TOOL_COUNT|int maxIter = config.maxIter;
         self.maxIter = maxIter is INFER_TOOL_COUNT ? config.tools.length() + 1 : maxIter;
         self.verbose = config.verbose;
         self.systemPrompt = config.systemPrompt.cloneReadOnly();
-        
         Memory? memory = config.hasKey("memory") ? config?.memory : check new ShortTermMemory();
-        self.functionCallAgent = check new FunctionCallAgent(config.model, config.tools, memory);
+
+        do {
+            self.functionCallAgent = check new FunctionCallAgent(config.model, config.tools, memory);
+            span.addTools(self.functionCallAgent.toolStore.getToolsInfo());
+            span.close();
+        } on fail Error err {
+            span.close(err);
+            return err;
+        }
     }
 
     # Executes the agent for a given user query.
@@ -98,14 +114,32 @@ public isolated distinct class Agent {
     public isolated function run(@display {label: "Query"} string query,
             @display {label: "Session ID"} string sessionId = DEFAULT_SESSION_ID,
             Context context = new) returns string|Error {
-        ExecutionTrace result = self.functionCallAgent.run(query, getFomatedSystemPrompt(self.systemPrompt),
-            self.maxIter, self.verbose, sessionId, context);
-        string? answer = result.answer;
-        if answer is string {
+        observe:InvokeAgentSpan span = observe:createInvokeAgentSpan(self.systemPrompt.role);
+        span.addId(self.uniqueId);
+        span.addSessionId(sessionId);
+        span.addInput(query);
+        string systemPrompt = getFomatedSystemPrompt(self.systemPrompt);
+        span.addSystemInstruction(systemPrompt);
+
+        ExecutionTrace executionTrace = self.functionCallAgent
+            .run(query, systemPrompt, self.maxIter, self.verbose, sessionId, context);
+        do {
+            string answer = check getAnswer(executionTrace, self.maxIter);
+            
+            span.addOutput(observe:TEXT, answer);
+            span.close();
             return answer;
+        } on fail Error err {
+            span.close(err);
+            return err;
         }
-        return constructError(result.steps, self.maxIter);
     }
+
+}
+
+isolated function getAnswer(ExecutionTrace executionTrace, int maxIter) returns string|Error {
+    string? answer = executionTrace.answer;
+    return answer ?: constructError(executionTrace.steps, maxIter);
 }
 
 isolated function constructError((ExecutionResult|ExecutionError|Error)[] steps, int maxIter) returns Error {

@@ -39,6 +39,11 @@ public type Tool record {|
     isolated function caller;
 |};
 
+type ToolInfo record {|
+    string name;
+    string description;
+|};
+
 public isolated class ToolStore {
     public final map<Tool> & readonly tools;
     private map<()> mcpTools = {};
@@ -101,7 +106,7 @@ public isolated class ToolStore {
         isolated function caller = self.tools.get(name).caller;
         ToolExecutionResult|error execution;
         lock {
-            readonly & map<json> toolInput = self.mcpTools.hasKey(name)
+            readonly & map<json> toolInput = self.isMcpTool(name)
                 ? {params: {name, arguments: inputValues}}.cloneReadOnly()
                 : inputValues.cloneReadOnly();
             execution = trap executeTool(caller, toolInput, context);
@@ -134,6 +139,27 @@ public isolated class ToolStore {
                 instruction = instruction);
         }
         return {value: observation};
+    }
+
+    isolated function getToolDescription(string toolName) returns string? {
+        if self.tools.hasKey(toolName) {
+            return self.tools.get(toolName).description;
+        }
+        return;
+    }
+
+    isolated function isMcpTool(string toolName) returns boolean {
+        lock {
+            return self.mcpTools.hasKey(toolName);
+        }
+    }
+
+    isolated function getToolsInfo() returns ToolInfo[] {
+        ToolInfo[] toolList = [];
+        foreach [string, Tool] [name, tool] in self.tools.entries() {
+            toolList.push({name, description: tool.description});
+        }
+        return toolList;
     }
 }
 
@@ -171,7 +197,7 @@ public isolated function executeTool(FunctionTool tool, map<json> llmToolInput, 
     return {result};
 }
 
-isolated function getInputArgumentsOfTool(FunctionTool tool, map<json> inputValues, Context context = new) 
+isolated function getInputArgumentsOfTool(FunctionTool tool, map<json> inputValues, Context context = new)
     returns (anydata|Context)[]|error {
     map<anydata> inputArgs = {};
     boolean hasContextArg = false;
