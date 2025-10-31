@@ -16,6 +16,7 @@
 
 import ai.observe;
 
+import ballerina/log;
 import ballerina/uuid;
 
 const INFER_TOOL_COUNT = "INFER_TOOL_COUNT";
@@ -114,6 +115,10 @@ public isolated distinct class Agent {
     public isolated function run(@display {label: "Query"} string query,
             @display {label: "Session ID"} string sessionId = DEFAULT_SESSION_ID,
             Context context = new) returns string|Error {
+        log:printDebug("Agent execution started",
+            query = query,
+            sessionId = sessionId
+        );
         observe:InvokeAgentSpan span = observe:createInvokeAgentSpan(self.systemPrompt.role);
         span.addId(self.uniqueId);
         span.addSessionId(sessionId);
@@ -125,11 +130,18 @@ public isolated distinct class Agent {
             .run(query, systemPrompt, self.maxIter, self.verbose, sessionId, context);
         do {
             string answer = check getAnswer(executionTrace, self.maxIter);
-            
+            log:printDebug("Agent execution completed successfully",
+                steps = executionTrace.steps.toString(),
+                answer = answer
+            );
             span.addOutput(observe:TEXT, answer);
             span.close();
             return answer;
         } on fail Error err {
+            log:printError("Agent execution failed",
+                err,
+                steps = executionTrace.steps.toString()
+            );
             span.close(err);
             return err;
         }

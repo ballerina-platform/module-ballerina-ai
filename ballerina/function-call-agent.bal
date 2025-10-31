@@ -73,13 +73,25 @@ isolated distinct class FunctionCallAgent {
         ChatMessage[] messages = createFunctionCallMessages(progress);
         ChatMessage[]|MemoryError additionalMessages = self.memory.get(sessionId);
         if additionalMessages is MemoryError {
-            log:printError("Failed to get chat messages from memory", additionalMessages);
+            log:printError("Failed to retrieve conversation history from memory",
+                additionalMessages,
+                sessionId = sessionId
+            );
         } else {
+            log:printDebug("Retrieved conversation history from memory",
+                sessionId = sessionId,
+                messages = additionalMessages.toString()
+            );
             messages.unshift(...additionalMessages);
         }
 
-        // TODO: Improve handling of multiple tool calls returned by the LLM.  
-        // Currently, tool calls are executed sequentially in separate chat responses.  
+        log:printDebug("Requesting tool selection from LLM",
+            sessionId = sessionId,
+            availableTools = self.toolStore.tools.toString()
+        );
+
+        // TODO: Improve handling of multiple tool calls returned by the LLM.
+        // Currently, tool calls are executed sequentially in separate chat responses.
         // Update the logic to execute all tool calls together and return a single response.
         ChatAssistantMessage response = check self.model->chat(messages,
         from Tool tool in self.toolStore.tools.toArray()
@@ -89,7 +101,19 @@ isolated distinct class FunctionCallAgent {
             parameters: tool.variables
         });
         FunctionCall[]? toolCalls = response?.toolCalls;
-        return toolCalls is FunctionCall[] ? toolCalls[0] : response?.content;
+
+        if toolCalls is FunctionCall[] {
+            log:printDebug("LLM selected tool",
+                sessionId = sessionId,
+                toolName = toolCalls[0].name
+            );
+            return toolCalls[0];
+        }
+
+        log:printDebug("LLM provided chat response instead of tool call",
+            sessionId = sessionId
+        );
+        return response?.content;
     }
 
     # Execute the agent for a given user's query.
