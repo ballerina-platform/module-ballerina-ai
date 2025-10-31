@@ -73,12 +73,14 @@ isolated distinct class FunctionCallAgent {
         ChatMessage[] messages = createFunctionCallMessages(progress);
         ChatMessage[]|MemoryError additionalMessages = self.memory.get(sessionId);
         if additionalMessages is MemoryError {
-            log:printError("Failed to retrieve conversation history from memory",
+            log:printDebug("Failed to retrieve conversation history from memory",
                 additionalMessages,
+                executionId = progress.executionId,
                 sessionId = sessionId
             );
         } else {
             log:printDebug("Retrieved conversation history from memory",
+                executionId = progress.executionId,
                 sessionId = sessionId,
                 messages = additionalMessages.toString()
             );
@@ -86,7 +88,9 @@ isolated distinct class FunctionCallAgent {
         }
 
         log:printDebug("Requesting tool selection from LLM",
+            executionId = progress.executionId,
             sessionId = sessionId,
+            messages = messages.toString(),
             availableTools = self.toolStore.tools.toString()
         );
 
@@ -104,14 +108,18 @@ isolated distinct class FunctionCallAgent {
 
         if toolCalls is FunctionCall[] {
             log:printDebug("LLM selected tool",
+                executionId = progress.executionId,
                 sessionId = sessionId,
-                toolName = toolCalls[0].name
+                toolName = toolCalls[0].name,
+                toolArguments = toolCalls[0].arguments
             );
             return toolCalls[0];
         }
 
         log:printDebug("LLM provided chat response instead of tool call",
-            sessionId = sessionId
+            executionId = progress.executionId,
+            sessionId = sessionId,
+            response = response?.content
         );
         return response?.content;
     }
@@ -124,10 +132,12 @@ isolated distinct class FunctionCallAgent {
     # + context - Context values to be used by the agent to execute the task
     # + verbose - If true, then print the reasoning steps (default: true)
     # + sessionId - The ID associated with the agent memory
+    # + executionId - Unique identifier for this execution
     # + return - Returns the execution steps tracing the agent's reasoning and outputs from the tools
     isolated function run(string query, string instruction, int maxIter = 5, boolean verbose = true,
-            string sessionId = DEFAULT_SESSION_ID, Context context = new) returns ExecutionTrace {
-        return run(self, instruction, query, maxIter, verbose, sessionId, context);
+            string sessionId = DEFAULT_SESSION_ID, Context context = new, string executionId = DEFAULT_EXECUTION_ID)
+            returns ExecutionTrace {
+        return run(self, instruction, query, maxIter, verbose, sessionId, context, executionId);
     }
 }
 

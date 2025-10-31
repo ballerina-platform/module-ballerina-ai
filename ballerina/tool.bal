@@ -86,7 +86,7 @@ public isolated class ToolStore {
         self.tools = toolMap.cloneReadOnly();
 
         log:printDebug("Tool registration completed",
-            toolNames = self.tools.keys()
+            tools = toolList.toString()
         );
     }
 
@@ -100,7 +100,7 @@ public isolated class ToolStore {
         string name = action.name;
         map<json>? inputs = action.arguments;
         if !self.tools.hasKey(name) {
-            log:printError("Tool not found",
+            log:printDebug("Tool not found",
                 toolName = name,
                 availableTools = self.tools.keys()
             );
@@ -110,7 +110,7 @@ public isolated class ToolStore {
         }
         map<json>|error inputValues = mergeInputs(inputs, self.tools.get(name).constants);
         if inputValues is error {
-            log:printError("Tool input validation failed",
+            log:printDebug("Tool input validation failed",
                 inputValues,
                 toolName = name
             );
@@ -134,7 +134,7 @@ public isolated class ToolStore {
             execution = trap executeTool(caller, toolInput, context);
         }
         if execution is error {
-            log:printError("Tool execution failed",
+            log:printDebug("Tool execution failed",
                 execution,
                 toolName = name
             );
@@ -158,18 +158,21 @@ public isolated class ToolStore {
             return {value: observation};
         }
         if observation !is error {
-            log:printError("Tool returned invalid output type",
-                toolName = name
+            log:printDebug("Tool returns an invalid output. Expected anydata or error.",
+                outputType = (typeof observation).toString(),
+                toolName = name,
+                inputs = inputValues.length() == 0 ? {} : inputValues
             );
             return error ToolInvalidOutputError("Tool returns an invalid output. Expected anydata or error.",
                 outputType = typeof observation, toolName = name, inputs = inputValues.length() == 0 ? {} : inputValues);
         }
         if observation.message() == "{ballerina/lang.function}IncompatibleArguments" {
-            log:printError("Tool execution failed due to incompatible arguments",
-                toolName = name
-            );
             string instruction = string `Tool "${name}"  execution failed due to invalid inputs provided.`
                 + string ` Use the schema to provide inputs: ${self.tools.get(name).variables.toString()}`;
+            log:printDebug(instruction,
+                toolName = name,
+                inputs = inputValues.length() == 0 ? {} : inputValues
+            );
             return error ToolInvalidInputError("Tool is provided with invalid inputs.",
                 observation, toolName = name, inputs = inputValues.length() == 0 ? {} : inputValues,
                 instruction = instruction);
@@ -270,7 +273,7 @@ isolated function registerTool(map<Tool & readonly> toolMap, ToolConfig[] tools)
             name = regexp:replaceAll(re `[^a-zA-Z0-9_-]`, name, "_");
         }
         if toolMap.hasKey(name) {
-            log:printError("Duplicate tool name detected",
+            log:printDebug("Duplicate tool name detected",
                 toolName = name
             );
             return error Error("Duplicated tools. Tool name should be unique.", toolName = name);
