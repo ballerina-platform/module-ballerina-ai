@@ -81,6 +81,13 @@ isolated client distinct class MockLlm {
         }
         ai:Prompt|string? lastMessageContent = lastMessage.content;
         string query = getChatMessageStringContent(lastMessageContent ?: "");
+        if query.includes("Select only the tools needed to complete the task and return them as a JSON array of tool names:") {
+            // Emulate dynamic tool loading: match the above query with the modified tool prompt from the agent implementation
+            lock {
+                toolLoadedDynamicaly = true;
+            }
+            return {role: ai:ASSISTANT, content: string `["sum"]`};
+        }
         if query.includes("Greet") {
             return {role: ai:ASSISTANT, content: "Hey John! Welcome to Ballerina!"};
         }
@@ -156,6 +163,12 @@ final ai:Agent agent = check new (model = model,
     tools = [sum, mutiply, new SearchToolKit(), getEmails]
 );
 
+final ai:Agent dynamicToolLoadingAgent = check new (model = model,
+    systemPrompt = {role: "Math tutor", instructions: "Help the students with their questions."},
+    tools = [sum],
+    enableLazyToolLoading = true
+);
+
 isolated class SearchToolKit {
     *ai:BaseToolKit;
 
@@ -179,7 +192,7 @@ isolated class SearchToolKit {
     }
 
     @ai:AgentTool
-    isolated function searchVideo(ai:Context ctx, string searchQuery, map<string>? properties = ()) 
+    isolated function searchVideo(ai:Context ctx, string searchQuery, map<string>? properties = ())
         returns string|error {
         ctx.set("isVideoSearchToolExecuted", true);
         if ctx.hasKey("videoUrl") {
