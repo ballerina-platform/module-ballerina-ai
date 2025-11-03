@@ -15,6 +15,7 @@
 // under the License.
 
 import ballerina/http;
+import ballerina/log;
 import ballerina/mcp;
 
 # Supported HTTP methods.
@@ -135,22 +136,46 @@ public isolated class McpToolKit {
     public isolated function init(string serverUrl, string[]? permittedTools = (),
             mcp:Implementation info = {name: "MCP Client", version: "1.0.0"},
             *mcp:StreamableHttpClientTransportConfig config) returns Error? {
+        log:printDebug("Connecting to MCP server",
+            serverUrl = serverUrl,
+            clientInfo = info
+        );
+
         mcp:StreamableHttpClient|mcp:ClientError mcpClient = new (serverUrl, config);
         if mcpClient is error {
+            log:printDebug("Failed to connect to MCP server",
+                mcpClient,
+                serverUrl = serverUrl
+            );
             return error Error("Failed to initialize the MCP client", mcpClient);
         }
         self.mcpClient = mcpClient;
 
         mcp:ClientError? initializeRes = self.mcpClient->initialize(info);
         if initializeRes is error {
+            log:printDebug("Failed to initialize MCP client",
+                initializeRes,
+                serverUrl = serverUrl
+            );
             return error Error("Failed to initialize the MCP client", initializeRes);
         }
 
         mcp:ListToolsResult|error listTools = self.mcpClient->listTools();
         if listTools is error {
+            log:printDebug("Failed to retrieve tools from MCP server",
+                listTools,
+                serverUrl = serverUrl
+            );
             return error Error("Failed to get tools from the MCP server", listTools);
         }
         mcp:ToolDefinition[] filteredTools = filterPermittedTools(listTools.tools, permittedTools);
+
+        log:printDebug("Retrieved tools from MCP server",
+            serverUrl = serverUrl,
+            tools = listTools.tools,
+            filteredTools = filteredTools
+        );
+
         isolated function caller = self.callTool;
 
         self.tools = from mcp:ToolDefinition tool in filteredTools
@@ -177,6 +202,7 @@ public isolated class HttpServiceToolKit {
     private final ToolConfig[] & readonly tools;
     private final map<string|string[]> & readonly headers;
     private final http:Client httpClient;
+    private final string serviceUrl;
 
     # Initializes the toolkit with the given service url and http tools.
     #
@@ -186,6 +212,7 @@ public isolated class HttpServiceToolKit {
     # + headers - The http headers to be used in the requests
     # + returns - error if the initialization fails
     public isolated function init(string serviceUrl, HttpTool[] httpTools, http:ClientConfiguration clientConfig = {}, map<string|string[]> headers = {}) returns Error? {
+        self.serviceUrl = serviceUrl;
         self.headers = headers.cloneReadOnly();
         http:Client|http:Error httpClient = new (serviceUrl, clientConfig);
         if httpClient is http:Error {
@@ -272,9 +299,26 @@ public isolated class HttpServiceToolKit {
     private isolated function get(HttpInput httpInput) returns HttpOutput|Error {
         do {
             HttpParameters httpParameters = check getHttpParameters(self.httpTools, GET, httpInput, false);
+            log:printDebug("Executing HTTP GET request",
+                serverUrl = self.serviceUrl,
+                path = httpParameters.path,
+                method = "GET"
+            );
             http:Response getResult = check self.httpClient->get(httpParameters.path, headers = self.headers);
+            log:printDebug("HTTP request completed",
+                serverUrl = self.serviceUrl,
+                path = httpParameters.path,
+                method = "GET",
+                statusCode = getResult.statusCode
+            );
             return extractResponsePayload(httpParameters.path, getResult);
         } on fail error e {
+            log:printDebug("HTTP request failed",
+                serverUrl = self.serviceUrl,
+                path = httpInput.path,
+                method = "GET",
+                errorMessage = e.message()
+            );
             return handleHttpResourceDespatchError(e);
         }
     }
@@ -282,9 +326,26 @@ public isolated class HttpServiceToolKit {
     private isolated function post(HttpInput httpInput) returns HttpOutput|Error {
         do {
             HttpParameters httpParameters = check getHttpParameters(self.httpTools, POST, httpInput, true);
+            log:printDebug("Executing HTTP POST request",
+                serverUrl = self.serviceUrl,
+                path = httpParameters.path,
+                method = "POST"
+            );
             http:Response postResult = check self.httpClient->post(httpParameters.path, message = httpParameters.message, headers = self.headers);
+            log:printDebug("HTTP request completed",
+                serverUrl = self.serviceUrl,
+                path = httpParameters.path,
+                method = "POST",
+                statusCode = postResult.statusCode
+            );
             return extractResponsePayload(httpParameters.path, postResult);
         } on fail error e {
+            log:printDebug("HTTP request failed",
+                serverUrl = self.serviceUrl,
+                path = httpInput.path,
+                method = "POST",
+                errorMessage = e.message()
+            );
             return handleHttpResourceDespatchError(e);
         }
     }
@@ -292,9 +353,26 @@ public isolated class HttpServiceToolKit {
     private isolated function delete(HttpInput httpInput) returns HttpOutput|Error {
         do {
             HttpParameters httpParameters = check getHttpParameters(self.httpTools, DELETE, httpInput, true);
+            log:printDebug("Executing HTTP DELETE request",
+                serverUrl = self.serviceUrl,
+                path = httpParameters.path,
+                method = "DELETE"
+            );
             http:Response deleteResult = check self.httpClient->delete(httpParameters.path, message = httpParameters.message, headers = self.headers);
+            log:printDebug("HTTP request completed",
+                serverUrl = self.serviceUrl,
+                path = httpParameters.path,
+                method = "DELETE",
+                statusCode = deleteResult.statusCode
+            );
             return extractResponsePayload(httpParameters.path, deleteResult);
         } on fail error e {
+            log:printDebug("HTTP request failed",
+                serverUrl = self.serviceUrl,
+                path = httpInput.path,
+                method = "DELETE",
+                errorMessage = e.message()
+            );
             return handleHttpResourceDespatchError(e);
         }
     }
@@ -302,9 +380,26 @@ public isolated class HttpServiceToolKit {
     private isolated function put(HttpInput httpInput) returns HttpOutput|Error {
         do {
             HttpParameters httpParameters = check getHttpParameters(self.httpTools, PUT, httpInput, true);
+            log:printDebug("Executing HTTP PUT request",
+                serverUrl = self.serviceUrl,
+                path = httpParameters.path,
+                method = "PUT"
+            );
             http:Response putResult = check self.httpClient->put(httpParameters.path, message = httpParameters.message, headers = self.headers);
+            log:printDebug("HTTP request completed",
+                serverUrl = self.serviceUrl,
+                path = httpParameters.path,
+                method = "PUT",
+                statusCode = putResult.statusCode
+            );
             return extractResponsePayload(httpParameters.path, putResult);
         } on fail error e {
+            log:printDebug("HTTP request failed",
+                serverUrl = self.serviceUrl,
+                path = httpInput.path,
+                method = "PUT",
+                errorMessage = e.message()
+            );
             return handleHttpResourceDespatchError(e);
         }
     }
@@ -312,9 +407,26 @@ public isolated class HttpServiceToolKit {
     private isolated function patch(HttpInput httpInput) returns HttpOutput|Error {
         do {
             HttpParameters httpParameters = check getHttpParameters(self.httpTools, PATCH, httpInput, true);
+            log:printDebug("Executing HTTP PATCH request",
+                serverUrl = self.serviceUrl,
+                path = httpParameters.path,
+                method = "PATCH"
+            );
             http:Response patchResult = check self.httpClient->patch(httpParameters.path, message = httpParameters.message, headers = self.headers);
+            log:printDebug("HTTP request completed",
+                serverUrl = self.serviceUrl,
+                path = httpParameters.path,
+                method = "PATCH",
+                statusCode = patchResult.statusCode
+            );
             return extractResponsePayload(httpParameters.path, patchResult);
         } on fail error e {
+            log:printDebug("HTTP request failed",
+                serverUrl = self.serviceUrl,
+                path = httpInput.path,
+                method = "PATCH",
+                errorMessage = e.message()
+            );
             return handleHttpResourceDespatchError(e);
         }
     }
@@ -322,9 +434,26 @@ public isolated class HttpServiceToolKit {
     private isolated function head(HttpInput httpInput) returns HttpOutput|Error {
         do {
             HttpParameters httpParameters = check getHttpParameters(self.httpTools, HEAD, httpInput, false);
+            log:printDebug("Executing HTTP HEAD request",
+                serverUrl = self.serviceUrl,
+                path = httpParameters.path,
+                method = "HEAD"
+            );
             http:Response headResult = check self.httpClient->head(httpParameters.path, headers = self.headers);
+            log:printDebug("HTTP request completed",
+                serverUrl = self.serviceUrl,
+                path = httpParameters.path,
+                method = "HEAD",
+                statusCode = headResult.statusCode
+            );
             return extractResponsePayload(httpParameters.path, headResult);
         } on fail error e {
+            log:printDebug("HTTP request failed",
+                serverUrl = self.serviceUrl,
+                path = httpInput.path,
+                method = "HEAD",
+                errorMessage = e.message()
+            );
             return handleHttpResourceDespatchError(e);
         }
     }
@@ -332,9 +461,26 @@ public isolated class HttpServiceToolKit {
     private isolated function options(HttpInput httpInput) returns HttpOutput|Error {
         do {
             HttpParameters httpParameters = check getHttpParameters(self.httpTools, OPTIONS, httpInput, false);
+            log:printDebug("Executing HTTP OPTIONS request",
+                serverUrl = self.serviceUrl,
+                path = httpParameters.path,
+                method = "OPTIONS"
+            );
             http:Response optionsResult = check self.httpClient->options(httpParameters.path, headers = self.headers);
+            log:printDebug("HTTP request completed",
+                serverUrl = self.serviceUrl,
+                path = httpParameters.path,
+                method = "OPTIONS",
+                statusCode = optionsResult.statusCode
+            );
             return extractResponsePayload(httpParameters.path, optionsResult);
         } on fail error e {
+            log:printDebug("HTTP request failed",
+                serverUrl = self.serviceUrl,
+                path = httpInput.path,
+                method = "OPTIONS",
+                errorMessage = e.message()
+            );
             return handleHttpResourceDespatchError(e);
         }
     }

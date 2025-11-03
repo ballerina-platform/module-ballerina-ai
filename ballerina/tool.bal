@@ -54,6 +54,10 @@ public isolated class ToolStore {
     # + tools - A list of tools that are available to the LLM
     # + return - An error if the tool is already registered
     public isolated function init((BaseToolKit|ToolConfig|FunctionTool)... tools) returns Error? {
+        log:printDebug("Registering tools",
+            tools = tools.toString()
+        );
+
         if tools.length() == 0 {
             self.tools = {};
             return;
@@ -80,6 +84,10 @@ public isolated class ToolStore {
         map<Tool & readonly> toolMap = {};
         check registerTool(toolMap, toolList);
         self.tools = toolMap.cloneReadOnly();
+
+        log:printDebug("Tool registration completed",
+            tools = toolList.toString()
+        );
     }
 
     # execute the tool decided by the LLM.
@@ -92,17 +100,31 @@ public isolated class ToolStore {
         string name = action.name;
         map<json>? inputs = action.arguments;
         if !self.tools.hasKey(name) {
+            log:printDebug("Tool not found",
+                toolName = name,
+                availableTools = self.tools.keys()
+            );
             return error ToolNotFoundError("Cannot find the tool.", toolName = name,
                 instruction = string `Tool "${name}" does not exists.`
                 + string ` Use a tool from the list: ${self.tools.keys().toString()}}`);
         }
         map<json>|error inputValues = mergeInputs(inputs, self.tools.get(name).constants);
         if inputValues is error {
+            log:printDebug("Tool input validation failed",
+                inputValues,
+                toolName = name
+            );
             string instruction = string `Tool "${name}"  execution failed due to invalid inputs provided.` +
                 string ` Use the schema to provide inputs: ${self.tools.get(name).variables.toString()}`;
             return error ToolInvalidInputError("Tool is provided with invalid inputs.", inputValues, toolName = name,
                 inputs = inputs ?: (), instruction = instruction);
         }
+
+        log:printDebug("Executing tool",
+            toolName = name,
+            isMcpTool = self.isMcpTool(name),
+            arguments = inputValues
+        );
         isolated function caller = self.tools.get(name).caller;
         ToolExecutionResult|error execution;
         lock {
@@ -112,6 +134,10 @@ public isolated class ToolStore {
             execution = trap executeTool(caller, toolInput, context);
         }
         if execution is error {
+            log:printDebug("Tool execution failed",
+                execution,
+                toolName = name
+            );
             return error ToolExecutionError("Tool execution failed.", execution, toolName = name,
                 inputs = inputValues.length() == 0 ? {} : inputValues);
         }
@@ -125,15 +151,28 @@ public isolated class ToolStore {
             observation = result;
         }
         if observation is anydata {
+            log:printDebug("Tool executed successfully",
+                toolName = name,
+                output = observation.toString()
+            );
             return {value: observation};
         }
         if observation !is error {
+            log:printDebug("Tool returns an invalid output. Expected anydata or error.",
+                outputType = (typeof observation).toString(),
+                toolName = name,
+                inputs = inputValues.length() == 0 ? {} : inputValues
+            );
             return error ToolInvalidOutputError("Tool returns an invalid output. Expected anydata or error.",
                 outputType = typeof observation, toolName = name, inputs = inputValues.length() == 0 ? {} : inputValues);
         }
         if observation.message() == "{ballerina/lang.function}IncompatibleArguments" {
             string instruction = string `Tool "${name}"  execution failed due to invalid inputs provided.`
                 + string ` Use the schema to provide inputs: ${self.tools.get(name).variables.toString()}`;
+            log:printDebug(instruction,
+                toolName = name,
+                inputs = inputValues.length() == 0 ? {} : inputValues
+            );
             return error ToolInvalidInputError("Tool is provided with invalid inputs.",
                 observation, toolName = name, inputs = inputValues.length() == 0 ? {} : inputValues,
                 instruction = instruction);
@@ -234,6 +273,9 @@ isolated function registerTool(map<Tool & readonly> toolMap, ToolConfig[] tools)
             name = regexp:replaceAll(re `[^a-zA-Z0-9_-]`, name, "_");
         }
         if toolMap.hasKey(name) {
+            log:printDebug("Duplicate tool name detected",
+                toolName = name
+            );
             return error Error("Duplicated tools. Tool name should be unique.", toolName = name);
         }
 

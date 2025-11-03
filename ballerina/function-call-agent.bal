@@ -73,13 +73,29 @@ isolated distinct class FunctionCallAgent {
         ChatMessage[] messages = createFunctionCallMessages(progress);
         ChatMessage[]|MemoryError additionalMessages = self.memory.get(sessionId);
         if additionalMessages is MemoryError {
-            log:printError("Failed to get chat messages from memory", additionalMessages);
+            log:printDebug("Failed to retrieve conversation history from memory",
+                additionalMessages,
+                executionId = progress.executionId,
+                sessionId = sessionId
+            );
         } else {
+            log:printDebug("Retrieved conversation history from memory",
+                executionId = progress.executionId,
+                sessionId = sessionId,
+                messages = additionalMessages.toString()
+            );
             messages.unshift(...additionalMessages);
         }
 
-        // TODO: Improve handling of multiple tool calls returned by the LLM.  
-        // Currently, tool calls are executed sequentially in separate chat responses.  
+        log:printDebug("Requesting tool selection from LLM",
+            executionId = progress.executionId,
+            sessionId = sessionId,
+            messages = messages.toString(),
+            availableTools = self.toolStore.tools.toString()
+        );
+
+        // TODO: Improve handling of multiple tool calls returned by the LLM.
+        // Currently, tool calls are executed sequentially in separate chat responses.
         // Update the logic to execute all tool calls together and return a single response.
         ChatAssistantMessage response = check self.model->chat(messages,
         from Tool tool in self.toolStore.tools.toArray()
@@ -89,7 +105,23 @@ isolated distinct class FunctionCallAgent {
             parameters: tool.variables
         });
         FunctionCall[]? toolCalls = response?.toolCalls;
-        return toolCalls is FunctionCall[] ? toolCalls[0] : response?.content;
+
+        if toolCalls is FunctionCall[] {
+            log:printDebug("LLM selected tool",
+                executionId = progress.executionId,
+                sessionId = sessionId,
+                toolName = toolCalls[0].name,
+                toolArguments = toolCalls[0].arguments
+            );
+            return toolCalls[0];
+        }
+
+        log:printDebug("LLM provided chat response instead of tool call",
+            executionId = progress.executionId,
+            sessionId = sessionId,
+            response = response?.content
+        );
+        return response?.content;
     }
 
     # Execute the agent for a given user's query.
@@ -100,10 +132,12 @@ isolated distinct class FunctionCallAgent {
     # + context - Context values to be used by the agent to execute the task
     # + verbose - If true, then print the reasoning steps (default: true)
     # + sessionId - The ID associated with the agent memory
+    # + executionId - Unique identifier for this execution
     # + return - Returns the execution steps tracing the agent's reasoning and outputs from the tools
     isolated function run(string query, string instruction, int maxIter = 5, boolean verbose = true,
-            string sessionId = DEFAULT_SESSION_ID, Context context = new) returns ExecutionTrace {
-        return run(self, instruction, query, maxIter, verbose, sessionId, context);
+            string sessionId = DEFAULT_SESSION_ID, Context context = new, string executionId = DEFAULT_EXECUTION_ID)
+            returns ExecutionTrace {
+        return run(self, instruction, query, maxIter, verbose, sessionId, context, executionId);
     }
 }
 

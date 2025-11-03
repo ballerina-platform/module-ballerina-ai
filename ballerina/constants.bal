@@ -25,6 +25,7 @@ const OPENAPI_PATTERN_DATE_TIME = "yyyy-MM-dd'T'HH:mm:ssZ";
 const THOUGHT_KEY = "Thought:";
 const BACKTICKS = "```";
 const DEFAULT_SESSION_ID = "sessionId";
+const DEFAULT_EXECUTION_ID = "executionId";
 
 final string:RegExp FINAL_ANSWER_REGEX = re `^final.?answer`;
 

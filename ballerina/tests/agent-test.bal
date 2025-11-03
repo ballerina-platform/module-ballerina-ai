@@ -39,7 +39,7 @@ function testAgentExecutorRun() returns error? {
     FunctionCallAgent agent = check new (model, [searchTool, calculatorTool]);
     string query = "Who is Leo DiCaprio's girlfriend? What is her current age raised to the 0.43 power?";
     Executor agentExecutor = new (agent, DEFAULT_SESSION_ID,
-        instruction = "Answer the questions", query = query, context = new
+        instruction = "Answer the questions", query = query, context = new, executionId = DEFAULT_EXECUTION_ID
     );
     record {|ExecutionResult|LlmChatResponse|ExecutionError|Error value;|}? result = agentExecutor.next();
     if result is () {
