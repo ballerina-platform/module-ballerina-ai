@@ -72,12 +72,10 @@ public type AgentConfiguration record {|
     @display {label: "Memory"}
     Memory? memory?;
 
-    # Instead of sending all tool schemas directly to the LLM, it first sends only the list of tools 
-    # along with their descriptions. The LLM then selects the tools required to fulfill the user query.
-    # After receiving the selected tools, their corresponding schemas are loaded and sent to the LLM 
-    # to request the necessary parameters for execution. This follows a double-dispatching approach.
-    @display {label: "Enable Lazy Tool Loading"}
-    boolean enableLazyToolLoading = false;
+    # Defines the strategies for loading tool schemas into an Agent. 
+    # By default, all tools are loaded without any filtering.
+    @display {label: "Tool Loading Strategy"}
+    ToolLoadingStrategy toolLoadingStrategy = NO_FILTER;
 |};
 
 # Represents an agent.
@@ -104,7 +102,7 @@ public isolated distinct class Agent {
 
         do {
             self.functionCallAgent = check new FunctionCallAgent(config.model, config.tools, memory,
-                config.enableLazyToolLoading);
+                config.toolLoadingStrategy);
             span.addTools(self.functionCallAgent.toolStore.getToolsInfo());
             span.close();
         } on fail Error err {

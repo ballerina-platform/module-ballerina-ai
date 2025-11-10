@@ -29,7 +29,8 @@ isolated distinct class FunctionCallAgent {
     final Memory memory;
     # Represents if the agent is stateless or not.
     final boolean stateless;
-    final boolean enableLazyToolLoading;
+    final ToolLoadingStrategy toolLoadingStrategy;
+    
 
     # Initialize an Agent.
     #
@@ -37,12 +38,12 @@ isolated distinct class FunctionCallAgent {
     # + tools - Tools to be used by the agent
     # + memory - The memory associated with the agent.
     isolated function init(ModelProvider model, (BaseToolKit|ToolConfig|FunctionTool)[] tools,
-            Memory? memory = (), boolean enableLazyToolLoading = false) returns Error? {
+            Memory? memory = (), ToolLoadingStrategy toolLoadingStrategy = NO_FILTER) returns Error? {
         self.toolStore = check new (...tools);
         self.model = model;
         self.memory = memory ?: check new ShortTermMemory();
         self.stateless = memory is ();
-        self.enableLazyToolLoading = enableLazyToolLoading;
+        self.toolLoadingStrategy = toolLoadingStrategy;
     }
 
     # Parse the function calling API response and extract the tool to be executed.
@@ -81,44 +82,26 @@ isolated distinct class FunctionCallAgent {
             messages.unshift(...additionalMessages);
         }
 
+        ToolLoadingStrategy toolLoadingStrategy = self.toolLoadingStrategy;
         ChatMessage lastMessage = messages[messages.length() - 1];
-        ChatCompletionFunctions[] tools = from Tool tool in self.toolStore.tools.toArray()
+        ChatCompletionFunctions[] registeredTools = from Tool tool in self.toolStore.tools.toArray()
             select {
                 name: tool.name,
                 description: tool.description,
                 parameters: tool.variables
             };
-
-        if self.enableLazyToolLoading && lastMessage is ChatUserMessage {
-            ToolInfo[] toolInfo = self.toolStore.getToolsInfo();
-            ChatUserMessage modifiedUserMessage = modifyUserPromptWithToolsInfo(lastMessage, toolInfo);
-
-            // Replace the last user message with the modified one that includes the tools prompt
-            _ = messages.pop();
-            messages.push(modifiedUserMessage);
-
-            ChatAssistantMessage response = check self.model->chat(messages, []);
-            log:printDebug(string `Calling model for lazy tool loading. Raw response: ${response.content.toString()}`);
-            string[]? selectedTools = getSelectedToolsFromAssistantMessage(response);
-            log:printDebug(string `Extracted tools from model response: ${selectedTools.toString()}`);
-
-            if selectedTools is string[] {
-                // Only load the tool schemas picked by the model
-                tools = from ChatCompletionFunctions tool in tools
-                    let string toolName = tool.name
-                    where selectedTools.some(selected => selected == toolName)
-                    select tool;
+        ChatCompletionFunctions[] filteredTools = registeredTools;
+        if toolLoadingStrategy == LLM_FILTER && lastMessage is ChatUserMessage {
+            ChatCompletionFunctions[]? selectedTools = lazyLoadTools(cloneMessages(messages), registeredTools, self.model);
+            if selectedTools !is () {
+                filteredTools = selectedTools;
             }
-
-            // Revert last message to original
-            _ = messages.pop();
-            messages.push(lastMessage);
         }
 
         // TODO: Improve handling of multiple tool calls returned by the LLM.  
         // Currently, tool calls are executed sequentially in separate chat responses.  
         // Update the logic to execute all tool calls together and return a single response.
-        ChatAssistantMessage response = check self.model->chat(messages, tools);
+        ChatAssistantMessage response = check self.model->chat(messages, filteredTools);
         FunctionCall[]? toolCalls = response?.toolCalls;
         return toolCalls is FunctionCall[] ? toolCalls[0] : response?.content;
     }
@@ -199,4 +182,82 @@ isolated function getSelectedToolsFromAssistantMessage(ChatAssistantMessage assi
         // In case of failure try to load all tools and ignore the error
         return;
     }
+}
+
+isolated function cloneMessages(ChatMessage[] messages) returns ChatMessage[] {
+    ChatMessage[] clonedMessages = [];
+    foreach ChatMessage msg in messages {
+        if msg is ChatUserMessage {
+            clonedMessages.push(cloneUserMessage(msg));
+            continue;
+        }
+        if msg is ChatSystemMessage {
+            clonedMessages.push(cloneSystemMessage(msg));
+            continue;
+        }
+        if msg is ChatAssistantMessage|ChatFunctionMessage {
+            clonedMessages.push(msg.clone());
+        }
+    }
+    return clonedMessages;
+}
+
+isolated function cloneUserMessage(ChatUserMessage message) returns ChatUserMessage {
+    string|Prompt content = message.content;
+    string|Prompt clonedContent = content is string ? content
+        : createPrompt(content.strings, content.insertions.cloneReadOnly());
+    ChatUserMessage clonedMessage = {
+        role: USER,
+        content: clonedContent
+    };
+    if message?.name is string {
+        clonedMessage.name = message?.name;
+    }
+    return clonedMessage;
+}
+
+isolated function cloneSystemMessage(ChatSystemMessage message) returns ChatSystemMessage {
+    string|Prompt content = message.content;
+    string|Prompt clonedContent = content is string ? content
+        : createPrompt(content.strings, content.insertions.cloneReadOnly());
+    ChatSystemMessage clonedMessage = {
+        role: SYSTEM,
+        content: clonedContent
+    };
+    if message?.name is string {
+        clonedMessage.name = message?.name;
+    }
+    return clonedMessage;
+}
+
+isolated function lazyLoadTools(ChatMessage[] messages, ChatCompletionFunctions[] registeredTools,
+        ModelProvider model) returns ChatCompletionFunctions[]? {
+    ChatMessage lastMessage = messages[messages.length() - 1];
+    if lastMessage !is ChatUserMessage {
+        return;
+    }
+    ToolInfo[] toolInfo = registeredTools.'map(tool => {name: tool.name, description: tool.description});
+    ChatUserMessage modifiedUserMessage = modifyUserPromptWithToolsInfo(lastMessage, toolInfo);
+
+    // Replace the last user message with the modified one that includes the tools prompt
+    _ = messages.pop();
+    messages.push(modifiedUserMessage);
+
+    ChatAssistantMessage|Error response = model->chat(messages, []);
+    if response is Error {
+        return;
+    }
+
+    log:printDebug(string `Calling model for lazy tool loading. Raw response: ${response.content.toString()}`);
+    string[]? selectedTools = getSelectedToolsFromAssistantMessage(response);
+    log:printDebug(string `Extracted tools from model response: ${selectedTools.toString()}`);
+
+    if selectedTools is string[] {
+        // Only load the tool schemas picked by the model
+        return from ChatCompletionFunctions tool in registeredTools
+            let string toolName = tool.name
+            where selectedTools.some(selected => selected == toolName)
+            select tool;
+    }
+    return;
 }
