@@ -134,3 +134,17 @@ public type RetryConfig record {|
     @display {label: "Retry Interval"}
     decimal interval?;
 |};
+
+# Defines the strategies for loading tool schemas into an Agent.
+public enum ToolLoadingStrategy {
+    # Loads all available tools without any filtering.
+    NO_FILTER,
+
+     # Uses a selective, double-dispatch strategy.
+     #
+     # Instead of sending all tool schemas directly to the LLM, only a list of tool names
+     # and descriptions is sent initially. The LLM then selects the tools needed to handle
+     # the user’s query. Once the required tools are identified, their corresponding schemas
+     # are loaded and sent to the LLM to obtain the necessary parameters for execution.
+    LLM_FILTER
+}

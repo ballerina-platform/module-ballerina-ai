@@ -14,6 +14,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
+import ballerina/lang.regexp;
 import ballerina/log;
 
 # Function call agent. 
@@ -28,6 +29,8 @@ isolated distinct class FunctionCallAgent {
     final Memory memory;
     # Represents if the agent is stateless or not.
     final boolean stateless;
+    final ToolLoadingStrategy toolLoadingStrategy;
+    
 
     # Initialize an Agent.
     #
@@ -35,11 +38,12 @@ isolated distinct class FunctionCallAgent {
     # + tools - Tools to be used by the agent
     # + memory - The memory associated with the agent.
     isolated function init(ModelProvider model, (BaseToolKit|ToolConfig|FunctionTool)[] tools,
-            Memory? memory = ()) returns Error? {
+            Memory? memory = (), ToolLoadingStrategy toolLoadingStrategy = NO_FILTER) returns Error? {
         self.toolStore = check new (...tools);
         self.model = model;
         self.memory = memory ?: check new ShortTermMemory();
         self.stateless = memory is ();
+        self.toolLoadingStrategy = toolLoadingStrategy;
     }
 
     # Parse the function calling API response and extract the tool to be executed.
@@ -87,23 +91,33 @@ isolated distinct class FunctionCallAgent {
             messages.unshift(...additionalMessages);
         }
 
+        ToolLoadingStrategy toolLoadingStrategy = self.toolLoadingStrategy;
+        ChatMessage lastMessage = messages[messages.length() - 1];
+        ChatCompletionFunctions[] registeredTools = from Tool tool in self.toolStore.tools.toArray()
+            select {
+                name: tool.name,
+                description: tool.description,
+                parameters: tool.variables
+            };
+        ChatCompletionFunctions[] filteredTools = registeredTools;
+        if toolLoadingStrategy == LLM_FILTER && lastMessage is ChatUserMessage {
+            ChatCompletionFunctions[]? selectedTools = lazyLoadTools(cloneMessages(messages), registeredTools, self.model);
+            if selectedTools !is () {
+                filteredTools = selectedTools;
+            }
+        }
+
         log:printDebug("Requesting tool selection from LLM",
             executionId = progress.executionId,
             sessionId = sessionId,
             messages = messages.toString(),
-            availableTools = self.toolStore.tools.toString()
+            availableTools = filteredTools.toString()
         );
 
         // TODO: Improve handling of multiple tool calls returned by the LLM.
         // Currently, tool calls are executed sequentially in separate chat responses.
         // Update the logic to execute all tool calls together and return a single response.
-        ChatAssistantMessage response = check self.model->chat(messages,
-        from Tool tool in self.toolStore.tools.toArray()
-        select {
-            name: tool.name,
-            description: tool.description,
-            parameters: tool.variables
-        });
+        ChatAssistantMessage response = check self.model->chat(messages, filteredTools);
         FunctionCall[]? toolCalls = response?.toolCalls;
 
         if toolCalls is FunctionCall[] {
@@ -139,6 +153,7 @@ isolated distinct class FunctionCallAgent {
             returns ExecutionTrace {
         return run(self, instruction, query, maxIter, verbose, sessionId, context, executionId);
     }
+
 }
 
 isolated function createFunctionCallMessages(ExecutionProgress progress) returns ChatMessage[] {
@@ -161,4 +176,122 @@ isolated function createFunctionCallMessages(ExecutionProgress progress) returns
         });
     }
     return messages;
+}
+
+isolated function modifyUserPromptWithToolsInfo(ChatUserMessage chatUserMsg, ToolInfo[] toolInfo)
+returns ChatUserMessage {
+    string toolsPrompt = string `
+
+These are the tools available to you: 
+${BACKTICKS} 
+${toolInfo.toJsonString()}
+${BACKTICKS}
+
+Select only the tools required to complete the task and return them as a JSON array of tool names:
+${BACKTICKS} 
+["toolNameOne","toolNameTwo","toolNameN"]
+${BACKTICKS}
+
+If no tools are needed, return an empty array:
+${BACKTICKS}
+[]
+${BACKTICKS}`;
+
+    string|Prompt content = chatUserMsg.content;
+    if content is string {
+        content += toolsPrompt;
+    } else {
+        content.insertions.push(toolsPrompt);
+    }
+
+    return {role: USER, content, name: chatUserMsg.name};
+}
+
+isolated function getSelectedToolsFromAssistantMessage(ChatAssistantMessage assistantMsg) returns string[]? {
+    do {
+        string rawResponse = assistantMsg.content ?: "[]";
+        string cleanedJson = regexp:replaceAll(check regexp:fromString("```"), rawResponse, "");
+        return check cleanedJson.fromJsonStringWithType();
+    } on fail error e {
+        // In case of failure try to load all tools and ignore the error
+        return;
+    }
+}
+
+isolated function cloneMessages(ChatMessage[] messages) returns ChatMessage[] {
+    ChatMessage[] clonedMessages = [];
+    foreach ChatMessage msg in messages {
+        if msg is ChatUserMessage {
+            clonedMessages.push(cloneUserMessage(msg));
+            continue;
+        }
+        if msg is ChatSystemMessage {
+            clonedMessages.push(cloneSystemMessage(msg));
+            continue;
+        }
+        if msg is ChatAssistantMessage|ChatFunctionMessage {
+            clonedMessages.push(msg.clone());
+        }
+    }
+    return clonedMessages;
+}
+
+isolated function cloneUserMessage(ChatUserMessage message) returns ChatUserMessage {
+    string|Prompt content = message.content;
+    string|Prompt clonedContent = content is string ? content
+        : createPrompt(content.strings, content.insertions.cloneReadOnly());
+    ChatUserMessage clonedMessage = {
+        role: USER,
+        content: clonedContent
+    };
+    if message?.name is string {
+        clonedMessage.name = message?.name;
+    }
+    return clonedMessage;
+}
+
+isolated function cloneSystemMessage(ChatSystemMessage message) returns ChatSystemMessage {
+    string|Prompt content = message.content;
+    string|Prompt clonedContent = content is string ? content
+        : createPrompt(content.strings, content.insertions.cloneReadOnly());
+    ChatSystemMessage clonedMessage = {
+        role: SYSTEM,
+        content: clonedContent
+    };
+    if message?.name is string {
+        clonedMessage.name = message?.name;
+    }
+    return clonedMessage;
+}
+
+isolated function lazyLoadTools(ChatMessage[] messages, ChatCompletionFunctions[] registeredTools,
+        ModelProvider model) returns ChatCompletionFunctions[]? {
+    ChatMessage lastMessage = messages[messages.length() - 1];
+    if lastMessage !is ChatUserMessage {
+        return;
+    }
+    ToolInfo[] toolInfo = registeredTools.'map(tool => {name: tool.name, description: tool.description});
+    ChatUserMessage modifiedUserMessage = modifyUserPromptWithToolsInfo(lastMessage, toolInfo);
+
+    // Replace the last user message with the modified one that includes the tools prompt
+    _ = messages.pop();
+    messages.push(modifiedUserMessage);
+
+    ChatAssistantMessage|Error response = model->chat(messages, []);
+    if response is Error {
+        return;
+    }
+
+    log:printDebug(string `Calling model for lazy tool loading. Raw response: ${response.content.toString()}`);
+    string[]? selectedTools = getSelectedToolsFromAssistantMessage(response);
+    log:printDebug(string `Extracted tools from model response: ${selectedTools.toString()}`);
+
+    if selectedTools is string[] {
+        // Only load the tool schemas picked by the model
+        return from ChatCompletionFunctions tool in registeredTools
+            let string toolName = tool.name
+            where selectedTools.some(selected => selected == toolName)
+            select tool;
+    }
+    return;
 }

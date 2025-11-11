@@ -4,6 +4,9 @@ This file documents all significant changes made to the Ballerina AI package acr
 
 ## [Unreleased]
 
+### Added
+- [Add Lazy Tool Loading to ai:Agent for Accurate LLM Tool Selection](https://github.com/wso2/product-ballerina-integrator/issues/1679)
+
 ## [1.7.0] - 2025-11-03
 
 ### Added

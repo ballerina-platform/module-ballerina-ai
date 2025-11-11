@@ -63,3 +63,14 @@ function testAgentToolExecutionforMcpServer() returns error? {
     string result = check agent.run("I'm John. Greet me once");
     test:assertEquals(result, "Hey John! Welcome to Ballerina!");
 }
+
+isolated boolean toolLoadedDynamicaly = false;
+
+@test:Config
+function testAgentWithDynamicToolLoadingConfig() returns error? {
+    string result = check dynamicToolLoadingAgent.run("What is the sum of the following numbers 78 90 45 23 8?");
+    test:assertEquals(result, "Answer is: 244");
+    lock {
+        test:assertTrue(toolLoadedDynamicaly);
+    }
+}

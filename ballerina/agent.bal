@@ -72,6 +72,11 @@ public type AgentConfiguration record {|
     # Defaults to use an in-memory message store that trims on overflow, if unspecified.
     @display {label: "Memory"}
     Memory? memory?;
+
+    # Defines the strategies for loading tool schemas into an Agent. 
+    # By default, all tools are loaded without any filtering.
+    @display {label: "Tool Loading Strategy"}
+    ToolLoadingStrategy toolLoadingStrategy = NO_FILTER;
 |};
 
 # Represents an agent.
@@ -97,7 +102,8 @@ public isolated distinct class Agent {
         Memory? memory = config.hasKey("memory") ? config?.memory : check new ShortTermMemory();
 
         do {
-            self.functionCallAgent = check new FunctionCallAgent(config.model, config.tools, memory);
+            self.functionCallAgent = check new FunctionCallAgent(config.model, config.tools, memory,
+                config.toolLoadingStrategy);
             span.addTools(self.functionCallAgent.toolStore.getToolsInfo());
             span.close();
         } on fail Error err {
