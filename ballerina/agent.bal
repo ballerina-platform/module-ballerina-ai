@@ -113,6 +113,9 @@ public isolated distinct class Agent {
     }
 
     # Executes the agent for a given user query.
+    # 
+    # **Note:** Calls to this function using the same session ID must be invoked sequentially by the caller, 
+    # as this operation is not thread-safe.
     #
     # + query - The natural language input provided to the agent
     # + sessionId - The ID associated with the agent memory

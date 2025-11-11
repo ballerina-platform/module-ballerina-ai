@@ -163,9 +163,9 @@ class Executor {
             return error TaskCompletedError("Task is already completed. No more reasoning is needed.");
         }
         log:printDebug("LLM reasoning started",
-            executionId = self.progress.executionId,
-            sessionId = self.sessionId,
-            history = self.progress.history.toString()
+                executionId = self.progress.executionId,
+                sessionId = self.sessionId,
+                history = self.progress.history.toString()
         );
         return check self.agent.selectNextTool(self.progress, self.sessionId);
     }
@@ -178,9 +178,9 @@ class Executor {
         LlmToolResponse|LlmChatResponse|LlmInvalidGenerationError parsedOutput = self.agent.parseLlmResponse(llmResponse);
         if parsedOutput is LlmChatResponse {
             log:printDebug("Parsed LLM response as chat response",
-                executionId = self.progress.executionId,
-                sessionId = self.sessionId,
-                response = parsedOutput.content
+                    executionId = self.progress.executionId,
+                    sessionId = self.sessionId,
+                    response = parsedOutput.content
             );
             self.isCompleted = true;
             return parsedOutput;
@@ -191,10 +191,10 @@ class Executor {
         if parsedOutput is LlmToolResponse {
             string toolName = parsedOutput.name;
             log:printDebug("Parsed LLM response as tool call",
-                executionId = self.progress.executionId,
-                sessionId = self.sessionId,
-                toolName = toolName,
-                arguments = parsedOutput.arguments
+                    executionId = self.progress.executionId,
+                    sessionId = self.sessionId,
+                    toolName = toolName,
+                    arguments = parsedOutput.arguments
             );
             observe:ExecuteToolSpan span = observe:createExecuteToolSpan(toolName);
             string? toolCallId = parsedOutput.id;
@@ -227,10 +227,10 @@ class Executor {
                 };
 
                 log:printDebug("Tool execution resulted in error",
-                    executionId = self.progress.executionId,
-                    observation = observation.toString(),
-                    sessionId = self.sessionId,
-                    toolName = toolName
+                        executionId = self.progress.executionId,
+                        observation = observation.toString(),
+                        sessionId = self.sessionId,
+                        toolName = toolName
                 );
 
                 Error toolExecutionError = error Error(observation.toString(), details = {parsedOutput});
@@ -239,10 +239,10 @@ class Executor {
                 anydata|error value = output.value;
                 observation = value is error ? value.toString() : value;
                 log:printDebug("Tool execution successful",
-                    executionId = self.progress.executionId,
-                    sessionId = self.sessionId,
-                    toolName = toolName,
-                    output = observation
+                        executionId = self.progress.executionId,
+                        sessionId = self.sessionId,
+                        toolName = toolName,
+                        output = observation
                 );
                 executionResult = {
                     tool: parsedOutput,
@@ -254,9 +254,9 @@ class Executor {
             }
         } else {
             log:printDebug("Failed to parse LLM response as valid tool or chat",
-                executionId = self.progress.executionId,
-                sessionId = self.sessionId,
-                errorMessage = parsedOutput.message()
+                    executionId = self.progress.executionId,
+                    sessionId = self.sessionId,
+                    errorMessage = parsedOutput.message()
             );
             observation = "Tool extraction failed due to invalid JSON_BLOB. Retry with correct JSON_BLOB.";
             executionResult = {
@@ -308,8 +308,7 @@ class Executor {
 isolated function run(BaseAgent agent, string instruction, string query, int maxIter, boolean verbose,
         string sessionId = DEFAULT_SESSION_ID, Context context = new, string executionId = DEFAULT_EXECUTION_ID)
         returns ExecutionTrace {
-    lock {
-        log:printDebug("Agent execution loop started",
+    log:printDebug("Agent execution loop started",
             executionId = executionId,
             sessionId = sessionId,
             maxIterations = maxIter,
@@ -317,83 +316,83 @@ isolated function run(BaseAgent agent, string instruction, string query, int max
             isStateless = agent.stateless
         );
 
-        (ExecutionResult|ExecutionError|Error)[] steps = [];
+    (ExecutionResult|ExecutionError|Error)[] steps = [];
 
-        string? content = ();
-        Iterator iterator = new (agent, sessionId, instruction = instruction, query = query, context = context, executionId = executionId);
-        int iter = 0;
-        ChatSystemMessage systemMessage = {role: SYSTEM, content: instruction};
-        updateMemory(agent.memory, sessionId, systemMessage);
+    string? content = ();
+    Iterator iterator = new (agent, sessionId, instruction = instruction, query = query, context = context, executionId = executionId);
+    int iter = 0;
+    ChatSystemMessage systemMessage = {role: SYSTEM, content: instruction};
+    updateMemory(agent.memory, sessionId, systemMessage);
 
-        ChatUserMessage userMessage = {role: USER, content: query};
-        updateMemory(agent.memory, sessionId, userMessage);
+    ChatUserMessage userMessage = {role: USER, content: query};
+    updateMemory(agent.memory, sessionId, userMessage);
 
-        ChatMessage[] temporaryMemory = [];
-        foreach ExecutionResult|LlmChatResponse|ExecutionError|Error step in iterator {
-            if iter == maxIter {
-                log:printDebug("Maximum iterations reached without final answer",
+    ChatMessage[] temporaryMemory = [];
+    foreach ExecutionResult|LlmChatResponse|ExecutionError|Error step in iterator {
+        if iter == maxIter {
+            log:printDebug("Maximum iterations reached without final answer",
                     executionId = executionId,
                     iterations = iter,
                     stepsCompleted = steps.length(),
                     sessionId = sessionId
                 );
-                break;
-            }
-            if step is Error {
-                error? cause = step.cause();
-                log:printDebug("Error occurred during agent iteration",
+            break;
+        }
+        if step is Error {
+            error? cause = step.cause();
+            log:printDebug("Error occurred during agent iteration",
                     step,
                     executionId = executionId,
                     iteration = iter,
                     sessionId = sessionId,
                     cause = cause !is () ? cause.toString() : "none"
                 );
-                steps.push(step);
-                break;
-            }
-            if step is LlmChatResponse {
-                content = step.content;
-                log:printDebug("Final answer generated by agent",
+            steps.push(step);
+            break;
+        }
+        if step is LlmChatResponse {
+            content = step.content;
+            log:printDebug("Final answer generated by agent",
                     executionId = executionId,
                     iteration = iter,
                     answer = step.content,
                     sessionId = sessionId
                 );
-                if verbose {
-                    io:println(string `${"\n\n"}Final Answer: ${step.content}${"\n\n"}`);
-                }
-                ChatAssistantMessage assistantMessage = {role: "assistant", content: step.content};
-                temporaryMemory.push(assistantMessage);
-                break;
+            if verbose {
+                io:println(string `${"\n\n"}Final Answer: ${step.content}${"\n\n"}`);
             }
-            iter += 1;
-            log:printDebug("Agent iteration started",
+            ChatAssistantMessage assistantMessage = {role: "assistant", content: step.content};
+            temporaryMemory.push(assistantMessage);
+            break;
+        }
+        iter += 1;
+        log:printDebug("Agent iteration started",
                 executionId = executionId,
                 iteration = iter,
                 maxIterations = maxIter,
                 stepsCompleted = steps.length(),
                 sessionId = sessionId
             );
-            if verbose {
-                io:println(string `${"\n\n"}Agent Iteration ${iter.toString()}`);
-                if step is ExecutionResult {
-                    LlmToolResponse tool = step.tool;
-                    io:println(string `Action:
+        if verbose {
+            io:println(string `${"\n\n"}Agent Iteration ${iter.toString()}`);
+            if step is ExecutionResult {
+                LlmToolResponse tool = step.tool;
+                io:println(string `Action:
     ${BACKTICKS}
     {
         ${ACTION_NAME_KEY}: ${tool.name},
         ${ACTION_ARGUEMENTS_KEY}: ${(tool.arguments ?: "None").toString()}
     }
     ${BACKTICKS}`);
-                    anydata|error observation = step?.observation;
-                    if observation is error {
-                        io:println(string `${OBSERVATION_KEY} (Error): ${observation.toString()}`);
-                    } else if observation !is () {
-                        io:println(string `${OBSERVATION_KEY}: ${observation.toString()}`);
-                    }
-                } else {
-                    error? cause = step.'error.cause();
-                    io:println(string `LLM Generation Error: 
+                anydata|error observation = step?.observation;
+                if observation is error {
+                    io:println(string `${OBSERVATION_KEY} (Error): ${observation.toString()}`);
+                } else if observation !is () {
+                    io:println(string `${OBSERVATION_KEY}: ${observation.toString()}`);
+                }
+            } else {
+                error? cause = step.'error.cause();
+                io:println(string `LLM Generation Error: 
     ${BACKTICKS}
     {
         message: ${step.'error.message()},
@@ -401,23 +400,22 @@ isolated function run(BaseAgent agent, string instruction, string query, int max
         llmResponse: ${step.llmResponse.toString()}
     }
     ${BACKTICKS}`);
-                }
             }
-            updateExecutionResultInMemory(step, temporaryMemory);
-            steps.push(step);
         }
-
-        foreach ChatMessage message in temporaryMemory {
-            updateMemory(agent.memory, sessionId, message);
-        }
-
-        if agent.stateless {
-            MemoryError? err = agent.memory.delete(sessionId);
-            // Ignore this error since the stateless agent always relies on DefaultMessageWindowChatMemoryManager,  
-            // which never return an error.
-        }
-        return {steps, answer: content};
+        updateExecutionResultInMemory(step, temporaryMemory);
+        steps.push(step);
     }
+
+    foreach ChatMessage message in temporaryMemory {
+        updateMemory(agent.memory, sessionId, message);
+    }
+
+    if agent.stateless {
+        MemoryError? err = agent.memory.delete(sessionId);
+        // Ignore this error since the stateless agent always relies on DefaultMessageWindowChatMemoryManager,  
+        // which never return an error.
+    }
+    return {steps, answer: content};
 }
 
 isolated function getObservationString(anydata|error observation) returns string {
