@@ -182,12 +182,12 @@ isolated function modifyUserPromptWithToolsInfo(ChatUserMessage chatUserMsg, Too
 returns ChatUserMessage {
     string toolsPrompt = string `
 
-These are the following tools available to you: 
+These are the tools available to you: 
 ${BACKTICKS} 
 ${toolInfo.toJsonString()}
 ${BACKTICKS}
 
-Select only the tools needed to complete the task and return them as a JSON array of tool names:
+Select only the tools required to complete the task and return them as a JSON array of tool names:
 ${BACKTICKS} 
 ["toolNameOne","toolNameTwo","toolNameN"]
 ${BACKTICKS}
