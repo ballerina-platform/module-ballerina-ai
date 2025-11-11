@@ -259,8 +259,10 @@ public isolated distinct client class Wso2ModelProvider {
             span.close(toolCall);
             return toolCall;
         }
-        span.addOutputType(observe:TEXT);
         chatAssistantMessage.toolCalls = [toolCall];
+        span.addOutputType(observe:TEXT);
+        span.addOutputMessages(chatAssistantMessage);
+        span.close();
         return chatAssistantMessage;
     }
 
