@@ -81,7 +81,7 @@ isolated client distinct class MockLlm {
         }
         ai:Prompt|string? lastMessageContent = lastMessage.content;
         string query = getChatMessageStringContent(lastMessageContent ?: "");
-        if query.includes("Select only the tools needed to complete the task and return them as a JSON array of tool names:") {
+        if query.includes("Select only the tools required to complete the task and return them as a JSON array of tool names:") {
             // Emulate dynamic tool loading: match the above query with the modified tool prompt from the agent implementation
             lock {
                 toolLoadedDynamicaly = true;
