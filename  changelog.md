@@ -10,6 +10,9 @@ This file documents all significant changes made to the Ballerina AI package acr
 ### Updated
 - [Remove Lock From Agent Run and Move Lock to Memory Implementations](https://github.com/wso2/product-ballerina-integrator/issues/1818)
 
+### Fixed
+- [Fix Improper Closure of Chat Span in Wso2ModelProvider](https://github.com/wso2/product-ballerina-integrator/issues/1835)
+
 ## [1.7.0] - 2025-11-03
 
 ### Added
