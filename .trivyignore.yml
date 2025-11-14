@@ -1,9 +1,0 @@
-ignore:
-  - id: CVE-2025-48924
-    package:
-      name: org.apache.commons:commons-lang3
-      version: "3.12.0"
-  - id: CVE-2021-0341
-    package:
-      name: com.squareup.okhttp3:okhttp
-      version: "3.14.0"
