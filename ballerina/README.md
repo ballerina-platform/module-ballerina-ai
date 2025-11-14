@@ -135,7 +135,7 @@ To learn more about ModelProviders, see [Direct LLM calls](#1-direct-llm-calls).
 
 ### 2.4: Define Tools and Toolkits
 
-An agent tools and toolkits extends the AI's abilities beyond text-based responses, enabling interaction with external systems or dynamic tasks. 
+Agent tools and toolkits extend the AI's abilities beyond text-based responses, enabling interaction with external systems or dynamic tasks. 
 
 You can define basic tools as shown below
 #### 2.4.1 Defining a Tool
@@ -219,7 +219,7 @@ public isolated class TaskManagerToolkit {
 }
 ```
 
-##### 2.4.1.4 Implement `getTools()` Method
+##### 2.4.2.4 Implement `getTools()` Method
 
 ```ballerina
 public isolated class TaskManagerToolkit {
@@ -300,7 +300,7 @@ The AI module provides a high-level abstraction called **KnowledgeBase** to make
 In a typical RAG system, the KnowledgeBase is often backed by a vector database for efficient storage and retrieval. The AI module provides **`ai:VectorKnowledgeBase`**, which uses an **`ai:VectorStore`** to implement this functionality.
 You can also create a custom KnowledgeBase if your requirements differ. 
 
-In oder to write a RAG workflow you should initialize the Knowledge base.
+In order to write a RAG workflow you should initialize the Knowledge base.
 
 ### 3.1 Creating a Vector Knowledge Base
 
@@ -315,7 +315,7 @@ The `ai:EmbeddingProvider` transforms documents into embeddings during **ingesti
 ```ballerina
 import ballerina/ai.openai;
 
-final openai:EmbeddingProvider embeddingModel = check new ("openAiApiKey", openapi:TEXT_EMBEDDING_3_SMALL);
+final openai:EmbeddingProvider embeddingModel = check new ("openAiApiKey", openai:TEXT_EMBEDDING_3_SMALL);
 ```
 
 ### 3.1.2: Initialize a Vector Store
@@ -369,7 +369,7 @@ string appealQuery = "How many annual leave days can a full-time employee carry 
 ai:QueryMatch[] queryMatches = check knowledgeBase.retrieve(appealQuery, 10);
 
 // Augment the user query using the retrieved documents
-ai:ChatUserMessage augmentedQuery = ai:augmentUserQuery(context, appealQuery);
+ai:ChatUserMessage augmentedQuery = ai:augmentUserQuery(queryMatches, appealQuery);
 
 // Send the augmented query to the model for response generation
 ai:ChatAssistantMessage assistantMessage = check model->chat(augmentedQuery);
