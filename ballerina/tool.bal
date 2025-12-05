@@ -200,6 +200,14 @@ public isolated class ToolStore {
         }
         return toolList;
     }
+
+    isolated function getToolSchema() returns ToolSchema[] {
+        ToolSchema[] toolSchemas = [];
+        foreach [string, Tool] [name, tool] in self.tools.entries() {
+            toolSchemas.push({name, description: tool.description, parametersSchema: tool.variables});
+        }
+        return toolSchemas;
+    }
 }
 
 isolated function getToolConfig(FunctionTool tool) returns ToolConfig|Error {
