@@ -405,10 +405,7 @@ isolated function run(BaseAgent agent, string instruction, string query, int max
         updateExecutionResultInMemory(step, temporaryMemory);
         steps.push(step);
     }
-
-    foreach ChatMessage message in temporaryMemory {
-        updateMemory(agent.memory, sessionId, message);
-    }
+    updateMemory(agent.memory, sessionId, temporaryMemory);
 
     if agent.stateless {
         MemoryError? err = agent.memory.delete(sessionId);
@@ -441,8 +438,8 @@ isolated function getObservationString(anydata|error observation) returns string
 # + return - Array of tools registered with the agent
 public isolated function getTools(Agent agent) returns Tool[] => agent.functionCallAgent.toolStore.tools.toArray();
 
-isolated function updateMemory(Memory memory, string sessionId, ChatMessage message) {
-    error? updationStation = memory.update(sessionId, message);
+isolated function updateMemory(Memory memory, string sessionId, ChatMessage[]|ChatMessage messages) {
+    error? updationStation = memory.update(sessionId, messages);
     if updationStation is error {
         log:printError("Error occured while updating the memory", updationStation);
     }

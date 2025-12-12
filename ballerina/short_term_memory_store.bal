@@ -38,12 +38,12 @@ public type ShortTermMemoryStore isolated object {
     public isolated function getAll(string key) 
         returns [ChatSystemMessage, ChatInteractiveMessage...]|ChatInteractiveMessage[]|MemoryError;
 
-    # Adds a chat message to the memory store for a given key.
-    # 
+    # Adds one or more chat messages to the memory store for a given key.
+    #
     # + key - The key associated with the memory
-    # + message - The `ChatMessage` message to store
+    # + message - The chat message or array of messages to store
     # + return - nil on success, or an `ai:MemoryError` if the operation fails
-    public isolated function put(string key, ChatMessage message) returns MemoryError?;
+    public isolated function put(string key, ChatMessage|ChatMessage[] message) returns MemoryError?;
 
     # Removes the system chat message, if specified, for a given key.
     # 
@@ -72,6 +72,11 @@ public type ShortTermMemoryStore isolated object {
     # + key - The key associated with the memory
     # + return - true if the memory store is full, false otherwise, or an `ai:MemoryError` error if the operation fails
     public isolated function isFull(string key) returns boolean|MemoryError;
+
+    # Obtains the size configured for the store.
+    #
+    # + return - returns the size configured for the store
+    public isolated function getSize() returns int;
 };
 
 # Provides an in-memory chat message store.
@@ -132,12 +137,18 @@ public isolated class InMemoryShortTermMemoryStore {
         return self.getChatInteractiveMessages(key);
     }
 
-    # Adds a message to the window.
+    # Adds one or more chat messages to the memory store for a given key.
     #
     # + key - The key associated with the memory
-    # + message - The `ChatMessage` message to store
+    # + message - The chat message or array of messages to store
     # + return - nil on success, or `ai:MemoryError` error if the operation fails 
-    public isolated function put(string key, ChatMessage message) returns MemoryError? {
+    public isolated function put(string key, ChatMessage|ChatMessage[] message) returns MemoryError? {
+        return message is ChatMessage
+            ? self.putMessage(key, message)
+            : message.forEach(msg => check self.putMessage(key, msg));
+    }
+
+    private isolated function putMessage(string key, ChatMessage message) returns MemoryError? {
         final readonly & MemoryChatMessage newMessage = check mapToMemoryChatMessage(message);
         lock {
             if newMessage is MemoryChatSystemMessage {
@@ -226,5 +237,12 @@ public isolated class InMemoryShortTermMemoryStore {
 
             return self.messages.get(key).length() == self.size;
         }
+    }
+
+    # Obtains the size configured for the `InMemoryShortTermMemoryStore`.
+    #
+    # + return - returns the size configured for the store
+    public isolated function getSize() returns int {
+        return self.size;
     }
 }

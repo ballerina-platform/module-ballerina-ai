@@ -102,6 +102,43 @@ function testShortTermMemoryWithInMemoryStoreTrimmingOnOverflow() returns error?
 }
 
 @test:Config
+function testShortTermMemoryWithInMemoryStoreTrimmingOnOverflowWithBatchUpdate() returns error? {
+    InMemoryShortTermMemoryStore store = check new (3);
+    Memory memory = check new ShortTermMemory(store);
+
+    check memory.update(K1, [K1SM1, K1M1]);
+
+    ChatMessage[] k1CurrentMemory = check memory.get(K1);
+    test:assertEquals(k1CurrentMemory.length(), 2);
+    assertChatMessageEquals(k1CurrentMemory[0], K1SM1);
+    assertChatMessageEquals(k1CurrentMemory[1], K1M1);
+
+    check memory.update(K1, [k1m2, K1M3]);
+    check memory.update(K2, K2M1);
+
+    k1CurrentMemory = check memory.get(K1);
+    test:assertEquals(k1CurrentMemory.length(), 4);
+    assertChatMessageEquals(k1CurrentMemory[0], K1SM1);
+    assertChatMessageEquals(k1CurrentMemory[1], K1M1);
+    assertChatMessageEquals(k1CurrentMemory[2], k1m2);
+    assertChatMessageEquals(k1CurrentMemory[3], K1M3);
+
+    // Overflows here
+    check memory.update(K1, [K1M4, K1M1, k1m2]);
+
+    k1CurrentMemory = check memory.get(K1);
+    test:assertEquals(k1CurrentMemory.length(), 4);
+    assertChatMessageEquals(k1CurrentMemory[0], K1SM1);
+    assertChatMessageEquals(k1CurrentMemory[1], K1M4);
+    assertChatMessageEquals(k1CurrentMemory[2], K1M1);
+    assertChatMessageEquals(k1CurrentMemory[3], k1m2);
+
+    ChatMessage[] k2CurrentMemory = check memory.get(K2);
+    test:assertEquals(k2CurrentMemory.length(), 1);
+    assertChatMessageEquals(k2CurrentMemory[0], K2M1);
+}
+
+@test:Config
 function testShortTermMemoryWithInMemoryStoreCustomTrimmingOnOverflow() returns error? {
     InMemoryShortTermMemoryStore store = check new (3);
     Memory memory = check new ShortTermMemory(store, <TrimOverflowHandlerConfiguration>{trimCount: 3});
@@ -122,6 +159,28 @@ function testShortTermMemoryWithInMemoryStoreCustomTrimmingOnOverflow() returns 
     k1CurrentMemory = check memory.get(K1);
     test:assertEquals(k1CurrentMemory.length(), 1);
     assertChatMessageEquals(k1CurrentMemory[0], K1M4);
+}
+
+@test:Config
+function testShortTermMemoryWithInMemoryStoreCustomTrimmingOnOverflowWithBatchUpdate() returns error? {
+    InMemoryShortTermMemoryStore store = check new (3);
+    Memory memory = check new ShortTermMemory(store, <TrimOverflowHandlerConfiguration>{trimCount: 3});
+
+    check memory.update(K1, [K1M1, k1m2, K1M3]);
+
+    ChatMessage[] k1CurrentMemory = check memory.get(K1);
+    test:assertEquals(k1CurrentMemory.length(), 3);
+    assertChatMessageEquals(k1CurrentMemory[0], K1M1);
+    assertChatMessageEquals(k1CurrentMemory[1], k1m2);
+    assertChatMessageEquals(k1CurrentMemory[2], K1M3);
+
+    // Overflows here
+    check memory.update(K1, [K1M4, K1M1]);
+
+    k1CurrentMemory = check memory.get(K1);
+    test:assertEquals(k1CurrentMemory.length(), 2);
+    assertChatMessageEquals(k1CurrentMemory[0], K1M4);
+    assertChatMessageEquals(k1CurrentMemory[1], K1M1);
 }
 
 const CHAT_METHOD = "chat";
@@ -232,6 +291,99 @@ function testShortTermMemoryWithSummarizationOnOverflow1() returns error? {
 }
 
 @test:Config
+function testShortTermMemoryWithSummarizationOnOverflow1WithBatchUpdate() returns error? {
+    final readonly & ChatAssistantMessage memorySummaryMessage = {
+        role: ASSISTANT,
+        content: string `The user inquired about their tasks for the day. The AI assistant retrieved and 
+            listed the user's tasks, which are:
+
+            1. **Buy groceries** - Completed
+            2. **Finish the project report** - Due by October 20, 2025
+            3. **Call Alice** - Due by October 21, 2025
+
+            The assistant offered further assistance if needed.`
+    };
+
+    final readonly & ChatSystemMessage ksm1 = {
+        role: SYSTEM,
+        content: string `
+            # Role  
+            Task Assistant  
+
+            # Instructions  
+            You are a helpful assistant that guides users with their todo lists.`
+    };
+
+    final readonly & ChatUserMessage km1 = {
+        role: USER,
+        content: "Hello, what do I have on my plate today?"
+    };
+
+    final readonly & ChatAssistantMessage km2 = {
+        role: ASSISTANT,
+        toolCalls: [
+            {
+                name: "listTasks",
+                arguments: {}
+            }
+        ]
+    };
+
+    final readonly & ChatFunctionMessage km3 = {
+        role: FUNCTION,
+        name: "listTasks",
+        content: "[{\"description\":\"Buy groceries\",\"dueBy\":\"2025-10-19\",\"completed\":true}," +
+            "{\"description\":\"Finish the project report\",\"dueBy\":\"2025-10-20\",\"completed\":false}," +
+            "{\"description\":\"Call Alice\",\"dueBy\":\"2025-10-21\",\"completed\":false}]"
+    };
+
+    final readonly & ChatAssistantMessage km4 = {
+        role: ASSISTANT,
+        content: string `
+            Today, you have the following task on your plate:
+
+            1. **Finish the project report** - Due by **October 20, 2025**.
+
+            Let me know if you need help with anything!`
+    };
+
+    InMemoryShortTermMemoryStore store = check new (4);
+    ModelProvider model = isolated client object {
+        isolated remote function chat(
+                ChatMessage[]|ChatUserMessage messages,
+                ChatCompletionFunctions[] tools, string? stop) returns ChatAssistantMessage|Error {
+            assertSummarizationRequestChatMessages(messages, [km1, km2, km3, km4], defaultSummarizationPrompt);
+            return memorySummaryMessage;
+        }
+
+        isolated remote function generate(Prompt prompt, typedesc<anydata> td) returns td|Error = external;
+    };
+
+    Memory memory = check new ShortTermMemory(
+        store,
+        overflowConfiguration = {
+            model
+        }
+    );
+
+    final string k = "key";
+
+    ChatMessage[] k3CurrentMemory = check memory.get(k);
+
+    final readonly & ChatUserMessage km5 = {
+        role: USER,
+        content: "What about tomorrow?"
+    };
+    check memory.update(k, [ksm1, km1, km2, km3, km4, km5]);
+
+    k3CurrentMemory = check memory.get(k);
+    test:assertEquals(k3CurrentMemory.length(), 3);
+    assertChatMessageEquals(k3CurrentMemory[0], ksm1);
+    assertChatMessageEquals(k3CurrentMemory[1], memorySummaryMessage);
+    assertChatMessageEquals(k3CurrentMemory[2], km5);
+}
+
+@test:Config
 function testShortTermMemoryWithSummarizationOnOverflow2() returns error? {
     final readonly & ChatAssistantMessage memorySummaryMessage = {
         role: ASSISTANT,
@@ -306,6 +458,72 @@ function testShortTermMemoryWithSummarizationOnOverflow2() returns error? {
     assertChatMessageEquals(k3CurrentMemory[1], km4);
 }
 
+@test:Config
+function testShortTermMemoryWithSummarizationOnOverflow2OnBatchUpdate() returns error? {
+    final readonly & ChatAssistantMessage memorySummaryMessage = {
+        role: ASSISTANT,
+        content: string `"**Summary of Chat History:**
+                1. **User Inquiry:** The user asked the AI about their tasks for the day.
+                
+                2. **AI Response:** The AI checked the user's task list.
+
+                3. **Tasks Listed:**
+                - **Completed Tasks:**
+                    - Buy groceries (due by 2025-10-19)
+                - **Pending Tasks:**
+                    - Finish the project report (due by 2025-10-20)
+                    - Call Alice (due by 2025-10-21)`
+    };
+
+    Memory memory = check new ShortTermMemory(
+        check new InMemoryShortTermMemoryStore(3),
+        overflowConfiguration = {
+            model: new MockSummarizerModel(memorySummaryMessage)
+        }
+    );
+
+    final string k = "key";
+
+    final readonly & ChatUserMessage km1 = {
+        role: USER,
+        content: "Hello, what do I have on my plate today?"
+    };
+
+    final readonly & ChatAssistantMessage km2 = {
+        role: ASSISTANT,
+        toolCalls: [
+            {
+                name: "listTasks",
+                arguments: {}
+            }
+        ]
+    };
+
+    final readonly & ChatFunctionMessage km3 = {
+        role: FUNCTION,
+        name: "listTasks",
+        content: "[{\"description\":\"Buy groceries\",\"dueBy\":\"2025-10-19\",\"completed\":true}," +
+            "{\"description\":\"Finish the project report\",\"dueBy\":\"2025-10-20\",\"completed\":false}," +
+            "{\"description\":\"Call Alice\",\"dueBy\":\"2025-10-21\",\"completed\":false}]"
+    };
+
+    final readonly & ChatAssistantMessage km4 = {
+        role: ASSISTANT,
+        content: string `
+            Today, you have the following task on your plate:
+
+            1. **Finish the project report** - Due by **October 20, 2025**.
+
+            Let me know if you need help with anything!`
+    };
+    check memory.update(k, [km1, km2, km3, km4]);
+
+    ChatMessage[] k3CurrentMemory = check memory.get(k);
+    test:assertEquals(k3CurrentMemory.length(), 2);
+    assertChatMessageEquals(k3CurrentMemory[0], memorySummaryMessage);
+    assertChatMessageEquals(k3CurrentMemory[1], km4);
+}
+
 // Tests preserving the last user message when summarizing on overflow.
 @test:Config
 function testShortTermMemoryWithSummarizationOnOverflow3() returns error? {
@@ -356,6 +574,52 @@ function testShortTermMemoryWithSummarizationOnOverflow3() returns error? {
     check memory.update(k, km4);
 
     k3CurrentMemory = check memory.get(k);
+    test:assertEquals(k3CurrentMemory.length(), 3);
+    assertChatMessageEquals(k3CurrentMemory[0], memorySummaryMessage);
+    assertChatMessageEquals(k3CurrentMemory[1], km3);
+    assertChatMessageEquals(k3CurrentMemory[2], km4);
+}
+
+@test:Config
+function testShortTermMemoryWithSummarizationOnOverflow3OnBatchUpdate() returns error? {
+    final readonly & ChatAssistantMessage memorySummaryMessage = {
+        role: ASSISTANT,
+        content: string `Joy asked the AI for a book recommendation. The AI responded 
+            by asking for Joy's preferred genre to provide a suitable suggestion.`
+    };
+
+    Memory memory = check new ShortTermMemory(
+        check new InMemoryShortTermMemoryStore(3),
+        overflowConfiguration = {
+            model: new MockSummarizerModel(memorySummaryMessage)
+        }
+    );
+
+    final string k = "key";
+
+    ChatUserMessage km1 = {
+        role: USER,
+        content: "Hello, I'm Joy. Can you recommend me a good book to read?"
+    };
+
+    ChatAssistantMessage km2 = {
+        role: ASSISTANT,
+        content: "Hi Joy! Sure, what genre are you interested in?"
+    };
+
+    ChatUserMessage km3 = {
+        role: USER,
+        content: "I enjoy science fiction and fantasy."
+    };
+
+    ChatAssistantMessage km4 = {
+        role: ASSISTANT,
+        content: string `Great choices! I recommend Arthur C. Clarke's '2001: A Space Odyssey' 
+            for science fiction and J.R.R. Tolkien's 'The Hobbit' for fantasy.`
+    };
+    check memory.update(k, [km1, km2, km3, km4]);
+
+    ChatMessage[] k3CurrentMemory = check memory.get(k);
     test:assertEquals(k3CurrentMemory.length(), 3);
     assertChatMessageEquals(k3CurrentMemory[0], memorySummaryMessage);
     assertChatMessageEquals(k3CurrentMemory[1], km3);

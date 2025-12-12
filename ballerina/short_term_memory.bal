@@ -104,33 +104,126 @@ public isolated class ShortTermMemory {
         }
     }
 
-    # Adds a chat message to the memory, handling overflow as configured.
+    # Adds one or more chat messages to the memory, handling overflow as configured.
     #
     # + key - The key associated with the memory
-    # + message - The message to store
+    # + message - The chat message or array of messages to store in memory
     # + return - nil on success, or an `ai:MemoryError` error if the operation fails 
-    public isolated function update(string key, ChatMessage message) returns MemoryError? {
-        final readonly &  MemoryChatMessage memoryChatMessage = check mapToMemoryChatMessage(message);
-        lock {
-            if memoryChatMessage is ChatSystemMessage {
-                return self.store.put(key, memoryChatMessage);
-            }
+    public isolated function update(string key, ChatMessage|ChatMessage[] message) returns MemoryError? {
+        if message is ChatMessage {
+            final readonly & MemoryChatMessage memoryChatMessage = check mapToMemoryChatMessage(message);
+            lock {
+                if memoryChatMessage is ChatSystemMessage {
+                    return self.store.put(key, memoryChatMessage);
+                }
 
-            if check self.store.isFull(key) {
-                final OverflowHandler overflowHandler = self.overflowHandler;
-
-                if overflowHandler is TrimOverflowHandlerConfiguration {
-                    check self.store.removeChatInteractiveMessages(key, overflowHandler.trimCount);
-                } else {
+                if check self.exceedsMemoryLimit(key, memoryChatMessage) {
+                    final OverflowHandler overflowHandler = self.overflowHandler;
+                    if overflowHandler is TrimOverflowHandlerConfiguration {
+                        check self.store.removeChatInteractiveMessages(key, overflowHandler.trimCount);
+                        return self.store.put(key, memoryChatMessage);
+                    }
                     ChatMessage[] updatedMessages = check overflowHandler(check self.store.getChatInteractiveMessages(key));
                     check self.store.removeChatInteractiveMessages(key);
-                    foreach ChatMessage updatedMessage in updatedMessages {
-                        check self.store.put(key, updatedMessage);
-                    }
+                    return self.store.put(key, [...updatedMessages, memoryChatMessage]);
                 }
+                return self.store.put(key, memoryChatMessage);
+            }
+        }
+        return self.batchUpdate(key, message);
+    }
+
+    private isolated function batchUpdate(string key, ChatMessage[] messages) returns MemoryError? {
+        final readonly & MemoryChatMessage[] memoryChatMessages = messages.'map(msg => check mapToMemoryChatMessage(msg)).cloneReadOnly();
+        lock {
+            MemoryChatMessage[] systemMessages = memoryChatMessages.filter(msg => msg is ChatSystemMessage);
+            MemoryChatInteractiveMessage[] interactiveMessages = filterMemoryChatInteractiveMessage(memoryChatMessages);
+            if systemMessages.length() > 0 {
+                // Update only the latest system message, ignore others
+                ChatSystemMessage lastSystemMessage = <ChatSystemMessage>systemMessages.pop();
+                check self.store.put(key, lastSystemMessage);
             }
 
-            return self.store.put(key, memoryChatMessage);
+            if interactiveMessages.length() == 0 {
+                return;
+            }
+
+            if check self.exceedsMemoryLimit(key, memoryChatMessages) {
+                final OverflowHandler overflowHandler = self.overflowHandler;
+                if overflowHandler is TrimOverflowHandlerConfiguration {
+                    return self.handleOverflowWithTrim(key, overflowHandler, interactiveMessages);
+                }
+                return self.handleOverflowWithSummurization(key, overflowHandler, interactiveMessages);
+            }
+            return self.store.put(key, interactiveMessages);
+        }
+    }
+
+    private isolated function exceedsMemoryLimit(string key, ChatMessage|ChatMessage[] message)
+        returns boolean|MemoryError {
+        lock {
+            int currentCapacity = (check self.store.getChatInteractiveMessages(key)).length();
+            int maxSize = self.store.getSize();
+
+            int incoming = message is ChatMessage ? 1 : message.length();
+            return currentCapacity + incoming > maxSize;
+        }
+    }
+
+    private isolated function handleOverflowWithTrim(string key, TrimOverflowHandlerConfiguration trimHandler,
+            MemoryChatInteractiveMessage[] incomingInteractiveMsgs) returns MemoryError? {
+        lock {
+            MemoryChatInteractiveMessage[] interactiveMessages = incomingInteractiveMsgs.clone();
+            int incoming = incomingInteractiveMsgs.length();
+            int currentSize = (check self.store.getChatInteractiveMessages(key)).length();
+            int totalSize = currentSize + incoming;
+            int trimCount = trimHandler.trimCount;
+            int maxSize = self.store.getSize();
+            int requiredTrim = 0;
+
+            if totalSize > maxSize {
+                int overflow = totalSize - maxSize;
+
+                int batches = overflow / trimCount;
+                if overflow % trimCount != 0 {
+                    batches += 1;
+                }
+
+                requiredTrim = batches * trimCount;
+            }
+
+            if requiredTrim > 0 {
+                check self.store.removeChatInteractiveMessages(key, requiredTrim);
+            }
+
+            // Handle case where the incoming batch itself is larger than available store capacity
+            if incoming > maxSize {
+                int sliceStart = incoming - (maxSize - trimCount);
+                if sliceStart < 0 {
+                    sliceStart = 0;
+                }
+                interactiveMessages = interactiveMessages.slice(sliceStart);
+            }
+            return self.store.put(key, interactiveMessages);
+        }
+    }
+
+    private isolated function handleOverflowWithSummurization(string key, OverflowHandlerFunction summarizationHandler,
+            MemoryChatInteractiveMessage[] incomingInteractiveMsgs) returns MemoryError? {
+        lock {
+            MemoryChatInteractiveMessage[] interactiveMsgs = incomingInteractiveMsgs.clone();
+            ChatInteractiveMessage[] currentMessages = check self.store.getChatInteractiveMessages(key);
+            int incoming = interactiveMsgs.length();
+            int maxSize = self.store.getSize();
+
+            int effectiveCount = incoming % maxSize;
+            ChatInteractiveMessage[] tailMessages = interactiveMsgs.slice(incoming - effectiveCount);
+
+            ChatInteractiveMessage[] headMessages = interactiveMsgs.slice(0, incoming - effectiveCount);
+            ChatMessage[] processedHead = check summarizationHandler([...currentMessages, ...headMessages]);
+
+            check self.store.removeChatInteractiveMessages(key);
+            return self.store.put(key, [...processedHead, ...tailMessages]);
         }
     }
 
@@ -201,4 +294,15 @@ isolated function toString(Prompt prompt) returns string {
         promptString += insertions[i].toJsonString() + strings[i + 1];
     }
     return promptString;
+}
+
+isolated function filterMemoryChatInteractiveMessage(MemoryChatMessage[] memoryChatMessages)
+    returns MemoryChatInteractiveMessage[] {
+    MemoryChatInteractiveMessage[] interactiveMessages = [];
+    foreach MemoryChatMessage msg in memoryChatMessages {
+        if msg is MemoryChatInteractiveMessage {
+            interactiveMessages.push(msg);
+        }
+    }
+    return interactiveMessages;
 }
