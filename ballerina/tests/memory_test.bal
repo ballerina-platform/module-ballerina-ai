@@ -184,7 +184,7 @@ function testShortTermMemoryWithInMemoryStoreCustomTrimmingOnOverflowWithBatchUp
 }
 
 @test:Config
-function testShortTermMemoryWithInCommingBatchSizeLargerThanCapacity() returns error? {
+function testShortTermMemoryWithIncomingBatchSizeLargerThanCapacity() returns error? {
     InMemoryShortTermMemoryStore store = check new (3);
     Memory memory = check new ShortTermMemory(store, <TrimOverflowHandlerConfiguration>{trimCount: 3});
 
