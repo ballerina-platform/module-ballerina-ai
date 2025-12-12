@@ -148,12 +148,12 @@ public isolated class ShortTermMemory {
                 return;
             }
 
-            if check self.exceedsMemoryLimit(key, memoryChatMessages) {
+            if check self.exceedsMemoryLimit(key, interactiveMessages) {
                 final OverflowHandler overflowHandler = self.overflowHandler;
                 if overflowHandler is TrimOverflowHandlerConfiguration {
                     return self.handleOverflowWithTrim(key, overflowHandler, interactiveMessages);
                 }
-                return self.handleOverflowWithSummurization(key, overflowHandler, interactiveMessages);
+                return self.handleOverflowWithSummarization(key, overflowHandler, interactiveMessages);
             }
             return self.store.put(key, interactiveMessages);
         }
@@ -163,7 +163,7 @@ public isolated class ShortTermMemory {
         returns boolean|MemoryError {
         lock {
             int currentCapacity = (check self.store.getChatInteractiveMessages(key)).length();
-            int maxSize = self.store.getSize();
+            int maxSize = self.store.getCapacity();
 
             int incoming = message is ChatMessage ? 1 : message.length();
             return currentCapacity + incoming > maxSize;
@@ -173,48 +173,40 @@ public isolated class ShortTermMemory {
     private isolated function handleOverflowWithTrim(string key, TrimOverflowHandlerConfiguration trimHandler,
             MemoryChatInteractiveMessage[] incomingInteractiveMsgs) returns MemoryError? {
         lock {
-            MemoryChatInteractiveMessage[] interactiveMessages = incomingInteractiveMsgs.clone();
-            int incoming = incomingInteractiveMsgs.length();
-            int currentSize = (check self.store.getChatInteractiveMessages(key)).length();
-            int totalSize = currentSize + incoming;
+            int incomingCount = incomingInteractiveMsgs.length();
+            ChatMessage[] existing = check self.store.getChatInteractiveMessages(key);
+            check self.store.removeChatInteractiveMessages(key);
+
+            int currentSize = existing.length();
             int trimCount = trimHandler.trimCount;
-            int maxSize = self.store.getSize();
-            int requiredTrim = 0;
+            int capacity = self.store.getCapacity();
 
-            if totalSize > maxSize {
-                int overflow = totalSize - maxSize;
+            // Count how many times trimming needs to occur during the simulation
+            int trimCycles = 0;
 
-                int batches = overflow / trimCount;
-                if overflow % trimCount != 0 {
-                    batches += 1;
+            foreach int _ in 0 ..< incomingCount {
+                if currentSize + 1 > capacity {
+                    trimCycles += 1;
+                    currentSize -= trimCount;
                 }
-
-                requiredTrim = batches * trimCount;
+                currentSize += 1;
             }
 
-            if requiredTrim > 0 {
-                check self.store.removeChatInteractiveMessages(key, requiredTrim);
-            }
+            int totalRemovals = trimCycles * trimCount;
 
-            // Handle case where the incoming batch itself is larger than available store capacity
-            if incoming > maxSize {
-                int sliceStart = incoming - (maxSize - trimCount);
-                if sliceStart < 0 {
-                    sliceStart = 0;
-                }
-                interactiveMessages = interactiveMessages.slice(sliceStart);
-            }
-            return self.store.put(key, interactiveMessages);
+            ChatMessage[] combined = [...existing, ...incomingInteractiveMsgs.clone()];
+            ChatMessage[] finalMessages = totalRemovals > 0 ? combined.slice(totalRemovals) : combined;
+            return self.store.put(key, finalMessages);
         }
     }
 
-    private isolated function handleOverflowWithSummurization(string key, OverflowHandlerFunction summarizationHandler,
+    private isolated function handleOverflowWithSummarization(string key, OverflowHandlerFunction summarizationHandler,
             MemoryChatInteractiveMessage[] incomingInteractiveMsgs) returns MemoryError? {
         lock {
             MemoryChatInteractiveMessage[] interactiveMsgs = incomingInteractiveMsgs.clone();
             ChatInteractiveMessage[] currentMessages = check self.store.getChatInteractiveMessages(key);
             int incoming = interactiveMsgs.length();
-            int maxSize = self.store.getSize();
+            int maxSize = self.store.getCapacity();
 
             int effectiveCount = incoming % maxSize;
             ChatInteractiveMessage[] tailMessages = interactiveMsgs.slice(incoming - effectiveCount);

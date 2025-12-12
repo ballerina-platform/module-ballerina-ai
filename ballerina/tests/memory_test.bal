@@ -183,6 +183,17 @@ function testShortTermMemoryWithInMemoryStoreCustomTrimmingOnOverflowWithBatchUp
     assertChatMessageEquals(k1CurrentMemory[1], K1M1);
 }
 
+@test:Config
+function testShortTermMemoryWithInCommingBatchSizeLargerThanCapacity() returns error? {
+    InMemoryShortTermMemoryStore store = check new (3);
+    Memory memory = check new ShortTermMemory(store, <TrimOverflowHandlerConfiguration>{trimCount: 3});
+
+    check memory.update(K1, [K1M1, k1m2, K1M3, K1M4]);
+    ChatMessage[] k1CurrentMemory = check memory.get(K1);
+    test:assertEquals(k1CurrentMemory.length(), 1);
+    assertChatMessageEquals(k1CurrentMemory[0], K1M4);
+}
+
 const CHAT_METHOD = "chat";
 
 @test:Config
