@@ -75,22 +75,7 @@ isolated distinct class FunctionCallAgent {
     # + return - LLM response containing the tool or chat response (or an error if the call fails)
     isolated function selectNextTool(ExecutionProgress progress, string sessionId = DEFAULT_SESSION_ID) returns json|Error {
         ChatMessage[] messages = createFunctionCallMessages(progress);
-        ChatMessage[]|MemoryError additionalMessages = self.memory.get(sessionId);
-        if additionalMessages is MemoryError {
-            log:printDebug("Failed to retrieve conversation history from memory",
-                additionalMessages,
-                executionId = progress.executionId,
-                sessionId = sessionId
-            );
-        } else {
-            log:printDebug("Retrieved conversation history from memory",
-                executionId = progress.executionId,
-                sessionId = sessionId,
-                messages = additionalMessages.toString()
-            );
-            messages.unshift(...additionalMessages);
-        }
-
+        messages.unshift(...progress.history);
         ToolLoadingStrategy toolLoadingStrategy = self.toolLoadingStrategy;
         ChatMessage lastMessage = messages[messages.length() - 1];
         ChatCompletionFunctions[] registeredTools = from Tool tool in self.toolStore.tools.toArray()
@@ -158,7 +143,7 @@ isolated distinct class FunctionCallAgent {
 
 isolated function createFunctionCallMessages(ExecutionProgress progress) returns ChatMessage[] {
     ChatMessage[] messages = [];
-    foreach ExecutionStep step in progress.history {
+    foreach ExecutionStep step in progress.currentExecutionSteps {
         FunctionCall|error functionCall = step.llmResponse.fromJsonWithType();
         if functionCall is error {
             panic error Error("Badly formated history for function call agent", llmResponse = step.llmResponse);
