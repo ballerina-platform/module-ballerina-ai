@@ -138,24 +138,27 @@ public isolated class ShortTermMemory {
         lock {
             MemoryChatMessage[] systemMessages = memoryChatMessages.filter(msg => msg is ChatSystemMessage);
             MemoryChatInteractiveMessage[] interactiveMessages = filterMemoryChatInteractiveMessage(memoryChatMessages);
+            ChatMessage[] allMessages = [];
             if systemMessages.length() > 0 {
                 // Update only the latest system message, ignore others
-                ChatSystemMessage lastSystemMessage = <ChatSystemMessage>systemMessages.pop();
-                check self.store.put(key, lastSystemMessage);
-            }
-
-            if interactiveMessages.length() == 0 {
-                return;
+                MemoryChatSystemMessage lastSystemMessage = <MemoryChatSystemMessage>systemMessages.pop();
+                allMessages = [lastSystemMessage];
             }
 
             if check self.exceedsMemoryLimit(key, interactiveMessages) {
                 final OverflowHandler overflowHandler = self.overflowHandler;
-                if overflowHandler is TrimOverflowHandlerConfiguration {
-                    return self.handleOverflowWithTrim(key, overflowHandler, interactiveMessages);
-                }
-                return self.handleOverflowWithSummarization(key, overflowHandler, interactiveMessages);
+                ChatMessage[] overflowHandledMessages = overflowHandler is TrimOverflowHandlerConfiguration
+                    ? check self.getInteractiveMessagesAfterTrim(key, overflowHandler, interactiveMessages)
+                    : check self.getInteractiveMessagesAfterSummarization(key, overflowHandler, interactiveMessages);
+                allMessages.push(...overflowHandledMessages);
+            } else {
+                allMessages.push(...interactiveMessages);
             }
-            return self.store.put(key, interactiveMessages);
+            
+            if allMessages.length() == 0 {
+                return;
+            }
+            return self.store.put(key, allMessages);
         }
     }
 
@@ -170,8 +173,8 @@ public isolated class ShortTermMemory {
         }
     }
 
-    private isolated function handleOverflowWithTrim(string key, TrimOverflowHandlerConfiguration trimHandler,
-            MemoryChatInteractiveMessage[] incomingInteractiveMsgs) returns MemoryError? {
+    private isolated function getInteractiveMessagesAfterTrim(string key, TrimOverflowHandlerConfiguration trimHandler,
+            MemoryChatInteractiveMessage[] incomingInteractiveMsgs) returns MemoryError|ChatMessage[] {
         lock {
             int incomingCount = incomingInteractiveMsgs.length();
             ChatMessage[] existing = check self.store.getChatInteractiveMessages(key);
@@ -195,13 +198,13 @@ public isolated class ShortTermMemory {
             int totalRemovals = trimCycles * trimCount;
 
             ChatMessage[] combined = [...existing, ...incomingInteractiveMsgs.clone()];
-            ChatMessage[] finalMessages = totalRemovals > 0 ? combined.slice(totalRemovals) : combined;
-            return self.store.put(key, finalMessages);
+            combined = totalRemovals > 0 ? combined.slice(totalRemovals) : combined;
+            return combined.'map(msg => check mapToMemoryChatMessage(msg)).clone();
         }
     }
 
-    private isolated function handleOverflowWithSummarization(string key, OverflowHandlerFunction summarizationHandler,
-            MemoryChatInteractiveMessage[] incomingInteractiveMsgs) returns MemoryError? {
+    private isolated function getInteractiveMessagesAfterSummarization(string key, OverflowHandlerFunction summarizationHandler,
+            MemoryChatInteractiveMessage[] incomingInteractiveMsgs) returns MemoryError|ChatMessage[] {
         lock {
             MemoryChatInteractiveMessage[] interactiveMsgs = incomingInteractiveMsgs.clone();
             ChatInteractiveMessage[] currentMessages = check self.store.getChatInteractiveMessages(key);
@@ -215,7 +218,8 @@ public isolated class ShortTermMemory {
             ChatMessage[] processedHead = check summarizationHandler([...currentMessages, ...headMessages]);
 
             check self.store.removeChatInteractiveMessages(key);
-            return self.store.put(key, [...processedHead, ...tailMessages]);
+            ChatMessage[] combined = [...processedHead, ...tailMessages];
+            return combined.'map(msg => check mapToMemoryChatMessage(msg)).clone();
         }
     }
 
