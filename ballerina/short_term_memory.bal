@@ -277,7 +277,10 @@ isolated function callModelToHandleOverflow(MemoryChatMessage[] memorySlice, Mod
     ]);
 }
 
-isolated function toString(Prompt prompt) returns string {
+isolated function toString(Prompt|string prompt) returns string {
+    if prompt is string {
+        return prompt;
+    }
     string[] & readonly strings = prompt.strings;
     anydata[] insertions = prompt.insertions;
 
