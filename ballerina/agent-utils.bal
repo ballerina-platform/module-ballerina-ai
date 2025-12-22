@@ -330,9 +330,10 @@ isolated function run(BaseAgent agent, string instruction, string query, int max
     }
     ChatMessage[] history = (pastHistory is ChatMessage[]) ? [...pastHistory]  : [];
     ChatSystemMessage systemMessage = {role: SYSTEM, content: instruction};
-    if history.length() > 0 && history[0] is ChatSystemMessage 
-        && instruction != toString((<ChatSystemMessage>history[0]).content) {
-        history[0] = systemMessage;
+    if history.length() > 0 && history[0] is ChatSystemMessage {
+        if instruction != toString((<ChatSystemMessage>history[0]).content) {
+            history[0] = systemMessage;
+        }
     } else {
         history = [systemMessage, ...history];
     }
