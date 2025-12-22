@@ -73,7 +73,7 @@ public type ShortTermMemoryStore isolated object {
     # + return - true if the memory store is full, false otherwise, or an `ai:MemoryError` error if the operation fails
     public isolated function isFull(string key) returns boolean|MemoryError;
 
-    # Obtains the capacity configured for each key in the store.
+    # Returns the capacity configured for each key in the store.
     #
     # + return - returns the capacity
     public isolated function getCapacity() returns int;
@@ -239,7 +239,7 @@ public isolated class InMemoryShortTermMemoryStore {
         }
     }
 
-    # Obtains the capacity configured for each key in the `InMemoryShortTermMemoryStore`.
+    # Returns the capacity configured for each key in the `InMemoryShortTermMemoryStore`.
     #
     # + return - returns the capacity
     public isolated function getCapacity() returns int {

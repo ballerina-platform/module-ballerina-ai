@@ -110,31 +110,32 @@ public isolated class ShortTermMemory {
     # + message - The chat message or array of messages to store in memory
     # + return - nil on success, or an `ai:MemoryError` error if the operation fails 
     public isolated function update(string key, ChatMessage|ChatMessage[] message) returns MemoryError? {
-        if message is ChatMessage {
-            final readonly & MemoryChatMessage memoryChatMessage = check mapToMemoryChatMessage(message);
-            lock {
-                if memoryChatMessage is ChatSystemMessage {
-                    return self.store.put(key, memoryChatMessage);
-                }
-
-                if check self.exceedsMemoryLimit(key, memoryChatMessage) {
-                    final OverflowHandler overflowHandler = self.overflowHandler;
-                    if overflowHandler is TrimOverflowHandlerConfiguration {
-                        check self.store.removeChatInteractiveMessages(key, overflowHandler.trimCount);
-                        return self.store.put(key, memoryChatMessage);
-                    }
-                    ChatMessage[] updatedMessages = check overflowHandler(check self.store.getChatInteractiveMessages(key));
-                    check self.store.removeChatInteractiveMessages(key);
-                    return self.store.put(key, [...updatedMessages, memoryChatMessage]);
-                }
+        if message is ChatMessage[] {
+            return self.batchUpdate(key, message);
+        }
+        final readonly & MemoryChatMessage memoryChatMessage = check mapToMemoryChatMessage(message);
+        lock {
+            if memoryChatMessage is ChatSystemMessage {
                 return self.store.put(key, memoryChatMessage);
             }
+
+            if check self.exceedsMemoryLimit(key, memoryChatMessage) {
+                final OverflowHandler overflowHandler = self.overflowHandler;
+                if overflowHandler is TrimOverflowHandlerConfiguration {
+                    check self.store.removeChatInteractiveMessages(key, overflowHandler.trimCount);
+                    return self.store.put(key, memoryChatMessage);
+                }
+                ChatMessage[] updatedMessages = check overflowHandler(check self.store.getChatInteractiveMessages(key));
+                check self.store.removeChatInteractiveMessages(key);
+                return self.store.put(key, [...updatedMessages, memoryChatMessage]);
+            }
+            return self.store.put(key, memoryChatMessage);
         }
-        return self.batchUpdate(key, message);
     }
 
     private isolated function batchUpdate(string key, ChatMessage[] messages) returns MemoryError? {
-        final readonly & MemoryChatMessage[] memoryChatMessages = messages.'map(msg => check mapToMemoryChatMessage(msg)).cloneReadOnly();
+        final readonly & MemoryChatMessage[] memoryChatMessages = from ChatMessage msg in messages
+            select check mapToMemoryChatMessage(msg);
         lock {
             MemoryChatMessage[] systemMessages = memoryChatMessages.filter(msg => msg is ChatSystemMessage);
             MemoryChatInteractiveMessage[] interactiveMessages = filterMemoryChatInteractiveMessage(memoryChatMessages);
@@ -185,16 +186,8 @@ public isolated class ShortTermMemory {
             int capacity = self.store.getCapacity();
 
             // Count how many times trimming needs to occur during the simulation
-            int trimCycles = 0;
-
-            foreach int _ in 0 ..< incomingCount {
-                if currentSize + 1 > capacity {
-                    trimCycles += 1;
-                    currentSize -= trimCount;
-                }
-                currentSize += 1;
-            }
-
+            int totalMessages = currentSize + incomingCount;
+            int trimCycles = totalMessages > capacity  ? ((totalMessages - capacity + trimCount - 1) / trimCount) : 0;
             int totalRemovals = trimCycles * trimCount;
 
             ChatMessage[] combined = [...existing, ...incomingInteractiveMsgs.clone()];
@@ -296,12 +289,6 @@ isolated function toString(Prompt|string prompt) returns string {
 }
 
 isolated function filterMemoryChatInteractiveMessage(MemoryChatMessage[] memoryChatMessages)
-    returns MemoryChatInteractiveMessage[] {
-    MemoryChatInteractiveMessage[] interactiveMessages = [];
-    foreach MemoryChatMessage msg in memoryChatMessages {
-        if msg is MemoryChatInteractiveMessage {
-            interactiveMessages.push(msg);
-        }
-    }
-    return interactiveMessages;
-}
+    returns MemoryChatInteractiveMessage[] => from MemoryChatMessage msg in memoryChatMessages
+        where msg is MemoryChatInteractiveMessage
+        select msg;

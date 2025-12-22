@@ -314,28 +314,23 @@ isolated function run(BaseAgent agent, string instruction, string query, int max
     // and append the user message for the current interaction.
     // After iterating and collecting execution steps in temporary memory,
     // update the actual memory in a single batch, including the system prompt and user message for this interaction.
-    ChatMessage[]|MemoryError pastHistory = agent.memory.get(sessionId);
-    if pastHistory is MemoryError {
+    ChatMessage[]|MemoryError prevHistory = agent.memory.get(sessionId);
+    if prevHistory is MemoryError {
         log:printDebug("Failed to retrieve conversation history from memory",
-            pastHistory,
+            prevHistory,
             executionId = executionId,
             sessionId = sessionId
         );
-    } else {
-        log:printDebug("Retrieved conversation history from memory",
-            executionId = executionId,
-            sessionId = sessionId,
-            messages = pastHistory.toString()
-        );
     }
-    ChatMessage[] history = (pastHistory is ChatMessage[]) ? [...pastHistory]  : [];
+    ChatMessage[] history = (prevHistory is ChatMessage[]) ? [...prevHistory]  : [];
     ChatSystemMessage systemMessage = {role: SYSTEM, content: instruction};
-    if history.length() > 0 && history[0] is ChatSystemMessage {
-        if instruction != toString((<ChatSystemMessage>history[0]).content) {
+    if history.length() > 0 {
+        ChatMessage firstMessage = history[0];
+        if firstMessage is ChatSystemMessage && instruction != toString(firstMessage.content) {
             history[0] = systemMessage;
         }
     } else {
-        history = [systemMessage, ...history];
+        history.unshift(systemMessage);
     }
     ChatUserMessage userMessage = {role: USER, content: query};
     history.push(userMessage);
@@ -346,7 +341,7 @@ isolated function run(BaseAgent agent, string instruction, string query, int max
     int iter = 0;
     foreach ExecutionResult|LlmChatResponse|ExecutionError|Error step in executor {
         ChatAssistantMessage|ChatFunctionMessage|Error iterationOutput = getOutputOfIteration(step);
-        ChatMessage[] iterationHistory = getHistoryOfIteration(executor.progress, history);
+        ChatMessage[] iterationHistory = buildCurrentIterationHistory(executor.progress, history);
         if verbose {
             verbosePrint(step, iter);
         }
@@ -470,9 +465,10 @@ isolated function getOutputOfIteration(ExecutionResult|LlmChatResponse|Execution
     };
 }
 
-isolated function getHistoryOfIteration(ExecutionProgress progress, ChatMessage[] additionalMessages) returns ChatMessage[] {
+isolated function buildCurrentIterationHistory(ExecutionProgress progress,
+    ChatMessage[] conversationHistoryUpToCurrentUserQuery) returns ChatMessage[] {
     ChatMessage[] messages = createFunctionCallMessages(progress);
-    messages.unshift(...additionalMessages);
+    messages.unshift(...conversationHistoryUpToCurrentUserQuery);
     return messages;
 }
 
