@@ -46,8 +46,12 @@ public final class ModuleUtils {
     }
 
     public static BError createError(String errorMessage) {
+        return createError(errorMessage, null);
+    }
+
+    public static BError createError(String errorMessage, BError error) {
         return ErrorCreator.createError(ModuleUtils.getModule(), ERROR_TYPE_NAME, StringUtils.fromString(errorMessage),
-                null, null);
+                error, null);
     }
 
     static boolean isModuleDefinedError(BError error) {

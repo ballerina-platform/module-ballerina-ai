@@ -76,7 +76,11 @@ modules = [
 [[package]]
 org = "ballerina"
 name = "crypto"
+<<<<<<< HEAD
 version = "2.10.0"
+=======
+version = "2.9.2"
+>>>>>>> 68a9aca1c17cf19e22d6c2d20d92b246f157e6b5
 dependencies = [
 	{org = "ballerina", name = "jballerina.java"},
 	{org = "ballerina", name = "time"}
