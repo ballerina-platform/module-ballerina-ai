@@ -166,10 +166,13 @@ public isolated class ShortTermMemory {
     private isolated function exceedsMemoryLimit(string key, ChatMessage|ChatMessage[] message)
         returns boolean|MemoryError {
         lock {
-            int currentSize = (check self.store.getChatInteractiveMessages(key)).length();
             int maxSize = self.store.getCapacity();
-
             int incoming = message is ChatMessage ? 1 : message.length();
+            // Early return to avoid a network call if incoming alone exceeds capacity
+            if incoming > maxSize {
+                return true;
+            }
+            int currentSize = (check self.store.getChatInteractiveMessages(key)).length();
             return currentSize + incoming > maxSize;
         }
     }
