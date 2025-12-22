@@ -16,7 +16,9 @@
 
 import ai.observe;
 
+import ballerina/jballerina.java;
 import ballerina/log;
+import ballerina/time;
 import ballerina/uuid;
 
 const INFER_TOOL_COUNT = "INFER_TOOL_COUNT";
@@ -86,6 +88,7 @@ public isolated distinct class Agent {
     private final readonly & SystemPrompt systemPrompt;
     private final boolean verbose;
     private final string uniqueId = uuid:createRandomUuid();
+    private final readonly & ToolSchema[] toolSchemas;
 
     # Initialize an Agent.
     #
@@ -100,10 +103,10 @@ public isolated distinct class Agent {
         self.verbose = config.verbose;
         self.systemPrompt = config.systemPrompt.cloneReadOnly();
         Memory? memory = config.hasKey("memory") ? config?.memory : check new ShortTermMemory();
-
         do {
             self.functionCallAgent = check new FunctionCallAgent(config.model, config.tools, memory,
                 config.toolLoadingStrategy);
+            self.toolSchemas = self.functionCallAgent.toolStore.getToolSchema().cloneReadOnly();
             span.addTools(self.functionCallAgent.toolStore.getToolsInfo());
             span.close();
         } on fail Error err {
@@ -113,17 +116,26 @@ public isolated distinct class Agent {
     }
 
     # Executes the agent for a given user query.
-    # 
+    #
     # **Note:** Calls to this function using the same session ID must be invoked sequentially by the caller, 
     # as this operation is not thread-safe.
     #
     # + query - The natural language input provided to the agent
     # + sessionId - The ID associated with the agent memory
     # + context - The additional context that can be used during agent tool execution
+    # + td - Type descriptor specifying the expected return type format
     # + return - The agent's response or an error
     public isolated function run(@display {label: "Query"} string query,
             @display {label: "Session ID"} string sessionId = DEFAULT_SESSION_ID,
-            Context context = new) returns string|Error {
+            Context context = new,
+            typedesc<Trace|string> td = <>) returns td|Error = @java:Method {
+        'class: "io.ballerina.stdlib.ai.Agent"
+    } external;
+
+    private isolated function runInternal(@display {label: "Query"} string query,
+            @display {label: "Session ID"} string sessionId = DEFAULT_SESSION_ID,
+            Context context = new, boolean withTrace = false) returns string|Trace|Error {
+        time:Utc startTime = time:utcNow();
         string executionId = uuid:createRandomUuid();
 
         log:printDebug("Agent execution started",
@@ -140,6 +152,8 @@ public isolated distinct class Agent {
 
         ExecutionTrace executionTrace = self.functionCallAgent
             .run(query, systemPrompt, self.maxIter, self.verbose, sessionId, context, executionId);
+        ChatUserMessage userMessage = {role: USER, content: query};
+        Iteration[] iterations = executionTrace.iterations;
         do {
             string answer = check getAnswer(executionTrace, self.maxIter);
             log:printDebug("Agent execution completed successfully",
@@ -149,7 +163,18 @@ public isolated distinct class Agent {
             );
             span.addOutput(observe:TEXT, answer);
             span.close();
-            return answer;
+
+            return withTrace
+                ? {
+                    id: executionId,
+                    userMessage,
+                    iterations,
+                    tools: self.toolSchemas,
+                    startTime,
+                    endTime: time:utcNow(),
+                    output: {role: ASSISTANT, content: answer}
+                }
+                : answer;
         } on fail Error err {
             log:printDebug("Agent execution failed",
                 err,
@@ -157,10 +182,20 @@ public isolated distinct class Agent {
                 steps = executionTrace.steps.toString()
             );
             span.close(err);
-            return err;
+
+            return withTrace
+                ? {
+                    id: executionId,
+                    userMessage,
+                    iterations,
+                    tools: self.toolSchemas,
+                    startTime,
+                    endTime: time:utcNow(),
+                    output: err
+                }
+                : err;
         }
     }
-
 }
 
 isolated function getAnswer(ExecutionTrace executionTrace, int maxIter) returns string|Error {

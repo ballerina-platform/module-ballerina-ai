@@ -18,6 +18,7 @@ import ai.observe;
 
 import ballerina/io;
 import ballerina/log;
+import ballerina/time;
 
 # Execution progress record
 type ExecutionProgress record {|
@@ -104,32 +105,9 @@ type BaseAgent distinct isolated object {
             returns ExecutionTrace;
 };
 
-# An iterator to iterate over agent's execution
-class Iterator {
-    *object:Iterable;
-    private final Executor executor;
-
-    # Initialize the iterator with the agent and the query.
-    #
-    # + agent - Agent instance to be executed
-    # + sessionId - The ID associated with the agent memory
-    # + query - Natural language query to be executed by the agent
-    # + context - Contextual information to be used by the tools during the execution
-    isolated function init(BaseAgent agent, string sessionId, *ExecutionProgress progress) {
-        self.executor = new (agent, sessionId, progress);
-    }
-
-    # Iterate over the agent's execution steps.
-    # + return - a record with the execution step or an error if the agent failed
-    public function iterator() returns object {
-        public function next() returns record {|ExecutionResult|LlmChatResponse|ExecutionError|Error value;|}?;
-    } {
-        return self.executor;
-    }
-}
-
 # An executor to perform step-by-step execution of the agent.
 class Executor {
+    *object:Iterable;
     private boolean isCompleted = false;
     private final string sessionId;
     private final BaseAgent agent;
@@ -279,6 +257,15 @@ class Executor {
         self.progress.history.push(step);
     }
 
+    # Iterate over the agent's execution steps.
+    #
+    # + return - a record with the execution step or an error if the agent failed
+    public function iterator() returns object {
+        public function next() returns record {|ExecutionResult|LlmChatResponse|ExecutionError|Error value;|}?;
+    } {
+        return self;
+    }
+
     # Reason and execute the next step of the agent.
     #
     # + return - A record with ExecutionResult, chat response or an error 
@@ -308,6 +295,8 @@ class Executor {
 isolated function run(BaseAgent agent, string instruction, string query, int maxIter, boolean verbose,
         string sessionId = DEFAULT_SESSION_ID, Context context = new, string executionId = DEFAULT_EXECUTION_ID)
         returns ExecutionTrace {
+    time:Utc startTime = time:utcNow();
+    Iteration[] iterations = [];
     log:printDebug("Agent execution loop started",
             executionId = executionId,
             sessionId = sessionId,
@@ -319,16 +308,21 @@ isolated function run(BaseAgent agent, string instruction, string query, int max
     (ExecutionResult|ExecutionError|Error)[] steps = [];
 
     string? content = ();
-    Iterator iterator = new (agent, sessionId, instruction = instruction, query = query, context = context, executionId = executionId);
+    Executor executor = new (agent, sessionId, progress = {instruction, query, context, executionId});
     int iter = 0;
     ChatSystemMessage systemMessage = {role: SYSTEM, content: instruction};
     updateMemory(agent.memory, sessionId, systemMessage);
 
     ChatUserMessage userMessage = {role: USER, content: query};
     updateMemory(agent.memory, sessionId, userMessage);
+    ChatAssistantMessage? finalAssistantMessage = ();
+    foreach ExecutionResult|LlmChatResponse|ExecutionError|Error step in executor {
+        ChatAssistantMessage|ChatFunctionMessage|Error iterationOutput = getOutputOfIteration(step);
+        ChatMessage[] iterationHistory = getHistoryOfIteration(executor.progress, agent.memory, sessionId);
+        if verbose {
+            verbosePrint(step, iter);
+        }
 
-    ChatMessage[] temporaryMemory = [];
-    foreach ExecutionResult|LlmChatResponse|ExecutionError|Error step in iterator {
         if iter == maxIter {
             log:printDebug("Maximum iterations reached without final answer",
                     executionId = executionId,
@@ -348,6 +342,7 @@ isolated function run(BaseAgent agent, string instruction, string query, int max
                     cause = cause !is () ? cause.toString() : "none"
                 );
             steps.push(step);
+            iterations.push({startTime, endTime: time:utcNow(), history: iterationHistory, output: iterationOutput});
             break;
         }
         if step is LlmChatResponse {
@@ -358,11 +353,8 @@ isolated function run(BaseAgent agent, string instruction, string query, int max
                     answer = step.content,
                     sessionId = sessionId
                 );
-            if verbose {
-                io:println(string `${"\n\n"}Final Answer: ${step.content}${"\n\n"}`);
-            }
-            ChatAssistantMessage assistantMessage = {role: "assistant", content: step.content};
-            temporaryMemory.push(assistantMessage);
+            finalAssistantMessage = {role: "assistant", content: step.content};
+            iterations.push({startTime, endTime: time:utcNow(), history: iterationHistory, output: iterationOutput});
             break;
         }
         iter += 1;
@@ -373,41 +365,17 @@ isolated function run(BaseAgent agent, string instruction, string query, int max
                 stepsCompleted = steps.length(),
                 sessionId = sessionId
             );
-        if verbose {
-            io:println(string `${"\n\n"}Agent Iteration ${iter.toString()}`);
-            if step is ExecutionResult {
-                LlmToolResponse tool = step.tool;
-                io:println(string `Action:
-    ${BACKTICKS}
-    {
-        ${ACTION_NAME_KEY}: ${tool.name},
-        ${ACTION_ARGUEMENTS_KEY}: ${(tool.arguments ?: "None").toString()}
-    }
-    ${BACKTICKS}`);
-                anydata|error observation = step?.observation;
-                if observation is error {
-                    io:println(string `${OBSERVATION_KEY} (Error): ${observation.toString()}`);
-                } else if observation !is () {
-                    io:println(string `${OBSERVATION_KEY}: ${observation.toString()}`);
-                }
-            } else {
-                error? cause = step.'error.cause();
-                io:println(string `LLM Generation Error: 
-    ${BACKTICKS}
-    {
-        message: ${step.'error.message()},
-        cause: ${(cause is error ? cause.message() : "Unspecified")},
-        llmResponse: ${step.llmResponse.toString()}
-    }
-    ${BACKTICKS}`);
-            }
-        }
-        updateExecutionResultInMemory(step, temporaryMemory);
+
         steps.push(step);
+        iterations.push({startTime, endTime: time:utcNow(), history: iterationHistory, output: iterationOutput});
+        startTime = time:utcNow();
     }
 
-    foreach ChatMessage message in temporaryMemory {
+    foreach ChatMessage message in createFunctionCallMessages(executor.progress) {
         updateMemory(agent.memory, sessionId, message);
+    }
+    if finalAssistantMessage is ChatAssistantMessage {
+        updateMemory(agent.memory, sessionId, finalAssistantMessage);
     }
 
     if agent.stateless {
@@ -415,7 +383,72 @@ isolated function run(BaseAgent agent, string instruction, string query, int max
         // Ignore this error since the stateless agent always relies on DefaultMessageWindowChatMemoryManager,  
         // which never return an error.
     }
-    return {steps, answer: content};
+    return {steps, iterations, answer: content};
+}
+
+isolated function verbosePrint(ExecutionResult|LlmChatResponse|ExecutionError|Error step, int iter) {
+    io:println(string `${"\n\n"}Agent Iteration ${iter.toString()}`);
+    if step is LlmChatResponse {
+        io:println(string `${"\n\n"}Final Answer: ${step.content}${"\n\n"}`);
+        return;
+    }
+    if step is ExecutionResult {
+        LlmToolResponse tool = step.tool;
+        io:println(string `Action:
+    ${BACKTICKS}
+    {
+        ${ACTION_NAME_KEY}: ${tool.name},
+        ${ACTION_ARGUEMENTS_KEY}: ${(tool.arguments ?: "None").toString()}
+    }
+    ${BACKTICKS}`);
+
+        anydata|error observation = step?.observation;
+        if observation is error {
+            io:println(string `${OBSERVATION_KEY} (Error): ${observation.toString()}`);
+        } else if observation !is () {
+            io:println(string `${OBSERVATION_KEY}: ${observation.toString()}`);
+        }
+        return;
+    }
+    if step is ExecutionError {
+        error? cause = step.'error.cause();
+        io:println(string `LLM Generation Error: 
+    ${BACKTICKS}
+    {
+        message: ${step.'error.message()},
+        cause: ${(cause is error ? cause.message() : "Unspecified")},
+        llmResponse: ${step.llmResponse.toString()}
+    }
+    ${BACKTICKS}`);
+    }
+}
+
+isolated function getOutputOfIteration(ExecutionResult|LlmChatResponse|ExecutionError|Error step)
+    returns ChatAssistantMessage|ChatFunctionMessage|Error {
+    if step is Error {
+        return step;
+    }
+    if step is LlmChatResponse {
+        return {role: ASSISTANT, content: step.content};
+    }
+    if step is ExecutionError {
+        return step.'error;
+    }
+    return {
+        role: FUNCTION,
+        name: step.tool.name,
+        id: step.tool.id,
+        content: getObservationString(step.observation)
+    };
+}
+
+isolated function getHistoryOfIteration(ExecutionProgress progress, Memory memory, string sessionId) returns ChatMessage[] {
+    ChatMessage[] messages = createFunctionCallMessages(progress);
+    ChatMessage[]|MemoryError additionalMessages = memory.get(sessionId);
+    if additionalMessages is ChatMessage[] {
+        messages.unshift(...additionalMessages);
+    }
+    return messages;
 }
 
 isolated function getObservationString(anydata|error observation) returns string {
