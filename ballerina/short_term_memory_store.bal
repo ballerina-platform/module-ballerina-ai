@@ -242,7 +242,6 @@ public isolated class InMemoryShortTermMemoryStore {
     # Returns the capacity configured for each key in the `InMemoryShortTermMemoryStore`.
     #
     # + return - returns the capacity
-    public isolated function getCapacity() returns int {
-        return self.size;
-    }
+    public isolated function getCapacity() returns int => self.size;
+    
 }
