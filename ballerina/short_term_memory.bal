@@ -137,13 +137,11 @@ public isolated class ShortTermMemory {
         final readonly & MemoryChatMessage[] memoryChatMessages = from ChatMessage msg in messages
             select check mapToMemoryChatMessage(msg);
         lock {
-            MemoryChatMessage[] systemMessages = memoryChatMessages.filter(msg => msg is ChatSystemMessage);
-            MemoryChatInteractiveMessage[] interactiveMessages = filterMemoryChatInteractiveMessage(memoryChatMessages);
+            var [systemMessages, interactiveMessages] = partitionChatMessagesByType(memoryChatMessages);
             ChatMessage[] allMessages = [];
             if systemMessages.length() > 0 {
                 // Update only the latest system message, ignore others
-                MemoryChatSystemMessage lastSystemMessage = <MemoryChatSystemMessage>systemMessages.pop();
-                allMessages = [lastSystemMessage];
+                allMessages = [<MemoryChatSystemMessage>systemMessages.pop()];
             }
 
             if check self.exceedsMemoryLimit(key, interactiveMessages) {
@@ -168,7 +166,7 @@ public isolated class ShortTermMemory {
         lock {
             int storeCapacity = self.store.getCapacity();
             int incomingMessageLength = message is ChatMessage ? 1 : message.length();
-            // Early return to avoid a network call if incoming alone exceeds capacity
+            // Early return to avoid a network-call/unnecessary store operation if incoming alone exceeds capacity
             if incomingMessageLength > storeCapacity {
                 return true;
             }
@@ -291,7 +289,17 @@ isolated function toString(Prompt|string prompt) returns string {
     return promptString;
 }
 
-isolated function filterMemoryChatInteractiveMessage(MemoryChatMessage[] memoryChatMessages)
-    returns MemoryChatInteractiveMessage[] => from MemoryChatMessage msg in memoryChatMessages
-        where msg is MemoryChatInteractiveMessage
-        select msg;
+isolated function partitionChatMessagesByType(MemoryChatMessage[] memoryChatMessages)
+    returns [MemoryChatSystemMessage[], MemoryChatInteractiveMessage[]] {
+    MemoryChatSystemMessage[] systemMessages = [];
+    MemoryChatInteractiveMessage[] interactiveMessages = [];
+    from MemoryChatMessage msg in memoryChatMessages
+    do {
+        if msg is MemoryChatSystemMessage {
+            systemMessages.push(msg);
+        } else {
+            interactiveMessages.push(msg);
+        }
+    };
+    return [systemMessages, interactiveMessages];
+}

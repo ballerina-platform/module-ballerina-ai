@@ -29,7 +29,7 @@ type ExecutionProgress record {|
     # Instruction used by the agent during the execution
     string instruction;
     # Execution history of actions performed so far in the current interaction
-    ExecutionStep[] currentExecutionSteps = [];
+    ExecutionStep[] executionSteps = [];
     # Contextual information to be used by the tools during the execution
     Context context;
     # History of previous interactions with the agent, including the latest user query
@@ -145,7 +145,7 @@ class Executor {
         log:printDebug("LLM reasoning started",
                 executionId = self.progress.executionId,
                 sessionId = self.sessionId,
-                history = self.progress.currentExecutionSteps.toString()
+                history = self.progress.executionSteps.toString()
         );
         return check self.agent.selectNextTool(self.progress, self.sessionId);
     }
@@ -256,7 +256,7 @@ class Executor {
     #
     # + step - Latest step to be added to the history
     public isolated function update(ExecutionStep step) {
-        self.progress.currentExecutionSteps.push(step);
+        self.progress.executionSteps.push(step);
     }
 
     # Iterate over the agent's execution steps.

@@ -143,7 +143,7 @@ isolated distinct class FunctionCallAgent {
 
 isolated function createFunctionCallMessages(ExecutionProgress progress) returns ChatMessage[] {
     ChatMessage[] messages = [];
-    foreach ExecutionStep step in progress.currentExecutionSteps {
+    foreach ExecutionStep step in progress.executionSteps {
         FunctionCall|error functionCall = step.llmResponse.fromJsonWithType();
         if functionCall is error {
             panic error Error("Badly formated history for function call agent", llmResponse = step.llmResponse);

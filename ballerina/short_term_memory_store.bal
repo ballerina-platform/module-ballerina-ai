@@ -243,5 +243,4 @@ public isolated class InMemoryShortTermMemoryStore {
     #
     # + return - returns the capacity
     public isolated function getCapacity() returns int => self.size;
-    
 }

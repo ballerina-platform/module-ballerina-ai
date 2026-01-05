@@ -79,24 +79,36 @@ public isolated class MessageWindowChatMemory {
     # + message - The chat message or array of messages to store in memory
     # + return - nil on success, or an `ai:Error` if the operation fails 
     public isolated function update(string sessionId, ChatMessage|ChatMessage[] message) returns MemoryError? {
-        return message is ChatMessage
-            ? self.updateMemory(sessionId, message)
-            : message.forEach(msg => check self.updateMemory(sessionId, msg));
-    }
+        self.createSessionIfNotExist(sessionId);
+        if message is ChatMessage {
+            readonly & MemoryChatMessage newMessage = check mapToMemoryChatMessage(message);
+            lock {
+                MemoryChatMessage[] memory = self.sessions.get(sessionId);
+                if memory.length() >= self.size - 1 {
+                    _ = memory.shift();
+                }
+                if newMessage is MemoryChatSystemMessage {
+                    self.systemMessageSessions[sessionId] = newMessage;
+                    return;
+                }
+                memory.push(newMessage);
+            }
+            return;
+        }
 
-    private isolated function updateMemory(string sessionId, ChatMessage message) returns MemoryError? {
-        readonly & MemoryChatMessage newMessage = check mapToMemoryChatMessage(message);
+        MemoryChatMessage[] & readonly newMessages = message.'map(msg => check mapToMemoryChatMessage(msg))
+            .cloneReadOnly();
         lock {
-            self.createSessionIfNotExist(sessionId);
+            var [newyStemMessages, newInteractiveMessages] = partitionChatMessagesByType(newMessages);
             MemoryChatMessage[] memory = self.sessions.get(sessionId);
-            if memory.length() >= self.size - 1 {
+
+            if newyStemMessages.length() > 0 {
+                self.systemMessageSessions[sessionId] = newyStemMessages.pop();
+            }
+            memory.push(...newInteractiveMessages);
+            while memory.length() >= self.size {
                 _ = memory.shift();
             }
-            if newMessage is MemoryChatSystemMessage {
-                self.systemMessageSessions[sessionId] = newMessage;
-                return;
-            }
-            memory.push(newMessage);
         }
     }
 
