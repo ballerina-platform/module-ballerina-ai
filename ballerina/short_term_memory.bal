@@ -141,7 +141,7 @@ public isolated class ShortTermMemory {
             ChatMessage[] allMessages = [];
             if systemMessages.length() > 0 {
                 // Update only the latest system message, ignore others
-                allMessages = [<MemoryChatSystemMessage>systemMessages.pop()];
+                allMessages = [systemMessages.pop()];
             }
 
             if check self.exceedsMemoryLimit(key, interactiveMessages) {

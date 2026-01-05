@@ -81,31 +81,36 @@ public isolated class MessageWindowChatMemory {
     public isolated function update(string sessionId, ChatMessage|ChatMessage[] message) returns MemoryError? {
         self.createSessionIfNotExist(sessionId);
         if message is ChatMessage {
-            readonly & MemoryChatMessage newMessage = check mapToMemoryChatMessage(message);
-            lock {
-                MemoryChatMessage[] memory = self.sessions.get(sessionId);
-                if memory.length() >= self.size - 1 {
-                    _ = memory.shift();
-                }
-                if newMessage is MemoryChatSystemMessage {
-                    self.systemMessageSessions[sessionId] = newMessage;
-                    return;
-                }
-                memory.push(newMessage);
-            }
-            return;
+            return self.updateWithSingleMessage(sessionId, message);
         }
+        return self.updateWithMessageBatch(sessionId, message);
+    }
 
-        MemoryChatMessage[] & readonly newMessages = message.'map(msg => check mapToMemoryChatMessage(msg))
-            .cloneReadOnly();
+    private isolated function updateWithSingleMessage(string sessionId, ChatMessage message) returns MemoryError? {
+        readonly & MemoryChatMessage newMessage = check mapToMemoryChatMessage(message);
         lock {
-            var [newyStemMessages, newInteractiveMessages] = partitionChatMessagesByType(newMessages);
             MemoryChatMessage[] memory = self.sessions.get(sessionId);
-
-            if newyStemMessages.length() > 0 {
-                self.systemMessageSessions[sessionId] = newyStemMessages.pop();
+            if memory.length() >= self.size - 1 {
+                _ = memory.shift();
             }
-            memory.push(...newInteractiveMessages);
+            if newMessage is MemoryChatSystemMessage {
+                self.systemMessageSessions[sessionId] = newMessage;
+                return;
+            }
+            memory.push(newMessage);
+        }
+    }
+
+    private isolated function updateWithMessageBatch(string sessionId, ChatMessage[] messages) returns MemoryError? {
+        MemoryChatMessage[] & readonly newMessages = from ChatMessage msg in messages
+            select check mapToMemoryChatMessage(msg);
+        lock {
+            var [systemMessages, interactiveMessages] = partitionChatMessagesByType(newMessages);
+            MemoryChatMessage[] memory = self.sessions.get(sessionId);
+            if systemMessages.length() > 0 {
+                self.systemMessageSessions[sessionId] = systemMessages.pop();
+            }
+            memory.push(...interactiveMessages);
             while memory.length() >= self.size {
                 _ = memory.shift();
             }
