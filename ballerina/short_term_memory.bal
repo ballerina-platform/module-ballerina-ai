@@ -104,33 +104,116 @@ public isolated class ShortTermMemory {
         }
     }
 
-    # Adds a chat message to the memory, handling overflow as configured.
+    # Adds one or more chat messages to the memory, handling overflow as configured.
     #
     # + key - The key associated with the memory
-    # + message - The message to store
+    # + message - The chat message or array of messages to store in memory
     # + return - nil on success, or an `ai:MemoryError` error if the operation fails 
-    public isolated function update(string key, ChatMessage message) returns MemoryError? {
-        final readonly &  MemoryChatMessage memoryChatMessage = check mapToMemoryChatMessage(message);
+    public isolated function update(string key, ChatMessage|ChatMessage[] message) returns MemoryError? {
+        if message is ChatMessage[] {
+            return self.batchUpdate(key, message);
+        }
+        final readonly & MemoryChatMessage memoryChatMessage = check mapToMemoryChatMessage(message);
         lock {
             if memoryChatMessage is ChatSystemMessage {
                 return self.store.put(key, memoryChatMessage);
             }
 
-            if check self.store.isFull(key) {
+            if check self.exceedsMemoryLimit(key, memoryChatMessage) {
                 final OverflowHandler overflowHandler = self.overflowHandler;
-
                 if overflowHandler is TrimOverflowHandlerConfiguration {
                     check self.store.removeChatInteractiveMessages(key, overflowHandler.trimCount);
-                } else {
-                    ChatMessage[] updatedMessages = check overflowHandler(check self.store.getChatInteractiveMessages(key));
-                    check self.store.removeChatInteractiveMessages(key);
-                    foreach ChatMessage updatedMessage in updatedMessages {
-                        check self.store.put(key, updatedMessage);
-                    }
+                    return self.store.put(key, memoryChatMessage);
                 }
+                ChatMessage[] updatedMessages = check overflowHandler(check self.store.getChatInteractiveMessages(key));
+                check self.store.removeChatInteractiveMessages(key);
+                return self.store.put(key, [...updatedMessages, memoryChatMessage]);
+            }
+            return self.store.put(key, memoryChatMessage);
+        }
+    }
+
+    private isolated function batchUpdate(string key, ChatMessage[] messages) returns MemoryError? {
+        final readonly & MemoryChatMessage[] memoryChatMessages = from ChatMessage msg in messages
+            select check mapToMemoryChatMessage(msg);
+        lock {
+            var [systemMessages, interactiveMessages] = partitionChatMessagesByType(memoryChatMessages);
+            ChatMessage[] allMessages = [];
+            if systemMessages.length() > 0 {
+                // Update only the latest system message, ignore others
+                allMessages = [systemMessages.pop()];
             }
 
-            return self.store.put(key, memoryChatMessage);
+            if check self.exceedsMemoryLimit(key, interactiveMessages) {
+                final OverflowHandler overflowHandler = self.overflowHandler;
+                ChatMessage[] overflowHandledMessages = overflowHandler is TrimOverflowHandlerConfiguration
+                    ? check self.getInteractiveMessagesAfterTrim(key, overflowHandler, interactiveMessages)
+                    : check self.getInteractiveMessagesAfterSummarization(key, overflowHandler, interactiveMessages);
+                allMessages.push(...overflowHandledMessages);
+            } else {
+                allMessages.push(...interactiveMessages);
+            }
+            
+            if allMessages.length() == 0 {
+                return;
+            }
+            return self.store.put(key, allMessages);
+        }
+    }
+
+    private isolated function exceedsMemoryLimit(string key, ChatMessage|ChatMessage[] message)
+        returns boolean|MemoryError {
+        lock {
+            int storeCapacity = self.store.getCapacity();
+            int incomingMessageLength = message is ChatMessage ? 1 : message.length();
+            // Early return to avoid a network-call/unnecessary store operation if incoming alone exceeds capacity
+            if incomingMessageLength > storeCapacity {
+                return true;
+            }
+            int currentLength = (check self.store.getChatInteractiveMessages(key)).length();
+            return currentLength + incomingMessageLength > storeCapacity;
+        }
+    }
+
+    private isolated function getInteractiveMessagesAfterTrim(string key, TrimOverflowHandlerConfiguration trimHandler,
+            MemoryChatInteractiveMessage[] incomingInteractiveMsgs) returns MemoryError|ChatMessage[] {
+        lock {
+            int incomingCount = incomingInteractiveMsgs.length();
+            ChatMessage[] existing = check self.store.getChatInteractiveMessages(key);
+            check self.store.removeChatInteractiveMessages(key);
+
+            int currentSize = existing.length();
+            int trimCount = trimHandler.trimCount;
+            int capacity = self.store.getCapacity();
+
+            // Count how many times trimming needs to occur during the simulation
+            int totalMessages = currentSize + incomingCount;
+            int trimCycles = totalMessages > capacity  ? ((totalMessages - capacity + trimCount - 1) / trimCount) : 0;
+            int totalRemovals = trimCycles * trimCount;
+
+            ChatMessage[] combined = [...existing, ...incomingInteractiveMsgs.clone()];
+            combined = totalRemovals > 0 ? combined.slice(totalRemovals) : combined;
+            return combined.'map(msg => check mapToMemoryChatMessage(msg)).clone();
+        }
+    }
+
+    private isolated function getInteractiveMessagesAfterSummarization(string key, OverflowHandlerFunction summarizationHandler,
+            MemoryChatInteractiveMessage[] incomingInteractiveMsgs) returns MemoryError|ChatMessage[] {
+        lock {
+            MemoryChatInteractiveMessage[] interactiveMsgs = incomingInteractiveMsgs.clone();
+            ChatInteractiveMessage[] currentMessages = check self.store.getChatInteractiveMessages(key);
+            int incoming = interactiveMsgs.length();
+            int maxSize = self.store.getCapacity();
+
+            int effectiveCount = incoming % maxSize == 0 ? maxSize : incoming % maxSize;
+            ChatInteractiveMessage[] tailMessages = interactiveMsgs.slice(incoming - effectiveCount);
+
+            ChatInteractiveMessage[] headMessages = interactiveMsgs.slice(0, incoming - effectiveCount);
+            ChatMessage[] processedHead = check summarizationHandler([...currentMessages, ...headMessages]);
+
+            check self.store.removeChatInteractiveMessages(key);
+            ChatMessage[] combined = [...processedHead, ...tailMessages];
+            return combined.'map(msg => check mapToMemoryChatMessage(msg)).clone();
         }
     }
 
@@ -192,7 +275,10 @@ isolated function callModelToHandleOverflow(MemoryChatMessage[] memorySlice, Mod
     ]);
 }
 
-isolated function toString(Prompt prompt) returns string {
+isolated function toString(Prompt|string prompt) returns string {
+    if prompt is string {
+        return prompt;
+    }
     string[] & readonly strings = prompt.strings;
     anydata[] insertions = prompt.insertions;
 
@@ -201,4 +287,19 @@ isolated function toString(Prompt prompt) returns string {
         promptString += insertions[i].toJsonString() + strings[i + 1];
     }
     return promptString;
+}
+
+isolated function partitionChatMessagesByType(MemoryChatMessage[] memoryChatMessages)
+    returns [MemoryChatSystemMessage[], MemoryChatInteractiveMessage[]] {
+    MemoryChatSystemMessage[] systemMessages = [];
+    MemoryChatInteractiveMessage[] interactiveMessages = [];
+    from MemoryChatMessage msg in memoryChatMessages
+    do {
+        if msg is MemoryChatSystemMessage {
+            systemMessages.push(msg);
+        } else {
+            interactiveMessages.push(msg);
+        }
+    };
+    return [systemMessages, interactiveMessages];
 }

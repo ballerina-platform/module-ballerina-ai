@@ -28,10 +28,12 @@ type ExecutionProgress record {|
     string query;
     # Instruction used by the agent during the execution
     string instruction;
-    # Execution history up to the current action
-    ExecutionStep[] history = [];
+    # Execution history of actions performed so far in the current interaction
+    ExecutionStep[] executionSteps = [];
     # Contextual information to be used by the tools during the execution
     Context context;
+    # History of previous interactions with the agent, including the latest user query
+    ChatMessage[] history;
 |};
 
 # Execution step information
@@ -143,7 +145,7 @@ class Executor {
         log:printDebug("LLM reasoning started",
                 executionId = self.progress.executionId,
                 sessionId = self.sessionId,
-                history = self.progress.history.toString()
+                history = self.progress.executionSteps.toString()
         );
         return check self.agent.selectNextTool(self.progress, self.sessionId);
     }
@@ -254,7 +256,7 @@ class Executor {
     #
     # + step - Latest step to be added to the history
     public isolated function update(ExecutionStep step) {
-        self.progress.history.push(step);
+        self.progress.executionSteps.push(step);
     }
 
     # Iterate over the agent's execution steps.
@@ -308,21 +310,41 @@ isolated function run(BaseAgent agent, string instruction, string query, int max
     (ExecutionResult|ExecutionError|Error)[] steps = [];
 
     string? content = ();
-    Executor executor = new (agent, sessionId, progress = {instruction, query, context, executionId});
-    int iter = 0;
+    // Retrieve the conversation history from memory, update the system message at the start,
+    // and append the user message for the current interaction.
+    // After iterating and collecting execution steps in temporary memory,
+    // update the actual memory in a single batch, including the system prompt and user message for this interaction.
+    ChatMessage[]|MemoryError prevHistory = agent.memory.get(sessionId);
+    if prevHistory is MemoryError {
+        log:printDebug("Failed to retrieve conversation history from memory",
+            prevHistory,
+            executionId = executionId,
+            sessionId = sessionId
+        );
+    }
+    ChatMessage[] history = (prevHistory is ChatMessage[]) ? [...prevHistory] : [];
     ChatSystemMessage systemMessage = {role: SYSTEM, content: instruction};
-    updateMemory(agent.memory, sessionId, systemMessage);
-
+    if history.length() > 0 {
+        ChatMessage firstMessage = history[0];
+        if firstMessage is ChatSystemMessage && instruction != toString(firstMessage.content) {
+            history[0] = systemMessage;
+        }
+    } else {
+        history.unshift(systemMessage);
+    }
     ChatUserMessage userMessage = {role: USER, content: query};
-    updateMemory(agent.memory, sessionId, userMessage);
+    history.push(userMessage);
+
+    Executor executor = new (agent, sessionId, progress = {instruction, query, context, executionId, history});
+    ChatMessage[] temporaryMemory = [systemMessage, userMessage];
     ChatAssistantMessage? finalAssistantMessage = ();
+    int iter = 0;
     foreach ExecutionResult|LlmChatResponse|ExecutionError|Error step in executor {
         ChatAssistantMessage|ChatFunctionMessage|Error iterationOutput = getOutputOfIteration(step);
-        ChatMessage[] iterationHistory = getHistoryOfIteration(executor.progress, agent.memory, sessionId);
+        ChatMessage[] iterationHistory = buildCurrentIterationHistory(executor.progress, history);
         if verbose {
             verbosePrint(step, iter);
         }
-
         if iter == maxIter {
             log:printDebug("Maximum iterations reached without final answer",
                     executionId = executionId,
@@ -353,7 +375,7 @@ isolated function run(BaseAgent agent, string instruction, string query, int max
                     answer = step.content,
                     sessionId = sessionId
                 );
-            finalAssistantMessage = {role: "assistant", content: step.content};
+            finalAssistantMessage = {role: ASSISTANT, content: step.content};
             iterations.push({startTime, endTime: time:utcNow(), history: iterationHistory, output: iterationOutput});
             break;
         }
@@ -371,13 +393,14 @@ isolated function run(BaseAgent agent, string instruction, string query, int max
         startTime = time:utcNow();
     }
 
-    foreach ChatMessage message in createFunctionCallMessages(executor.progress) {
-        updateMemory(agent.memory, sessionId, message);
-    }
+    ChatMessage[] intermediateFunctionCallMessages = createFunctionCallMessages(executor.progress);
+    temporaryMemory.push(...intermediateFunctionCallMessages);
     if finalAssistantMessage is ChatAssistantMessage {
-        updateMemory(agent.memory, sessionId, finalAssistantMessage);
+        temporaryMemory.push(finalAssistantMessage);
     }
 
+    // Batch update the memory with the user message, system message, and all intermediate steps from tool execution
+    updateMemory(agent.memory, sessionId, temporaryMemory);
     if agent.stateless {
         MemoryError? err = agent.memory.delete(sessionId);
         // Ignore this error since the stateless agent always relies on DefaultMessageWindowChatMemoryManager,  
@@ -442,12 +465,10 @@ isolated function getOutputOfIteration(ExecutionResult|LlmChatResponse|Execution
     };
 }
 
-isolated function getHistoryOfIteration(ExecutionProgress progress, Memory memory, string sessionId) returns ChatMessage[] {
+isolated function buildCurrentIterationHistory(ExecutionProgress progress,
+    ChatMessage[] conversationHistoryUpToCurrentUserQuery) returns ChatMessage[] {
     ChatMessage[] messages = createFunctionCallMessages(progress);
-    ChatMessage[]|MemoryError additionalMessages = memory.get(sessionId);
-    if additionalMessages is ChatMessage[] {
-        messages.unshift(...additionalMessages);
-    }
+    messages.unshift(...conversationHistoryUpToCurrentUserQuery);
     return messages;
 }
 
@@ -474,8 +495,8 @@ isolated function getObservationString(anydata|error observation) returns string
 # + return - Array of tools registered with the agent
 public isolated function getTools(Agent agent) returns Tool[] => agent.functionCallAgent.toolStore.tools.toArray();
 
-isolated function updateMemory(Memory memory, string sessionId, ChatMessage message) {
-    error? updationStation = memory.update(sessionId, message);
+isolated function updateMemory(Memory memory, string sessionId, ChatMessage[] messages) {
+    error? updationStation = memory.update(sessionId, messages);
     if updationStation is error {
         log:printError("Error occured while updating the memory", updationStation);
     }

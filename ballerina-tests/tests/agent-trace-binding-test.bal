@@ -35,7 +35,7 @@ isolated function testTraceBinding() returns error? {
     int expectedIterationCount = 2;
     test:assertEquals(trace.iterations.length(), expectedIterationCount);
 
-    int expectedSecondIterationHistoryCount = 13;
+    int expectedSecondIterationHistoryCount = 14;
     test:assertEquals(
             trace.iterations[1].history.length(),
             expectedSecondIterationHistoryCount
