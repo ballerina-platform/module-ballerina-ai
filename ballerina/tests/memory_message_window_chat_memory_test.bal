@@ -48,6 +48,24 @@ function testUpdateExceedMemorySize() returns error? {
 }
 
 @test:Config {}
+function testBatchUpdateExceedMemorySize() returns error? {
+    MessageWindowChatMemory chatMemory = new (3);
+    ChatSystemMessage systemMessage = {
+        role: "system",
+        content: "You are an AI assistant to help users get answers."
+    };
+    ChatUserMessage userMessage = {role: "user", content: "Hi im bob"};
+    ChatAssistantMessage assistantMessage = {role: "assistant", content: "Hello Bob! How can I assist you today?"};
+    ChatUserMessage userMessage2 = {role: "user", content: "Add the numbers [2,3,4,5]"};
+    _ = check chatMemory.update(DEFAULT_SESSION_ID, [userMessage, assistantMessage, systemMessage, userMessage2]);
+    ChatMessage[] history = check chatMemory.get(DEFAULT_SESSION_ID);
+    io:println("History: ", history);
+    assertChatMessageEquals(history[0], systemMessage);
+    assertChatMessageEquals(history[1], assistantMessage);
+    test:assertEquals(history.length(), 3);
+}
+
+@test:Config {}
 function testClearMemory() returns error? {
     MessageWindowChatMemory chatMemory = new (4);
     ChatUserMessage userMessage = {role: "user", content: "Hi im bob"};

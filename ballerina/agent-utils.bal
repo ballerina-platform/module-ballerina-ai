@@ -322,7 +322,7 @@ isolated function run(BaseAgent agent, string instruction, string query, int max
             sessionId = sessionId
         );
     }
-    ChatMessage[] history = (prevHistory is ChatMessage[]) ? [...prevHistory]  : [];
+    ChatMessage[] history = (prevHistory is ChatMessage[]) ? [...prevHistory] : [];
     ChatSystemMessage systemMessage = {role: SYSTEM, content: instruction};
     if history.length() > 0 {
         ChatMessage firstMessage = history[0];
