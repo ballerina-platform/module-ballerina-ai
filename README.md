@@ -1,6 +1,6 @@
 # Ballerina AI Library
 
-[![Build](https://github.com/ballerina-platform/module-ballerina-ai/workflows/CI/badge.svg)](https://github.com/ballerina-platform/module-ballerina-ai/actions?query=workflow%3ACI)
+[![Build](https://github.com/ballerina-platform/module-ballerina-ai/actions/workflows/build-timestamped-master.yml/badge.svg?branch=main)](https://github.com/ballerina-platform/module-ballerina-ai/actions/workflows/build-timestamped-master.yml)
 [![GitHub Last Commit](https://img.shields.io/github/last-commit/ballerina-platform/module-ballerina-ai.svg)](https://github.com/ballerina-platform/module-ballerina-ai/commits/master)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
