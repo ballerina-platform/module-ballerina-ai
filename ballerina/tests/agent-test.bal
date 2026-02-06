@@ -36,7 +36,7 @@ ModelProvider model = new MockLLM();
     enable: false
 }
 function testAgentExecutorRun() returns error? {
-    FunctionCallAgent agent = check new (model, [searchTool, calculatorTool]);
+    FunctionCallAgent agent = check new (model, [searchTool, calculatorTool], new, ());
     string query = "Who is Leo DiCaprio's girlfriend? What is her current age raised to the 0.43 power?";
     Executor agentExecutor = new (agent, DEFAULT_SESSION_ID,
         instruction = "Answer the questions", query = query, context = new, executionId = DEFAULT_EXECUTION_ID,
@@ -75,7 +75,7 @@ function testAgentExecutorRun() returns error? {
 
 @test:Config
 function testAgentRunHavingErrorStep() returns error? {
-    FunctionCallAgent agent = check new (model, [searchTool, calculatorTool]);
+    FunctionCallAgent agent = check new (model, [searchTool, calculatorTool], new, ());
     string query = "Random query";
     ExecutionTrace trace = run(agent, instruction = "Answer the questions", query = query,
             context = new, maxIter = 5, verbose = false);

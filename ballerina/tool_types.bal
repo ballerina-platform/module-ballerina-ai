@@ -144,6 +144,8 @@ public type ToolConfig record {|
     map<json>? parameters = ();
     # Pointer to the function that should be called when the tool is invoked.
     FunctionTool caller;
+    # Scopes required to invoke this tool
+    string|string[] scopes?;
 |};
 
 # Defines the configuration of the Tool annotation.
@@ -156,6 +158,9 @@ public type ToolAnnotationConfig record {|
     # The input schema expected by the tool. If the tool does not expect any input, this should be null.  
     # If not provided, the input schema is generated automatically. 
     ObjectInputSchema? parameters?;
+    # Scopes required to invoke this tool
+    @display {label: "Required Scopes"}
+    string|string[] scopes?;
 |};
 
 # Represents the annotation of a function tool.
@@ -165,7 +170,7 @@ public annotation ToolAnnotationConfig AgentTool on function, object function;
 public type FunctionTool isolated function;
 
 # Generates a array of `ToolConfig` from the given list of function pointers.
-# 
+#
 # + tools - Array of function pointers annotated with `@ai:AgentTool` annotation
 # + return - Array of `ai:ToolConfig` instances
 public isolated function getToolConfigs(FunctionTool[] tools) returns ToolConfig[] {
@@ -173,8 +178,8 @@ public isolated function getToolConfigs(FunctionTool[] tools) returns ToolConfig
     foreach FunctionTool tool in tools {
         ToolConfig|Error toolConfig = getToolConfig(tool);
         if toolConfig is Error {
-            log:printWarn("Failed to create 'ai:ToolConfig' for function '" 
-                + getFunctionName(tool) + "'. Skipping this tool.", 'error = toolConfig);
+            log:printWarn("Failed to create 'ai:ToolConfig' for function '"
+                    + getFunctionName(tool) + "'. Skipping this tool.", 'error = toolConfig);
         } else {
             toolConfigs.push(toolConfig);
         }

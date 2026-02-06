@@ -42,6 +42,8 @@ public type ToolSchema record {|
     string description;
     # Parameters schema of the tool
     map<json> parametersSchema?;
+    # Scopes required to invoke this tool
+    string|string[] scopes?;
 |};
 
 # Represents a single execution step of an agent iteration.

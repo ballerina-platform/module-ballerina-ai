@@ -179,9 +179,11 @@ public isolated class McpToolKit {
         isolated function caller = self.callTool;
 
         self.tools = from mcp:ToolDefinition tool in filteredTools
+            let string|string[]? scope = <string|string[]?>tool["scopes"]
             select {
                 name: tool.name,
                 description: tool.description ?: "",
+                scopes: scope.cloneReadOnly(),
                 parameters: check getInputSchemaValues(tool).cloneReadOnly(),
                 caller
             };
@@ -300,9 +302,9 @@ public isolated class HttpServiceToolKit {
         do {
             HttpParameters httpParameters = check getHttpParameters(self.httpTools, GET, httpInput, false);
             log:printDebug("Executing HTTP GET request",
-                serverUrl = self.serviceUrl,
-                path = httpParameters.path,
-                method = "GET"
+                    serverUrl = self.serviceUrl,
+                    path = httpParameters.path,
+                    method = "GET"
             );
             http:Response getResult = check self.httpClient->get(httpParameters.path, headers = self.headers);
             log:printDebug("HTTP request completed",
@@ -538,6 +540,8 @@ public isolated function getPermittedMcpToolConfigs(mcp:StreamableHttpClient mcp
                 name: tool.name,
                 description: tool.description ?: "",
                 parameters: (<map<json>>tool.inputSchema).cloneReadOnly(),
+                scopes: permittedTools is FunctionTool ?  (check (getToolConfig(permittedTools)))[SCOPES] : 
+                                (check getToolConfig(permittedTools.get(tool.name)))[SCOPES],
                 caller: permittedTools is FunctionTool ? permittedTools : permittedTools.get(tool.name)
             };
     } on fail error e {

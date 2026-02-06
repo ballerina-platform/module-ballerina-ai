@@ -65,6 +65,7 @@ import static io.ballerina.compiler.syntax.tree.SyntaxKind.SPECIFIC_FIELD;
 import static io.ballerina.stdlib.ai.plugin.ToolAnnotationConfig.DESCRIPTION_FIELD_NAME;
 import static io.ballerina.stdlib.ai.plugin.ToolAnnotationConfig.NAME_FIELD_NAME;
 import static io.ballerina.stdlib.ai.plugin.ToolAnnotationConfig.PARAMETERS_FIELD_NAME;
+import static io.ballerina.stdlib.ai.plugin.ToolAnnotationConfig.SCOPES;
 
 /**
  * Modifies the AI tool annotations with the generated tool configuration.
@@ -261,7 +262,7 @@ class AiSourceModifier implements ModifierTask<SourceModifierContext> {
     }
 
     private List<MappingFieldNode> getMissingFields(Set<String> existingFieldNames, ToolAnnotationConfig config) {
-        List<String> requiredFields = List.of(NAME_FIELD_NAME, DESCRIPTION_FIELD_NAME, PARAMETERS_FIELD_NAME);
+        List<String> requiredFields = List.of(NAME_FIELD_NAME, DESCRIPTION_FIELD_NAME, PARAMETERS_FIELD_NAME, SCOPES);
         List<MappingFieldNode> missingFields = new ArrayList<>();
         for (String fieldName : requiredFields) {
             if (!existingFieldNames.contains(fieldName)) {

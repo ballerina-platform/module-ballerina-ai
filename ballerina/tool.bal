@@ -14,9 +14,12 @@
 // specific language governing permissions and limitations
 // under the License.
 
+import ballerina/cache;
 import ballerina/http;
 import ballerina/lang.regexp;
 import ballerina/log;
+
+configurable record {||} config = {};
 
 # Represent the execution result of a tool.
 public type ToolExecutionResult record {|
@@ -37,16 +40,20 @@ public type Tool record {|
     map<json> constants = {};
     # Function that should be called to execute the tool
     isolated function caller;
+    # Scopes required to invoke this tool
+    string|string[] scopes?;
 |};
 
 type ToolInfo record {|
     string name;
     string description;
+    string|string[] scopes?;
 |};
 
-public isolated class ToolStore {
+public isolated class ToolManager {
     public final map<Tool> & readonly tools;
     private map<()> mcpTools = {};
+    private boolean hasAuthConfig = false;
 
     # Register tools to the agent. 
     # These tools will be by the LLM to perform tasks.
@@ -88,6 +95,53 @@ public isolated class ToolStore {
         log:printDebug("Tool registration completed",
             tools = toolList.toString()
         );
+    }
+
+    public isolated function validateTool(LlmToolResponse action, AuthConfig? auth, cache:Cache tokenManager, Context context, 
+                                          boolean isMcpTool) returns 
+        ToolNotFoundError|ToolInvalidInputError|TokenAcquisitionError|TokenValidationError|MissMatchScopeError? {
+        string toolName = action.name;
+        map<json>? inputs = action.arguments;
+        if !self.tools.hasKey(toolName) {
+            log:printDebug("Tool not found",
+                    toolName = toolName,
+                    availableTools = self.tools.keys()
+            );
+            return error ToolNotFoundError("Cannot find the tool.", toolName = toolName,
+                instruction = string `Tool "${toolName}" does not exists.`
+                + string ` Use a tool from the list: ${self.tools.keys().toString()}}`);
+        }
+        map<json>|error inputValues = mergeInputs(inputs, self.tools.get(toolName).constants);
+        if inputValues is error {
+            log:printDebug("Tool input validation failed",
+                    inputValues,
+                    toolName = toolName
+            );
+            string instruction = string `Tool "${toolName}"  execution failed due to invalid inputs provided.` +
+                string ` Use the schema to provide inputs: ${self.tools.get(toolName).variables.toString()}`;
+            return error ToolInvalidInputError("Tool is provided with invalid inputs.", inputValues, toolName = toolName,
+                inputs = inputs ?: (), instruction = instruction);
+        }
+
+        log:printDebug("Executing tool",
+                toolName = toolName,
+                isMcpTool = self.isMcpTool(toolName),
+                arguments = inputValues
+        );
+        if auth is AuthConfig {
+            lock {
+                self.hasAuthConfig = true;
+            }
+            string|string[]? scopes = self.tools.get(toolName).scopes;
+            if scopes is () {
+                return;
+            }
+
+            string baseUrl = auth.baseAuthUrl;
+            baseUrl = !baseUrl.endsWith("/") ? baseUrl.concat("/") : baseUrl;
+            check validateToolScope(check getToolScopes(auth, baseUrl, tokenManager, 
+                  toolName, scopes, context, isMcpTool), toolName, scopes);
+        }
     }
 
     # execute the tool decided by the LLM.
@@ -196,7 +250,7 @@ public isolated class ToolStore {
     isolated function getToolsInfo() returns ToolInfo[] {
         ToolInfo[] toolList = [];
         foreach [string, Tool] [name, tool] in self.tools.entries() {
-            toolList.push({name, description: tool.description});
+            toolList.push({name, description: tool.description, scopes: tool.scopes});
         }
         return toolList;
     }
@@ -204,7 +258,7 @@ public isolated class ToolStore {
     isolated function getToolSchema() returns ToolSchema[] {
         ToolSchema[] toolSchemas = [];
         foreach [string, Tool] [name, tool] in self.tools.entries() {
-            toolSchemas.push({name, description: tool.description, parametersSchema: tool.variables});
+            toolSchemas.push({name, description: tool.description, parametersSchema: tool.variables, scopes: tool.scopes});
         }
         return toolSchemas;
     }
@@ -216,13 +270,24 @@ isolated function getToolConfig(FunctionTool tool) returns ToolConfig|Error {
     if config is () {
         return error Error("The function '" + getFunctionName(tool) + "' must be annotated with `@ai:AgentTool`.");
     }
+    string?|string[] scopes = config?.scopes;
     do {
-        return {
-            name: check config?.name.ensureType(),
-            description: check config?.description.ensureType(),
-            parameters: check config?.parameters.ensureType(),
-            caller: tool
-        };
+        if scopes !is () {
+            return {
+                name: check config?.name.ensureType(),
+                description: check config?.description.ensureType(),
+                parameters: check config?.parameters.ensureType(),
+                scopes: check config?.scopes.ensureType(),
+                caller: tool
+            };
+        } else {
+            return {
+                name: check config?.name.ensureType(),
+                description: check config?.description.ensureType(),
+                parameters: check config?.parameters.ensureType(),
+                caller: tool
+            };
+        }
     } on fail error e {
         return error Error("Unable to register the function '" + getFunctionName(tool) + "' as agent tool", e);
     }
@@ -263,7 +328,6 @@ isolated function getInputArgumentsOfTool(FunctionTool tool, map<json> inputValu
     if (!hasContextArg) {
         return orderedArgs.cloneReadOnly();
     }
-    // Compiler plugin guarantees context is the first argument, if present
     return [context, ...orderedArgs.cloneReadOnly()];
 }
 
@@ -282,7 +346,7 @@ isolated function registerTool(map<Tool & readonly> toolMap, ToolConfig[] tools)
         }
         if toolMap.hasKey(name) {
             log:printDebug("Duplicate tool name detected",
-                toolName = name
+                    toolName = name
             );
             return error Error("Duplicated tools. Tool name should be unique.", toolName = name);
         }
@@ -302,7 +366,8 @@ isolated function registerTool(map<Tool & readonly> toolMap, ToolConfig[] tools)
             description: regexp:replaceAll(re `\n`, tool.description, " "),
             variables,
             constants,
-            caller: tool.caller
+            caller: tool.caller,
+            scopes: tool.scopes
         };
         toolMap[name] = agentTool.cloneReadOnly();
     }

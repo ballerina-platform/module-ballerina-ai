@@ -14,6 +14,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
+import ballerina/cache;
 import ballerina/lang.regexp;
 import ballerina/log;
 
@@ -22,28 +23,34 @@ import ballerina/log;
 isolated distinct class FunctionCallAgent {
     *BaseAgent;
     # Tool store to be used by the agent
-    final ToolStore toolStore;
+    final ToolManager toolManager;
     # LLM model instance (should be a function call model)
     final ModelProvider model;
     # The memory associated with the agent.
     final Memory memory;
     # Represents if the agent is stateless or not.
     final boolean stateless;
+    # Strategy used to control how and when tools are loaded for the agent.
     final ToolLoadingStrategy toolLoadingStrategy;
-    
+    # Cache used to store and reuse authentication tokens for tool access.
+    final cache:Cache tokenManager;
+    # Authentication configuration used for acquiring OAuth tokens when accessing secured tools.
+    final (AuthConfig?) & readonly auth;
 
     # Initialize an Agent.
     #
     # + model - LLM model instance
     # + tools - Tools to be used by the agent
     # + memory - The memory associated with the agent.
-    isolated function init(ModelProvider model, (BaseToolKit|ToolConfig|FunctionTool)[] tools,
+    isolated function init(ModelProvider model, (BaseToolKit|ToolConfig|FunctionTool)[] tools, cache:Cache tokenManager, AuthConfig? auth,
             Memory? memory = (), ToolLoadingStrategy toolLoadingStrategy = NO_FILTER) returns Error? {
-        self.toolStore = check new (...tools);
+        self.toolManager = check new (...tools);
         self.model = model;
         self.memory = memory ?: check new ShortTermMemory();
         self.stateless = memory is ();
         self.toolLoadingStrategy = toolLoadingStrategy;
+        self.auth = auth.cloneReadOnly();
+        self.tokenManager = tokenManager;
     }
 
     # Parse the function calling API response and extract the tool to be executed.
@@ -78,7 +85,7 @@ isolated distinct class FunctionCallAgent {
         messages.unshift(...progress.history);
         ToolLoadingStrategy toolLoadingStrategy = self.toolLoadingStrategy;
         ChatMessage lastMessage = messages[messages.length() - 1];
-        ChatCompletionFunctions[] registeredTools = from Tool tool in self.toolStore.tools.toArray()
+        ChatCompletionFunctions[] registeredTools = from Tool tool in self.toolManager.tools.toArray()
             select {
                 name: tool.name,
                 description: tool.description,

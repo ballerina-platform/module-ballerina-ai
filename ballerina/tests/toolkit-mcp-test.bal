@@ -32,7 +32,7 @@ function testMcpToolKit() returns error? {
             "greetName": "John"
         }
     };
-    ToolStore toolStore = check new (mcpToolKit);
+    ToolManager toolStore = check new (mcpToolKit);
     ToolOutput output = check toolStore.execute(toolInput);
     if output.value is error {
         test:assertFail("tool execution output is an error");
@@ -67,7 +67,7 @@ function testMcpToolKitWithPermittedTools() returns error? {
             "greetName": "John"
         }
     };
-    ToolStore toolStore = check new (mcpToolKit);
+    ToolManager toolStore = check new (mcpToolKit);
     ToolOutput output = check toolStore.execute(toolInput);
     if output.value is error {
         test:assertFail("tool execution output is an error");
@@ -136,7 +136,7 @@ function testCustomMcpToolKitWithPermittedTools() returns error? {
             "greetName": "John"
         }
     };
-    ToolStore toolStore = check new (mcpToolKit);
+    ToolManager toolStore = check new (mcpToolKit);
     ToolOutput output = check toolStore.execute(toolInput);
     if output.value is error {
         test:assertFail("tool execution output is an error");
@@ -191,7 +191,7 @@ function testCustomMcpToolKitWithAllToolsPermitted() returns error? {
             "greetName": "John"
         }
     };
-    ToolStore toolStore = check new (mcpToolKit);
+    ToolManager toolStore = check new (mcpToolKit);
     ToolOutput output = check toolStore.execute(toolInput);
     if output.value is error {
         test:assertFail("tool execution output is an error");

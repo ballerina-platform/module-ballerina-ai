@@ -52,6 +52,7 @@ import java.util.stream.Collectors;
 import static io.ballerina.stdlib.ai.plugin.ToolAnnotationConfig.DESCRIPTION_FIELD_NAME;
 import static io.ballerina.stdlib.ai.plugin.ToolAnnotationConfig.NAME_FIELD_NAME;
 import static io.ballerina.stdlib.ai.plugin.ToolAnnotationConfig.PARAMETERS_FIELD_NAME;
+import static io.ballerina.stdlib.ai.plugin.ToolAnnotationConfig.SCOPES;
 import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.CONTEXT_PARAM_MUST_BE_FIRST;
 import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.INVALID_RETURN_TYPE_IN_TOOL;
 import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.PARAMETER_IS_NOT_A_SUBTYPE_OF_ANYDATA;
@@ -208,7 +209,9 @@ class ToolAnnotationAnalysisTask implements AnalysisTask<SyntaxNodeAnalysisConte
         String parameters = fieldValues.containsKey(PARAMETERS_FIELD_NAME)
                 ? fieldValues.get(PARAMETERS_FIELD_NAME).toSourceCode()
                 : getParameterSchema(functionSymbol, functionDefinitionNode.location());
-        return new ToolAnnotationConfig(name, description, parameters);
+        String scopes = fieldValues.containsKey(SCOPES) ? fieldValues.get(SCOPES).toSourceCode()
+                : "";
+        return new ToolAnnotationConfig(name, description, parameters, scopes);
     }
 
     private Map<String, ExpressionNode> extractFieldValues(SeparatedNodeList<MappingFieldNode> fields) {
