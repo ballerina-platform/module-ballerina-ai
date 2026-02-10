@@ -53,7 +53,7 @@ public isolated function loadConversationThreads(string evalSetPath) returns map
                     ChatAssistantMessage|ChatFunctionMessage|Error iterationOutput = rawIterationOutput is string
                         ? error(rawIterationOutput) : rawIterationOutput;
 
-                    ChatMessage[] messageHistory = rawIteration.history.'map(msg => getChatMesssage(msg));
+                    ChatMessage[] messageHistory = rawIteration.history.'map(msg => getChatMessage(msg));
                     Iteration agentIteration = {
                         startTime: iterationStartTime,
                         endTime: iterationEndTime,
@@ -145,7 +145,7 @@ isolated function getChatUserMessage(TraceChatUserMessage message) returns ChatU
     name: message.name
 };
 
-isolated function getChatMesssage(TraceChatMessage message) returns ChatMessage {
+isolated function getChatMessage(TraceChatMessage message) returns ChatMessage {
     if message is TraceChatUserMessage {
         return getChatUserMessage(message);
     }
