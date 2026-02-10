@@ -28,7 +28,7 @@ def packageOrg = "ballerina"
 def tomlVersion = stripBallerinaExtensionVersion("${project.version}")
 def ballerinaTomlFilePlaceHolder = new File("${project.rootDir}/build-config/resources/BallerinaTest.toml")
 def ballerinaTomlFile = new File("$project.projectDir/Ballerina.toml")
-def testCoverageParam = "--code-coverage --coverage-format=xml --includes=io.ballerina.lib.ai*:ballerina.* --includes=io.ballerina.stdlib.ai*:ballerina.*"
+def testCoverageParam = "--code-coverage --coverage-format=xml --includes=io.ballerina.stdlib.ai*:ballerina.*"
 def ballerinaDist = "${project.rootDir}/target/ballerina-runtime"
 def distributionBinPath =  "${ballerinaDist}/bin"
 
