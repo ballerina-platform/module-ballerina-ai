@@ -5,6 +5,12 @@ This file documents all significant changes made to the Ballerina AI package acr
 ## [Unreleased]
 
 ### Added
+
+- [Add Support to Load Conversation Threads from Evaluation Dataset JSON](https://github.com/wso2/product-ballerina-integrator/issues/2399)
+
+## [1.9.0] - 2026-01-06
+
+### Added
 - [Add Support for Batch update in Agent Memory](https://github.com/wso2/product-ballerina-integrator/issues/2081)
 - [Add `Trace` binding support to the `ai:Agent` run method](https://github.com/wso2/product-ballerina-integrator/issues/2053)
 
