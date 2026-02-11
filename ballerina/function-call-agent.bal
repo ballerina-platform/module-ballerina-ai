@@ -30,7 +30,6 @@ isolated distinct class FunctionCallAgent {
     # Represents if the agent is stateless or not.
     final boolean stateless;
     final ToolLoadingStrategy toolLoadingStrategy;
-    
 
     # Initialize an Agent.
     #
@@ -93,10 +92,10 @@ isolated distinct class FunctionCallAgent {
         }
 
         log:printDebug("Requesting tool selection from LLM",
-            executionId = progress.executionId,
-            sessionId = sessionId,
-            messages = messages.toString(),
-            availableTools = filteredTools.toString()
+                executionId = progress.executionId,
+                sessionId = sessionId,
+                messages = messages.toString(),
+                availableTools = filteredTools.toString()
         );
 
         // TODO: Improve handling of multiple tool calls returned by the LLM.
@@ -107,18 +106,18 @@ isolated distinct class FunctionCallAgent {
 
         if toolCall is FunctionCall {
             log:printDebug("LLM selected tool",
-                executionId = progress.executionId,
-                sessionId = sessionId,
-                toolName = toolCall.name,
-                toolArguments = toolCall.arguments
+                    executionId = progress.executionId,
+                    sessionId = sessionId,
+                    toolName = toolCall.name,
+                    toolArguments = toolCall.arguments
             );
             return toolCall;
         }
 
         log:printDebug("LLM provided chat response instead of tool call",
-            executionId = progress.executionId,
-            sessionId = sessionId,
-            response = response?.content
+                executionId = progress.executionId,
+                sessionId = sessionId,
+                response = response?.content
         );
         return response?.content;
     }
