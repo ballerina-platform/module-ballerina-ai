@@ -154,6 +154,7 @@ public isolated distinct class Agent {
             .run(query, systemPrompt, self.maxIter, self.verbose, sessionId, context, executionId);
         ChatUserMessage userMessage = {role: USER, content: query};
         Iteration[] iterations = executionTrace.iterations;
+        FunctionCall[]? toolCalls = executionTrace.toolCalls.length() == 0 ? () : executionTrace.toolCalls;
         do {
             string answer = check getAnswer(executionTrace, self.maxIter);
             log:printDebug("Agent execution completed successfully",
@@ -164,6 +165,8 @@ public isolated distinct class Agent {
             span.addOutput(observe:TEXT, answer);
             span.close();
 
+
+
             return withTrace
                 ? {
                     id: executionId,
@@ -172,7 +175,8 @@ public isolated distinct class Agent {
                     tools: self.toolSchemas,
                     startTime,
                     endTime: time:utcNow(),
-                    output: {role: ASSISTANT, content: answer}
+                    output: {role: ASSISTANT, content: answer},
+                    toolCalls
                 }
                 : answer;
         } on fail Error err {
@@ -191,7 +195,8 @@ public isolated distinct class Agent {
                     tools: self.toolSchemas,
                     startTime,
                     endTime: time:utcNow(),
-                    output: err
+                    output: err,
+                    toolCalls
                 }
                 : err;
         }

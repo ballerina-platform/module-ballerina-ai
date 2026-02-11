@@ -5,6 +5,11 @@ This file documents all significant changes made to the Ballerina AI package acr
 ## [Unreleased]
 
 ### Added
+- [Add Tool Invocation Tracking to ai:Trace via `toolCalls` Field](https://github.com/wso2/product-ballerina-integrator/issues/2425)
+
+## [1.9.0] - 2026-01-06
+
+### Added
 - [Add Support for Batch update in Agent Memory](https://github.com/wso2/product-ballerina-integrator/issues/2081)
 - [Add `Trace` binding support to the `ai:Agent` run method](https://github.com/wso2/product-ballerina-integrator/issues/2053)
 

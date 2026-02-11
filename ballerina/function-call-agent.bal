@@ -103,16 +103,16 @@ isolated distinct class FunctionCallAgent {
         // Currently, tool calls are executed sequentially in separate chat responses.
         // Update the logic to execute all tool calls together and return a single response.
         ChatAssistantMessage response = check self.model->chat(messages, filteredTools);
-        FunctionCall[]? toolCalls = response?.toolCalls;
+        FunctionCall? toolCall = getFirstToolCall(response);
 
-        if toolCalls is FunctionCall[] {
+        if toolCall is FunctionCall {
             log:printDebug("LLM selected tool",
                 executionId = progress.executionId,
                 sessionId = sessionId,
-                toolName = toolCalls[0].name,
-                toolArguments = toolCalls[0].arguments
+                toolName = toolCall.name,
+                toolArguments = toolCall.arguments
             );
-            return toolCalls[0];
+            return toolCall;
         }
 
         log:printDebug("LLM provided chat response instead of tool call",
@@ -279,4 +279,12 @@ isolated function lazyLoadTools(ChatMessage[] messages, ChatCompletionFunctions[
             select tool;
     }
     return;
+}
+
+isolated function getFirstToolCall(ChatAssistantMessage msg) returns FunctionCall? {
+    FunctionCall[]? toolCalls = msg?.toolCalls;
+    if toolCalls is () || toolCalls.length() == 0 {
+        return;
+    }
+    return toolCalls[0];
 }
