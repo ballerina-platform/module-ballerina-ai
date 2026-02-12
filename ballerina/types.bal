@@ -47,6 +47,7 @@ type ExecutionTrace record {|
     (ExecutionResult|ExecutionError|Error)[] steps;
     string answer?;
     Iteration[] iterations;
+    FunctionCall[] toolCalls;
 |};
 
 # Configurations for controlling the behaviours when communicating with a remote HTTP endpoint.
