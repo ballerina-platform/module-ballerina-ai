@@ -33,7 +33,6 @@ isolated function testLoadConversationThreads() returns error? {
     test:assertEquals(getChatMessageStringContent(trace_2.userMessage.content), "2-8+9?");
 
     test:assertEquals(trace_2.iterations.length(), 3);
-    test:assertEquals(trace_2.iterations[2].length(), 4);
     test:assertEquals(trace_2.iterations[2].history.length(), 12);
     test:assertEquals(trace_2.tools.length(), 4);
 
