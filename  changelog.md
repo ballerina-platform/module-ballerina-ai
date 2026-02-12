@@ -7,6 +7,7 @@ This file documents all significant changes made to the Ballerina AI package acr
 ### Added
 
 - [Add Support to Load Conversation Threads from Evaluation Dataset JSON](https://github.com/wso2/product-ballerina-integrator/issues/2399)
+- [Add Tool Invocation Tracking to ai:Trace via `toolCalls` Field](https://github.com/wso2/product-ballerina-integrator/issues/2425)
 
 ## [1.9.0] - 2026-01-06
 

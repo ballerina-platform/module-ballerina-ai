@@ -43,3 +43,17 @@ isolated function testTraceBinding() returns error? {
 
     test:assertEquals(output.content, "Answer is: 244");
 }
+
+@test:Config
+isolated function testTraceHavingToolCallsOfTurn() returns error? {
+    string query = "What is the sum of the following numbers 78 90 45 23 8?";
+    ai:Trace trace = check agent.run(query);
+    ai:ChatAssistantMessage output = check trace.output;
+    test:assertEquals(output.content, "Answer is: 244");
+    ai:FunctionCall[]? toolCalls = trace.toolCalls;
+    if toolCalls is () {
+        test:assertFail("Expected a tool array found null");
+    }
+    test:assertEquals(toolCalls.length(), 1);
+    test:assertEquals(toolCalls[0].name, "sum");
+}
