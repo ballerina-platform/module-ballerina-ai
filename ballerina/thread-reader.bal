@@ -28,33 +28,34 @@ import ballerina/time;
 #
 # + evalSetPath - Path to the JSON file containing the evaluation dataset
 # + return - Map of conversation threads indexed by thread ID, or an `Error` if the file cannot be read or parsed
-public isolated function loadConversationThreads(string evalSetPath) returns map<[ConversationThread]>|Error {
+public isolated function loadConversationThreads(string evalSetPath) returns map<[readonly & ConversationThread]>|Error {
     do {
         json traceJson = check io:fileReadJson(evalSetPath);
         TraceDataset dataset = check traceJson.fromJsonWithType();
-        map<[ConversationThread]> threadsById = {};
+        map<[readonly & ConversationThread]> threadsById = {};
 
         foreach RawConversationThread rawThread in dataset.threads {
-            Trace[] conversationTraces = [];
+            (readonly & Trace)[] conversationTraces = [];
             foreach RawTrace rawTrace in rawThread.traces {
                 ChatAssistantMessage|string rawOutput = rawTrace.output;
-                ChatAssistantMessage|Error finalOutput = rawOutput is ChatAssistantMessage
-                    ? rawOutput : error(rawOutput);
+                readonly & ChatAssistantMessage|Error finalOutput = rawOutput is ChatAssistantMessage
+                    ? rawOutput.cloneReadOnly() : error(rawOutput);
 
                 time:Utc traceStartTime = check getUtcTime(rawTrace.startTime);
                 time:Utc traceEndTime = check getUtcTime(rawTrace.endTime);
 
-                Iteration[] agentIterations = [];
+                (readonly & Iteration)[] agentIterations = [];
                 foreach var rawIteration in rawTrace.iterations {
                     time:Utc iterationStartTime = check getUtcTime(rawIteration.startTime);
                     time:Utc iterationEndTime = check getUtcTime(rawIteration.endTime);
 
                     ChatAssistantMessage|ChatFunctionMessage|string rawIterationOutput = rawIteration.output;
-                    ChatAssistantMessage|ChatFunctionMessage|Error iterationOutput = rawIterationOutput is string
-                        ? error(rawIterationOutput) : rawIterationOutput;
+                    readonly & (ChatAssistantMessage|ChatFunctionMessage|Error) iterationOutput =
+                        rawIterationOutput is string ? error(rawIterationOutput) : rawIterationOutput.cloneReadOnly();
 
-                    ChatMessage[] messageHistory = rawIteration.history.'map(msg => getChatMessage(msg));
-                    Iteration agentIteration = {
+                    readonly & ChatMessage[] messageHistory = rawIteration.history.'map(msg => getChatMessage(msg))
+                        .cloneReadOnly();
+                    readonly & Iteration agentIteration = {
                         startTime: iterationStartTime,
                         endTime: iterationEndTime,
                         output: iterationOutput,
@@ -63,20 +64,24 @@ public isolated function loadConversationThreads(string evalSetPath) returns map
                     agentIterations.push(agentIteration);
                 }
 
-                Trace conversationTrace = {
+                readonly & Trace conversationTrace = {
                     id: rawTrace.id,
                     output: finalOutput,
                     userMessage: getChatUserMessage(rawTrace.userMessage),
-                    tools: rawTrace.tools,
+                    tools: rawTrace.tools.cloneReadOnly(),
                     startTime: traceStartTime,
                     endTime: traceEndTime,
-                    iterations: agentIterations,
-                    toolCalls: rawTrace.toolCalls
+                    iterations: agentIterations.cloneReadOnly(),
+                    toolCalls: rawTrace.toolCalls.cloneReadOnly()
                 };
                 conversationTraces.push(conversationTrace);
             }
 
-            ConversationThread thread = {id: rawThread.id, name: rawThread.name, traces: conversationTraces};
+            readonly & ConversationThread thread = {
+                id: rawThread.id,
+                name: rawThread.name,
+                traces: conversationTraces.cloneReadOnly()
+            };
             threadsById[thread.id] = [thread];
         }
 
@@ -100,7 +105,7 @@ public type ConversationThread record {|
     # Human-readable name or description of the conversation thread
     string name;
     # Sequence of traces representing individual agent executions within this thread
-    Trace[] traces;
+    readonly & Trace[] traces;
 |};
 
 type TraceDataset record {
@@ -148,23 +153,22 @@ type TraceChatUserMessage record {|
 
 type TraceChatMessage TraceChatUserMessage|TraceChatSystemMessage|ChatAssistantMessage|ChatFunctionMessage;
 
-isolated function getChatUserMessage(TraceChatUserMessage message) returns ChatUserMessage => {
+isolated function getChatUserMessage(TraceChatUserMessage message) returns readonly & ChatUserMessage => {
     role: message.role,
     content: message.content,
     name: message.name
 };
 
-isolated function getChatMessage(TraceChatMessage message) returns ChatMessage {
+isolated function getChatMessage(TraceChatMessage message) returns readonly & ChatMessage {
     if message is TraceChatUserMessage {
         return getChatUserMessage(message);
     }
     if message is TraceChatSystemMessage {
-        ChatSystemMessage systemMessage = {
+        return {
             role: message.role,
             content: message.content,
             name: message.name
         };
-        return systemMessage;
     }
-    return message;
+    return message.cloneReadOnly();
 }
