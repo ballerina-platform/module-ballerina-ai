@@ -165,8 +165,6 @@ public isolated distinct class Agent {
             span.addOutput(observe:TEXT, answer);
             span.close();
 
-
-
             return withTrace
                 ? {
                     id: executionId,
