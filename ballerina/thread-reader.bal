@@ -34,20 +34,20 @@ public isolated function loadConversationThreads(string evalSetPath) returns map
         TraceDataset dataset = check traceJson.fromJsonWithType();
         map<[ConversationThread]> threadsById = {};
 
-        foreach var rawThread in dataset.threads {
+        foreach RawConversationThread rawThread in dataset.threads {
             Trace[] conversationTraces = [];
-            foreach var rawTrace in rawThread.traces {
+            foreach RawTrace rawTrace in rawThread.traces {
                 ChatAssistantMessage|string rawOutput = rawTrace.output;
                 ChatAssistantMessage|Error finalOutput = rawOutput is ChatAssistantMessage
                     ? rawOutput : error(rawOutput);
 
-                time:Utc traceStartTime = check time:utcFromString(rawTrace.startTime);
-                time:Utc traceEndTime = check time:utcFromString(rawTrace.endTime);
+                time:Utc traceStartTime = check getUtcTime(rawTrace.startTime);
+                time:Utc traceEndTime = check getUtcTime(rawTrace.endTime);
 
                 Iteration[] agentIterations = [];
                 foreach var rawIteration in rawTrace.iterations {
-                    time:Utc iterationStartTime = check time:utcFromString(rawIteration.startTime);
-                    time:Utc iterationEndTime = check time:utcFromString(rawIteration.endTime);
+                    time:Utc iterationStartTime = check getUtcTime(rawIteration.startTime);
+                    time:Utc iterationEndTime = check getUtcTime(rawIteration.endTime);
 
                     ChatAssistantMessage|ChatFunctionMessage|string rawIterationOutput = rawIteration.output;
                     ChatAssistantMessage|ChatFunctionMessage|Error iterationOutput = rawIterationOutput is string
@@ -70,7 +70,8 @@ public isolated function loadConversationThreads(string evalSetPath) returns map
                     tools: rawTrace.tools,
                     startTime: traceStartTime,
                     endTime: traceEndTime,
-                    iterations: agentIterations
+                    iterations: agentIterations,
+                    toolCalls: rawTrace.toolCalls
                 };
                 conversationTraces.push(conversationTrace);
             }
@@ -83,6 +84,13 @@ public isolated function loadConversationThreads(string evalSetPath) returns map
     } on fail error e {
         return error("failed to load conversation threads", e);
     }
+}
+
+isolated function getUtcTime(time:Utc|string timestamp) returns time:Utc|error {
+    if timestamp is time:Utc {
+        return timestamp;
+    }
+    return time:utcFromString(timestamp);
 }
 
 # Represents a conversation thread containing multiple agent interaction traces.
@@ -114,15 +122,16 @@ type RawTrace record {|
     RawIteration[] iterations;
     ChatAssistantMessage|string output;
     ToolSchema[] tools;
-    string startTime;
-    string endTime;
+    string|time:Utc startTime;
+    string|time:Utc endTime;
+    FunctionCall[] toolCalls?;
 |};
 
 type RawIteration record {|
     TraceChatMessage[] history;
     ChatAssistantMessage|ChatFunctionMessage|string output;
-    string startTime;
-    string endTime;
+    string|time:Utc startTime;
+    string|time:Utc endTime;
 |};
 
 type TraceChatSystemMessage record {|
