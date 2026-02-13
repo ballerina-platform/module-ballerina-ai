@@ -1,0 +1,1824 @@
+{
+  "id": "90cf3c76-cad6-4d94-bb43-15ba8a03645a",
+  "name": "session-d6350003",
+  "description": "Session export",
+  "threads": [
+    {
+      "id": "thread-01",
+      "name": "Thread - d6350004",
+      "traces": [
+        {
+          "id": "34d770bfab6486ede2a8fa893341f7c1",
+          "userMessage": {
+            "role": "user",
+            "content": "hi"
+          },
+          "iterations": [
+            {
+              "history": [
+                {
+                  "role": "system",
+                  "content": "# Role  \nMath Tutor  \n\n# Instructions  \nYou are a math tutor assistant.\n\nRULES (MUST FOLLOW):\n\n* You MUST use the provided mathematical tools (add, subtract, multiply, divide) for ALL calculations, even simple ones.\n* You are NOT allowed to compute results mentally or inline.\n* If a calculation is required and a tool is available, you MUST call the tool.\n* If you do not call a tool when a calculation is required, the response is invalid.\n\nProvide clear, step-by-step explanations. Include the final answer at the end."
+                },
+                {
+                  "role": "user",
+                  "content": "hi"
+                }
+              ],
+              "output": {
+                "role": "assistant",
+                "content": "Hello! How can I assist you with math today?",
+                "toolCalls": null
+              },
+              "startTime": "2026-02-12T05:47:05.966Z",
+              "endTime": "2026-02-12T05:47:08.056Z"
+            }
+          ],
+          "output": {
+            "role": "assistant",
+            "content": "Hello! How can I assist you with math today?",
+            "toolCalls": null
+          },
+          "tools": [
+            {
+              "name": "divideTool",
+              "description": "Calculates the division of two numbers Handles division by zero If num2 is zero, returns 0 Otherwise, returns the result of the division",
+              "parametersSchema": {
+                "type": "object",
+                "required": [
+                  "num1",
+                  "num2"
+                ],
+                "properties": {
+                  "num1": {
+                    "type": "number",
+                    "format": "float"
+                  },
+                  "num2": {
+                    "type": "number",
+                    "format": "float"
+                  }
+                }
+              }
+            },
+            {
+              "name": "multiplyTool",
+              "description": "Calculates the product of two numbers",
+              "parametersSchema": {
+                "type": "object",
+                "required": [
+                  "num1",
+                  "num2"
+                ],
+                "properties": {
+                  "num1": {
+                    "type": "number",
+                    "format": "float"
+                  },
+                  "num2": {
+                    "type": "number",
+                    "format": "float"
+                  }
+                }
+              }
+            },
+            {
+              "name": "subtractTool",
+              "description": "Calculates the difference of two numbers",
+              "parametersSchema": {
+                "type": "object",
+                "required": [
+                  "num1",
+                  "num2"
+                ],
+                "properties": {
+                  "num1": {
+                    "type": "number",
+                    "format": "float"
+                  },
+                  "num2": {
+                    "type": "number",
+                    "format": "float"
+                  }
+                }
+              }
+            },
+            {
+              "name": "sumTool",
+              "description": "Calculates the sum of two numbers",
+              "parametersSchema": {
+                "type": "object",
+                "required": [
+                  "num1",
+                  "num2"
+                ],
+                "properties": {
+                  "num1": {
+                    "type": "number",
+                    "format": "float"
+                  },
+                  "num2": {
+                    "type": "number",
+                    "format": "float"
+                  }
+                }
+              }
+            }
+          ],
+          "toolCalls": [],
+          "startTime": "2026-02-12T05:47:05.948Z",
+          "endTime": "2026-02-12T05:47:08.086Z"
+        },
+        {
+          "id": "7d1dd4603e574dc438b8b7dbe008f7bd",
+          "userMessage": {
+            "role": "user",
+            "content": "1+1?"
+          },
+          "iterations": [
+            {
+              "history": [
+                {
+                  "role": "system",
+                  "content": "# Role  \nMath Tutor  \n\n# Instructions  \nYou are a math tutor assistant.\n\nRULES (MUST FOLLOW):\n\n* You MUST use the provided mathematical tools (add, subtract, multiply, divide) for ALL calculations, even simple ones.\n* You are NOT allowed to compute results mentally or inline.\n* If a calculation is required and a tool is available, you MUST call the tool.\n* If you do not call a tool when a calculation is required, the response is invalid.\n\nProvide clear, step-by-step explanations. Include the final answer at the end."
+                },
+                {
+                  "role": "user",
+                  "content": "hi"
+                },
+                {
+                  "role": "assistant",
+                  "content": "Hello! How can I assist you with math today?",
+                  "toolCalls": null
+                },
+                {
+                  "role": "user",
+                  "content": "1+1?"
+                },
+                {
+                  "role": "assistant",
+                  "content": null,
+                  "toolCalls": [
+                    {
+                      "name": "sumTool",
+                      "arguments": {
+                        "num1": 1,
+                        "num2": 1
+                      }
+                    }
+                  ]
+                }
+              ],
+              "output": {
+                "role": "assistant",
+                "content": null,
+                "toolCalls": [
+                  {
+                    "name": "sumTool",
+                    "arguments": {
+                      "num1": 1,
+                      "num2": 1
+                    }
+                  }
+                ]
+              },
+              "startTime": "2026-02-12T05:47:13.364Z",
+              "endTime": "2026-02-12T05:47:14.333Z"
+            },
+            {
+              "history": [
+                {
+                  "role": "system",
+                  "content": "# Role  \nMath Tutor  \n\n# Instructions  \nYou are a math tutor assistant.\n\nRULES (MUST FOLLOW):\n\n* You MUST use the provided mathematical tools (add, subtract, multiply, divide) for ALL calculations, even simple ones.\n* You are NOT allowed to compute results mentally or inline.\n* If a calculation is required and a tool is available, you MUST call the tool.\n* If you do not call a tool when a calculation is required, the response is invalid.\n\nProvide clear, step-by-step explanations. Include the final answer at the end."
+                },
+                {
+                  "role": "user",
+                  "content": "hi"
+                },
+                {
+                  "role": "assistant",
+                  "content": "Hello! How can I assist you with math today?",
+                  "toolCalls": null
+                },
+                {
+                  "role": "user",
+                  "content": "1+1?"
+                },
+                {
+                  "role": "assistant",
+                  "content": null,
+                  "toolCalls": [
+                    {
+                      "name": "sumTool",
+                      "arguments": {
+                        "num1": 1,
+                        "num2": 1
+                      }
+                    }
+                  ]
+                },
+                {
+                  "role": "function",
+                  "content": "2.0",
+                  "name": "sumTool"
+                }
+              ],
+              "output": {
+                "role": "assistant",
+                "content": "To calculate \\(1 + 1\\), I used the sum tool, which gave me a result of \\(2\\). \n\nSo, \\(1 + 1 = 2\\).",
+                "toolCalls": null
+              },
+              "startTime": "2026-02-12T05:47:14.349Z",
+              "endTime": "2026-02-12T05:47:15.874Z"
+            }
+          ],
+          "output": {
+            "role": "assistant",
+            "content": "To calculate \\(1 + 1\\), I used the sum tool, which gave me a result of \\(2\\). \n\nSo, \\(1 + 1 = 2\\).",
+            "toolCalls": null
+          },
+          "tools": [
+            {
+              "name": "divideTool",
+              "description": "Calculates the division of two numbers Handles division by zero If num2 is zero, returns 0 Otherwise, returns the result of the division",
+              "parametersSchema": {
+                "type": "object",
+                "required": [
+                  "num1",
+                  "num2"
+                ],
+                "properties": {
+                  "num1": {
+                    "type": "number",
+                    "format": "float"
+                  },
+                  "num2": {
+                    "type": "number",
+                    "format": "float"
+                  }
+                }
+              }
+            },
+            {
+              "name": "multiplyTool",
+              "description": "Calculates the product of two numbers",
+              "parametersSchema": {
+                "type": "object",
+                "required": [
+                  "num1",
+                  "num2"
+                ],
+                "properties": {
+                  "num1": {
+                    "type": "number",
+                    "format": "float"
+                  },
+                  "num2": {
+                    "type": "number",
+                    "format": "float"
+                  }
+                }
+              }
+            },
+            {
+              "name": "subtractTool",
+              "description": "Calculates the difference of two numbers",
+              "parametersSchema": {
+                "type": "object",
+                "required": [
+                  "num1",
+                  "num2"
+                ],
+                "properties": {
+                  "num1": {
+                    "type": "number",
+                    "format": "float"
+                  },
+                  "num2": {
+                    "type": "number",
+                    "format": "float"
+                  }
+                }
+              }
+            },
+            {
+              "name": "sumTool",
+              "description": "Calculates the sum of two numbers",
+              "parametersSchema": {
+                "type": "object",
+                "required": [
+                  "num1",
+                  "num2"
+                ],
+                "properties": {
+                  "num1": {
+                    "type": "number",
+                    "format": "float"
+                  },
+                  "num2": {
+                    "type": "number",
+                    "format": "float"
+                  }
+                }
+              }
+            }
+          ],
+          "toolCalls": [
+            {
+              "name": "sumTool",
+              "arguments": {
+                "num1": 1,
+                "num2": 1
+              }
+            }
+          ],
+          "startTime": "2026-02-12T05:47:13.361Z",
+          "endTime": "2026-02-12T05:47:15.883Z"
+        },
+        {
+          "id": "9d19134e24ff660614e10ee3c5677cdf",
+          "userMessage": {
+            "role": "user",
+            "content": "2-8+9?"
+          },
+          "iterations": [
+            {
+              "history": [
+                {
+                  "role": "system",
+                  "content": "# Role  \nMath Tutor  \n\n# Instructions  \nYou are a math tutor assistant.\n\nRULES (MUST FOLLOW):\n\n* You MUST use the provided mathematical tools (add, subtract, multiply, divide) for ALL calculations, even simple ones.\n* You are NOT allowed to compute results mentally or inline.\n* If a calculation is required and a tool is available, you MUST call the tool.\n* If you do not call a tool when a calculation is required, the response is invalid.\n\nProvide clear, step-by-step explanations. Include the final answer at the end."
+                },
+                {
+                  "role": "user",
+                  "content": "hi"
+                },
+                {
+                  "role": "assistant",
+                  "content": "Hello! How can I assist you with math today?",
+                  "toolCalls": null
+                },
+                {
+                  "role": "user",
+                  "content": "1+1?"
+                },
+                {
+                  "role": "assistant",
+                  "content": null,
+                  "toolCalls": [
+                    {
+                      "name": "sumTool",
+                      "arguments": {
+                        "num1": 1,
+                        "num2": 1
+                      }
+                    }
+                  ]
+                },
+                {
+                  "role": "function",
+                  "content": "2.0",
+                  "name": "sumTool"
+                },
+                {
+                  "role": "assistant",
+                  "content": "To calculate \\(1 + 1\\), I used the sum tool, which gave me a result of \\(2\\). \n\nSo, \\(1 + 1 = 2\\).",
+                  "toolCalls": null
+                },
+                {
+                  "role": "user",
+                  "content": "2-8+9?"
+                },
+                {
+                  "role": "assistant",
+                  "content": null,
+                  "toolCalls": [
+                    {
+                      "name": "subtractTool",
+                      "arguments": {
+                        "num1": 2,
+                        "num2": 8
+                      }
+                    }
+                  ]
+                }
+              ],
+              "output": {
+                "role": "assistant",
+                "content": null,
+                "toolCalls": [
+                  {
+                    "name": "subtractTool",
+                    "arguments": {
+                      "num1": 2,
+                      "num2": 8
+                    }
+                  }
+                ]
+              },
+              "startTime": "2026-02-12T05:47:20.217Z",
+              "endTime": "2026-02-12T05:47:21.093Z"
+            },
+            {
+              "history": [
+                {
+                  "role": "system",
+                  "content": "# Role  \nMath Tutor  \n\n# Instructions  \nYou are a math tutor assistant.\n\nRULES (MUST FOLLOW):\n\n* You MUST use the provided mathematical tools (add, subtract, multiply, divide) for ALL calculations, even simple ones.\n* You are NOT allowed to compute results mentally or inline.\n* If a calculation is required and a tool is available, you MUST call the tool.\n* If you do not call a tool when a calculation is required, the response is invalid.\n\nProvide clear, step-by-step explanations. Include the final answer at the end."
+                },
+                {
+                  "role": "user",
+                  "content": "hi"
+                },
+                {
+                  "role": "assistant",
+                  "content": "Hello! How can I assist you with math today?",
+                  "toolCalls": null
+                },
+                {
+                  "role": "user",
+                  "content": "1+1?"
+                },
+                {
+                  "role": "assistant",
+                  "content": null,
+                  "toolCalls": [
+                    {
+                      "name": "sumTool",
+                      "arguments": {
+                        "num1": 1,
+                        "num2": 1
+                      }
+                    }
+                  ]
+                },
+                {
+                  "role": "function",
+                  "content": "2.0",
+                  "name": "sumTool"
+                },
+                {
+                  "role": "assistant",
+                  "content": "To calculate \\(1 + 1\\), I used the sum tool, which gave me a result of \\(2\\). \n\nSo, \\(1 + 1 = 2\\).",
+                  "toolCalls": null
+                },
+                {
+                  "role": "user",
+                  "content": "2-8+9?"
+                },
+                {
+                  "role": "assistant",
+                  "content": null,
+                  "toolCalls": [
+                    {
+                      "name": "subtractTool",
+                      "arguments": {
+                        "num1": 2,
+                        "num2": 8
+                      }
+                    }
+                  ]
+                },
+                {
+                  "role": "function",
+                  "content": "-6.0",
+                  "name": "subtractTool"
+                },
+                {
+                  "role": "assistant",
+                  "content": null,
+                  "toolCalls": [
+                    {
+                      "name": "sumTool",
+                      "arguments": {
+                        "num1": -6,
+                        "num2": 9
+                      }
+                    }
+                  ]
+                }
+              ],
+              "output": {
+                "role": "assistant",
+                "content": null,
+                "toolCalls": [
+                  {
+                    "name": "sumTool",
+                    "arguments": {
+                      "num1": -6,
+                      "num2": 9
+                    }
+                  }
+                ]
+              },
+              "startTime": "2026-02-12T05:47:21.096Z",
+              "endTime": "2026-02-12T05:47:22.326Z"
+            },
+            {
+              "history": [
+                {
+                  "role": "system",
+                  "content": "# Role  \nMath Tutor  \n\n# Instructions  \nYou are a math tutor assistant.\n\nRULES (MUST FOLLOW):\n\n* You MUST use the provided mathematical tools (add, subtract, multiply, divide) for ALL calculations, even simple ones.\n* You are NOT allowed to compute results mentally or inline.\n* If a calculation is required and a tool is available, you MUST call the tool.\n* If you do not call a tool when a calculation is required, the response is invalid.\n\nProvide clear, step-by-step explanations. Include the final answer at the end."
+                },
+                {
+                  "role": "user",
+                  "content": "hi"
+                },
+                {
+                  "role": "assistant",
+                  "content": "Hello! How can I assist you with math today?",
+                  "toolCalls": null
+                },
+                {
+                  "role": "user",
+                  "content": "1+1?"
+                },
+                {
+                  "role": "assistant",
+                  "content": null,
+                  "toolCalls": [
+                    {
+                      "name": "sumTool",
+                      "arguments": {
+                        "num1": 1,
+                        "num2": 1
+                      }
+                    }
+                  ]
+                },
+                {
+                  "role": "function",
+                  "content": "2.0",
+                  "name": "sumTool"
+                },
+                {
+                  "role": "assistant",
+                  "content": "To calculate \\(1 + 1\\), I used the sum tool, which gave me a result of \\(2\\). \n\nSo, \\(1 + 1 = 2\\).",
+                  "toolCalls": null
+                },
+                {
+                  "role": "user",
+                  "content": "2-8+9?"
+                },
+                {
+                  "role": "assistant",
+                  "content": null,
+                  "toolCalls": [
+                    {
+                      "name": "subtractTool",
+                      "arguments": {
+                        "num1": 2,
+                        "num2": 8
+                      }
+                    }
+                  ]
+                },
+                {
+                  "role": "function",
+                  "content": "-6.0",
+                  "name": "subtractTool"
+                },
+                {
+                  "role": "assistant",
+                  "content": null,
+                  "toolCalls": [
+                    {
+                      "name": "sumTool",
+                      "arguments": {
+                        "num1": -6,
+                        "num2": 9
+                      }
+                    }
+                  ]
+                },
+                {
+                  "role": "function",
+                  "content": "3.0",
+                  "name": "sumTool"
+                }
+              ],
+              "output": {
+                "role": "assistant",
+                "content": "To calculate \\(2 - 8 + 9\\), I followed these steps:\n\n1. First, I calculated \\(2 - 8\\) using the subtract tool, which gave me \\(-6\\).\n2. Next, I added \\(-6 + 9\\) using the sum tool, which resulted in \\(3\\).\n\nSo, \\(2 - 8 + 9 = 3\\).",
+                "toolCalls": null
+              },
+              "startTime": "2026-02-12T05:47:22.330Z",
+              "endTime": "2026-02-12T05:47:24.281Z"
+            }
+          ],
+          "output": {
+            "role": "assistant",
+            "content": "To calculate \\(2 - 8 + 9\\), I followed these steps:\n\n1. First, I calculated \\(2 - 8\\) using the subtract tool, which gave me \\(-6\\).\n2. Next, I added \\(-6 + 9\\) using the sum tool, which resulted in \\(3\\).\n\nSo, \\(2 - 8 + 9 = 3\\).",
+            "toolCalls": null
+          },
+          "tools": [
+            {
+              "name": "divideTool",
+              "description": "Calculates the division of two numbers Handles division by zero If num2 is zero, returns 0 Otherwise, returns the result of the division",
+              "parametersSchema": {
+                "type": "object",
+                "required": [
+                  "num1",
+                  "num2"
+                ],
+                "properties": {
+                  "num1": {
+                    "type": "number",
+                    "format": "float"
+                  },
+                  "num2": {
+                    "type": "number",
+                    "format": "float"
+                  }
+                }
+              }
+            },
+            {
+              "name": "multiplyTool",
+              "description": "Calculates the product of two numbers",
+              "parametersSchema": {
+                "type": "object",
+                "required": [
+                  "num1",
+                  "num2"
+                ],
+                "properties": {
+                  "num1": {
+                    "type": "number",
+                    "format": "float"
+                  },
+                  "num2": {
+                    "type": "number",
+                    "format": "float"
+                  }
+                }
+              }
+            },
+            {
+              "name": "subtractTool",
+              "description": "Calculates the difference of two numbers",
+              "parametersSchema": {
+                "type": "object",
+                "required": [
+                  "num1",
+                  "num2"
+                ],
+                "properties": {
+                  "num1": {
+                    "type": "number",
+                    "format": "float"
+                  },
+                  "num2": {
+                    "type": "number",
+                    "format": "float"
+                  }
+                }
+              }
+            },
+            {
+              "name": "sumTool",
+              "description": "Calculates the sum of two numbers",
+              "parametersSchema": {
+                "type": "object",
+                "required": [
+                  "num1",
+                  "num2"
+                ],
+                "properties": {
+                  "num1": {
+                    "type": "number",
+                    "format": "float"
+                  },
+                  "num2": {
+                    "type": "number",
+                    "format": "float"
+                  }
+                }
+              }
+            }
+          ],
+          "toolCalls": [
+            {
+              "name": "subtractTool",
+              "arguments": {
+                "num1": 2,
+                "num2": 8
+              }
+            },
+            {
+              "name": "sumTool",
+              "arguments": {
+                "num1": -6,
+                "num2": 9
+              }
+            }
+          ],
+          "startTime": "2026-02-12T05:47:20.215Z",
+          "endTime": "2026-02-12T05:47:24.292Z"
+        },
+        {
+          "id": "d71bb50e5683269eef3fa688c783c893",
+          "userMessage": {
+            "role": "user",
+            "content": "hey"
+          },
+          "iterations": [
+            {
+              "history": [
+                {
+                  "role": "system",
+                  "content": "# Role  \nMath Tutor  \n\n# Instructions  \nYou are a math tutor assistant.\n\nRULES (MUST FOLLOW):\n\n* You MUST use the provided mathematical tools (add, subtract, multiply, divide) for ALL calculations, even simple ones.\n* You are NOT allowed to compute results mentally or inline.\n* If a calculation is required and a tool is available, you MUST call the tool.\n* If you do not call a tool when a calculation is required, the response is invalid.\n\nProvide clear, step-by-step explanations. Include the final answer at the end."
+                },
+                {
+                  "role": "user",
+                  "content": "1+1?"
+                },
+                {
+                  "role": "assistant",
+                  "content": null,
+                  "toolCalls": [
+                    {
+                      "name": "sumTool",
+                      "arguments": {
+                        "num1": 1,
+                        "num2": 1
+                      }
+                    }
+                  ]
+                },
+                {
+                  "role": "function",
+                  "content": "2.0",
+                  "name": "sumTool"
+                },
+                {
+                  "role": "assistant",
+                  "content": "To calculate \\(1 + 1\\), I used the sum tool, which gave me a result of \\(2\\). \n\nSo, \\(1 + 1 = 2\\).",
+                  "toolCalls": null
+                },
+                {
+                  "role": "user",
+                  "content": "2-8+9?"
+                },
+                {
+                  "role": "assistant",
+                  "content": null,
+                  "toolCalls": [
+                    {
+                      "name": "subtractTool",
+                      "arguments": {
+                        "num1": 2,
+                        "num2": 8
+                      }
+                    }
+                  ]
+                },
+                {
+                  "role": "function",
+                  "content": "-6.0",
+                  "name": "subtractTool"
+                },
+                {
+                  "role": "assistant",
+                  "content": null,
+                  "toolCalls": [
+                    {
+                      "name": "sumTool",
+                      "arguments": {
+                        "num1": -6,
+                        "num2": 9
+                      }
+                    }
+                  ]
+                },
+                {
+                  "role": "function",
+                  "content": "3.0",
+                  "name": "sumTool"
+                },
+                {
+                  "role": "assistant",
+                  "content": "To calculate \\(2 - 8 + 9\\), I followed these steps:\n\n1. First, I calculated \\(2 - 8\\) using the subtract tool, which gave me \\(-6\\).\n2. Next, I added \\(-6 + 9\\) using the sum tool, which resulted in \\(3\\).\n\nSo, \\(2 - 8 + 9 = 3\\).",
+                  "toolCalls": null
+                },
+                {
+                  "role": "user",
+                  "content": "hey"
+                }
+              ],
+              "output": {
+                "role": "assistant",
+                "content": "Hello! How can I assist you with your math questions today?",
+                "toolCalls": null
+              },
+              "startTime": "2026-02-12T05:47:31.146Z",
+              "endTime": "2026-02-12T05:47:32.157Z"
+            }
+          ],
+          "output": {
+            "role": "assistant",
+            "content": "Hello! How can I assist you with your math questions today?",
+            "toolCalls": null
+          },
+          "tools": [
+            {
+              "name": "divideTool",
+              "description": "Calculates the division of two numbers Handles division by zero If num2 is zero, returns 0 Otherwise, returns the result of the division",
+              "parametersSchema": {
+                "type": "object",
+                "required": [
+                  "num1",
+                  "num2"
+                ],
+                "properties": {
+                  "num1": {
+                    "type": "number",
+                    "format": "float"
+                  },
+                  "num2": {
+                    "type": "number",
+                    "format": "float"
+                  }
+                }
+              }
+            },
+            {
+              "name": "multiplyTool",
+              "description": "Calculates the product of two numbers",
+              "parametersSchema": {
+                "type": "object",
+                "required": [
+                  "num1",
+                  "num2"
+                ],
+                "properties": {
+                  "num1": {
+                    "type": "number",
+                    "format": "float"
+                  },
+                  "num2": {
+                    "type": "number",
+                    "format": "float"
+                  }
+                }
+              }
+            },
+            {
+              "name": "subtractTool",
+              "description": "Calculates the difference of two numbers",
+              "parametersSchema": {
+                "type": "object",
+                "required": [
+                  "num1",
+                  "num2"
+                ],
+                "properties": {
+                  "num1": {
+                    "type": "number",
+                    "format": "float"
+                  },
+                  "num2": {
+                    "type": "number",
+                    "format": "float"
+                  }
+                }
+              }
+            },
+            {
+              "name": "sumTool",
+              "description": "Calculates the sum of two numbers",
+              "parametersSchema": {
+                "type": "object",
+                "required": [
+                  "num1",
+                  "num2"
+                ],
+                "properties": {
+                  "num1": {
+                    "type": "number",
+                    "format": "float"
+                  },
+                  "num2": {
+                    "type": "number",
+                    "format": "float"
+                  }
+                }
+              }
+            }
+          ],
+          "toolCalls": [],
+          "startTime": "2026-02-12T05:47:31.145Z",
+          "endTime": "2026-02-12T05:47:32.163Z"
+        }
+      ],
+      "created_on": "2026-02-12T05:47:42.789Z"
+    },
+    {
+      "id": "thread-02",
+      "name": "Thread - d6350005",
+      "traces": [
+        {
+          "id": "34d770bfab6486ede2a8fa893341f7c1",
+          "userMessage": {
+            "role": "user",
+            "content": "hi"
+          },
+          "iterations": [
+            {
+              "history": [
+                {
+                  "role": "system",
+                  "content": "# Role  \nMath Tutor  \n\n# Instructions  \nYou are a math tutor assistant.\n\nRULES (MUST FOLLOW):\n\n* You MUST use the provided mathematical tools (add, subtract, multiply, divide) for ALL calculations, even simple ones.\n* You are NOT allowed to compute results mentally or inline.\n* If a calculation is required and a tool is available, you MUST call the tool.\n* If you do not call a tool when a calculation is required, the response is invalid.\n\nProvide clear, step-by-step explanations. Include the final answer at the end."
+                },
+                {
+                  "role": "user",
+                  "content": "hi"
+                }
+              ],
+              "output": {
+                "role": "assistant",
+                "content": "Hello! How can I assist you with math today?",
+                "toolCalls": null
+              },
+              "startTime": "2026-02-12T05:47:05.966Z",
+              "endTime": "2026-02-12T05:47:08.056Z"
+            }
+          ],
+          "output": {
+            "role": "assistant",
+            "content": "Hello! How can I assist you with math today?",
+            "toolCalls": null
+          },
+          "tools": [
+            {
+              "name": "divideTool",
+              "description": "Calculates the division of two numbers Handles division by zero If num2 is zero, returns 0 Otherwise, returns the result of the division",
+              "parametersSchema": {
+                "type": "object",
+                "required": [
+                  "num1",
+                  "num2"
+                ],
+                "properties": {
+                  "num1": {
+                    "type": "number",
+                    "format": "float"
+                  },
+                  "num2": {
+                    "type": "number",
+                    "format": "float"
+                  }
+                }
+              }
+            },
+            {
+              "name": "multiplyTool",
+              "description": "Calculates the product of two numbers",
+              "parametersSchema": {
+                "type": "object",
+                "required": [
+                  "num1",
+                  "num2"
+                ],
+                "properties": {
+                  "num1": {
+                    "type": "number",
+                    "format": "float"
+                  },
+                  "num2": {
+                    "type": "number",
+                    "format": "float"
+                  }
+                }
+              }
+            },
+            {
+              "name": "subtractTool",
+              "description": "Calculates the difference of two numbers",
+              "parametersSchema": {
+                "type": "object",
+                "required": [
+                  "num1",
+                  "num2"
+                ],
+                "properties": {
+                  "num1": {
+                    "type": "number",
+                    "format": "float"
+                  },
+                  "num2": {
+                    "type": "number",
+                    "format": "float"
+                  }
+                }
+              }
+            },
+            {
+              "name": "sumTool",
+              "description": "Calculates the sum of two numbers",
+              "parametersSchema": {
+                "type": "object",
+                "required": [
+                  "num1",
+                  "num2"
+                ],
+                "properties": {
+                  "num1": {
+                    "type": "number",
+                    "format": "float"
+                  },
+                  "num2": {
+                    "type": "number",
+                    "format": "float"
+                  }
+                }
+              }
+            }
+          ],
+          "toolCalls": [],
+          "startTime": "2026-02-12T05:47:05.948Z",
+          "endTime": "2026-02-12T05:47:08.086Z"
+        },
+        {
+          "id": "7d1dd4603e574dc438b8b7dbe008f7bd",
+          "userMessage": {
+            "role": "user",
+            "content": "1+1?"
+          },
+          "iterations": [
+            {
+              "history": [
+                {
+                  "role": "system",
+                  "content": "# Role  \nMath Tutor  \n\n# Instructions  \nYou are a math tutor assistant.\n\nRULES (MUST FOLLOW):\n\n* You MUST use the provided mathematical tools (add, subtract, multiply, divide) for ALL calculations, even simple ones.\n* You are NOT allowed to compute results mentally or inline.\n* If a calculation is required and a tool is available, you MUST call the tool.\n* If you do not call a tool when a calculation is required, the response is invalid.\n\nProvide clear, step-by-step explanations. Include the final answer at the end."
+                },
+                {
+                  "role": "user",
+                  "content": "hi"
+                },
+                {
+                  "role": "assistant",
+                  "content": "Hello! How can I assist you with math today?",
+                  "toolCalls": null
+                },
+                {
+                  "role": "user",
+                  "content": "1+1?"
+                },
+                {
+                  "role": "assistant",
+                  "content": null,
+                  "toolCalls": [
+                    {
+                      "name": "sumTool",
+                      "arguments": {
+                        "num1": 1,
+                        "num2": 1
+                      }
+                    }
+                  ]
+                }
+              ],
+              "output": {
+                "role": "assistant",
+                "content": null,
+                "toolCalls": [
+                  {
+                    "name": "sumTool",
+                    "arguments": {
+                      "num1": 1,
+                      "num2": 1
+                    }
+                  }
+                ]
+              },
+              "startTime": "2026-02-12T05:47:13.364Z",
+              "endTime": "2026-02-12T05:47:14.333Z"
+            },
+            {
+              "history": [
+                {
+                  "role": "system",
+                  "content": "# Role  \nMath Tutor  \n\n# Instructions  \nYou are a math tutor assistant.\n\nRULES (MUST FOLLOW):\n\n* You MUST use the provided mathematical tools (add, subtract, multiply, divide) for ALL calculations, even simple ones.\n* You are NOT allowed to compute results mentally or inline.\n* If a calculation is required and a tool is available, you MUST call the tool.\n* If you do not call a tool when a calculation is required, the response is invalid.\n\nProvide clear, step-by-step explanations. Include the final answer at the end."
+                },
+                {
+                  "role": "user",
+                  "content": "hi"
+                },
+                {
+                  "role": "assistant",
+                  "content": "Hello! How can I assist you with math today?",
+                  "toolCalls": null
+                },
+                {
+                  "role": "user",
+                  "content": "1+1?"
+                },
+                {
+                  "role": "assistant",
+                  "content": null,
+                  "toolCalls": [
+                    {
+                      "name": "sumTool",
+                      "arguments": {
+                        "num1": 1,
+                        "num2": 1
+                      }
+                    }
+                  ]
+                },
+                {
+                  "role": "function",
+                  "content": "2.0",
+                  "name": "sumTool"
+                }
+              ],
+              "output": {
+                "role": "assistant",
+                "content": "To calculate \\(1 + 1\\), I used the sum tool, which gave me a result of \\(2\\). \n\nSo, \\(1 + 1 = 2\\).",
+                "toolCalls": null
+              },
+              "startTime": "2026-02-12T05:47:14.349Z",
+              "endTime": "2026-02-12T05:47:15.874Z"
+            }
+          ],
+          "output": {
+            "role": "assistant",
+            "content": "To calculate \\(1 + 1\\), I used the sum tool, which gave me a result of \\(2\\). \n\nSo, \\(1 + 1 = 2\\).",
+            "toolCalls": null
+          },
+          "tools": [
+            {
+              "name": "divideTool",
+              "description": "Calculates the division of two numbers Handles division by zero If num2 is zero, returns 0 Otherwise, returns the result of the division",
+              "parametersSchema": {
+                "type": "object",
+                "required": [
+                  "num1",
+                  "num2"
+                ],
+                "properties": {
+                  "num1": {
+                    "type": "number",
+                    "format": "float"
+                  },
+                  "num2": {
+                    "type": "number",
+                    "format": "float"
+                  }
+                }
+              }
+            },
+            {
+              "name": "multiplyTool",
+              "description": "Calculates the product of two numbers",
+              "parametersSchema": {
+                "type": "object",
+                "required": [
+                  "num1",
+                  "num2"
+                ],
+                "properties": {
+                  "num1": {
+                    "type": "number",
+                    "format": "float"
+                  },
+                  "num2": {
+                    "type": "number",
+                    "format": "float"
+                  }
+                }
+              }
+            },
+            {
+              "name": "subtractTool",
+              "description": "Calculates the difference of two numbers",
+              "parametersSchema": {
+                "type": "object",
+                "required": [
+                  "num1",
+                  "num2"
+                ],
+                "properties": {
+                  "num1": {
+                    "type": "number",
+                    "format": "float"
+                  },
+                  "num2": {
+                    "type": "number",
+                    "format": "float"
+                  }
+                }
+              }
+            },
+            {
+              "name": "sumTool",
+              "description": "Calculates the sum of two numbers",
+              "parametersSchema": {
+                "type": "object",
+                "required": [
+                  "num1",
+                  "num2"
+                ],
+                "properties": {
+                  "num1": {
+                    "type": "number",
+                    "format": "float"
+                  },
+                  "num2": {
+                    "type": "number",
+                    "format": "float"
+                  }
+                }
+              }
+            }
+          ],
+          "toolCalls": [
+            {
+              "name": "sumTool",
+              "arguments": {
+                "num1": 1,
+                "num2": 1
+              }
+            }
+          ],
+          "startTime": "2026-02-12T05:47:13.361Z",
+          "endTime": "2026-02-12T05:47:15.883Z"
+        },
+        {
+          "id": "9d19134e24ff660614e10ee3c5677cdf",
+          "userMessage": {
+            "role": "user",
+            "content": "2-8+9?"
+          },
+          "iterations": [
+            {
+              "history": [
+                {
+                  "role": "system",
+                  "content": "# Role  \nMath Tutor  \n\n# Instructions  \nYou are a math tutor assistant.\n\nRULES (MUST FOLLOW):\n\n* You MUST use the provided mathematical tools (add, subtract, multiply, divide) for ALL calculations, even simple ones.\n* You are NOT allowed to compute results mentally or inline.\n* If a calculation is required and a tool is available, you MUST call the tool.\n* If you do not call a tool when a calculation is required, the response is invalid.\n\nProvide clear, step-by-step explanations. Include the final answer at the end."
+                },
+                {
+                  "role": "user",
+                  "content": "hi"
+                },
+                {
+                  "role": "assistant",
+                  "content": "Hello! How can I assist you with math today?",
+                  "toolCalls": null
+                },
+                {
+                  "role": "user",
+                  "content": "1+1?"
+                },
+                {
+                  "role": "assistant",
+                  "content": null,
+                  "toolCalls": [
+                    {
+                      "name": "sumTool",
+                      "arguments": {
+                        "num1": 1,
+                        "num2": 1
+                      }
+                    }
+                  ]
+                },
+                {
+                  "role": "function",
+                  "content": "2.0",
+                  "name": "sumTool"
+                },
+                {
+                  "role": "assistant",
+                  "content": "To calculate \\(1 + 1\\), I used the sum tool, which gave me a result of \\(2\\). \n\nSo, \\(1 + 1 = 2\\).",
+                  "toolCalls": null
+                },
+                {
+                  "role": "user",
+                  "content": "2-8+9?"
+                },
+                {
+                  "role": "assistant",
+                  "content": null,
+                  "toolCalls": [
+                    {
+                      "name": "subtractTool",
+                      "arguments": {
+                        "num1": 2,
+                        "num2": 8
+                      }
+                    }
+                  ]
+                }
+              ],
+              "output": {
+                "role": "assistant",
+                "content": null,
+                "toolCalls": [
+                  {
+                    "name": "subtractTool",
+                    "arguments": {
+                      "num1": 2,
+                      "num2": 8
+                    }
+                  }
+                ]
+              },
+              "startTime": "2026-02-12T05:47:20.217Z",
+              "endTime": "2026-02-12T05:47:21.093Z"
+            },
+            {
+              "history": [
+                {
+                  "role": "system",
+                  "content": "# Role  \nMath Tutor  \n\n# Instructions  \nYou are a math tutor assistant.\n\nRULES (MUST FOLLOW):\n\n* You MUST use the provided mathematical tools (add, subtract, multiply, divide) for ALL calculations, even simple ones.\n* You are NOT allowed to compute results mentally or inline.\n* If a calculation is required and a tool is available, you MUST call the tool.\n* If you do not call a tool when a calculation is required, the response is invalid.\n\nProvide clear, step-by-step explanations. Include the final answer at the end."
+                },
+                {
+                  "role": "user",
+                  "content": "hi"
+                },
+                {
+                  "role": "assistant",
+                  "content": "Hello! How can I assist you with math today?",
+                  "toolCalls": null
+                },
+                {
+                  "role": "user",
+                  "content": "1+1?"
+                },
+                {
+                  "role": "assistant",
+                  "content": null,
+                  "toolCalls": [
+                    {
+                      "name": "sumTool",
+                      "arguments": {
+                        "num1": 1,
+                        "num2": 1
+                      }
+                    }
+                  ]
+                },
+                {
+                  "role": "function",
+                  "content": "2.0",
+                  "name": "sumTool"
+                },
+                {
+                  "role": "assistant",
+                  "content": "To calculate \\(1 + 1\\), I used the sum tool, which gave me a result of \\(2\\). \n\nSo, \\(1 + 1 = 2\\).",
+                  "toolCalls": null
+                },
+                {
+                  "role": "user",
+                  "content": "2-8+9?"
+                },
+                {
+                  "role": "assistant",
+                  "content": null,
+                  "toolCalls": [
+                    {
+                      "name": "subtractTool",
+                      "arguments": {
+                        "num1": 2,
+                        "num2": 8
+                      }
+                    }
+                  ]
+                },
+                {
+                  "role": "function",
+                  "content": "-6.0",
+                  "name": "subtractTool"
+                },
+                {
+                  "role": "assistant",
+                  "content": null,
+                  "toolCalls": [
+                    {
+                      "name": "sumTool",
+                      "arguments": {
+                        "num1": -6,
+                        "num2": 9
+                      }
+                    }
+                  ]
+                }
+              ],
+              "output": {
+                "role": "assistant",
+                "content": null,
+                "toolCalls": [
+                  {
+                    "name": "sumTool",
+                    "arguments": {
+                      "num1": -6,
+                      "num2": 9
+                    }
+                  }
+                ]
+              },
+              "startTime": "2026-02-12T05:47:21.096Z",
+              "endTime": "2026-02-12T05:47:22.326Z"
+            },
+            {
+              "history": [
+                {
+                  "role": "system",
+                  "content": "# Role  \nMath Tutor  \n\n# Instructions  \nYou are a math tutor assistant.\n\nRULES (MUST FOLLOW):\n\n* You MUST use the provided mathematical tools (add, subtract, multiply, divide) for ALL calculations, even simple ones.\n* You are NOT allowed to compute results mentally or inline.\n* If a calculation is required and a tool is available, you MUST call the tool.\n* If you do not call a tool when a calculation is required, the response is invalid.\n\nProvide clear, step-by-step explanations. Include the final answer at the end."
+                },
+                {
+                  "role": "user",
+                  "content": "hi"
+                },
+                {
+                  "role": "assistant",
+                  "content": "Hello! How can I assist you with math today?",
+                  "toolCalls": null
+                },
+                {
+                  "role": "user",
+                  "content": "1+1?"
+                },
+                {
+                  "role": "assistant",
+                  "content": null,
+                  "toolCalls": [
+                    {
+                      "name": "sumTool",
+                      "arguments": {
+                        "num1": 1,
+                        "num2": 1
+                      }
+                    }
+                  ]
+                },
+                {
+                  "role": "function",
+                  "content": "2.0",
+                  "name": "sumTool"
+                },
+                {
+                  "role": "assistant",
+                  "content": "To calculate \\(1 + 1\\), I used the sum tool, which gave me a result of \\(2\\). \n\nSo, \\(1 + 1 = 2\\).",
+                  "toolCalls": null
+                },
+                {
+                  "role": "user",
+                  "content": "2-8+9?"
+                },
+                {
+                  "role": "assistant",
+                  "content": null,
+                  "toolCalls": [
+                    {
+                      "name": "subtractTool",
+                      "arguments": {
+                        "num1": 2,
+                        "num2": 8
+                      }
+                    }
+                  ]
+                },
+                {
+                  "role": "function",
+                  "content": "-6.0",
+                  "name": "subtractTool"
+                },
+                {
+                  "role": "assistant",
+                  "content": null,
+                  "toolCalls": [
+                    {
+                      "name": "sumTool",
+                      "arguments": {
+                        "num1": -6,
+                        "num2": 9
+                      }
+                    }
+                  ]
+                },
+                {
+                  "role": "function",
+                  "content": "3.0",
+                  "name": "sumTool"
+                }
+              ],
+              "output": {
+                "role": "assistant",
+                "content": "To calculate \\(2 - 8 + 9\\), I followed these steps:\n\n1. First, I calculated \\(2 - 8\\) using the subtract tool, which gave me \\(-6\\).\n2. Next, I added \\(-6 + 9\\) using the sum tool, which resulted in \\(3\\).\n\nSo, \\(2 - 8 + 9 = 3\\).",
+                "toolCalls": null
+              },
+              "startTime": "2026-02-12T05:47:22.330Z",
+              "endTime": "2026-02-12T05:47:24.281Z"
+            }
+          ],
+          "output": {
+            "role": "assistant",
+            "content": "To calculate \\(2 - 8 + 9\\), I followed these steps:\n\n1. First, I calculated \\(2 - 8\\) using the subtract tool, which gave me \\(-6\\).\n2. Next, I added \\(-6 + 9\\) using the sum tool, which resulted in \\(3\\).\n\nSo, \\(2 - 8 + 9 = 3\\).",
+            "toolCalls": null
+          },
+          "tools": [
+            {
+              "name": "divideTool",
+              "description": "Calculates the division of two numbers Handles division by zero If num2 is zero, returns 0 Otherwise, returns the result of the division",
+              "parametersSchema": {
+                "type": "object",
+                "required": [
+                  "num1",
+                  "num2"
+                ],
+                "properties": {
+                  "num1": {
+                    "type": "number",
+                    "format": "float"
+                  },
+                  "num2": {
+                    "type": "number",
+                    "format": "float"
+                  }
+                }
+              }
+            },
+            {
+              "name": "multiplyTool",
+              "description": "Calculates the product of two numbers",
+              "parametersSchema": {
+                "type": "object",
+                "required": [
+                  "num1",
+                  "num2"
+                ],
+                "properties": {
+                  "num1": {
+                    "type": "number",
+                    "format": "float"
+                  },
+                  "num2": {
+                    "type": "number",
+                    "format": "float"
+                  }
+                }
+              }
+            },
+            {
+              "name": "subtractTool",
+              "description": "Calculates the difference of two numbers",
+              "parametersSchema": {
+                "type": "object",
+                "required": [
+                  "num1",
+                  "num2"
+                ],
+                "properties": {
+                  "num1": {
+                    "type": "number",
+                    "format": "float"
+                  },
+                  "num2": {
+                    "type": "number",
+                    "format": "float"
+                  }
+                }
+              }
+            },
+            {
+              "name": "sumTool",
+              "description": "Calculates the sum of two numbers",
+              "parametersSchema": {
+                "type": "object",
+                "required": [
+                  "num1",
+                  "num2"
+                ],
+                "properties": {
+                  "num1": {
+                    "type": "number",
+                    "format": "float"
+                  },
+                  "num2": {
+                    "type": "number",
+                    "format": "float"
+                  }
+                }
+              }
+            }
+          ],
+          "toolCalls": [
+            {
+              "name": "subtractTool",
+              "arguments": {
+                "num1": 2,
+                "num2": 8
+              }
+            },
+            {
+              "name": "sumTool",
+              "arguments": {
+                "num1": -6,
+                "num2": 9
+              }
+            }
+          ],
+          "startTime": "2026-02-12T05:47:20.215Z",
+          "endTime": "2026-02-12T05:47:24.292Z"
+        },
+        {
+          "id": "d71bb50e5683269eef3fa688c783c893",
+          "userMessage": {
+            "role": "user",
+            "content": "hey"
+          },
+          "iterations": [
+            {
+              "history": [
+                {
+                  "role": "system",
+                  "content": "# Role  \nMath Tutor  \n\n# Instructions  \nYou are a math tutor assistant.\n\nRULES (MUST FOLLOW):\n\n* You MUST use the provided mathematical tools (add, subtract, multiply, divide) for ALL calculations, even simple ones.\n* You are NOT allowed to compute results mentally or inline.\n* If a calculation is required and a tool is available, you MUST call the tool.\n* If you do not call a tool when a calculation is required, the response is invalid.\n\nProvide clear, step-by-step explanations. Include the final answer at the end."
+                },
+                {
+                  "role": "user",
+                  "content": "1+1?"
+                },
+                {
+                  "role": "assistant",
+                  "content": null,
+                  "toolCalls": [
+                    {
+                      "name": "sumTool",
+                      "arguments": {
+                        "num1": 1,
+                        "num2": 1
+                      }
+                    }
+                  ]
+                },
+                {
+                  "role": "function",
+                  "content": "2.0",
+                  "name": "sumTool"
+                },
+                {
+                  "role": "assistant",
+                  "content": "To calculate \\(1 + 1\\), I used the sum tool, which gave me a result of \\(2\\). \n\nSo, \\(1 + 1 = 2\\).",
+                  "toolCalls": null
+                },
+                {
+                  "role": "user",
+                  "content": "2-8+9?"
+                },
+                {
+                  "role": "assistant",
+                  "content": null,
+                  "toolCalls": [
+                    {
+                      "name": "subtractTool",
+                      "arguments": {
+                        "num1": 2,
+                        "num2": 8
+                      }
+                    }
+                  ]
+                },
+                {
+                  "role": "function",
+                  "content": "-6.0",
+                  "name": "subtractTool"
+                },
+                {
+                  "role": "assistant",
+                  "content": null,
+                  "toolCalls": [
+                    {
+                      "name": "sumTool",
+                      "arguments": {
+                        "num1": -6,
+                        "num2": 9
+                      }
+                    }
+                  ]
+                },
+                {
+                  "role": "function",
+                  "content": "3.0",
+                  "name": "sumTool"
+                },
+                {
+                  "role": "assistant",
+                  "content": "To calculate \\(2 - 8 + 9\\), I followed these steps:\n\n1. First, I calculated \\(2 - 8\\) using the subtract tool, which gave me \\(-6\\).\n2. Next, I added \\(-6 + 9\\) using the sum tool, which resulted in \\(3\\).\n\nSo, \\(2 - 8 + 9 = 3\\).",
+                  "toolCalls": null
+                },
+                {
+                  "role": "user",
+                  "content": "hey"
+                }
+              ],
+              "output": {
+                "role": "assistant",
+                "content": "Hello! How can I assist you with your math questions today?",
+                "toolCalls": null
+              },
+              "startTime": "2026-02-12T05:47:31.146Z",
+              "endTime": "2026-02-12T05:47:32.157Z"
+            }
+          ],
+          "output": {
+            "role": "assistant",
+            "content": "Hello! How can I assist you with your math questions today?",
+            "toolCalls": null
+          },
+          "tools": [
+            {
+              "name": "divideTool",
+              "description": "Calculates the division of two numbers Handles division by zero If num2 is zero, returns 0 Otherwise, returns the result of the division",
+              "parametersSchema": {
+                "type": "object",
+                "required": [
+                  "num1",
+                  "num2"
+                ],
+                "properties": {
+                  "num1": {
+                    "type": "number",
+                    "format": "float"
+                  },
+                  "num2": {
+                    "type": "number",
+                    "format": "float"
+                  }
+                }
+              }
+            },
+            {
+              "name": "multiplyTool",
+              "description": "Calculates the product of two numbers",
+              "parametersSchema": {
+                "type": "object",
+                "required": [
+                  "num1",
+                  "num2"
+                ],
+                "properties": {
+                  "num1": {
+                    "type": "number",
+                    "format": "float"
+                  },
+                  "num2": {
+                    "type": "number",
+                    "format": "float"
+                  }
+                }
+              }
+            },
+            {
+              "name": "subtractTool",
+              "description": "Calculates the difference of two numbers",
+              "parametersSchema": {
+                "type": "object",
+                "required": [
+                  "num1",
+                  "num2"
+                ],
+                "properties": {
+                  "num1": {
+                    "type": "number",
+                    "format": "float"
+                  },
+                  "num2": {
+                    "type": "number",
+                    "format": "float"
+                  }
+                }
+              }
+            },
+            {
+              "name": "sumTool",
+              "description": "Calculates the sum of two numbers",
+              "parametersSchema": {
+                "type": "object",
+                "required": [
+                  "num1",
+                  "num2"
+                ],
+                "properties": {
+                  "num1": {
+                    "type": "number",
+                    "format": "float"
+                  },
+                  "num2": {
+                    "type": "number",
+                    "format": "float"
+                  }
+                }
+              }
+            }
+          ],
+          "toolCalls": [],
+          "startTime": "2026-02-12T05:47:31.145Z",
+          "endTime": "2026-02-12T05:47:32.163Z"
+        }
+      ],
+      "created_on": "2026-02-12T05:47:42.789Z"
+    }
+  ],
+  "created_on": "2026-02-12T05:47:42.789Z"
+}

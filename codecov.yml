@@ -1,5 +1,9 @@
 fixes:
   - "io/ballerina/lib/ai/plugin/::./compiler-plugin/src/main/java/io/ballerina/lib/ai/plugin/"
+  - "ballerina/ai/**/::../ballerina/"
+
+ignore:
+    - "ballerina-tests"
 
 coverage:
   precision: 2
