@@ -16,6 +16,7 @@
 
 import ballerina/mcp;
 import ballerina/test;
+import ballerina/io;
 
 @test:Config {
     groups: ["mcp"]
@@ -32,7 +33,7 @@ function testMcpToolKit() returns error? {
             "greetName": "John"
         }
     };
-    ToolManager toolStore = check new (mcpToolKit);
+    ToolStore toolStore = check new (mcpToolKit);
     ToolOutput output = check toolStore.execute(toolInput);
     if output.value is error {
         test:assertFail("tool execution output is an error");
@@ -67,7 +68,7 @@ function testMcpToolKitWithPermittedTools() returns error? {
             "greetName": "John"
         }
     };
-    ToolManager toolStore = check new (mcpToolKit);
+    ToolStore toolStore = check new (mcpToolKit);
     ToolOutput output = check toolStore.execute(toolInput);
     if output.value is error {
         test:assertFail("tool execution output is an error");
@@ -136,7 +137,7 @@ function testCustomMcpToolKitWithPermittedTools() returns error? {
             "greetName": "John"
         }
     };
-    ToolManager toolStore = check new (mcpToolKit);
+    ToolStore toolStore = check new (mcpToolKit);
     ToolOutput output = check toolStore.execute(toolInput);
     if output.value is error {
         test:assertFail("tool execution output is an error");
@@ -181,7 +182,9 @@ isolated class CustomMcpToolKit2 {
 }
 function testCustomMcpToolKitWithAllToolsPermitted() returns error? {
     CustomMcpToolKit2 mcpToolKit = check new;
+    io:println();
     ToolConfig[] tools = mcpToolKit.getTools();
+
     test:assertEquals(tools.length(), 2); // Test mcp server used for testing has 2 tools
     test:assertEquals(tools[0].name, "single-greeting");
 
@@ -191,7 +194,7 @@ function testCustomMcpToolKitWithAllToolsPermitted() returns error? {
             "greetName": "John"
         }
     };
-    ToolManager toolStore = check new (mcpToolKit);
+    ToolStore toolStore = check new (mcpToolKit);
     ToolOutput output = check toolStore.execute(toolInput);
     if output.value is error {
         test:assertFail("tool execution output is an error");

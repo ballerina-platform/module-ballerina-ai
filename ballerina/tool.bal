@@ -19,8 +19,6 @@ import ballerina/http;
 import ballerina/lang.regexp;
 import ballerina/log;
 
-configurable record {||} config = {};
-
 # Represent the execution result of a tool.
 public type ToolExecutionResult record {|
     # Return value of the tool
@@ -50,10 +48,10 @@ type ToolInfo record {|
     string|string[] scopes?;
 |};
 
-public isolated class ToolManager {
+public isolated class ToolStore {
     public final map<Tool> & readonly tools;
     private map<()> mcpTools = {};
-    private boolean hasAuthConfig = false;
+    private boolean isAuthEnabled = false;
 
     # Register tools to the agent. 
     # These tools will be by the LLM to perform tasks.
@@ -62,7 +60,7 @@ public isolated class ToolManager {
     # + return - An error if the tool is already registered
     public isolated function init((BaseToolKit|ToolConfig|FunctionTool)... tools) returns Error? {
         log:printDebug("Registering tools",
-            tools = tools.toString()
+                tools = tools.toString()
         );
 
         if tools.length() == 0 {
@@ -93,55 +91,8 @@ public isolated class ToolManager {
         self.tools = toolMap.cloneReadOnly();
 
         log:printDebug("Tool registration completed",
-            tools = toolList.toString()
+                tools = toolList.toString()
         );
-    }
-
-    public isolated function validateTool(LlmToolResponse action, AuthConfig? auth, cache:Cache tokenManager, Context context, 
-                                          boolean isMcpTool) returns 
-        ToolNotFoundError|ToolInvalidInputError|TokenAcquisitionError|TokenValidationError|MissMatchScopeError? {
-        string toolName = action.name;
-        map<json>? inputs = action.arguments;
-        if !self.tools.hasKey(toolName) {
-            log:printDebug("Tool not found",
-                    toolName = toolName,
-                    availableTools = self.tools.keys()
-            );
-            return error ToolNotFoundError("Cannot find the tool.", toolName = toolName,
-                instruction = string `Tool "${toolName}" does not exists.`
-                + string ` Use a tool from the list: ${self.tools.keys().toString()}}`);
-        }
-        map<json>|error inputValues = mergeInputs(inputs, self.tools.get(toolName).constants);
-        if inputValues is error {
-            log:printDebug("Tool input validation failed",
-                    inputValues,
-                    toolName = toolName
-            );
-            string instruction = string `Tool "${toolName}"  execution failed due to invalid inputs provided.` +
-                string ` Use the schema to provide inputs: ${self.tools.get(toolName).variables.toString()}`;
-            return error ToolInvalidInputError("Tool is provided with invalid inputs.", inputValues, toolName = toolName,
-                inputs = inputs ?: (), instruction = instruction);
-        }
-
-        log:printDebug("Executing tool",
-                toolName = toolName,
-                isMcpTool = self.isMcpTool(toolName),
-                arguments = inputValues
-        );
-        if auth is AuthConfig {
-            lock {
-                self.hasAuthConfig = true;
-            }
-            string|string[]? scopes = self.tools.get(toolName).scopes;
-            if scopes is () {
-                return;
-            }
-
-            string baseUrl = auth.baseAuthUrl;
-            baseUrl = !baseUrl.endsWith("/") ? baseUrl.concat("/") : baseUrl;
-            check validateToolScope(check getToolScopes(auth, baseUrl, tokenManager, 
-                  toolName, scopes, context, isMcpTool), toolName, scopes);
-        }
     }
 
     # execute the tool decided by the LLM.
@@ -155,8 +106,8 @@ public isolated class ToolManager {
         map<json>? inputs = action.arguments;
         if !self.tools.hasKey(name) {
             log:printDebug("Tool not found",
-                toolName = name,
-                availableTools = self.tools.keys()
+                    toolName = name,
+                    availableTools = self.tools.keys()
             );
             return error ToolNotFoundError("Cannot find the tool.", toolName = name,
                 instruction = string `Tool "${name}" does not exists.`
@@ -165,8 +116,8 @@ public isolated class ToolManager {
         map<json>|error inputValues = mergeInputs(inputs, self.tools.get(name).constants);
         if inputValues is error {
             log:printDebug("Tool input validation failed",
-                inputValues,
-                toolName = name
+                    inputValues,
+                    toolName = name
             );
             string instruction = string `Tool "${name}"  execution failed due to invalid inputs provided.` +
                 string ` Use the schema to provide inputs: ${self.tools.get(name).variables.toString()}`;
@@ -175,9 +126,9 @@ public isolated class ToolManager {
         }
 
         log:printDebug("Executing tool",
-            toolName = name,
-            isMcpTool = self.isMcpTool(name),
-            arguments = inputValues
+                toolName = name,
+                isMcpTool = self.isMcpTool(name),
+                arguments = inputValues
         );
         isolated function caller = self.tools.get(name).caller;
         ToolExecutionResult|error execution;
@@ -189,8 +140,8 @@ public isolated class ToolManager {
         }
         if execution is error {
             log:printDebug("Tool execution failed",
-                execution,
-                toolName = name
+                    execution,
+                    toolName = name
             );
             return error ToolExecutionError("Tool execution failed.", execution, toolName = name,
                 inputs = inputValues.length() == 0 ? {} : inputValues);
@@ -206,16 +157,16 @@ public isolated class ToolManager {
         }
         if observation is anydata {
             log:printDebug("Tool executed successfully",
-                toolName = name,
-                output = observation.toString()
+                    toolName = name,
+                    output = observation.toString()
             );
             return {value: observation};
         }
         if observation !is error {
             log:printDebug("Tool returns an invalid output. Expected anydata or error.",
-                outputType = (typeof observation).toString(),
-                toolName = name,
-                inputs = inputValues.length() == 0 ? {} : inputValues
+                    outputType = (typeof observation).toString(),
+                    toolName = name,
+                    inputs = inputValues.length() == 0 ? {} : inputValues
             );
             return error ToolInvalidOutputError("Tool returns an invalid output. Expected anydata or error.",
                 outputType = typeof observation, toolName = name, inputs = inputValues.length() == 0 ? {} : inputValues);
@@ -224,8 +175,8 @@ public isolated class ToolManager {
             string instruction = string `Tool "${name}"  execution failed due to invalid inputs provided.`
                 + string ` Use the schema to provide inputs: ${self.tools.get(name).variables.toString()}`;
             log:printDebug(instruction,
-                toolName = name,
-                inputs = inputValues.length() == 0 ? {} : inputValues
+                    toolName = name,
+                    inputs = inputValues.length() == 0 ? {} : inputValues
             );
             return error ToolInvalidInputError("Tool is provided with invalid inputs.",
                 observation, toolName = name, inputs = inputValues.length() == 0 ? {} : inputValues,
@@ -244,6 +195,18 @@ public isolated class ToolManager {
     isolated function isMcpTool(string toolName) returns boolean {
         lock {
             return self.mcpTools.hasKey(toolName);
+        }
+    }
+
+    isolated function setAuthEnabled(boolean isAuthEnabled) {
+        lock {
+            self.isAuthEnabled = isAuthEnabled;
+        }
+    }
+
+    isolated function hasAuthConfig() returns boolean {
+        lock {
+            return self.isAuthEnabled;
         }
     }
 
@@ -270,7 +233,7 @@ isolated function getToolConfig(FunctionTool tool) returns ToolConfig|Error {
     if config is () {
         return error Error("The function '" + getFunctionName(tool) + "' must be annotated with `@ai:AgentTool`.");
     }
-    string?|string[] scopes = config?.scopes;
+    string|string[]? scopes = config?.scopes;
     do {
         if scopes !is () {
             return {
@@ -280,14 +243,13 @@ isolated function getToolConfig(FunctionTool tool) returns ToolConfig|Error {
                 scopes: check config?.scopes.ensureType(),
                 caller: tool
             };
-        } else {
-            return {
-                name: check config?.name.ensureType(),
-                description: check config?.description.ensureType(),
-                parameters: check config?.parameters.ensureType(),
-                caller: tool
-            };
         }
+        return {
+            name: check config?.name.ensureType(),
+            description: check config?.description.ensureType(),
+            parameters: check config?.parameters.ensureType(),
+            caller: tool
+        };
     } on fail error e {
         return error Error("Unable to register the function '" + getFunctionName(tool) + "' as agent tool", e);
     }
@@ -430,4 +392,51 @@ isolated function mergeInputs(map<json>? inputs, map<json> constants) returns ma
         }
     }
     return inputs;
+}
+
+public isolated function validateTool(LlmToolResponse action, AuthConfig? auth, cache:Cache tokenManager, Context context,
+        boolean isMcpTool, map<Tool> & readonly tool) returns
+    ToolNotFoundError|ToolInvalidInputError|TokenAcquisitionError|TokenValidationError|MismatchScopeError? {
+    string toolName = action.name;
+    map<json>? inputs = action.arguments;
+    string? agentId = auth is AuthConfig ? auth.agentId : ();
+    if !tool.hasKey(toolName) {
+        log:printDebug("Tool not found",
+            agentId = agentId,
+            toolName = toolName,
+            availableTools = tool.keys()
+        );
+        return error ToolNotFoundError("Cannot find the tool.", toolName = toolName,
+            instruction = string `Tool "${toolName}" does not exists.`
+            + string ` Use a tool from the list: ${tool.keys().toString()}}`);
+    }
+    map<json>|error inputValues = mergeInputs(inputs, tool.get(toolName).constants);
+    if inputValues is error {
+        log:printDebug("Tool input validation failed",
+            inputValues,
+            agentId = agentId,
+            toolName = toolName
+        );
+        string instruction = string `Tool "${toolName}"  execution failed due to invalid inputs provided.` +
+            string ` Use the schema to provide inputs: ${tool.get(toolName).variables.toString()}`;
+        return error ToolInvalidInputError("Tool is provided with invalid inputs.", inputValues, toolName = toolName,
+            inputs = inputs ?: (), instruction = instruction);
+    }
+
+    log:printDebug("Executing tool",
+        agentId = agentId,
+        toolName = toolName,
+        isMcpTool = isMcpTool,
+        arguments = inputValues
+    );
+    if auth is AuthConfig {
+        string|string[]? scopes = tool.get(toolName).scopes;
+        if scopes is () {
+            return;
+        }
+        string baseUrl = auth.baseAuthUrl;
+        baseUrl = !baseUrl.endsWith("/") ? baseUrl.concat("/") : baseUrl;
+        check validateToolScope(check getToolScopes(auth, baseUrl, tokenManager,
+                        toolName, scopes, context), toolName, scopes, auth.agentId);
+    }
 }

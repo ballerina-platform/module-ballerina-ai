@@ -540,11 +540,25 @@ public isolated function getPermittedMcpToolConfigs(mcp:StreamableHttpClient mcp
                 name: tool.name,
                 description: tool.description ?: "",
                 parameters: (<map<json>>tool.inputSchema).cloneReadOnly(),
-                scopes: permittedTools is FunctionTool ?  (check (getToolConfig(permittedTools)))[SCOPES] : 
-                                (check getToolConfig(permittedTools.get(tool.name)))[SCOPES],
+                scopes:  getClientToolScopes(permittedTools, tool.name),
                 caller: permittedTools is FunctionTool ? permittedTools : permittedTools.get(tool.name)
             };
     } on fail error e {
         return error Error("failed to generate permitted MCP tool configurations", e);
     }
+}
+
+isolated function getClientToolScopes(map<FunctionTool>|FunctionTool permittedTools, string toolName) returns string|string[]? {
+    if permittedTools is FunctionTool {
+        ToolConfig|Error toolConfig = getToolConfig(permittedTools);
+        if toolConfig is ToolConfig {
+            return toolConfig.scopes;
+        }
+        return [];
+    } 
+    ToolConfig|Error toolConfig = getToolConfig(permittedTools.get(toolName));
+    if toolConfig is ToolConfig {
+        return toolConfig.scopes;
+    }
+    return [];
 }

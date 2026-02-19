@@ -23,7 +23,7 @@ import ballerina/log;
 isolated distinct class FunctionCallAgent {
     *BaseAgent;
     # Tool store to be used by the agent
-    final ToolManager toolManager;
+    final ToolStore toolStore;
     # LLM model instance (should be a function call model)
     final ModelProvider model;
     # The memory associated with the agent.
@@ -44,7 +44,7 @@ isolated distinct class FunctionCallAgent {
     # + memory - The memory associated with the agent.
     isolated function init(ModelProvider model, (BaseToolKit|ToolConfig|FunctionTool)[] tools, cache:Cache tokenManager, AuthConfig? auth,
             Memory? memory = (), ToolLoadingStrategy toolLoadingStrategy = NO_FILTER) returns Error? {
-        self.toolManager = check new (...tools);
+        self.toolStore = check new (...tools);
         self.model = model;
         self.memory = memory ?: check new ShortTermMemory();
         self.stateless = memory is ();
@@ -85,7 +85,7 @@ isolated distinct class FunctionCallAgent {
         messages.unshift(...progress.history);
         ToolLoadingStrategy toolLoadingStrategy = self.toolLoadingStrategy;
         ChatMessage lastMessage = messages[messages.length() - 1];
-        ChatCompletionFunctions[] registeredTools = from Tool tool in self.toolManager.tools.toArray()
+        ChatCompletionFunctions[] registeredTools = from Tool tool in self.toolStore.tools.toArray()
             select {
                 name: tool.name,
                 description: tool.description,

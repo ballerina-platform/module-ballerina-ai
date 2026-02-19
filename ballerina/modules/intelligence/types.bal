@@ -337,12 +337,8 @@ public type CreateChatCompletionResponse record {
     *ChatCompletionsResponseCommon;
     @jsondata:Name {value: "prompt_filter_results"}
     PromptFilterResults promptFilterResults?;
-    record {
-        *ChatCompletionChoiceCommon;
-        @jsondata:Name {value: "content_filter_results"}
-        ContentFilterChoiceResults contentFilterResults?;
-        ChatCompletionResponseMessage message?;
-    }[] choices;
+    record {*ChatCompletionChoiceCommon; @jsondata:Name {value: "content_filter_results"}
+        ContentFilterChoiceResults contentFilterResults?; ChatCompletionResponseMessage message?;}[] choices;
 };
 
 public type ChatCompletionMessageToolCall record {

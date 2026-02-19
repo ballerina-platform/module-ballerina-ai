@@ -86,7 +86,7 @@ public type ToolOutput record {|
 
 type BaseAgent distinct isolated object {
     ModelProvider model;
-    ToolManager toolManager;
+    ToolStore toolStore;
     Memory memory;
     boolean stateless;
     cache:Cache tokenManager;
@@ -121,7 +121,6 @@ class Executor {
     private string agentId = "";
     private boolean & readonly isAuthEnabled = false;
 
-
     # Initialize the executor with the agent and the query.
     #
     # + agent - Agent instance to be executed
@@ -153,8 +152,8 @@ class Executor {
         if self.isCompleted {
             if self.isAuthEnabled {
                 log:printError("Task is already completed. No more reasoning is needed.",
-                    executionId = self.progress.executionId,
-                    agentId = self.agentId
+                        executionId = self.progress.executionId,
+                        agentId = self.agentId
                 );
             }
             return error TaskCompletedError("Task is already completed. No more reasoning is needed.");
@@ -198,24 +197,24 @@ class Executor {
             if toolCallId is string {
                 span.addId(toolCallId);
             }
-            ToolManager toolManager = self.agent.toolManager;
-            string? toolDescription = toolManager.getToolDescription(toolName);
+            ToolStore toolStore = self.agent.toolStore;
+            string? toolDescription = toolStore.getToolDescription(toolName);
             if toolDescription is string {
                 span.addDescription(toolDescription);
             }
-            boolean isMcpTool = toolManager.isMcpTool(toolName);
+            boolean isMcpTool = toolStore.isMcpTool(toolName);
             span.addType(isMcpTool ? observe:EXTENTION : observe:FUNCTION);
             span.addArguments(parsedOutput.arguments);
-            LlmInvalidGenerationError|ToolExecutionError? validateRes = toolManager.
-                        validateTool(parsedOutput, self.agent.auth, self.agent.tokenManager, 
-                        self.progress.context, isMcpTool);
+            toolStore.setAuthEnabled(self.agent.auth is AuthConfig);
+            LlmInvalidGenerationError|ToolExecutionError? validateRes = validateTool(parsedOutput, self.agent.auth, 
+                        self.agent.tokenManager, self.progress.context, isMcpTool, toolStore.tools);
             if validateRes is Error {
                 log:printError("Tool validation failed",
-                    executionId = self.progress.executionId,
-                    agentId = self.agentId,
-                    sessionId = self.sessionId,
-                    toolName = toolName,
-                    'error = validateRes
+                        executionId = self.progress.executionId,
+                        agentId = self.agentId,
+                        sessionId = self.sessionId,
+                        toolName = toolName,
+                        'error = validateRes
                 );
                 observation = "Tool extraction failed due to tool validation";
                 executionResult = {
@@ -224,7 +223,7 @@ class Executor {
                     observation: "Tool extraction failed due to tool validation"
                 };
             } else {
-                ToolOutput|ToolExecutionError|LlmInvalidGenerationError output = toolManager.execute(parsedOutput,
+                ToolOutput|ToolExecutionError|LlmInvalidGenerationError output = toolStore.execute(parsedOutput,
                     self.progress.context);
                 if output is Error {
                     if output is ToolNotFoundError {
@@ -243,18 +242,18 @@ class Executor {
 
                     if self.isAuthEnabled {
                         log:printError("Tool execution resulted in error",
-                            executionId = self.progress.executionId,
-                            agentId = self.agentId,
-                            observation = observation.toString(),
-                            sessionId = self.sessionId,
-                            toolName = toolName
+                                executionId = self.progress.executionId,
+                                agentId = self.agentId,
+                                observation = observation.toString(),
+                                sessionId = self.sessionId,
+                                toolName = toolName
                         );
                     } else {
                         log:printDebug("Tool execution resulted in error",
-                            executionId = self.progress.executionId,
-                            observation = observation.toString(),
-                            sessionId = self.sessionId,
-                            toolName = toolName
+                                executionId = self.progress.executionId,
+                                observation = observation.toString(),
+                                sessionId = self.sessionId,
+                                toolName = toolName
                         );
                     }
 
@@ -265,17 +264,17 @@ class Executor {
                     observation = value is error ? value.toString() : value;
                     if self.isAuthEnabled {
                         log:printInfo("Tool execution successful",
-                            executionId = self.progress.executionId,
-                            agentId = self.agentId,
-                            sessionId = self.sessionId,
-                            toolName = toolName
+                                executionId = self.progress.executionId,
+                                agentId = self.agentId,
+                                sessionId = self.sessionId,
+                                toolName = toolName
                         );
                     } else {
                         log:printDebug("Tool execution successful",
-                            executionId = self.progress.executionId,
-                            sessionId = self.sessionId,
-                            toolName = toolName,
-                            output = observation
+                                executionId = self.progress.executionId,
+                                sessionId = self.sessionId,
+                                toolName = toolName,
+                                output = observation
                         );
                     }
                     executionResult = {
@@ -358,7 +357,7 @@ isolated function run(BaseAgent agent, string instruction, string query, int max
             executionId = executionId,
             sessionId = sessionId,
             maxIterations = maxIter,
-            tools = agent.toolManager.tools.toString(),
+            tools = agent.toolStore.tools.toString(),
             isStateless = agent.stateless
     );
 
@@ -371,9 +370,9 @@ isolated function run(BaseAgent agent, string instruction, string query, int max
     ChatMessage[]|MemoryError prevHistory = agent.memory.get(sessionId);
     if prevHistory is MemoryError {
         log:printDebug("Failed to retrieve conversation history from memory",
-            prevHistory,
-            executionId = executionId,
-            sessionId = sessionId
+                prevHistory,
+                executionId = executionId,
+                sessionId = sessionId
         );
     }
     ChatMessage[] history = (prevHistory is ChatMessage[]) ? [...prevHistory] : [];
@@ -552,7 +551,7 @@ isolated function getObservationString(anydata|error observation) returns string
 #
 # + agent - Agent instance
 # + return - Array of tools registered with the agent
-public isolated function getTools(Agent agent) returns Tool[] => agent.functionCallAgent.toolManager.tools.toArray();
+public isolated function getTools(Agent agent) returns Tool[] => agent.functionCallAgent.toolStore.tools.toArray();
 
 isolated function updateMemory(Memory memory, string sessionId, ChatMessage[] messages) {
     error? updationStation = memory.update(sessionId, messages);

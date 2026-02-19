@@ -113,7 +113,7 @@ function testExecuteSuccessfulOutput() returns error? {
             }
         }
     };
-    ToolManager toolStore = check new (sendEmailTool);
+    ToolStore toolStore = check new (sendEmailTool);
     ToolOutput output = check toolStore.execute(sendMailInput);
     if output.value is error {
         test:assertFail("tool execution output is an error");
@@ -160,7 +160,7 @@ function testExecuteErrorOutput() returns error? {
             }
         }
     };
-    ToolManager toolStore = check new (sendEmailTool);
+    ToolStore toolStore = check new (sendEmailTool);
     ToolOutput output = check toolStore.execute(sendMailInput);
     if output.value !is error {
         test:assertFail("tool execution output is not an error");
@@ -207,7 +207,7 @@ function testExecutionError() returns error? {
             }
         }
     };
-    ToolManager toolStore = check new (sendEmailTool);
+    ToolStore toolStore = check new (sendEmailTool);
     ToolOutput output = check toolStore.execute(sendMailInput);
     if output.value !is error {
         test:assertFail("tool execution should return an error, yet it is succesfull");
@@ -236,7 +236,7 @@ function testToolWithDefaultParameters() returns error? {
             c: "override"
         }
     };
-    ToolManager toolStore = check new (testToolConfig);
+    ToolStore toolStore = check new (testToolConfig);
     ToolOutput output = check toolStore.execute(testToolInput);
     test:assertEquals(output.value, "required default-one override");
 }
@@ -264,7 +264,7 @@ function testExecutionPanicError() returns error? {
             }
         }
     };
-    ToolManager toolStore = check new (sendEmailTool);
+    ToolStore toolStore = check new (sendEmailTool);
     ToolOutput|Error output = toolStore.execute(sendMailInput);
     if output !is Error {
         test:assertFail("tool execution should failed with erronous generation, yet it is succesfull");
@@ -273,7 +273,7 @@ function testExecutionPanicError() returns error? {
 
 @test:Config
 isolated function testInitializingToolStoreWithoutNoTools() returns error? {
-    ToolManager toolStore = check new ();
+    ToolStore toolStore = check new ();
     test:assertEquals(toolStore.tools.toArray().length(), 0);
 }
 

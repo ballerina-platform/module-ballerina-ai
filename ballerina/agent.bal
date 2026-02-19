@@ -173,7 +173,7 @@ public isolated distinct class Agent {
     private final string uniqueId = uuid:createRandomUuid();
     private final readonly & ToolSchema[] toolSchemas;
     private final cache:Cache tokenManager = new ();
-    private string agentId = "";
+    private string? agentId = ();
     private boolean & readonly isAuthEnabled = false;
 
     # Initialize an Agent.
@@ -197,8 +197,8 @@ public isolated distinct class Agent {
         do {
             self.functionCallAgent = check new FunctionCallAgent(config.model, config.tools, self.tokenManager, 
                 config?.auth, memory, config.toolLoadingStrategy);
-            self.toolSchemas = self.functionCallAgent.toolManager.getToolSchema().cloneReadOnly();
-            span.addTools(self.functionCallAgent.toolManager.getToolsInfo());
+            self.toolSchemas = self.functionCallAgent.toolStore.getToolSchema().cloneReadOnly();
+            span.addTools(self.functionCallAgent.toolStore.getToolsInfo());
             span.close();
         } on fail Error err {
             span.close(err);

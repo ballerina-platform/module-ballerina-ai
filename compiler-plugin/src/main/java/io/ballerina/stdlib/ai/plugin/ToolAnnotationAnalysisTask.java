@@ -210,7 +210,7 @@ class ToolAnnotationAnalysisTask implements AnalysisTask<SyntaxNodeAnalysisConte
                 ? fieldValues.get(PARAMETERS_FIELD_NAME).toSourceCode()
                 : getParameterSchema(functionSymbol, functionDefinitionNode.location());
         String scopes = fieldValues.containsKey(SCOPES) ? fieldValues.get(SCOPES).toSourceCode()
-                : "";
+                : null;
         return new ToolAnnotationConfig(name, description, parameters, scopes);
     }
 
