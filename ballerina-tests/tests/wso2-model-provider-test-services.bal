@@ -20,7 +20,11 @@ import ballerina/test;
 isolated service /llm on new http:Listener(8080) {
     private map<int> retryCountMap = {};
     isolated resource function post azureopenai/deployments/gpt4onew/chat/completions(
-            @http:Payload CreateChatCompletionRequest payload) returns CreateChatCompletionResponse|error {
+            @http:Payload CreateChatCompletionRequest payload,
+            @http:Header string x\-product,
+            @http:Header string x\-usage\-context) returns CreateChatCompletionResponse|error {
+        test:assertEquals(x\-product, "bi");
+        test:assertEquals(x\-usage\-context, "model_provider_chat");
         [ChatCompletionRequestMessage[], string] [messages, initialText] = check validateChatCompletionPayload(payload);
 
         json[]? content = check messages[0]["content"].ensureType();

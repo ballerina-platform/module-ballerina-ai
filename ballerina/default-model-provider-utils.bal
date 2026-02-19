@@ -267,7 +267,10 @@ isolated function getLlMResponse(intelligence:Client llmClient,
         }
     }
 
-    intelligence:CreateChatCompletionResponse|error response = llmClient->/chat/completions.post(request);
+    intelligence:CreateChatCompletionResponse|error response = llmClient->/chat/completions.post(request, headers = {
+        "x-product": "bi",
+        "x-usage-context": "model_provider_chat"
+    });
     if response is error {
         return error("LLM call failed: " + response.message(), detail = response.detail(), cause = response.cause());
     }

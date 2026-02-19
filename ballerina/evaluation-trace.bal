@@ -26,6 +26,8 @@ public type Trace record {|
     Iteration[] iterations;
     # Final output produced by the agent
     ChatAssistantMessage|Error output;
+    # Tool invocations requested by the LLM in this turn
+    FunctionCall[] toolCalls?;
     # Schema of the tools used by the agent during execution
     ToolSchema[] tools;
     # Start time of the trace

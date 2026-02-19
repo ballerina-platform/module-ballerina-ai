@@ -217,7 +217,10 @@ public isolated distinct client class Wso2ModelProvider {
             request.functions = tools;
             span.addTools(tools);
         }
-        intelligence:CreateChatCompletionResponse|error response = self.llmClient->/chat/completions.post(request);
+        intelligence:CreateChatCompletionResponse|error response = self.llmClient->/chat/completions.post(request, headers = {
+            "x-product": "bi",
+            "x-usage-context": "model_provider_chat"
+        });
         if response is error {
             Error err = error LlmConnectionError("Error while connecting to the model", response);
             span.close(err);
