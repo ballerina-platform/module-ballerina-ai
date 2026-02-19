@@ -92,6 +92,13 @@ public type ChatCompletionFunctions record {|
     map<json> parameters?;
 |};
 
+public type InbuiltModelTool record {|
+    # Name of the tool
+    string name;
+    # Configurations of the tool
+    map<json> configurations?;
+|};
+
 # Function call record
 public type FunctionCall record {|
     # Name of the function
@@ -119,7 +126,7 @@ public type ModelProvider distinct isolated client object {
     # + tools - Tool definitions to be used for the tool call
     # + stop - Stop sequence to stop the completion
     # + return - Function to be called, chat response or an error in-case of failures
-    isolated remote function chat(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [], string? stop = ())
+    isolated remote function chat(ChatMessage[]|ChatUserMessage messages, (ChatCompletionFunctions|InbuiltModelTool)[] tools = [], string? stop = ())
         returns ChatAssistantMessage|Error;
 
     # Sends a chat request to the model and generates a value that belongs to the type
@@ -198,7 +205,7 @@ public isolated distinct client class Wso2ModelProvider {
     # + tools - Tool definitions to be used for the tool call
     # + stop - Stop sequence to stop the completion
     # + return - Function to be called, chat response or an error in-case of failures
-    isolated remote function chat(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools, string? stop = ())
+    isolated remote function chat(ChatMessage[]|ChatUserMessage messages, (ChatCompletionFunctions|InbuiltModelTool)[] tools = [], string? stop = ())
     returns ChatAssistantMessage|Error {
         observe:ChatSpan span = observe:createChatSpan("gpt-4o-mini");
         span.addProvider("WSO2");
