@@ -93,7 +93,10 @@ public isolated class Context {
     # + return - The access token associated with the tool
     public isolated function getAccessToken(string toolName) returns string {
         lock {
-            return self.toolAccessToken.get(toolName);
+            if (self.toolAccessToken.hasKey(toolName)) {
+                return self.toolAccessToken.get(toolName);
+            }
+            return "";
         }
     }
 
