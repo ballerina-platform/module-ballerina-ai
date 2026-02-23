@@ -96,7 +96,7 @@ public type InbuiltModelTool record {|
     # Name of the tool
     string name;
     # Configurations of the tool
-    map<json> configurations?;
+    map<anydata> configurations?;
 |};
 
 # Function call record
@@ -222,7 +222,16 @@ public isolated distinct client class Wso2ModelProvider {
         };
         if tools.length() > 0 {
             request.functions = tools;
-            span.addTools(tools);
+            json[] toolsArr = [];
+
+            foreach ChatCompletionFunctions|InbuiltModelTool tool in tools {
+                if tool is ChatCompletionFunctions {
+                    toolsArr.push(tool);
+                } else {
+                    toolsArr.push(tool.toJson());
+                }
+            }
+            span.addTools(toolsArr);
         }
         intelligence:CreateChatCompletionResponse|error response = self.llmClient->/chat/completions.post(request, headers = {
             "x-product": "bi",
