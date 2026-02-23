@@ -17,11 +17,11 @@
 import ai.observe;
 
 import ballerina/cache;
+import ballerina/crypto;
 import ballerina/jballerina.java;
 import ballerina/log;
 import ballerina/time;
 import ballerina/uuid;
-import ballerina/crypto;
 
 const INFER_TOOL_COUNT = "INFER_TOOL_COUNT";
 
@@ -63,7 +63,7 @@ public type AuthConfig record {|
     # The secret associated with the agent identity.
     @display {label: "Agent Secret"}
     string agentSecret;
-    
+
     # The OAuth 2.0 client identifier issued to the agent.
     @display {label: "Client ID"}
     string clientId;
@@ -188,17 +188,37 @@ public isolated distinct class Agent {
         self.verbose = config.verbose;
         self.systemPrompt = config.systemPrompt.cloneReadOnly();
         Memory? memory = config.hasKey("memory") ? config?.memory : check new ShortTermMemory();
-        AuthConfig? auth = config.auth; 
+        observe:CreateAgentIdentitySpan? agentIdentitySpan = ();
+        AuthConfig? auth = config.auth;
         if auth is AuthConfig {
+            agentIdentitySpan = observe:createCreateAgentIdentitySpan(config.systemPrompt.role);
             self.agentId = auth.agentId.cloneReadOnly();
+            if agentIdentitySpan is observe:CreateAgentIdentitySpan {
+                lock {
+                    agentIdentitySpan.addId(self.agentId);
+                }
+                agentIdentitySpan.addProviderUrl(auth.baseAuthUrl);
+                agentIdentitySpan.addTokenValidationMethod(auth.tokenValidation is Jwt ? "Jwt" : "Interospection");
+            }
         }
         do {
-            self.functionCallAgent = check new FunctionCallAgent(config.model, config.tools, self.tokenManager, 
-                config?.auth, memory, config.toolLoadingStrategy);
+            self.functionCallAgent = check new FunctionCallAgent(config.model, config.tools, self.tokenManager,
+                config?.auth, memory, config.toolLoadingStrategy
+            );
             self.toolSchemas = self.functionCallAgent.toolStore.getToolSchema().cloneReadOnly();
             span.addTools(self.functionCallAgent.toolStore.getToolsInfo());
+            lock {
+                if agentIdentitySpan is observe:CreateAgentIdentitySpan {
+                    agentIdentitySpan.close();
+                }
+            }
             span.close();
         } on fail Error err {
+            lock {
+                if agentIdentitySpan is observe:CreateAgentIdentitySpan {
+                    agentIdentitySpan.close(err);
+                }
+            }
             span.close(err);
             return err;
         }
@@ -242,7 +262,7 @@ public isolated distinct class Agent {
                 );
             }
         }
-        
+
         observe:InvokeAgentSpan span = observe:createInvokeAgentSpan(self.systemPrompt.role);
         span.addId(self.uniqueId);
         span.addSessionId(sessionId);
@@ -258,17 +278,17 @@ public isolated distinct class Agent {
         do {
             string answer = check getAnswer(executionTrace, self.maxIter);
             lock {
-	            if self.agentId is string {
-	                log:printInfo("Agent execution completed successfully",
-	                        executionId = executionId,
+                if self.agentId is string {
+                    log:printInfo("Agent execution completed successfully",
+                            executionId = executionId,
                             agentId = self.agentId
-	                );
-	            } else {
+                    );
+                } else {
                     log:printDebug("Agent execution completed successfully",
-	                        executionId = executionId,
-	                        steps = executionTrace.steps.toString(),
-	                        answer = answer
-	                );
+                            executionId = executionId,
+                            steps = executionTrace.steps.toString(),
+                            answer = answer
+                    );
                 }
             }
             span.addOutput(observe:TEXT, answer);
@@ -288,22 +308,22 @@ public isolated distinct class Agent {
                 : answer;
         } on fail Error err {
             lock {
-	            if self.agentId is string{
-	                log:printError("Agent execution failed",
+                if self.agentId is string {
+                    log:printError("Agent execution failed",
                             err,
-	                        executionId = executionId,
+                            executionId = executionId,
                             agentId = self.agentId,
-	                        steps = executionTrace.steps.toString()
-	                );
-	            } else {
+                            steps = executionTrace.steps.toString()
+                    );
+                } else {
                     log:printDebug("Agent execution failed",
-                        err,
-                        executionId = executionId,
-                        steps = executionTrace.steps.toString()
+                            err,
+                            executionId = executionId,
+                            steps = executionTrace.steps.toString()
                     );
                 }
             }
-            
+
             span.close(err);
 
             return withTrace

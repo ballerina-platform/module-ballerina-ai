@@ -58,7 +58,25 @@ enum GenAiTagNames {
     KNOWLEDGE_BASE_INGEST_INPUT_CHUNKS = "gen_ai.knowledge_base.ingest.input.chunks",
     KNOWLEDGE_BASE_RETRIEVE_INPUT_QUERY = "gen_ai.knowledge_base.retrieve.input.query",
     KNOWLEDGE_BASE_RETRIEVE_INPUT_LIMIT = "gen_ai.knowledge_base.retrieve.input.limit",
-    KNOWLEDGE_BASE_RETRIEVE_INPUT_FILTER = "gen_ai.knowledge_base.retrieve.input.filter"
+    KNOWLEDGE_BASE_RETRIEVE_INPUT_FILTER = "gen_ai.knowledge_base.retrieve.input.filter",
+
+    CLIENT_ID = "genai.auth.client_id",
+    RESOURCE_INDICATOR = "genai.auth.resource",
+    PKCE_CHALLENGE = "genai.auth.pkce_challenge",
+    PKCE_METHOD = "genai.auth.pkce_method",
+    AUTH_SCOPES = "genai.auth.scopes",
+    TOKEN_STATUS = "genai.auth.token_status",
+    REQUIRED_SCOPES = "genai.auth.required_scopes",
+    GRANTED_SCOPES = "genai.auth.granted_scopes",
+    FLOW_ID = "genai.auth.flow_id",
+    AUTHENTICATOR_ID = "genai.auth.authenticator_id",
+    OP_AGENT_AUTHN = "genai.auth.agent_authenticate",
+    OP_EXCHANGE_TOKEN = "genai.auth.token_exchange",
+    AUTH_CODE = "genai.auth.code",
+    PKCE_VERIFIER = "genai.auth.code_verifier",
+    OP_VALIDATE_SCOPE = "genai.auth.validate_scope",
+    IDENTITY_PROVIDER_URL = "gen_ai.identity.provider",
+    TOKEN_VALIDATION_METHOD = "gen_ai.token.validation.method"
 }
 
 enum Operations {
@@ -72,7 +90,14 @@ enum Operations {
     // Not mandated by spec
     CREATE_KNOWLEDGE_BASE = "create_knowledge_base",
     KNOWLEDGE_BASE_INGEST = "knowledge_base_ingest",
-    KNOWLEDGE_BASE_RETRIEVE = "knowledge_base_retrieve"
+    KNOWLEDGE_BASE_RETRIEVE = "knowledge_base_retrieve",
+
+    CREATE_AGENT_IDENTITY = "create_agent_identity",
+    INVOKE_AUTHORIZE_ENDPOINT = "invoke_authorize_endpoint",
+    AGENT_AUTHENTICATION = "agent_authentication",
+    EXCHANGE_TOKEN = "exchange_token",
+    VALIDATE_TOKEN = "validate_token",
+    VALIDATE_TOOL_AUTHORIZATION = "validate_tool_authorization"
 }
 
 # Represents the type of output produced by an LLM.

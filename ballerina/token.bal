@@ -14,6 +14,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
+import ai.observe;
 import ballerina/cache;
 import ballerina/crypto;
 import ballerina/http;
@@ -98,16 +99,22 @@ isolated function getToolScopes(AuthConfig auth, string baseUrl, cache:Cache tok
                 toolName = toolName,
                 scopes = scopes
         );
+        
         Token freshToken = check getFreshToken(auth, baseUrl, scopes, toolName, httpclient);
+
+        observe:ValidateTokenSpan createValidateTokenSpan = observe:createValidateTokenSpan("WSO2:Asgardeo");
         ValidationResponse|error validateTokenResult = validateToken(auth, baseUrl, 
             freshToken.access_token, freshToken.token_type);
         if validateTokenResult is error {
+            createValidateTokenSpan.addValidationResult(false, auth.clientId, auth.agentId);
+            createValidateTokenSpan.close(validateTokenResult);
             log:printError("Token validation failed", 'error = validateTokenResult, 
                 agentId = auth.agentId, toolName = toolName);
             return error TokenValidationError("Token validation failed: ", 
                 cause = validateTokenResult);
         }
         boolean? active = validateTokenResult.active;
+        createValidateTokenSpan.addValidationResult(active, auth.clientId, auth.agentId);
         if active is () || active is true {
             freshToken.expires_in = validateTokenResult.exp;
             freshToken.scope = validateTokenResult.scope;
@@ -115,25 +122,28 @@ isolated function getToolScopes(AuthConfig auth, string baseUrl, cache:Cache tok
             scopeInToken = addToken(toolName, freshToken, tokenManager);
             log:printDebug("Setting token in the context for MCP tool: ", 
                 agentId = agentId, toolName = toolName);
-            context.setAccessToken(toolName, tokenValue);
         } else {
-            log:printError("Token validation failed: token is expired or revoked", 
-                agentId = auth.agentId, toolName = toolName);
-            return error TokenValidationError("Token validation failed: token is expired or revoked");
+            string msg = "Token validation failed: token is expired or revoked";
+            createValidateTokenSpan.close(error TokenValidationError(msg));
+            log:printError(msg, agentId = auth.agentId, toolName = toolName);
+            return error TokenValidationError(msg);
         }
+        createValidateTokenSpan.close();
     }
+    context.setAccessToken(toolName, tokenValue);
     return scopeInToken;
 }
 
 isolated function validateToolScope(string[] cachedScopes, string toolName, string|string[] scopes, 
-        string agentId)
-                returns InsufficientScopeError? {
+        string agentId) returns InsufficientScopeError? {
+    observe:ValidateToolAuthorizationSpan toolAuthorizationSpan = observe:createValidateToolAuthorizationSpan(toolName);
     log:printDebug("Validating scopes for tool: ",
             agentId = agentId,
             toolName = toolName,
             requiredScopes = scopes
     );
     string[] requiredScopes = scopes is string[] ? scopes : [scopes];
+    toolAuthorizationSpan.addScopeCheck(requiredScopes, cachedScopes);
     foreach string scope in requiredScopes {
         if cachedScopes.indexOf(scope) is () {
             log:printError("Scope mismatch detected for tool: ",
@@ -141,16 +151,21 @@ isolated function validateToolScope(string[] cachedScopes, string toolName, stri
                     toolName = toolName,
                     missingScope = scope
             );
-            return error InsufficientScopeError("Requested OAuth scope is not permitted or does not " +
-                "match the existing token scopes: " + scope);
+            InsufficientScopeError err = error InsufficientScopeError("Requested OAuth scope is " +
+                "not permitted or does not match the existing token scopes: " + scope);
+            toolAuthorizationSpan.close(err);
+            return err;
         }
     }
+    toolAuthorizationSpan.close();
     log:printInfo("Successfully validated scopes", agentId = agentId, toolName = toolName);
     return;
 }
 
 isolated function getFreshToken(AuthConfig auth, string baseUrl, string|string[] scopes, 
         string toolName, http:Client httpclient) returns TokenAcquisitionError|Token {
+    observe:InvokeAuthorizeEndpointSpan invokeAuthorizeEndpointSpan = 
+                    observe:createInvokeAuthorizeEndpointSpan("WSO2");
     Pkce? pkce = ();
     if (auth.isPkceEnabled) {
         Pkce|error result = generatePKCE();
@@ -162,33 +177,46 @@ isolated function getFreshToken(AuthConfig auth, string baseUrl, string|string[]
         }
         pkce = result;
     }
-
+    invokeAuthorizeEndpointSpan.addAuthRequestDetails(auth.clientId, 
+                scopes, challenge= pkce is Pkce ? pkce.challenge : ());
     AuthResponse|error flowId = getFlowId(auth, baseUrl, scopes, pkce, httpclient);
     if flowId is error {
+        invokeAuthorizeEndpointSpan.close(flowId);
         log:printError("Failed to obtain flow id for token acquisition",
                 'error = flowId, agentId = auth.agentId, toolName = toolName);
         return error TokenAcquisitionError("Failed to obtain flow id", detail = {cause: flowId});
     }
+    invokeAuthorizeEndpointSpan.close();
     log:printInfo("Successfully obtained flow id for token acquisition", agentId = auth.agentId, 
             toolName = toolName);
 
+    observe:AgentAuthenticationSpan authenticationSpan = 
+            observe:createAgentAuthenticationSpan(flowId.flowId);
+    authenticationSpan.addAgentIdentity(auth.agentId, flowId.nextStep.authenticators[0].authenticatorId);
     Code|error code = getCode(flowId, auth, baseUrl, httpclient);
     if code is error {
+        authenticationSpan.close(code);
         log:printError("Failed to obtain authorization code for token acquisition", 
                 'error = code, agentId = auth.agentId, toolName = toolName);
         return error TokenAcquisitionError("Failed to obtain authorization code", 
             detail = {cause: code});
     }
+    authenticationSpan.close();
     log:printInfo("Successfully obtained authorization code", agentId = auth.agentId,
              toolName = toolName);
 
+    observe:ExchangeTokenSpan exchangeTokenSpan = observe:createExchangeTokenSpan();
+    exchangeTokenSpan.addExchangeDetails(code.authData.code, 
+            pkce is Pkce ? pkce.verifier : (), auth.clientId);
     error|Token token = getToken(code.authData.code, auth, baseUrl, pkce, httpclient);
     if token is error {
-        log:printError("Failed to obtain access token", 'error = token, agentId = auth.agentId, 
-            toolName = toolName);
+        exchangeTokenSpan.close(token);
+        log:printError("Failed to obtain access token", 'error = token, 
+                agentId = auth.agentId, toolName = toolName);
         return error TokenAcquisitionError("Failed to obtain access token", 
             detail = {cause: token});
     }
+    exchangeTokenSpan.close();
     log:printInfo("Successfully obtained access token", agentId = auth.agentId, 
         toolName = toolName);
     return token;
