@@ -221,7 +221,7 @@ public isolated class ToolStore {
     isolated function getToolSchema() returns ToolSchema[] {
         ToolSchema[] toolSchemas = [];
         foreach [string, Tool] [name, tool] in self.tools.entries() {
-            toolSchemas.push({name, description: tool.description, parametersSchema: tool.variables, scopes: tool.scopes});
+            toolSchemas.push({name, description: tool.description, parametersSchema: tool.variables});
         }
         return toolSchemas;
     }
@@ -233,22 +233,13 @@ isolated function getToolConfig(FunctionTool tool) returns ToolConfig|Error {
     if config is () {
         return error Error("The function '" + getFunctionName(tool) + "' must be annotated with `@ai:AgentTool`.");
     }
-    string|string[]? scopes = config?.scopes;
     do {
-        if scopes !is () {
-            return {
-                name: check config?.name.ensureType(),
-                description: check config?.description.ensureType(),
-                parameters: check config?.parameters.ensureType(),
-                scopes: check config?.scopes.ensureType(),
-                caller: tool
-            };
-        }
         return {
             name: check config?.name.ensureType(),
             description: check config?.description.ensureType(),
             parameters: check config?.parameters.ensureType(),
-            caller: tool
+            caller: tool,
+            scopes: check config?.scopes.ensureType()
         };
     } on fail error e {
         return error Error("Unable to register the function '" + getFunctionName(tool) + "' as agent tool", e);
@@ -290,6 +281,7 @@ isolated function getInputArgumentsOfTool(FunctionTool tool, map<json> inputValu
     if (!hasContextArg) {
         return orderedArgs.cloneReadOnly();
     }
+    // Compiler plugin guarantees context is the first argument, if present
     return [context, ...orderedArgs.cloneReadOnly()];
 }
 
@@ -395,8 +387,7 @@ isolated function mergeInputs(map<json>? inputs, map<json> constants) returns ma
 }
 
 public isolated function validateTool(LlmToolResponse action, AuthConfig? auth, cache:Cache tokenManager, Context context,
-        boolean isMcpTool, map<Tool> & readonly tool) returns
-    ToolNotFoundError|ToolInvalidInputError|TokenAcquisitionError|TokenValidationError|MismatchScopeError? {
+        boolean isMcpTool, map<Tool> & readonly tool) returns ToolNotFoundError|ToolInvalidInputError|TokenAcquisitionError|TokenValidationError? {
     string toolName = action.name;
     map<json>? inputs = action.arguments;
     string? agentId = auth is AuthConfig ? auth.agentId : ();
@@ -436,7 +427,11 @@ public isolated function validateTool(LlmToolResponse action, AuthConfig? auth, 
         }
         string baseUrl = auth.baseAuthUrl;
         baseUrl = !baseUrl.endsWith("/") ? baseUrl.concat("/") : baseUrl;
+        http:Client|http:ClientError httpclient = new (baseUrl);
+        if  httpclient is http:ClientError {
+            return error TokenAcquisitionError(httpclient.message());
+        }
         check validateToolScope(check getToolScopes(auth, baseUrl, tokenManager,
-                        toolName, scopes, context), toolName, scopes, auth.agentId);
+                        toolName, scopes, context, httpclient), toolName, scopes, auth.agentId);
     }
 }

@@ -16,7 +16,6 @@
 
 import ballerina/mcp;
 import ballerina/test;
-import ballerina/io;
 
 @test:Config {
     groups: ["mcp"]
@@ -182,9 +181,7 @@ isolated class CustomMcpToolKit2 {
 }
 function testCustomMcpToolKitWithAllToolsPermitted() returns error? {
     CustomMcpToolKit2 mcpToolKit = check new;
-    io:println();
     ToolConfig[] tools = mcpToolKit.getTools();
-
     test:assertEquals(tools.length(), 2); // Test mcp server used for testing has 2 tools
     test:assertEquals(tools[0].name, "single-greeting");
 

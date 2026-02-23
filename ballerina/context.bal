@@ -91,12 +91,12 @@ public isolated class Context {
     #
     # + toolName - The name of the tool
     # + return - The access token associated with the tool
-    public isolated function getAccessToken(string toolName) returns string {
+    public isolated function getAccessToken(string toolName) returns string|error {
         lock {
             if (self.toolAccessToken.hasKey(toolName)) {
                 return self.toolAccessToken.get(toolName);
             }
-            return "";
+            return error(string `Access token not found for tool '${toolName}'.`);
         }
     }
 

@@ -78,7 +78,7 @@ function testAgentRunHavingErrorStep() returns error? {
     FunctionCallAgent agent = check new (model, [searchTool, calculatorTool], new, ());
     string query = "Random query";
     ExecutionTrace trace = run(agent, instruction = "Answer the questions", query = query,
-            context = new, maxIter = 5, verbose = false);
+            context = new, maxIter = 5, verbose = false, agentId = ());
     test:assertEquals(trace.answer is (), true);
     test:assertEquals(trace.steps.length(), 1);
     test:assertEquals(trace.steps[0] is Error, true);

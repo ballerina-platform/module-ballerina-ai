@@ -118,8 +118,7 @@ class Executor {
     private final BaseAgent agent;
     # Contains the current execution progress for the agent and the query
     public ExecutionProgress progress;
-    private string agentId = "";
-    private boolean & readonly isAuthEnabled = false;
+    private string? agentId = ();
 
     # Initialize the executor with the agent and the query.
     #
@@ -133,7 +132,6 @@ class Executor {
         self.progress = progress;
         AuthConfig? auth = agent.auth;
         if auth is AuthConfig {
-            self.isAuthEnabled = true;
             self.agentId = auth.agentId;
         }
     }
@@ -150,19 +148,32 @@ class Executor {
     # + return - generated LLM response during the reasoning or an error if the reasoning fails
     public isolated function reason() returns json|Error {
         if self.isCompleted {
-            if self.isAuthEnabled {
+            if self.agentId is string {
                 log:printError("Task is already completed. No more reasoning is needed.",
-                        executionId = self.progress.executionId,
-                        agentId = self.agentId
+                    agentId = self.agentId,
+                    executionId = self.progress.executionId
+                );
+            } else {
+                log:printError("Task is already completed. No more reasoning is needed.",
+                    executionId = self.progress.executionId
                 );
             }
             return error TaskCompletedError("Task is already completed. No more reasoning is needed.");
         }
-        log:printDebug("LLM reasoning started",
+        if self.agentId is string {
+            log:printDebug("LLM reasoning started",
+                agentId = self.agentId,
                 executionId = self.progress.executionId,
                 sessionId = self.sessionId,
                 history = self.progress.executionSteps.toString()
-        );
+            );
+        } else {
+            log:printDebug("LLM reasoning started",
+                executionId = self.progress.executionId,
+                sessionId = self.sessionId,
+                history = self.progress.executionSteps.toString()
+            );
+        }
         return check self.agent.selectNextTool(self.progress, self.sessionId);
     }
 
@@ -173,11 +184,20 @@ class Executor {
     public isolated function act(json llmResponse) returns ExecutionResult|LlmChatResponse|ExecutionError {
         LlmToolResponse|LlmChatResponse|LlmInvalidGenerationError parsedOutput = self.agent.parseLlmResponse(llmResponse);
         if parsedOutput is LlmChatResponse {
-            log:printDebug("Parsed LLM response as chat response",
+            if self.agentId is string {
+                log:printDebug("Parsed LLM response as chat response",
+                    agentId = self.agentId,
                     executionId = self.progress.executionId,
                     sessionId = self.sessionId,
                     response = parsedOutput.content
-            );
+                );
+            } else {
+                log:printDebug("Parsed LLM response as chat response",
+                    executionId = self.progress.executionId,
+                    sessionId = self.sessionId,
+                    response = parsedOutput.content
+                );
+            }
             self.isCompleted = true;
             return parsedOutput;
         }
@@ -186,12 +206,22 @@ class Executor {
         ExecutionResult|ExecutionError executionResult;
         if parsedOutput is LlmToolResponse {
             string toolName = parsedOutput.name;
-            log:printDebug("Parsed LLM response as tool call",
+            if self.agentId is string {
+                log:printDebug("Parsed LLM response as tool call",
+                    agentId = self.agentId,
                     executionId = self.progress.executionId,
                     sessionId = self.sessionId,
                     toolName = toolName,
                     arguments = parsedOutput.arguments
-            );
+                );
+            } else {
+                log:printDebug("Parsed LLM response as tool call",
+                    executionId = self.progress.executionId,
+                    sessionId = self.sessionId,
+                    toolName = toolName,
+                    arguments = parsedOutput.arguments
+                );
+            }
             observe:ExecuteToolSpan span = observe:createExecuteToolSpan(toolName);
             string? toolCallId = parsedOutput.id;
             if toolCallId is string {
@@ -206,16 +236,25 @@ class Executor {
             span.addType(isMcpTool ? observe:EXTENTION : observe:FUNCTION);
             span.addArguments(parsedOutput.arguments);
             toolStore.setAuthEnabled(self.agent.auth is AuthConfig);
-            LlmInvalidGenerationError|ToolExecutionError? validateRes = validateTool(parsedOutput, self.agent.auth, 
-                        self.agent.tokenManager, self.progress.context, isMcpTool, toolStore.tools);
+            LlmInvalidGenerationError|ToolExecutionError? validateRes = validateTool(parsedOutput, 
+                self.agent.auth, self.agent.tokenManager, self.progress.context, isMcpTool, toolStore.tools);
             if validateRes is Error {
-                log:printError("Tool validation failed",
-                        executionId = self.progress.executionId,
+                if self.agentId is string {
+                    log:printError("Tool validation failed",
                         agentId = self.agentId,
+                        executionId = self.progress.executionId,
                         sessionId = self.sessionId,
                         toolName = toolName,
                         'error = validateRes
-                );
+                    );
+                } else {
+                    log:printError("Tool validation failed",
+                        executionId = self.progress.executionId,
+                        sessionId = self.sessionId,
+                        toolName = toolName,
+                        'error = validateRes
+                    );
+                }
                 observation = "Tool extraction failed due to tool validation";
                 executionResult = {
                     llmResponse,
@@ -240,20 +279,20 @@ class Executor {
                         observation: observation.toString()
                     };
 
-                    if self.isAuthEnabled {
+                    if self.agentId is string {
                         log:printError("Tool execution resulted in error",
-                                executionId = self.progress.executionId,
-                                agentId = self.agentId,
-                                observation = observation.toString(),
-                                sessionId = self.sessionId,
-                                toolName = toolName
+                            agentId = self.agentId,
+                            executionId = self.progress.executionId,
+                            observation = observation.toString(),
+                            sessionId = self.sessionId,
+                            toolName = toolName
                         );
                     } else {
                         log:printDebug("Tool execution resulted in error",
-                                executionId = self.progress.executionId,
-                                observation = observation.toString(),
-                                sessionId = self.sessionId,
-                                toolName = toolName
+                            executionId = self.progress.executionId,
+                            observation = observation.toString(),
+                            sessionId = self.sessionId,
+                            toolName = toolName
                         );
                     }
 
@@ -262,19 +301,19 @@ class Executor {
                 } else {
                     anydata|error value = output.value;
                     observation = value is error ? value.toString() : value;
-                    if self.isAuthEnabled {
+                    if self.agentId is string {
                         log:printInfo("Tool execution successful",
-                                executionId = self.progress.executionId,
-                                agentId = self.agentId,
-                                sessionId = self.sessionId,
-                                toolName = toolName
+                            agentId = self.agentId,
+                            executionId = self.progress.executionId,
+                            sessionId = self.sessionId,
+                            toolName = toolName
                         );
                     } else {
                         log:printDebug("Tool execution successful",
-                                executionId = self.progress.executionId,
-                                sessionId = self.sessionId,
-                                toolName = toolName,
-                                output = observation
+                            executionId = self.progress.executionId,
+                            sessionId = self.sessionId,
+                            toolName = toolName,
+                            output = observation
                         );
                     }
                     executionResult = {
@@ -287,11 +326,20 @@ class Executor {
                 }
             }
         } else {
-            log:printDebug("Failed to parse LLM response as valid tool or chat",
+            if self.agentId is string {
+                log:printDebug("Failed to parse LLM response as valid tool or chat",
+                    agentId = self.agentId,
                     executionId = self.progress.executionId,
                     sessionId = self.sessionId,
                     errorMessage = parsedOutput.message()
-            );
+                );
+            } else {
+                log:printDebug("Failed to parse LLM response as valid tool or chat",
+                    executionId = self.progress.executionId,
+                    sessionId = self.sessionId,
+                    errorMessage = parsedOutput.message()
+                );
+            }
             observation = "Tool extraction failed due to invalid JSON_BLOB. Retry with correct JSON_BLOB.";
             executionResult = {
                 llmResponse,
@@ -348,18 +396,29 @@ class Executor {
 # + sessionId - The ID associated with the memory
 # + executionId - Unique identifier for this execution
 # + return - Returns the execution steps tracing the agent's reasoning and outputs from the tools
-isolated function run(BaseAgent agent, string instruction, string query, int maxIter, boolean verbose,
+isolated function run(BaseAgent agent, string instruction, string query, int maxIter, boolean verbose, string? agentId, 
         string sessionId = DEFAULT_SESSION_ID, Context context = new, string executionId = DEFAULT_EXECUTION_ID)
         returns ExecutionTrace {
     time:Utc startTime = time:utcNow();
     Iteration[] iterations = [];
-    log:printDebug("Agent execution loop started",
+    if agentId is string {
+        log:printDebug("Agent execution loop started",
+            agentId = agentId,
             executionId = executionId,
             sessionId = sessionId,
             maxIterations = maxIter,
             tools = agent.toolStore.tools.toString(),
             isStateless = agent.stateless
-    );
+        );
+    } else {
+        log:printDebug("Agent execution loop started",
+            executionId = executionId,
+            sessionId = sessionId,
+            maxIterations = maxIter,
+            tools = agent.toolStore.tools.toString(),
+            isStateless = agent.stateless
+        );
+    }
 
     (ExecutionResult|ExecutionError|Error)[] steps = [];
     string? content = ();
@@ -369,11 +428,20 @@ isolated function run(BaseAgent agent, string instruction, string query, int max
     // update the actual memory in a single batch, including the system prompt and user message for this interaction.
     ChatMessage[]|MemoryError prevHistory = agent.memory.get(sessionId);
     if prevHistory is MemoryError {
-        log:printDebug("Failed to retrieve conversation history from memory",
-                prevHistory,
-                executionId = executionId,
-                sessionId = sessionId
-        );
+        if agentId is string {
+            log:printDebug("Failed to retrieve conversation history from memory",
+                    prevHistory,
+                    agentId = agentId,
+                    executionId = executionId,
+                    sessionId = sessionId
+            );
+        } else {
+            log:printDebug("Failed to retrieve conversation history from memory",
+                    prevHistory,
+                    executionId = executionId,
+                    sessionId = sessionId
+            );
+        }
     }
     ChatMessage[] history = (prevHistory is ChatMessage[]) ? [...prevHistory] : [];
     ChatSystemMessage systemMessage = {role: SYSTEM, content: instruction};
@@ -399,12 +467,22 @@ isolated function run(BaseAgent agent, string instruction, string query, int max
             verbosePrint(step, iter);
         }
         if iter == maxIter {
-            log:printDebug("Maximum iterations reached without final answer",
+            if agentId is string {
+                log:printDebug("Maximum iterations reached without final answer",
+                    agentId = agentId,
                     executionId = executionId,
                     iterations = iter,
                     stepsCompleted = steps.length(),
                     sessionId = sessionId
                 );
+            } else {
+                log:printDebug("Maximum iterations reached without final answer",
+                    executionId = executionId,
+                    iterations = iter,
+                    stepsCompleted = steps.length(),
+                    sessionId = sessionId
+                );
+            }
             break;
         }
         if step is Error {
@@ -422,24 +500,45 @@ isolated function run(BaseAgent agent, string instruction, string query, int max
         }
         if step is LlmChatResponse {
             content = step.content;
-            log:printDebug("Final answer generated by agent",
+            if agentId is string {
+                log:printDebug("Final answer generated by agent",
+                    agentId = agentId,
                     executionId = executionId,
                     iteration = iter,
                     answer = step.content,
                     sessionId = sessionId
                 );
+            } else {
+                log:printDebug("Final answer generated by agent",
+                    executionId = executionId,
+                    iteration = iter,
+                    answer = step.content,
+                    sessionId = sessionId
+                );
+            }
             finalAssistantMessage = {role: ASSISTANT, content: step.content};
             iterations.push({startTime, endTime: time:utcNow(), history: iterationHistory, output: iterationOutput});
             break;
         }
         iter += 1;
-        log:printDebug("Agent iteration started",
+        if agentId is string {
+            log:printDebug("Agent iteration started",
+                agentId = agentId,
                 executionId = executionId,
                 iteration = iter,
                 maxIterations = maxIter,
                 stepsCompleted = steps.length(),
                 sessionId = sessionId
             );
+        } else {
+            log:printDebug("Agent iteration started",
+                executionId = executionId,
+                iteration = iter,
+                maxIterations = maxIter,
+                stepsCompleted = steps.length(),
+                sessionId = sessionId
+            );
+        }
 
         steps.push(step);
         iterations.push({startTime, endTime: time:utcNow(), history: iterationHistory, output: iterationOutput});
@@ -453,7 +552,7 @@ isolated function run(BaseAgent agent, string instruction, string query, int max
     }
 
     // Batch update the memory with the user message, system message, and all intermediate steps from tool execution
-    updateMemory(agent.memory, sessionId, temporaryMemory);
+    updateMemory(agent.memory, sessionId, temporaryMemory, agentId);
     if agent.stateless {
         MemoryError? err = agent.memory.delete(sessionId);
         // Ignore this error since the stateless agent always relies on DefaultMessageWindowChatMemoryManager,  
@@ -553,10 +652,14 @@ isolated function getObservationString(anydata|error observation) returns string
 # + return - Array of tools registered with the agent
 public isolated function getTools(Agent agent) returns Tool[] => agent.functionCallAgent.toolStore.tools.toArray();
 
-isolated function updateMemory(Memory memory, string sessionId, ChatMessage[] messages) {
+isolated function updateMemory(Memory memory, string sessionId, ChatMessage[] messages, string? agentId) {
     error? updationStation = memory.update(sessionId, messages);
     if updationStation is error {
-        log:printError("Error occured while updating the memory", updationStation);
+        if agentId is string {
+            log:printError("Error occured while updating the memory", updationStation, agentId = agentId);
+        } else {
+            log:printError("Error occured while updating the memory", updationStation);
+        }
     }
 }
 

@@ -174,7 +174,6 @@ public isolated distinct class Agent {
     private final readonly & ToolSchema[] toolSchemas;
     private final cache:Cache tokenManager = new ();
     private string? agentId = ();
-    private boolean & readonly isAuthEnabled = false;
 
     # Initialize an Agent.
     #
@@ -191,7 +190,6 @@ public isolated distinct class Agent {
         Memory? memory = config.hasKey("memory") ? config?.memory : check new ShortTermMemory();
         AuthConfig? auth = config.auth; 
         if auth is AuthConfig {
-            self.isAuthEnabled = true;
             self.agentId = auth.agentId.cloneReadOnly();
         }
         do {
@@ -229,7 +227,7 @@ public isolated distinct class Agent {
         time:Utc startTime = time:utcNow();
         string executionId = uuid:createRandomUuid();
         lock {
-            if self.isAuthEnabled {
+            if self.agentId is string {
                 log:printDebug("Agent execution started",
                         executionId = executionId,
                         agentId = self.agentId,
@@ -260,7 +258,7 @@ public isolated distinct class Agent {
         do {
             string answer = check getAnswer(executionTrace, self.maxIter);
             lock {
-	            if self.isAuthEnabled {
+	            if self.agentId is string {
 	                log:printInfo("Agent execution completed successfully",
 	                        executionId = executionId,
                             agentId = self.agentId
@@ -290,7 +288,7 @@ public isolated distinct class Agent {
                 : answer;
         } on fail Error err {
             lock {
-	            if self.isAuthEnabled {
+	            if self.agentId is string{
 	                log:printError("Agent execution failed",
                             err,
 	                        executionId = executionId,

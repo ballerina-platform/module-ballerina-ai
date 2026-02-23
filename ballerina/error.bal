@@ -84,7 +84,7 @@ public type ToolInvalidInputError distinct LlmInvalidGenerationError;
 public type MissingHttpParameterError distinct ToolInvalidInputError;
 
 # Errors occurred when validating tool scope.
-public type MismatchScopeError distinct ToolInvalidInputError;
+public type InsufficientScopeError distinct ToolInvalidInputError;
 
 # Represents an error that occurs when the maximum number of iterations has been exceeded.
 public type MaxIterationExceededError distinct (Error & error<record {|(ExecutionResult|ExecutionError|Error)[] steps;|}>);

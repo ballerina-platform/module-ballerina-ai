@@ -179,11 +179,9 @@ public isolated class McpToolKit {
         isolated function caller = self.callTool;
 
         self.tools = from mcp:ToolDefinition tool in filteredTools
-            let string|string[]? scope = <string|string[]?>tool["scopes"]
             select {
                 name: tool.name,
                 description: tool.description ?: "",
-                scopes: scope.cloneReadOnly(),
                 parameters: check getInputSchemaValues(tool).cloneReadOnly(),
                 caller
             };
@@ -549,16 +547,7 @@ public isolated function getPermittedMcpToolConfigs(mcp:StreamableHttpClient mcp
 }
 
 isolated function getClientToolScopes(map<FunctionTool>|FunctionTool permittedTools, string toolName) returns string|string[]? {
-    if permittedTools is FunctionTool {
-        ToolConfig|Error toolConfig = getToolConfig(permittedTools);
-        if toolConfig is ToolConfig {
-            return toolConfig.scopes;
-        }
-        return [];
-    } 
-    ToolConfig|Error toolConfig = getToolConfig(permittedTools.get(toolName));
-    if toolConfig is ToolConfig {
-        return toolConfig.scopes;
-    }
-    return [];
+    ToolConfig|Error toolConfig =  permittedTools is FunctionTool ? getToolConfig(permittedTools) :
+                            getToolConfig(permittedTools.get(toolName));
+    return toolConfig is ToolConfig ? toolConfig.scopes : [];
 }

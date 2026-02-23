@@ -143,9 +143,9 @@ isolated distinct class FunctionCallAgent {
     isolated function run(string query, string instruction, int maxIter = 5, boolean verbose = true,
             string sessionId = DEFAULT_SESSION_ID, Context context = new, string executionId = DEFAULT_EXECUTION_ID)
             returns ExecutionTrace {
-        return run(self, instruction, query, maxIter, verbose, sessionId, context, executionId);
+        return run(self, instruction, query, maxIter, verbose, self.auth is AuthConfig ? self.auth?.agentId : () , 
+                sessionId, context, executionId);
     }
-
 }
 
 isolated function createFunctionCallMessages(ExecutionProgress progress) returns ChatMessage[] {
