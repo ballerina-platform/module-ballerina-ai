@@ -80,10 +80,10 @@ type ValidationResponse record {
 
 isolated function getToolScopes(AuthConfig auth, string baseUrl, cache:Cache tokenManager, 
         string toolName, string|string[] scopes, Context context, http:Client httpclient) 
-            returns TokenAcquisitionError|InsufficientScopeError|TokenValidationError|string[] {
+            returns TokenAcquisitionError|InsufficientScopeError|TokenValidationError|map<()>  {
     string agentId = auth.agentId;
     boolean needsRefresh = true;
-    string[] scopeInToken = [];
+    map<()> scopeInToken = {};
     string & readonly tokenValue = EMPTY_STRING;
     if tokenManager.hasKey(toolName) {
         any|error token = tokenManager.get(toolName);
@@ -134,7 +134,7 @@ isolated function getToolScopes(AuthConfig auth, string baseUrl, cache:Cache tok
     return scopeInToken;
 }
 
-isolated function validateToolScope(string[] cachedScopes, string toolName, string|string[] scopes, 
+isolated function validateToolScope(map<()> cachedScopes, string toolName, string|string[] scopes, 
         string agentId) returns InsufficientScopeError? {
     observe:ValidateToolAuthorizationSpan toolAuthorizationSpan = observe:createValidateToolAuthorizationSpan(toolName);
     log:printDebug("Validating scopes for tool: ",
@@ -143,9 +143,9 @@ isolated function validateToolScope(string[] cachedScopes, string toolName, stri
             requiredScopes = scopes
     );
     string[] requiredScopes = scopes is string[] ? scopes : [scopes];
-    toolAuthorizationSpan.addScopeCheck(requiredScopes, cachedScopes);
+    toolAuthorizationSpan.addScopeCheck(requiredScopes, cachedScopes.keys());
     foreach string scope in requiredScopes {
-        if cachedScopes.indexOf(scope) is () {
+        if !cachedScopes.hasKey(scope) {
             log:printError("Scope mismatch detected for tool: ",
                     agentId = agentId,
                     toolName = toolName,
@@ -295,7 +295,7 @@ isolated function getToken(string code, AuthConfig auth, string baseUrl, Pkce? p
     return httpclient->post(TOKEN, req);
 }
 
-isolated function addToken(string toolName, Token token, cache:Cache tokenManager) returns string[] {
+isolated function addToken(string toolName, Token token, cache:Cache tokenManager) returns map<()> {
     TokenCache tokenCache = new (token);
     cache:Error? output = tokenManager.put(toolName, tokenCache);
     if output is cache:Error {
@@ -402,14 +402,20 @@ isolated class TokenCache {
 
     private string accessToken;
     private int expTime;
-    private string[] scopes;
+    private map<()> scopes = {}; // Use a map instead of an array to reduce the lookup time.
 
     # Initializes the token cache with default empty values.
     isolated function init(Token token, decimal clockSkew = 10) {
         self.accessToken = token.access_token;
         self.expTime = token.expires_in - <int>clockSkew;
-        string? scope = token?.scope;
-        self.scopes = scope is string ? re ` `.split(scope) : [];
+        string? tokenScopes = token?.scope;
+        if tokenScopes is string {
+            foreach string scope in re ` `.split(tokenScopes) {
+                lock {
+	                self.scopes[scope] = ();
+                }
+            }
+        }
     }
 
     # Returns the currently cached access token.
@@ -424,7 +430,7 @@ isolated class TokenCache {
     # Returns a cloned list of scopes associated with the cached access token.
     #
     # + return - A cloned array of scopes linked to the access token
-    isolated function getScopes() returns string[] {
+    isolated function getScopes() returns map<()> {
         lock {
             return self.scopes.clone();
         }

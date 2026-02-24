@@ -432,6 +432,6 @@ public isolated function validateTool(LlmToolResponse action, AuthConfig? auth, 
             return error TokenAcquisitionError(httpclient.message());
         }
         check validateToolScope(check getToolScopes(auth, baseUrl, tokenManager,
-                        toolName, scopes, context, httpclient), toolName, scopes, auth.agentId);
+                    toolName, scopes, context, httpclient), toolName, scopes, auth.agentId);
     }
 }
