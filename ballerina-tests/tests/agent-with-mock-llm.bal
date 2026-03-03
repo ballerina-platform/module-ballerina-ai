@@ -73,7 +73,7 @@ isolated function getEmails() returns stream<Mail, ai:Error?>|error? {
 isolated client distinct class MockLlm {
     *ai:ModelProvider;
 
-    isolated remote function chat(ai:ChatMessage[]|ai:ChatUserMessage messages, (ai:ChatCompletionFunctions|ai:InbuiltModelTool)[] tools = [], string? stop)
+    isolated remote function chat(ai:ChatMessage[]|ai:ChatUserMessage messages, (ai:ChatCompletionFunctions|ai:InbuiltModelTool)[] tools = [], string? stop = ())
         returns ai:ChatAssistantMessage|ai:LlmError {
         ai:ChatMessage lastMessage = messages is ai:ChatUserMessage ? messages : messages.pop();
         if lastMessage !is ai:ChatUserMessage|ai:ChatFunctionMessage {
