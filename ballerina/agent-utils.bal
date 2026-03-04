@@ -90,7 +90,7 @@ type BaseAgent distinct isolated object {
     Memory memory;
     boolean stateless;
     cache:Cache tokenManager;
-    AuthConfig? auth;
+    AgentCredential? agentCredential;
 
     # Parse the llm response and extract the tool to be executed.
     #
@@ -130,9 +130,9 @@ class Executor {
         self.sessionId = sessionId;
         self.agent = agent;
         self.progress = progress;
-        AuthConfig? auth = agent.auth;
-        if auth is AuthConfig {
-            self.agentId = auth.agentId;
+        AgentCredential? agentCredential = agent.agentCredential;
+        if agentCredential is AgentCredential {
+            self.agentId = agentCredential.agentId;
         }
     }
 
@@ -235,9 +235,9 @@ class Executor {
             boolean isMcpTool = toolStore.isMcpTool(toolName);
             span.addType(isMcpTool ? observe:EXTENTION : observe:FUNCTION);
             span.addArguments(parsedOutput.arguments);
-            toolStore.setAuthEnabled(self.agent.auth is AuthConfig);
-            LlmInvalidGenerationError|ToolExecutionError? validateRes = validateTool(parsedOutput, 
-                self.agent.auth, self.agent.tokenManager, self.progress.context, isMcpTool, toolStore.tools);
+            ToolNotFoundError|ToolInvalidInputError|TokenAcquisitionError|TokenValidationError? 
+                    validateRes = validateTool(parsedOutput, self.agent.agentCredential, 
+                    self.agent.tokenManager, self.progress.context, toolStore.tools, isMcpTool);
             if validateRes is Error {
                 if self.agentId is string {
                     log:printError("Tool validation failed",
@@ -255,12 +255,24 @@ class Executor {
                         'error = validateRes
                     );
                 }
-                observation = "Tool extraction failed due to tool validation";
+                if validateRes is ToolNotFoundError|ToolInvalidInputError {
+                    observation = "Tool extraction failed due to tool validation"; 
+                } else {
+                    observation = "Tool validation failed while attempting to execute the selected tool. "
+                        + "This error occurred during validation of the current tool execution request, "
+                        + "possibly due to insufficient permissions or scope validation restrictions. "
+                        + "Do not retry executing the same tool. "
+                        + "In the final response, clearly inform the user that the tool execution failed "
+                        + "because the agent is not authorized to execute the tool or does not have the "
+                        + "required scopes or permissions.";
+                }
                 executionResult = {
                     llmResponse,
                     'error: validateRes,
-                    observation: "Tool extraction failed due to tool validation"
+                    observation: observation.toString()
                 };
+                Error toolExecutionError = error Error(observation.toString(), details = {parsedOutput});
+                span.close(toolExecutionError);
             } else {
                 ToolOutput|ToolExecutionError|LlmInvalidGenerationError output = toolStore.execute(parsedOutput,
                     self.progress.context);

@@ -35,21 +35,21 @@ isolated distinct class FunctionCallAgent {
     # Cache used to store and reuse authentication tokens for tool access.
     final cache:Cache tokenManager;
     # Authentication configuration used for acquiring OAuth tokens when accessing secured tools.
-    final (AuthConfig?) & readonly auth;
+    final readonly & AgentCredential? agentCredential;
 
     # Initialize an Agent.
     #
     # + model - LLM model instance
     # + tools - Tools to be used by the agent
     # + memory - The memory associated with the agent.
-    isolated function init(ModelProvider model, (BaseToolKit|ToolConfig|FunctionTool)[] tools, cache:Cache tokenManager, AuthConfig? auth,
-            Memory? memory = (), ToolLoadingStrategy toolLoadingStrategy = NO_FILTER) returns Error? {
+    isolated function init(ModelProvider model, (BaseToolKit|ToolConfig|FunctionTool)[] tools, cache:Cache tokenManager, 
+        AgentCredential? agentCredential, Memory? memory = (), ToolLoadingStrategy toolLoadingStrategy = NO_FILTER) returns Error? {
         self.toolStore = check new (...tools);
         self.model = model;
         self.memory = memory ?: check new ShortTermMemory();
         self.stateless = memory is ();
         self.toolLoadingStrategy = toolLoadingStrategy;
-        self.auth = auth.cloneReadOnly();
+        self.agentCredential = agentCredential.cloneReadOnly();
         self.tokenManager = tokenManager;
     }
 
@@ -143,8 +143,9 @@ isolated distinct class FunctionCallAgent {
     isolated function run(string query, string instruction, int maxIter = 5, boolean verbose = true,
             string sessionId = DEFAULT_SESSION_ID, Context context = new, string executionId = DEFAULT_EXECUTION_ID)
             returns ExecutionTrace {
-        return run(self, instruction, query, maxIter, verbose, self.auth is AuthConfig ? self.auth?.agentId : () , 
-                sessionId, context, executionId);
+        AgentCredential? & readonly agentConfig = self.agentCredential.cloneReadOnly();
+        string? agentId = agentConfig is AgentCredential ? agentConfig.agentId : ();
+        return run(self, instruction, query, maxIter, verbose, agentId, sessionId, context, executionId);
     }
 }
 

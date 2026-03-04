@@ -49,6 +49,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+import static io.ballerina.stdlib.ai.plugin.ToolAnnotationConfig.AUTH;
 import static io.ballerina.stdlib.ai.plugin.ToolAnnotationConfig.DESCRIPTION_FIELD_NAME;
 import static io.ballerina.stdlib.ai.plugin.ToolAnnotationConfig.NAME_FIELD_NAME;
 import static io.ballerina.stdlib.ai.plugin.ToolAnnotationConfig.PARAMETERS_FIELD_NAME;
@@ -211,7 +212,9 @@ class ToolAnnotationAnalysisTask implements AnalysisTask<SyntaxNodeAnalysisConte
                 : getParameterSchema(functionSymbol, functionDefinitionNode.location());
         String scopes = fieldValues.containsKey(SCOPES) ? fieldValues.get(SCOPES).toSourceCode()
                 : null;
-        return new ToolAnnotationConfig(name, description, parameters, scopes);
+        String auth = fieldValues.containsKey(AUTH) ? fieldValues.get(AUTH).toSourceCode()
+                : null;
+        return new ToolAnnotationConfig(name, description, parameters, scopes, auth);
     }
 
     private Map<String, ExpressionNode> extractFieldValues(SeparatedNodeList<MappingFieldNode> fields) {

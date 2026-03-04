@@ -150,3 +150,33 @@ public enum ToolLoadingStrategy {
      # are loaded and sent to the LLM to obtain the necessary parameters for execution.
     LLM_FILTER
 }
+
+# Represents the OAuth 2.0 client configuration required to interact
+# with an external Authorization Server and validate issued access tokens.
+@display {label: "OAuth Client Configuration"}
+public type AgentIdAuthConfig record {|
+
+    # The base URL of the Authorization Server used to resolve
+    # OAuth 2.0 endpoints such as authorization, token, and introspection.
+    @display {label: "Authorization Server Base URL"}
+    string baseAuthUrl?;
+
+    # The OAuth 2.0 client identifier issued to this client application.
+    @display {label: "Client ID"}
+    string clientId?;
+
+    # The redirect URI registered for the OAuth client and used
+    # in the Authorization Code flow.
+    @display {label: "Redirect URI"}
+    string redirectUri?;
+
+    # Scopes required to invoke this tool
+    @display {label: "Required Scopes"}
+    string|string[] scopes?;
+
+    # Indicates whether PKCE (Proof Key for Code Exchange) is enabled
+    # for the Authorization Code flow.
+    @display {label: "Enable PKCE"}
+    boolean isPkceEnabled = false;
+|};
+
