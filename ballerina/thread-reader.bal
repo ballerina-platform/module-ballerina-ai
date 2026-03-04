@@ -24,7 +24,7 @@ import ballerina/time;
 # a conversation thread with multiple traces of agent executions.
 #
 # Expected structure: `{ "id": "...", "name": "...", "description": "...", "threads": [...] }`
-# where each thread in the array has `id`, `name`, and `traces` fields.
+# where each thread in the array has `id`, `description`, and `traces` fields.
 #
 # + evalSetPath - Path to the JSON file containing the evaluation dataset
 # + return - Map of conversation threads indexed by thread ID, or an `Error` if the file cannot be read or parsed
@@ -79,7 +79,7 @@ public isolated function loadConversationThreads(string evalSetPath) returns map
 
             readonly & ConversationThread thread = {
                 id: rawThread.id,
-                name: rawThread.name,
+                description: rawThread.description,
                 traces: conversationTraces.cloneReadOnly()
             };
             threadsById[thread.id] = [thread];
@@ -102,8 +102,8 @@ isolated function getUtcTime(time:Utc|string timestamp) returns time:Utc|error {
 public type ConversationThread record {|
     # Unique identifier for the conversation thread
     string id;
-    # Human-readable name or description of the conversation thread
-    string name;
+    # Human-readable description of the conversation thread
+    string description;
     # Sequence of traces representing individual agent executions within this thread
     readonly & Trace[] traces;
 |};
@@ -117,7 +117,7 @@ type TraceDataset record {
 
 type RawConversationThread record {
     string id;
-    string name;
+    string description;
     RawTrace[] traces;
 };
 

@@ -5,7 +5,7 @@
   "threads": [
     {
       "id": "thread-01",
-      "name": "Thread - d6350004",
+      "description": "Description 01",
       "traces": [
         {
           "id": "34d770bfab6486ede2a8fa893341f7c1",
@@ -913,7 +913,7 @@
     },
     {
       "id": "thread-02",
-      "name": "Thread - d6350005",
+      "description": "Description 02",
       "traces": [
         {
           "id": "34d770bfab6486ede2a8fa893341f7c1",
