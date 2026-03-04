@@ -78,10 +78,11 @@ type ValidationResponse record {
     boolean active?;
 };
 
-isolated function getToolScopes(AuthConfig auth, string baseUrl, cache:Cache tokenManager, 
-        string toolName, string|string[] scopes, Context context, http:Client httpclient) 
-            returns TokenAcquisitionError|InsufficientScopeError|TokenValidationError|map<()>  {
-    string agentId = auth.agentId;
+isolated function getToolScopes(AgentCredential agentCredential, OauthClientConfig oauthClientConfig, 
+        JwtConfig|IntrospectionConfig tokenValidator, string baseUrl, cache:Cache tokenManager, string toolName, 
+        string|string[] scopes, Context context, http:Client httpclient) 
+        returns TokenAcquisitionError|InsufficientScopeError|TokenValidationError|map<()>?  {
+    string agentId = agentCredential.agentId;
     boolean needsRefresh = true;
     map<()> scopeInToken = {};
     string & readonly tokenValue = EMPTY_STRING;
@@ -100,21 +101,22 @@ isolated function getToolScopes(AuthConfig auth, string baseUrl, cache:Cache tok
                 scopes = scopes
         );
         
-        Token freshToken = check getFreshToken(auth, baseUrl, scopes, toolName, httpclient);
-
+        Token freshToken = check getFreshToken(agentCredential, oauthClientConfig, agentId, 
+                scopes, toolName, httpclient);
         observe:ValidateTokenSpan createValidateTokenSpan = observe:createValidateTokenSpan("WSO2:Asgardeo");
-        ValidationResponse|error validateTokenResult = validateToken(auth, baseUrl, 
-            freshToken.access_token, freshToken.token_type);
+        ValidationResponse|error validateTokenResult = validateToken(tokenValidator, baseUrl, 
+            freshToken.access_token, freshToken.token_type, agentId);
+        string clientId = oauthClientConfig.clientId;
         if validateTokenResult is error {
-            createValidateTokenSpan.addValidationResult(false, auth.clientId, auth.agentId);
+            createValidateTokenSpan.addValidationResult(false, clientId, agentId);
             createValidateTokenSpan.close(validateTokenResult);
             log:printError("Token validation failed", 'error = validateTokenResult, 
-                agentId = auth.agentId, toolName = toolName);
+                agentId = agentId, toolName = toolName);
             return error TokenValidationError("Token validation failed: ", 
                 cause = validateTokenResult);
         }
         boolean? active = validateTokenResult.active;
-        createValidateTokenSpan.addValidationResult(active, auth.clientId, auth.agentId);
+        createValidateTokenSpan.addValidationResult(active, clientId, agentId);
         if active is () || active is true {
             freshToken.expires_in = validateTokenResult.exp;
             freshToken.scope = validateTokenResult.scope;
@@ -125,7 +127,7 @@ isolated function getToolScopes(AuthConfig auth, string baseUrl, cache:Cache tok
         } else {
             string msg = "Token validation failed: token is expired or revoked";
             createValidateTokenSpan.close(error TokenValidationError(msg));
-            log:printError(msg, agentId = auth.agentId, toolName = toolName);
+            log:printError(msg, agentId = agentId, toolName = toolName);
             return error TokenValidationError(msg);
         }
         createValidateTokenSpan.close();
@@ -162,76 +164,77 @@ isolated function validateToolScope(map<()> cachedScopes, string toolName, strin
     return;
 }
 
-isolated function getFreshToken(AuthConfig auth, string baseUrl, string|string[] scopes, 
-        string toolName, http:Client httpclient) returns TokenAcquisitionError|Token {
+isolated function getFreshToken(AgentCredential agentCredential, OauthClientConfig oauthClientConfig, 
+        string agentId, string|string[] scopes, string toolName, http:Client httpclient) returns TokenAcquisitionError|Token {
     observe:InvokeAuthorizeEndpointSpan invokeAuthorizeEndpointSpan = 
                     observe:createInvokeAuthorizeEndpointSpan("WSO2");
     Pkce? pkce = ();
-    if (auth.isPkceEnabled) {
+    if (oauthClientConfig.isPkceEnabled) {
         Pkce|error result = generatePKCE();
         if result is error {
-            log:printError("Failed to create pkce value", 'error = result, agentId = auth.agentId, 
+            log:printError("Failed to create pkce value", 'error = result, agentId = agentId, 
                 toolName = toolName);
             return error TokenAcquisitionError("Failed to create pkce value", 
                 detail = {cause: result});
         }
         pkce = result;
     }
-    invokeAuthorizeEndpointSpan.addAuthRequestDetails(auth.clientId, 
+    string clientId = oauthClientConfig.clientId;
+    invokeAuthorizeEndpointSpan.addAuthRequestDetails(clientId, 
                 scopes, challenge= pkce is Pkce ? pkce.challenge : ());
-    AuthResponse|error flowId = getFlowId(auth, baseUrl, scopes, pkce, httpclient);
+    AuthResponse|error flowId = getFlowId(oauthClientConfig, agentId, scopes, pkce, httpclient);
     if flowId is error {
         invokeAuthorizeEndpointSpan.close(flowId);
         log:printError("Failed to obtain flow id for token acquisition",
-                'error = flowId, agentId = auth.agentId, toolName = toolName);
+                'error = flowId, agentId = agentId, toolName = toolName);
         return error TokenAcquisitionError("Failed to obtain flow id", detail = {cause: flowId});
     }
     invokeAuthorizeEndpointSpan.close();
-    log:printInfo("Successfully obtained flow id for token acquisition", agentId = auth.agentId, 
+    log:printInfo("Successfully obtained flow id for token acquisition", agentId = agentId, 
             toolName = toolName);
 
     observe:AgentAuthenticationSpan authenticationSpan = 
             observe:createAgentAuthenticationSpan(flowId.flowId);
-    authenticationSpan.addAgentIdentity(auth.agentId, flowId.nextStep.authenticators[0].authenticatorId);
-    Code|error code = getCode(flowId, auth, baseUrl, httpclient);
+    authenticationSpan.addAgentIdentity(agentId, flowId.nextStep.authenticators[0].authenticatorId);
+    Code|error code = getCode(flowId, agentCredential, httpclient);
     if code is error {
         authenticationSpan.close(code);
         log:printError("Failed to obtain authorization code for token acquisition", 
-                'error = code, agentId = auth.agentId, toolName = toolName);
+                'error = code, agentId = agentId, toolName = toolName);
         return error TokenAcquisitionError("Failed to obtain authorization code", 
             detail = {cause: code});
     }
     authenticationSpan.close();
-    log:printInfo("Successfully obtained authorization code", agentId = auth.agentId,
+    log:printInfo("Successfully obtained authorization code", agentId = agentId,
              toolName = toolName);
 
     observe:ExchangeTokenSpan exchangeTokenSpan = observe:createExchangeTokenSpan();
     exchangeTokenSpan.addExchangeDetails(code.authData.code, 
-            pkce is Pkce ? pkce.verifier : (), auth.clientId);
-    error|Token token = getToken(code.authData.code, auth, baseUrl, pkce, httpclient);
+            pkce is Pkce ? pkce.verifier : (), clientId);
+    error|Token token = getToken(code.authData.code, oauthClientConfig, agentId, pkce, httpclient);
     if token is error {
         exchangeTokenSpan.close(token);
         log:printError("Failed to obtain access token", 'error = token, 
-                agentId = auth.agentId, toolName = toolName);
+                agentId = agentId, toolName = toolName);
         return error TokenAcquisitionError("Failed to obtain access token", 
             detail = {cause: token});
     }
     exchangeTokenSpan.close();
-    log:printInfo("Successfully obtained access token", agentId = auth.agentId, 
+    log:printInfo("Successfully obtained access token", agentId = agentId, 
         toolName = toolName);
     return token;
 }
 
-isolated function getFlowId(AuthConfig auth, string baseUrl, string|string[] scope, Pkce? pkce, 
+isolated function getFlowId(OauthClientConfig clientConfig, string agentId, string|string[] scope, Pkce? pkce, 
                 http:Client httpclient) returns error|AuthResponse {
     log:printDebug("Requesting flow id and authenticator id for token acquisition", 
-        agentId = auth.agentId, scope = scope);
+        agentId = agentId, scope = scope);
     string scopes = scope is string[] ? string:'join(SPACE, ...scope) : scope;
     map<string> formData = {
-        client_id: auth.clientId,
+        client_id: clientConfig.clientId,
         response_type: CODE,
         scope: scopes,
-        redirect_uri: auth.redirectUri,
+        redirect_uri: clientConfig.redirectUri,
         response_mode: DIRECT
     };
     if pkce is Pkce {
@@ -252,16 +255,15 @@ isolated function getFlowId(AuthConfig auth, string baseUrl, string|string[] sco
     return httpclient->post(AUTHORIZE, req);
 }
 
-isolated function getCode(AuthResponse authResponse, AuthConfig auth, string baseUrl, 
-                http:Client httpclient) returns error|Code {
-    log:printDebug("Requesting authorization code for token acquisition", agentId = auth.agentId);
+isolated function getCode(AuthResponse authResponse, AgentCredential agentCredential, http:Client httpclient) returns error|Code {
+    log:printDebug("Requesting authorization code for token acquisition", agentId = agentCredential.agentId);
     json payload = {
         "flowId": authResponse.flowId,
         "selectedAuthenticator": {
             "authenticatorId": authResponse.nextStep.authenticators[0].authenticatorId,
             "params": {
-                "username": auth.agentId,
-                "password": auth.agentSecret
+                "username": agentCredential.agentId,
+                "password": agentCredential.agentSecret
 
             }
         }
@@ -272,14 +274,14 @@ isolated function getCode(AuthResponse authResponse, AuthConfig auth, string bas
     return httpclient->post(AUTHN_HEADER, req);
 }
 
-isolated function getToken(string code, AuthConfig auth, string baseUrl, Pkce? pkce, 
+isolated function getToken(string code, OauthClientConfig oauthConfig, string agentId, Pkce? pkce, 
                 http:Client httpclient) returns error|Token {
-    log:printDebug("Requesting access token for token acquisition", agentId = auth.agentId);
+    log:printDebug("Requesting access token for token acquisition", agentId = agentId);
     map<string> formData = {
-        client_id: auth.clientId,
+        client_id: oauthConfig.clientId,
         grant_type: AUTHORIZATION_CODE,
         code: code,
-        redirect_uri: auth.redirectUri
+        redirect_uri: oauthConfig.redirectUri
     };
     if pkce is Pkce {
         formData["code_verifier"] = pkce.verifier;
@@ -304,35 +306,34 @@ isolated function addToken(string toolName, Token token, cache:Cache tokenManage
     return tokenCache.getScopes();
 }
 
-isolated function validateToken(AuthConfig auth, string baseUrl, string accessToken,
-        string tokenTypeHint) returns error|ValidationResponse {
-    Jwt|Introspection validation = auth.tokenValidation;
-    if validation is Jwt {
-        string? url = validation?.jwksConfig?.url;
+isolated function validateToken(JwtConfig|IntrospectionConfig validator, string baseUrl, 
+        string accessToken, string tokenTypeHint, string agentId) returns error|ValidationResponse {
+    if validator is JwtConfig {
+        string? url = validator?.jwksConfig?.url;
         if url is string {
-            return validateWithJwks(accessToken, url, auth);
+            return validateWithJwks(accessToken, url, agentId);
         }
-        string|crypto:PublicKey? certFile = validation?.certFile;
+        string|crypto:PublicKey? certFile = validator?.certFile;
         if certFile is string|crypto:PublicKey {
             return validateWithCertificate(accessToken, certFile);
         }
         return error TokenValidationError("No valid JWT validation configuration found");
     }
 
-    string? url = validation.introspectionUrl;
+    string? url = validator.introspectionUrl;
     string introspectUrl = url is string ? url : baseUrl.concat(INTROSPECT);
     return validateWithIntrospection(
             introspectUrl,
             accessToken,
-            auth.agentId,
-            validation.clientConfig,
+            agentId,
+            validator.clientCredential,
             tokenTypeHint
     );
 }
 
-isolated function validateWithJwks(string token, string url, AuthConfig auth) 
+isolated function validateWithJwks(string token, string url, string agentId) 
         returns error|ValidationResponse {
-    log:printDebug("Validating token using JWKS", agentId = auth.agentId);
+    log:printDebug("Validating token using JWKS", agentId = agentId);
     jwt:ValidatorConfig validatorConfig = {
         signatureConfig: {
             jwksConfig: {
@@ -356,14 +357,14 @@ isolated function validateWithCertificate(string token, string|crypto:PublicKey 
 }
 
 isolated function validateWithIntrospection(string url, string accessToken, string agentId, 
-        ClientCredentialsConfig clientConfig, string? tokenTypeHint) returns ValidationResponse|error {
+        ClientCredential clientCredential, string? tokenTypeHint) returns ValidationResponse|error {
     log:printDebug("Validating token using introspection", agentId = agentId);
     string textPayload = TOKEN_WITH_EQUAL + accessToken;
     if tokenTypeHint is string {
         textPayload += TOKEN_TYPE_HINT + tokenTypeHint;
     }
-    http:Client httpclient = check new (url, auth = {username: clientConfig.clientId, 
-        password: clientConfig.clientSecret});
+    http:Client httpclient = check new (url, auth = {username: clientCredential.clientId, 
+        password: clientCredential.clientSecret});
     http:Request req = new;
     req.setHeader(CONTENT_TYPE_HEADER, APPLICATION_X_WWW_FORM_URLENCODED);
     req.setPayload(textPayload);

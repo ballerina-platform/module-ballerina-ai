@@ -17,7 +17,6 @@
 import ai.observe;
 
 import ballerina/cache;
-import ballerina/crypto;
 import ballerina/jballerina.java;
 import ballerina/log;
 import ballerina/time;
@@ -47,80 +46,17 @@ public enum AgentType {
     FUNCTION_CALL_AGENT
 }
 
-# Represents the authentication configuration of an autonomous agent.
-@display {label: "Auth Configuration"}
-public type AuthConfig record {|
-
-    # The base URL of the authorization server used to derive OAuth 2.0 endpoints 
-    # such as authorization, token, and introspection.
-    @display {label: "Base Auth URL"}
-    string baseAuthUrl;
+# Represents the authentication credentials of an autonomous agent.
+@display {label: "Agent Credential"}
+public type AgentCredential record {|
 
     # The unique identifier assigned to the agent.
     @display {label: "Agent ID"}
     string agentId;
 
-    # The secret associated with the agent identity.
+    # The secret associated with the agent.
     @display {label: "Agent Secret"}
     string agentSecret;
-
-    # The OAuth 2.0 client identifier issued to the agent.
-    @display {label: "Client ID"}
-    string clientId;
-
-    # The redirect URI registered for the OAuth client and used in 
-    # authorization code-based OAuth 2.0 flows.
-    @display {label: "Redirect URI"}
-    string redirectUri;
-
-    # Indicates whether PKCE (Proof Key for Code Exchange) is enabled 
-    # for the OAuth 2.0 authorization code flow.
-    @display {label: "PKCE Enabled"}
-    boolean isPkceEnabled = false;
-
-    # Defines the strategy used to validate incoming access tokens.
-    # This may involve local JWT validation (JWKS or certificate-based)
-    # or remote OAuth 2.0 token introspection.
-    @display {label: "Token Validation Strategy"}
-    Jwt|Introspection tokenValidation;
-|};
-
-# Validates JWT access tokens locally.
-public type Jwt record {|
-
-    # Configuration for resolving public keys from a JWKS endpoint.
-    # When provided, the validator retrieves signing keys dynamically.
-    record {|
-        string url;
-    |} jwksConfig?;
-
-    # Public certificate or key used for local signature verification.
-    # Used when JWKS-based resolution is not configured.
-    string|crypto:PublicKey certFile?;
-|};
-
-# Validates access tokens remotely using an OAuth 2.0 introspection endpoint.
-public type Introspection record {|
-
-    # The URL of the OAuth 2.0 introspection endpoint used 
-    # to validate tokens remotely.
-    @display {label: "Introspection URL"}
-    string introspectionUrl?;
-
-    # Client credentials used to authenticate with the introspection endpoint.
-    ClientCredentialsConfig clientConfig;
-|};
-
-# Client credentials for authenticating with the OAuth 2.0 introspection endpoint.
-public type ClientCredentialsConfig record {|
-
-    # The client identifier issued by the authorization server.
-    @display {label: "Client ID"}
-    string clientId;
-
-    # The confidential client secret issued by the authorization server.
-    @display {label: "Client Secret"}
-    string clientSecret;
 |};
 
 # Provides a set of configurations for the agent.
@@ -158,10 +94,9 @@ public type AgentConfiguration record {|
     @display {label: "Tool Loading Strategy"}
     ToolLoadingStrategy toolLoadingStrategy = NO_FILTER;
 
-    # Defines the authentication configuration that represents
-    # the OAuth 2.0 identity used by the agent at runtime.
-    @display {label: "Authentication Configuration"}
-    AuthConfig auth?;
+    # Optional authentication details of the agent.
+    @display {label: "Agent Details"}
+    AgentCredential agentCredential?;
 |};
 
 # Represents an agent.
@@ -189,22 +124,19 @@ public isolated distinct class Agent {
         self.systemPrompt = config.systemPrompt.cloneReadOnly();
         Memory? memory = config.hasKey("memory") ? config?.memory : check new ShortTermMemory();
         observe:CreateAgentIdentitySpan? agentIdentitySpan = ();
-        AuthConfig? auth = config.auth;
-        if auth is AuthConfig {
+        AgentCredential? agentCredential = config.agentCredential;
+        if agentCredential is AgentCredential {
             agentIdentitySpan = observe:createCreateAgentIdentitySpan(config.systemPrompt.role);
-            self.agentId = auth.agentId.cloneReadOnly();
+            self.agentId = agentCredential.agentId.cloneReadOnly();
             if agentIdentitySpan is observe:CreateAgentIdentitySpan {
                 lock {
                     agentIdentitySpan.addId(self.agentId);
                 }
-                agentIdentitySpan.addProviderUrl(auth.baseAuthUrl);
-                agentIdentitySpan.addTokenValidationMethod(auth.tokenValidation is Jwt ? "Jwt" : "Interospection");
             }
         }
         do {
             self.functionCallAgent = check new FunctionCallAgent(config.model, config.tools, self.tokenManager,
-                config?.auth, memory, config.toolLoadingStrategy
-            );
+                agentCredential, memory, config.toolLoadingStrategy);
             self.toolSchemas = self.functionCallAgent.toolStore.getToolSchema().cloneReadOnly();
             span.addTools(self.functionCallAgent.toolStore.getToolsInfo());
             lock {

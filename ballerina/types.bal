@@ -15,6 +15,7 @@
 // under the License.
 
 import ballerina/http;
+import ballerina/crypto;
 
 # Represents a request message for the chat service.
 #
@@ -150,3 +151,96 @@ public enum ToolLoadingStrategy {
      # are loaded and sent to the LLM to obtain the necessary parameters for execution.
     LLM_FILTER
 }
+
+# Represents the OAuth 2.0 client configuration required to interact
+# with an external Authorization Server and validate issued access tokens.
+@display {label: "OAuth Client Configuration"}
+public type OauthClientConfig record {|
+
+    # The base URL of the Authorization Server used to resolve
+    # OAuth 2.0 endpoints such as authorization, token, and introspection.
+    @display {label: "Authorization Server Base URL"}
+    string baseAuthUrl;
+
+    # The OAuth 2.0 client identifier issued to this client application.
+    @display {label: "Client ID"}
+    string clientId;
+
+    # The redirect URI registered for the OAuth client and used
+    # in the Authorization Code flow.
+    @display {label: "Redirect URI"}
+    string redirectUri;
+
+    # Indicates whether PKCE (Proof Key for Code Exchange) is enabled
+    # for the Authorization Code flow.
+    @display {label: "Enable PKCE"}
+    boolean isPkceEnabled = false;
+|};
+
+public type AuthConfig record {|
+
+    # Configuration for authenticating with an external authorization server
+    # to obtain access tokens required for non- MCP tool invocation.
+    @display {label: "OAuth Client Configuration"}
+    OauthClientConfig? clientConfig?;
+
+    # Defines how access tokens should be validated.
+    # Supports local JWT validation or OAuth 2.0 token introspection.
+    @display {label: "Token Validation Strategy"}
+    JwtConfig|IntrospectionConfig tokenValidator;
+|};
+
+public type InternalAuthConfig record {|
+
+    # Configuration for authenticating with an external authorization server
+    # to obtain access tokens required for non- MCP tool invocation.
+    @display {label: "OAuth Client Configuration"}
+    OauthClientConfig clientConfig;
+
+    # Defines how access tokens should be validated.
+    # Supports local JWT validation or OAuth 2.0 token introspection.
+    @display {label: "Token Validation Strategy"}
+    JwtConfig|IntrospectionConfig tokenValidator;
+|};
+
+# Configuration for resolving public signing keys from a JWKS endpoint.
+public type JwksConfig record {|
+    # The HTTPS URL of the JWKS endpoint. 
+    string url;
+|};
+
+# Validates JWT access tokens locally.
+public type JwtConfig record {|
+
+    # Configuration for resolving public keys from a JWKS endpoint.
+    # When provided, the validator retrieves signing keys dynamically.
+    JwksConfig jwksConfig?;
+
+    # Public certificate or key used for local signature verification.
+    # Used when JWKS-based resolution is not configured.
+    string|crypto:PublicKey certFile?;
+|};
+
+# Validates access tokens remotely using an OAuth 2.0 introspection endpoint.
+public type IntrospectionConfig record {|
+
+    # The URL of the OAuth 2.0 introspection endpoint used
+    # to validate tokens remotely.
+    @display {label: "Introspection URL"}
+    string introspectionUrl?;
+
+    # Client credentials used to authenticate with the introspection endpoint.
+    ClientCredential clientCredential;
+|};
+
+# Client credentials for authenticating with the OAuth 2.0 introspection endpoint.
+public type ClientCredential record {|
+
+    # The client identifier issued by the authorization server.
+    @display {label: "Client ID"}
+    string clientId;
+
+    # The confidential client secret issued by the authorization server.
+    @display {label: "Client Secret"}
+    string clientSecret;
+|};

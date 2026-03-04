@@ -144,6 +144,9 @@ public type ToolConfig record {|
     map<json>? parameters = ();
     # Pointer to the function that should be called when the tool is invoked.
     FunctionTool caller;
+    # Optional authorization configuration required to invoke this tool.
+    @display {label: "Authorization Configuration"}
+    AuthConfig auth?;
     # Scopes required to invoke this tool
     string|string[] scopes?;
 |};
@@ -158,6 +161,9 @@ public type ToolAnnotationConfig record {|
     # The input schema expected by the tool. If the tool does not expect any input, this should be null.  
     # If not provided, the input schema is generated automatically. 
     ObjectInputSchema? parameters?;
+    # Optional authorization configuration required to invoke this tool.
+    @display {label: "Authorization Configuration"}
+    AuthConfig auth?;
     # Scopes required to invoke this tool
     @display {label: "Required Scopes"}
     string|string[] scopes?;
