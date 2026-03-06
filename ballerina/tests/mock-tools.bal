@@ -50,7 +50,7 @@ isolated function sendMail(record {|string senderEmail; MessageRequest messageRe
 public isolated client class MockLLM {
     *ModelProvider;
 
-    isolated remote function chat(ChatMessage[]|ChatUserMessage messages, (ChatCompletionFunctions|InbuiltModelTool)[] tools, string? stop)
+    isolated remote function chat(ChatMessage[]|ChatUserMessage messages, (ChatCompletionFunctions|BuiltInTool)[] tools, string? stop)
         returns ChatAssistantMessage|LlmError {
         ChatMessage lastMessage = messages is ChatUserMessage ? messages : messages.pop();
         string prompt = lastMessage is ChatUserMessage ? getChatMessageStringContent(lastMessage.content) : "";

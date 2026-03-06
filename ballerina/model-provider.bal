@@ -92,10 +92,14 @@ public type ChatCompletionFunctions record {|
     map<json> parameters?;
 |};
 
-public type InbuiltModelTool record {|
-    # Name of the tool
+# Represents a built-in tool provided natively by a model provider (e.g., web search, code interpreter, file search).
+# Unlike `ChatCompletionFunctions` which are user-defined function tools, built-in tools are managed and
+# executed by the model provider itself. Provider-specific modules should include this type using `*BuiltInTool`
+# and narrow the `name` field to a string literal for the specific tool.
+public type BuiltInTool record {|
+    # Identifier for the built-in tool (e.g., "web_search", "code_interpreter", "file_search", "code_execution")
     string name;
-    # Configurations of the tool
+    # Provider-specific configuration options for the tool
     map<anydata> configurations?;
 |};
 
@@ -126,7 +130,7 @@ public type ModelProvider distinct isolated client object {
     # + tools - Tool definitions to be used for the tool call
     # + stop - Stop sequence to stop the completion
     # + return - Function to be called, chat response or an error in-case of failures
-    isolated remote function chat(ChatMessage[]|ChatUserMessage messages, (ChatCompletionFunctions|InbuiltModelTool)[] tools = [], string? stop = ())
+    isolated remote function chat(ChatMessage[]|ChatUserMessage messages, (ChatCompletionFunctions|BuiltInTool)[] tools = [], string? stop = ())
         returns ChatAssistantMessage|Error;
 
     # Sends a chat request to the model and generates a value that belongs to the type
@@ -205,7 +209,7 @@ public isolated distinct client class Wso2ModelProvider {
     # + tools - Tool definitions to be used for the tool call
     # + stop - Stop sequence to stop the completion
     # + return - Function to be called, chat response or an error in-case of failures
-    isolated remote function chat(ChatMessage[]|ChatUserMessage messages, (ChatCompletionFunctions|InbuiltModelTool)[] tools = [], string? stop = ())
+    isolated remote function chat(ChatMessage[]|ChatUserMessage messages, (ChatCompletionFunctions|BuiltInTool)[] tools = [], string? stop = ())
     returns ChatAssistantMessage|Error {
         observe:ChatSpan span = observe:createChatSpan("gpt-4o-mini");
         span.addProvider("WSO2");
@@ -224,7 +228,7 @@ public isolated distinct client class Wso2ModelProvider {
             request.functions = tools;
             json[] toolsArr = [];
 
-            foreach ChatCompletionFunctions|InbuiltModelTool tool in tools {
+            foreach ChatCompletionFunctions|BuiltInTool tool in tools {
                 if tool is ChatCompletionFunctions {
                     toolsArr.push(tool);
                 } else {
