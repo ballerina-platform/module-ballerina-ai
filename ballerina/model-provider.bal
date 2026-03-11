@@ -92,12 +92,12 @@ public type ChatCompletionFunctions record {|
     map<json> parameters?;
 |};
 
-# Represents a built-in tool provided natively by a model provider (e.g., web search, code interpreter, file search).
+# Represents a built-in tool provided natively by a model provider (e.g., web search, code interpreter).
 # Unlike `ChatCompletionFunctions` which are user-defined function tools, built-in tools are managed and
 # executed by the model provider itself. Provider-specific modules should include this type using `*BuiltInTool`
 # and narrow the `name` field to a string literal for the specific tool.
 public type BuiltInTool record {|
-    # Identifier for the built-in tool (e.g., "web_search", "code_interpreter", "file_search", "code_execution")
+    # Identifier for the built-in tool (e.g., "web_search", "code_interpreter", "code_execution")
     string name;
     # Provider-specific configuration options for the tool
     map<anydata> configurations?;
@@ -224,17 +224,27 @@ public isolated distinct client class Wso2ModelProvider {
             messages: self.mapToChatCompletionRequestMessage(messages),
             temperature: self.temperature
         };
-        if tools.length() > 0 {
-            request.functions = tools;
-            json[] toolsArr = [];
 
-            foreach ChatCompletionFunctions|BuiltInTool tool in tools {
-                if tool is ChatCompletionFunctions {
-                    toolsArr.push(tool);
-                } else {
-                    toolsArr.push(tool.toJson());
-                }
+        json[] toolsArr = [];
+        ChatCompletionFunctions[] functionTools = [];
+        string[] builtInTools = [];
+        foreach ChatCompletionFunctions|BuiltInTool tool in tools {
+            if tool is ChatCompletionFunctions {
+                toolsArr.push(tool);
+                functionTools.push(tool);
+            } else {
+                toolsArr.push(tool.toJson());
+                builtInTools.push(tool.name);
             }
+        }
+
+        if builtInTools.length() > 0 {
+            return error Error(string `Built-in tools [${string:'join(", ", ...builtInTools)}] are not supported `
+                + "for this model.");
+        }
+
+        if functionTools.length() > 0 {
+            request.functions = functionTools;
             span.addTools(toolsArr);
         }
         intelligence:CreateChatCompletionResponse|error response = self.llmClient->/chat/completions.post(request, headers = {
