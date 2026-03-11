@@ -5,12 +5,12 @@
 
 [ballerina]
 dependencies-toml-version = "2"
-distribution-version = "2201.13.0"
+distribution-version = "2201.12.0"
 
 [[package]]
 org = "ballerina"
 name = "ai"
-version = "1.10.0"
+version = "1.11.0"
 dependencies = [
 	{org = "ballerina", name = "constraint"},
 	{org = "ballerina", name = "data.jsondata"},
@@ -97,7 +97,7 @@ modules = [
 [[package]]
 org = "ballerina"
 name = "data.xmldata"
-version = "1.6.0"
+version = "1.6.1"
 dependencies = [
 	{org = "ballerina", name = "jballerina.java"},
 	{org = "ballerina", name = "lang.object"}
@@ -345,7 +345,7 @@ dependencies = [
 [[package]]
 org = "ballerina"
 name = "observe"
-version = "1.7.0"
+version = "1.6.0"
 dependencies = [
 	{org = "ballerina", name = "jballerina.java"}
 ]
