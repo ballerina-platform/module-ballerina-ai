@@ -39,20 +39,6 @@ public isolated distinct class CreateAgentIdentitySpan {
       self.addTag(AGENT_ID, agentId);
    }
 
-   # Records the URL of the identity provider used for this agent.
-   # 
-   # + url - The base URL of the Identity Server
-   public isolated function addProviderUrl(string url) {
-      self.addTag(IDENTITY_PROVIDER_URL, url);
-   }
-
-   # Records the method used to validate the agent's identity tokens.
-   # 
-   # + method - The validation method used (e.g., "jwt" or "introspection")
-   public isolated function addTokenValidationMethod(string method) {
-      self.addTag(TOKEN_VALIDATION_METHOD, method);
-   }
-
    # Adds a custom tag to the span.
    # 
    # + key - The metadata tag name from `GenAiTagNames`
@@ -82,15 +68,24 @@ public isolated distinct class InvokeAuthorizeEndpointSpan {
       self.addTag(OPERATION_NAME, INVOKE_AUTHORIZE_ENDPOINT);
    }
 
+      # Records the URL of the identity provider used for this agent.
+   # 
+   # + url - The base URL of the Identity Server
+   public isolated function addProviderUrl(string url) {
+      self.addTag(IDENTITY_PROVIDER_URL, url);
+   }
+
    # Records parameters from the /authorize call including PKCE challenge.
    # 
    # + clientId - The OAuth2 client identifier
    # + scopes - The list of requested scopes
+   # + url - The authorize endpoint URL of the Identity Server
    # + 'resource - The resource indicator (e.g., booking_api)
    # + challenge - The PKCE code_challenge
    # + method - The PKCE transformation method (S256)
-   public isolated function addAuthRequestDetails(string clientId, string[]|string scopes, string 'resource = "", 
+   public isolated function addAuthRequestDetails(string clientId, string[]|string scopes, string url, string 'resource = "", 
                                                 string? challenge = (), string method = "S256") {
+      self.addTag(IDENTITY_PROVIDER_URL, url);
       self.addTag(CLIENT_ID, clientId);
       self.addTag(AUTH_SCOPES, scopes.toString());
       self.addTag(RESOURCE_INDICATOR, 'resource);
@@ -160,12 +155,8 @@ public isolated distinct class ExchangeTokenSpan {
 
    # Records the details of the token exchange including PKCE verification.
    # 
-   # + code - The authorization code received from the IS
-   # + codeVerifier - The PKCE code_verifier used for validation
    # + clientId - The OAuth2 client identifier
-   public isolated function addExchangeDetails(string code, string? codeVerifier, string clientId) {
-      self.addTag(AUTH_CODE, code);
-      self.addTag(PKCE_VERIFIER, codeVerifier);
+   public isolated function addExchangeDetails(string clientId) {
       self.addTag(CLIENT_ID, clientId);
    }
 
@@ -237,8 +228,8 @@ public isolated distinct class ValidateToolAuthorizationSpan {
    # + required - The scopes required to run the tool
    # + granted - The scopes present in the agent's current token
    public isolated function addScopeCheck(string[] required, string[] granted) {
-      self.addTag(AUTH_SCOPES, 
-            string `Required: ${required.toString()}, Granted: ${granted.toString()}`);
+      self.addTag(REQUIRED_SCOPES, required);
+      self.addTag(GRANTED_SCOPES, granted);
    }
 
    isolated function addTag(GenAiTagNames key, anydata value) {

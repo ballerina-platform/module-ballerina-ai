@@ -404,7 +404,7 @@ isolated function validateTool(LlmToolResponse action, AgentCredential? agentCre
     log:printDebug("Executing tool",
         agentId = agentId,
         toolName = toolName,
-        arguments = inputValues
+        arguments = inputValues.keys()
     );
     AgentIdAuthConfig? agentIdConfig = tool.get(toolName).agentIdConfig;
     string[]|string? scopes = agentIdConfig?.scopes;

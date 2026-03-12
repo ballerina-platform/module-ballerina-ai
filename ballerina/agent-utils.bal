@@ -300,7 +300,7 @@ class Executor {
                             toolName = toolName
                         );
                     } else {
-                        log:printDebug("Tool execution resulted in error",
+                        log:printError("Tool execution resulted in error",
                             executionId = self.progress.executionId,
                             observation = observation.toString(),
                             sessionId = self.sessionId,

@@ -65,19 +65,6 @@ type Code record {
     record {string code;} authData;
 };
 
-# Represents the validation response.
-#
-# + scope - A JSON string containing a space-separated list of scopes associated with this token
-# + client_id - Client identifier for the OAuth 2.0 client, which requested this token
-# + exp - Expiry time (seconds since the Epoch)
-# + active - Indicates whether the token is currently active.
-type ValidationResponse record {
-    string scope?;
-    string client_id;
-    int exp;
-    boolean active?;
-};
-
 isolated function getToolScopes(AgentCredential agentCredential, AgentIdAuthConfig agentIdConfig, string baseUrl, 
         cache:Cache tokenManager, string toolName, string|string[] scopes, Context context, http:Client httpclient) 
         returns TokenAcquisitionError|InsufficientScopeError|TokenValidationError|map<()>?  {
@@ -100,10 +87,10 @@ isolated function getToolScopes(AgentCredential agentCredential, AgentIdAuthConf
         );
         
         Token freshToken = check getFreshToken(agentCredential, agentIdConfig, agentId, 
-                scopes, toolName, httpclient);
+                scopes, toolName, httpclient, baseUrl);
         error|map<()> validateTokenResult = validateToken(toolName, freshToken, tokenManager);
         if validateTokenResult is error {
-            return error TokenValidationError("");
+            return error TokenValidationError(validateTokenResult.message());
         }
         context.setAccessToken(toolName, freshToken.access_token);
         return validateTokenResult;
@@ -111,47 +98,9 @@ isolated function getToolScopes(AgentCredential agentCredential, AgentIdAuthConf
     return scopeInToken;
 }
 
-isolated function validateToken(string toolName, Token token, cache:Cache tokenManager) returns error| map<()> {
-    jwt:Payload decode = (check jwt:decode(token.access_token))[1];
-    [int, decimal] currentTime = time:utcNow();
-    if (currentTime[0] <= decode?.exp) {
-        token.scope = decode["scope"].toString();
-        token.expires_in = <int>decode["exp"];
-        return addToken(toolName, token, tokenManager);
-    }
-    return {};
-} 
-
-isolated function validateToolScope(map<()> scopesInToken, string toolName, string|string[] scopes, 
-        string agentId) returns InsufficientScopeError? {
-    observe:ValidateToolAuthorizationSpan toolAuthorizationSpan = observe:createValidateToolAuthorizationSpan(toolName);
-    log:printDebug("Validating scopes for tool: ",
-            agentId = agentId,
-            toolName = toolName,
-            requiredScopes = scopes
-    );
-    string[] requiredScopes = scopes is string[] ? scopes : [scopes];
-    toolAuthorizationSpan.addScopeCheck(requiredScopes, scopesInToken.keys());
-    foreach string scope in requiredScopes {
-        if !scopesInToken.hasKey(scope) {
-            log:printError("Scope mismatch detected for tool: ",
-                    agentId = agentId,
-                    toolName = toolName,
-                    missingScope = scope
-            );
-            InsufficientScopeError err = error InsufficientScopeError("Requested OAuth scope is " +
-                "not permitted or does not match the existing token scopes: " + scope);
-            toolAuthorizationSpan.close(err);
-            return err;
-        }
-    }
-    toolAuthorizationSpan.close();
-    log:printInfo("Successfully validated scopes", agentId = agentId, toolName = toolName);
-    return;
-}
-
 isolated function getFreshToken(AgentCredential agentCredential, AgentIdAuthConfig agentIdConfig, 
-        string agentId, string|string[] scopes, string toolName, http:Client httpclient) returns TokenAcquisitionError|Token {
+        string agentId, string|string[] scopes, string toolName, http:Client httpclient, string baseUrl) 
+            returns TokenAcquisitionError|Token {
     observe:InvokeAuthorizeEndpointSpan invokeAuthorizeEndpointSpan = 
                     observe:createInvokeAuthorizeEndpointSpan("WSO2");
     Pkce? pkce = ();
@@ -167,15 +116,16 @@ isolated function getFreshToken(AgentCredential agentCredential, AgentIdAuthConf
     }
     string? clientId = agentIdConfig.clientId;
     if clientId is () {
-        return error TokenAcquisitionError("");
+        return error TokenAcquisitionError("Client ID cannot be empty.");
     } 
     string? redirectUri = agentIdConfig.redirectUri;
     if redirectUri is () {
-        return error TokenAcquisitionError("");
+        return error TokenAcquisitionError("Redirect uri cannot be empty.");
     } 
-    invokeAuthorizeEndpointSpan.addAuthRequestDetails(clientId, 
-                scopes, challenge= pkce is Pkce ? pkce.challenge : ());
-    AuthResponse|error flowId = getFlowId(clientId, redirectUri , agentId, scopes, pkce, httpclient);
+    invokeAuthorizeEndpointSpan.addAuthRequestDetails(clientId, scopes, baseUrl, 
+            challenge= pkce is Pkce ? pkce.challenge : ());
+    AuthResponse|error flowId = getFlowId(clientId, redirectUri , agentId, scopes, 
+            pkce, httpclient);
     if flowId is error {
         invokeAuthorizeEndpointSpan.close(flowId);
         log:printError("Failed to obtain flow id for token acquisition",
@@ -202,8 +152,7 @@ isolated function getFreshToken(AgentCredential agentCredential, AgentIdAuthConf
              toolName = toolName);
 
     observe:ExchangeTokenSpan exchangeTokenSpan = observe:createExchangeTokenSpan();
-    exchangeTokenSpan.addExchangeDetails(code.authData.code, 
-            pkce is Pkce ? pkce.verifier : (), clientId);
+    exchangeTokenSpan.addExchangeDetails(clientId);
     error|Token token = getToken(code.authData.code, clientId, redirectUri , agentId, pkce, httpclient);
     if token is error {
         exchangeTokenSpan.close(token);
@@ -297,6 +246,50 @@ isolated function addToken(string toolName, Token token, cache:Cache tokenManage
         log:printError("Failed to store token in cache", output, toolName = toolName);
     }
     return tokenCache.getScopes();
+}
+
+isolated function validateToken(string toolName, Token token, cache:Cache tokenManager) returns error| map<()> {
+    observe:ValidateTokenSpan validateTokenSpan = observe:createValidateTokenSpan("WSO2");
+    jwt:Payload decode = (check jwt:decode(token.access_token))[1];
+    [int, decimal] currentTime = time:utcNow();
+    if (currentTime[0] <= decode?.exp) {
+        token.scope = decode["scope"].toString();
+        token.expires_in = <int>decode["exp"];
+        validateTokenSpan.addValidationResult(true, decode["client_id"].toString(), decode?.sub);
+        validateTokenSpan.close();
+        return addToken(toolName, token, tokenManager);
+    }
+    validateTokenSpan.addValidationResult(false, decode["client_id"].toString(), decode?.sub);
+    validateTokenSpan.close();
+    return {};
+} 
+
+isolated function validateToolScope(map<()> scopesInToken, string toolName, string|string[] scopes, 
+        string agentId) returns InsufficientScopeError? {
+    observe:ValidateToolAuthorizationSpan toolAuthorizationSpan = observe:createValidateToolAuthorizationSpan(toolName);
+    log:printDebug("Validating scopes for tool: ",
+            agentId = agentId,
+            toolName = toolName,
+            requiredScopes = scopes
+    );
+    string[] requiredScopes = scopes is string[] ? scopes : [scopes];
+    toolAuthorizationSpan.addScopeCheck(requiredScopes, scopesInToken.keys());
+    foreach string scope in requiredScopes {
+        if !scopesInToken.hasKey(scope) {
+            log:printError("Scope mismatch detected for tool: ",
+                    agentId = agentId,
+                    toolName = toolName,
+                    missingScope = scope
+            );
+            InsufficientScopeError err = error InsufficientScopeError("Requested OAuth scope is " +
+                "not permitted or does not match the existing token scopes: " + scope);
+            toolAuthorizationSpan.close(err);
+            return err;
+        }
+    }
+    toolAuthorizationSpan.close();
+    log:printInfo("Successfully validated scopes", agentId = agentId, toolName = toolName);
+    return;
 }
 
 isolated function generateVerifier(int length) returns string|error {
