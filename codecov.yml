@@ -1,9 +1,12 @@
 fixes:
-  - "io/ballerina/lib/ai/plugin/::./compiler-plugin/src/main/java/io/ballerina/lib/ai/plugin/"
+  - "io/ballerina/stdlib/ai/plugin::.compiler-plugin/src/main/java/io/ballerina/stdlib/ai/plugin"
   - "ballerina/ai/**/::../ballerina/"
 
 ignore:
-    - "ballerina-tests"
+  - "ballerina-tests"
+  - "native/src/test"
+  - "ballerina/modules/intelligence" # Generated connector
+  - "ballerina/modules/observe" # Needs manual testing with observablity provider
 
 coverage:
   precision: 2

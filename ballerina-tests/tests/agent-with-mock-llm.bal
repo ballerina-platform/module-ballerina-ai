@@ -160,7 +160,8 @@ isolated function getChatMessageStringContent(ai:Prompt|string prompt) returns s
 final MockLlm model = new;
 final ai:Agent agent = check new (model = model,
     systemPrompt = {role: "Math tutor", instructions: "Help the students with their questions."},
-    tools = [sum, mutiply, new SearchToolKit(), getEmails]
+    tools = [sum, mutiply, new SearchToolKit(), getEmails],
+    verbose = true
 );
 
 final ai:Agent dynamicToolLoadingAgent = check new (model = model,

@@ -1,6 +1,9 @@
 # Ballerina AI Library
 
 [![Build](https://github.com/ballerina-platform/module-ballerina-ai/actions/workflows/build-timestamped-master.yml/badge.svg?branch=main)](https://github.com/ballerina-platform/module-ballerina-ai/actions/workflows/build-timestamped-master.yml)
+[![codecov](https://codecov.io/gh/ballerina-platform/module-ballerina-ai/branch/master/graph/badge.svg)](https://codecov.io/gh/ballerina-platform/module-ballerina-ai)
+[![Trivy](https://github.com/ballerina-platform/module-ballerina-ai/actions/workflows/trivy-scan.yml/badge.svg)](https://github.com/ballerina-platform/module-ballerina-ai/actions/workflows/trivy-scan.yml)
+[![GraalVM Check](https://github.com/ballerina-platform/module-ballerina-ai/actions/workflows/build-with-bal-test-graalvm.yml/badge.svg)](https://github.com/ballerina-platform/module-ballerina-ai/actions/workflows/build-with-bal-test-graalvm.yml)
 [![GitHub Last Commit](https://img.shields.io/github/last-commit/ballerina-platform/module-ballerina-ai.svg)](https://github.com/ballerina-platform/module-ballerina-ai/commits/master)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 

@@ -674,25 +674,3 @@ isolated function updateMemory(Memory memory, string sessionId, ChatMessage[] me
         }
     }
 }
-
-isolated function updateExecutionResultInMemory(ExecutionResult|LlmChatResponse|ExecutionError|Error step, ChatMessage[] temporaryMemory) {
-    if step is ExecutionResult {
-        LlmToolResponse tool = step.tool;
-        anydata|error observation = step?.observation;
-
-        ChatAssistantMessage assistantMessage = {
-            role: ASSISTANT,
-            toolCalls: [{name: tool.name, id: tool.id, arguments: tool.arguments}]
-        };
-        temporaryMemory.push(assistantMessage);
-
-        ChatFunctionMessage functionMessage = {
-            role: FUNCTION,
-            name: tool.name,
-            content: observation is error ?
-                observation.toString() : observation is () ? "" : observation.toString(),
-            id: tool.id
-        };
-        temporaryMemory.push(functionMessage);
-    }
-}
