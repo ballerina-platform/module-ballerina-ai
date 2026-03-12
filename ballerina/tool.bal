@@ -408,10 +408,11 @@ isolated function validateTool(LlmToolResponse action, AgentCredential? agentCre
     );
     AgentIdAuthConfig? agentIdConfig = tool.get(toolName).agentIdConfig;
     string[]|string? scopes = agentIdConfig?.scopes;
-    if agentCredential is AgentCredential && agentIdConfig is AgentIdAuthConfig && scopes !is () {
+    if agentCredential is AgentCredential && agentIdConfig is AgentIdAuthConfig && agentIdConfig.clientId !is () && scopes !is () {
         string? baseUrl = agentIdConfig.baseAuthUrl;
         if baseUrl is () {
-            return error TokenAcquisitionError("");
+            return error TokenAcquisitionError("Authorization is required to use this tool, " + 
+                "but the base URL is not configured.");
         }
         http:Client|http:ClientError httpclient = new (!baseUrl.endsWith("/") ? baseUrl.concat("/") : baseUrl);
         if  httpclient is http:ClientError {
@@ -424,7 +425,7 @@ isolated function validateTool(LlmToolResponse action, AgentCredential? agentCre
             return;
         }
         check validateToolScope(result, toolName, scopes, agentCredential.agentId);
-    } else if scopes !is () && (agentIdConfig is () || agentCredential is ()) {
+    } else if scopes !is () && (agentIdConfig?.clientId is () || agentCredential is ()) {
         log:printError("Authorization is required for the tool, but no agent credential " +
             "or auth configuration was provided.", toolName = toolName, agentId = agentId);
         return error TokenAcquisitionError("Authorization is required for the tool, but no agent " +

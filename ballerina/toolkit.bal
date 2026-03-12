@@ -135,13 +135,18 @@ public isolated class McpToolKit {
 
     public isolated function init(string serverUrl, string[]? permittedTools = (),
             mcp:Implementation info = {name: "MCP Client", version: "1.0.0"}, 
-            *mcp:StreamableHttpClientTransportConfig config) returns Error? {
+            *StreamableHttpClientTransportConfig config) returns Error? {
         log:printDebug("Connecting to MCP server",
                 serverUrl = serverUrl,
                 clientInfo = info
         );
 
-        mcp:StreamableHttpClient|mcp:ClientError mcpClient = new (serverUrl, config);
+        http:ClientAuthConfig|AgentIdAuthConfig? auth = config.auth;
+        if auth !is http:ClientAuthConfig {
+            config.auth = ();
+        }
+
+        mcp:StreamableHttpClient|mcp:ClientError mcpClient = new (serverUrl, <mcp:StreamableHttpClientTransportConfig>config);
         if mcpClient is error {
             log:printDebug("Failed to connect to MCP server",
                     mcpClient,
@@ -530,13 +535,13 @@ isolated function getInputSchemaValues(mcp:ToolDefinition tool) returns map<json
 #       to obtain access tokens required for MCP tool invocation
 # + return - An array of tool configurations or an error if the operation fails
 public isolated function getPermittedMcpToolConfigs(mcp:StreamableHttpClient mcpClient, mcp:Implementation info,
-        map<FunctionTool>|FunctionTool permittedTools, http:ClientAuthConfig|mcp:AgentIdAuthConfig? agentIdConfig = ()) returns ToolConfig[]|Error {
+        map<FunctionTool>|FunctionTool permittedTools, AgentIdAuthConfig? agentIdConfig = ()) returns ToolConfig[]|Error {
     do {
-        if agentIdConfig is mcp:AgentIdAuthConfig {
-        log:printWarn(
-            "Stateful session mode is not supported when agent identity is used. " + 
-                "If you are using STATEFUL mode, switch to STATELESS or AUTO mode."
-        );        
+        if agentIdConfig is AgentIdAuthConfig {
+            log:printWarn(
+                "Stateful session mode is not supported when agent identity is used. " + 
+                    "If you are using STATEFUL mode, switch to STATELESS or AUTO mode."
+            );        
         } else {
             _ = check mcpClient->initialize(info);
         }
@@ -559,18 +564,24 @@ public isolated function getPermittedMcpToolConfigs(mcp:StreamableHttpClient mcp
 }
 
 isolated function addScopeInConfig(map<FunctionTool>|FunctionTool permittedTools, string toolName, 
-        http:ClientAuthConfig|mcp:AgentIdAuthConfig? clientConfig) returns AgentIdAuthConfig {
+        AgentIdAuthConfig? clientConfig) returns AgentIdAuthConfig {
     string|string[]? clientToolScopes = getClientToolScopes(permittedTools, toolName);
-    if clientConfig is AgentIdAuthConfig {
-        AgentIdAuthConfig aiAlientConfig  = {...clientConfig};
-        aiAlientConfig.scopes = clientToolScopes;
-        return aiAlientConfig;
-    } 
+    if clientToolScopes !is () {
+        if clientConfig is AgentIdAuthConfig {
+            AgentIdAuthConfig aiClientConfig  = {...clientConfig};
+            aiClientConfig.scopes = clientToolScopes;
+            return aiClientConfig;
+        }
+    } else {
+        if clientConfig is AgentIdAuthConfig {
+            return clientConfig;
+        }
+    }
     return {scopes: clientToolScopes};
 }
 
 isolated function getClientToolScopes(map<FunctionTool>|FunctionTool permittedTools, string toolName) returns string|string[]? {
     ToolConfig|Error toolConfig =  permittedTools is FunctionTool ? getToolConfig(permittedTools) :
                             getToolConfig(permittedTools.get(toolName));
-    return toolConfig is ToolConfig ? toolConfig.agentIdConfig?.scopes : [];
+    return toolConfig is ToolConfig ? toolConfig.agentIdConfig?.scopes : ();
 }

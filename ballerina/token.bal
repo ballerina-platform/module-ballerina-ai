@@ -116,11 +116,13 @@ isolated function getFreshToken(AgentCredential agentCredential, AgentIdAuthConf
     }
     string? clientId = agentIdConfig.clientId;
     if clientId is () {
-        return error TokenAcquisitionError("Client ID cannot be empty.");
+        return error TokenAcquisitionError("Authorization is required to use this tool, " + 
+            "but the client id is not configured.");
     } 
     string? redirectUri = agentIdConfig.redirectUri;
     if redirectUri is () {
-        return error TokenAcquisitionError("Redirect uri cannot be empty.");
+        return error TokenAcquisitionError("Authorization is required to use this tool, " + 
+            "but the redirect uri is not configured.");
     } 
     invokeAuthorizeEndpointSpan.addAuthRequestDetails(clientId, scopes, baseUrl, 
             challenge= pkce is Pkce ? pkce.challenge : ());

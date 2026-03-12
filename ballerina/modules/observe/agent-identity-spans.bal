@@ -14,9 +14,6 @@
 // specific language governing permissions and limitations
 // under the License.
 
-// Copyright (c) 2026 WSO2 LLC (http://www.wso2.com).
-// ... (Standard License Header)
-
 # Represents a tracing span for the creation and configuration of an agent's identity.
 public isolated distinct class CreateAgentIdentitySpan {
    *AiSpan;
