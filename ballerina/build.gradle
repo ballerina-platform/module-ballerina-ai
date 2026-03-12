@@ -33,7 +33,7 @@ def compilerPluginTomlFile = new File("$project.projectDir/CompilerPlugin.toml")
 ballerina {
     packageOrganization = packageOrg
     module = packageName
-    testCoverageParam = "--code-coverage --coverage-format=xml --includes=io.ballerina.stdlib.ai*:ballerina.*"
+    testCoverageParam = "--code-coverage --coverage-format=xml --includes=io.ballerina.stdlib.ai*:ballerina.ai*"
     langVersion = ballerinaLangVersion
     platform = "java21"
 }

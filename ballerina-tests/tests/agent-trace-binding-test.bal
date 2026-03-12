@@ -57,3 +57,20 @@ isolated function testTraceHavingToolCallsOfTurn() returns error? {
     test:assertEquals(toolCalls.length(), 1);
     test:assertEquals(toolCalls[0].name, "sum");
 }
+
+final ai:Agent testAgent = check new (
+    systemPrompt = {role: "Test Agent", instructions: "Answer the questions"},
+    model = model,
+    tools = [sum]
+);
+
+@test:Config
+function testAgentRunReturnsTraceOnError() returns error? {
+    string query = "Random query";
+    ai:Trace trace = check testAgent.run(query);
+    test:assertTrue(trace.output is ai:Error, "Expected trace.output to be an Error when agent execution fails");
+    test:assertEquals(trace.userMessage.content, query);
+    test:assertEquals(trace.tools.length(), 1);
+    test:assertTrue(trace.id.length() > 0);
+    test:assertTrue(trace.startTime <= trace.endTime);
+}
