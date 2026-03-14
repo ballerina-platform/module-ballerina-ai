@@ -19,15 +19,19 @@ graalvmCompatible = true
 [[platform.java21.dependency]]
 groupId = "io.ballerina.stdlib"
 artifactId = "ai-native"
-version = "1.10.0"
-path = "../native/build/libs/ai-native-1.10.0.jar"
+version = "1.11.0"
+path = "../native/build/libs/ai-native-1.11.0-SNAPSHOT.jar"
 
 [[platform.java21.dependency]]
 groupId = "io.ballerina.stdlib"
 artifactId = "ai-native"
-version = "1.10.0"
-path = "../native/build/libs/ai-native-1.10.0-tests.jar"
+version = "1.11.0"
+path = "../native/build/libs/ai-native-1.11.0-SNAPSHOT-tests.jar"
 testOnly = true
+
+[[platform.java21.dependency]]
+groupId = "dev.langchain4j"
+artifactId = "langchain4j"
 version = "1.1.0"
 path="./lib/langchain4j-1.1.0.jar"
 
