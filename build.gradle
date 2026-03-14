@@ -88,6 +88,13 @@ subprojects {
         ballerinaStdLibs
     }
 
+    // Fix GHSA-72hv-8253-57qq vulnerability from multiple Jackson packages
+    configurations.all {
+        resolutionStrategy.force(
+            "com.fasterxml.jackson.core:jackson-core:$jacksonCoreVersion"
+        )
+    }
+
     dependencies {
         /* JBallerina Tools */
         jbalTools ("org.ballerinalang:jballerina-tools:${ballerinaLangVersion}") {
