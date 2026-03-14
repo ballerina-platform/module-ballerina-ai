@@ -100,7 +100,7 @@ public type BuiltInTool record {|
     # Identifier for the built-in tool (e.g., "web_search", "code_interpreter", "code_execution")
     string name;
     # Provider-specific configuration options for the tool
-    map<anydata> configurations?;
+    map<json> configurations?;
 |};
 
 # Function call record
@@ -239,8 +239,10 @@ public isolated distinct client class Wso2ModelProvider {
         }
 
         if builtInTools.length() > 0 {
-            return error Error(string `Built-in tools [${string:'join(", ", ...builtInTools)}] are not supported `
-                + "for this model.");
+            Error err = error Error(string `Built-in tools [${string:'join(", ", ...builtInTools)}] are not supported`
+                + " for this model.");
+            span.close(err);
+            return err;
         }
 
         if functionTools.length() > 0 {
