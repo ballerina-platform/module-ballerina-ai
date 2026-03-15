@@ -256,10 +256,10 @@ function testShortTermMemoryWithSummarizationOnOverflow1() returns error? {
     InMemoryShortTermMemoryStore store = check new (4);
     ModelProvider model = isolated client object {
         isolated remote function chat(
-                ChatMessage[]|ChatUserMessage messages, 
-                ChatCompletionFunctions[] tools, string? stop) returns ChatAssistantMessage|Error {
+                ChatMessage[]|ChatUserMessage messages,
+                (ChatCompletionFunctions|BuiltInTool)[] tools, string? stop) returns ChatAssistantMessage|Error {
             assertSummarizationRequestChatMessages(messages, [km1, km2, km3, km4], defaultSummarizationPrompt);
-            return memorySummaryMessage;                    
+            return memorySummaryMessage;
         }
 
         isolated remote function generate(Prompt prompt, typedesc<anydata> td) returns td|Error = external;
@@ -362,7 +362,7 @@ function testShortTermMemoryWithSummarizationOnOverflow1WithBatchUpdate() return
     ModelProvider model = isolated client object {
         isolated remote function chat(
                 ChatMessage[]|ChatUserMessage messages,
-                ChatCompletionFunctions[] tools, string? stop) returns ChatAssistantMessage|Error {
+                (ChatCompletionFunctions|BuiltInTool)[] tools, string? stop) returns ChatAssistantMessage|Error {
             assertSummarizationRequestChatMessages(messages, [km1, km2, km3, km4], defaultSummarizationPrompt);
             return memorySummaryMessage;
         }
@@ -672,8 +672,8 @@ function testOverridingSummarizationPrompt() returns error? {
 
     ModelProvider model = isolated client object {
         isolated remote function chat(
-                ChatMessage[]|ChatUserMessage messages, 
-                ChatCompletionFunctions[] tools, string? stop) returns ChatAssistantMessage|Error {
+                ChatMessage[]|ChatUserMessage messages,
+                (ChatCompletionFunctions|BuiltInTool)[] tools, string? stop) returns ChatAssistantMessage|Error {
             assertSummarizationRequestChatMessages(messages, [km1, km2, km3], customSummarizationPrompt);
             return mockSummaryMessage;                    
         }
@@ -752,8 +752,8 @@ function testSummarizationFailure() returns error? {
 
     ModelProvider model = isolated client object {
         isolated remote function chat(
-                ChatMessage[]|ChatUserMessage messages, 
-                ChatCompletionFunctions[] tools, string? stop) returns ChatAssistantMessage|Error {
+                ChatMessage[]|ChatUserMessage messages,
+                (ChatCompletionFunctions|BuiltInTool)[] tools, string? stop) returns ChatAssistantMessage|Error {
             assertSummarizationRequestChatMessages(messages, [km1, km2, km3], defaultSummarizationPrompt);
             return error("Simulated summarization failure");                    
         }
@@ -822,8 +822,8 @@ isolated client class MockSummarizerModel {
     }
 
     isolated remote function chat(
-            ChatMessage[]|ChatUserMessage messages, 
-            ChatCompletionFunctions[] tools, string? stop) returns ChatAssistantMessage|Error => 
+            ChatMessage[]|ChatUserMessage messages,
+            (ChatCompletionFunctions|BuiltInTool)[] tools, string? stop) returns ChatAssistantMessage|Error =>
                 self.memorySummaryMessage;
 
     isolated remote function generate(Prompt prompt, typedesc<anydata> td) returns td|Error = external;

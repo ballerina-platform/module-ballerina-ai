@@ -21,7 +21,7 @@ import ballerina/jballerina.java;
 isolated client class ProviderImpl {
     *ai:ModelProvider;
 
-    isolated remote function chat(ai:ChatMessage[]|ai:ChatUserMessage messages, ai:ChatCompletionFunctions[] tools, string? stop)
+    isolated remote function chat(ai:ChatMessage[]|ai:ChatUserMessage messages, (ai:ChatCompletionFunctions|ai:BuiltInTool)[] tools = [], string? stop = ())
         returns ai:ChatAssistantMessage|ai:LlmError {
         return {role: ai:ASSISTANT};
     }

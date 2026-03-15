@@ -92,6 +92,17 @@ public type ChatCompletionFunctions record {|
     map<json> parameters?;
 |};
 
+# Represents a built-in tool provided natively by a model provider (e.g., web search, code interpreter).
+# Unlike `ChatCompletionFunctions` which are user-defined function tools, built-in tools are managed and
+# executed by the model provider itself. Provider-specific modules should include this type using `*BuiltInTool`
+# and narrow the `name` field to a string literal for the specific tool.
+public type BuiltInTool record {|
+    # Identifier for the built-in tool (e.g., "web_search", "code_interpreter", "code_execution")
+    string name;
+    # Provider-specific configuration options for the tool
+    map<json> configurations?;
+|};
+
 # Function call record
 public type FunctionCall record {|
     # Name of the function
@@ -119,7 +130,7 @@ public type ModelProvider distinct isolated client object {
     # + tools - Tool definitions to be used for the tool call
     # + stop - Stop sequence to stop the completion
     # + return - Function to be called, chat response or an error in-case of failures
-    isolated remote function chat(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [], string? stop = ())
+    isolated remote function chat(ChatMessage[]|ChatUserMessage messages, (ChatCompletionFunctions|BuiltInTool)[] tools = [], string? stop = ())
         returns ChatAssistantMessage|Error;
 
     # Sends a chat request to the model and generates a value that belongs to the type
@@ -198,7 +209,7 @@ public isolated distinct client class Wso2ModelProvider {
     # + tools - Tool definitions to be used for the tool call
     # + stop - Stop sequence to stop the completion
     # + return - Function to be called, chat response or an error in-case of failures
-    isolated remote function chat(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools, string? stop = ())
+    isolated remote function chat(ChatMessage[]|ChatUserMessage messages, (ChatCompletionFunctions|BuiltInTool)[] tools = [], string? stop = ())
     returns ChatAssistantMessage|Error {
         observe:ChatSpan span = observe:createChatSpan("gpt-4o-mini");
         span.addProvider("WSO2");
@@ -213,9 +224,30 @@ public isolated distinct client class Wso2ModelProvider {
             messages: self.mapToChatCompletionRequestMessage(messages),
             temperature: self.temperature
         };
-        if tools.length() > 0 {
-            request.functions = tools;
-            span.addTools(tools);
+
+        json[] toolsArr = [];
+        ChatCompletionFunctions[] functionTools = [];
+        string[] builtInTools = [];
+        foreach ChatCompletionFunctions|BuiltInTool tool in tools {
+            if tool is ChatCompletionFunctions {
+                toolsArr.push(tool);
+                functionTools.push(tool);
+            } else {
+                toolsArr.push(tool.toJson());
+                builtInTools.push(tool.name);
+            }
+        }
+
+        if builtInTools.length() > 0 {
+            Error err = error Error(string `Built-in tools [${string:'join(", ", ...builtInTools)}] are not supported`
+                + " for this model.");
+            span.close(err);
+            return err;
+        }
+
+        if functionTools.length() > 0 {
+            request.functions = functionTools;
+            span.addTools(toolsArr);
         }
         intelligence:CreateChatCompletionResponse|error response = self.llmClient->/chat/completions.post(request, headers = {
             "x-product": "bi",

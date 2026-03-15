@@ -487,7 +487,7 @@ isolated function getObservationString(anydata|error observation) returns string
         if cause is error {
             errorInfo.cause = cause.message().trim();
         }
-        return "Error occured while trying to execute the tool: " + errorInfo.toString();
+        return "Error occurred while trying to execute the tool: " + errorInfo.toString();
     } else {
         return observation.toString().trim();
     }
@@ -502,6 +502,6 @@ public isolated function getTools(Agent agent) returns Tool[] => agent.functionC
 isolated function updateMemory(Memory memory, string sessionId, ChatMessage[] messages) {
     error? updationStation = memory.update(sessionId, messages);
     if updationStation is error {
-        log:printError("Error occured while updating the memory", updationStation);
+        log:printError("Error occurred while updating the memory", updationStation);
     }
 }
