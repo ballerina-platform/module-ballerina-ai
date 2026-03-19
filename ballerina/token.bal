@@ -65,10 +65,10 @@ type Code record {
     record {string code;} authData;
 };
 
-isolated function getToolScopes(AgentCredential agentCredential, AgentIdAuthConfig agentIdConfig, string baseUrl, 
+isolated function getToolScopes(Credential agentCredential, AgentIdAuthConfig agentIdConfig, string baseUrl, 
         cache:Cache tokenManager, string toolName, string|string[] scopes, Context context, http:Client httpclient) 
         returns TokenAcquisitionError|InsufficientScopeError|TokenValidationError|map<()>?  {
-    string agentId = agentCredential.agentId;
+    string agentId = agentCredential.id;
     boolean needsRefresh = true;
     map<()> scopeInToken = {};
     if tokenManager.hasKey(toolName) {
@@ -92,20 +92,19 @@ isolated function getToolScopes(AgentCredential agentCredential, AgentIdAuthConf
         if validateTokenResult is error {
             return error TokenValidationError(validateTokenResult.message());
         }
-        context.setAccessToken(toolName, freshToken.access_token);
         return validateTokenResult;
     }
     return scopeInToken;
 }
 
-isolated function getFreshToken(AgentCredential agentCredential, AgentIdAuthConfig agentIdConfig, 
+isolated function getFreshToken(Credential agentCredential, AgentIdAuthConfig agentIdConfig, 
         string agentId, string|string[] scopes, string toolName, http:Client httpclient, string baseUrl) 
             returns TokenAcquisitionError|Token {
     observe:InvokeAuthorizeEndpointSpan invokeAuthorizeEndpointSpan = 
                     observe:createInvokeAuthorizeEndpointSpan("WSO2");
     Pkce? pkce = ();
     if (agentIdConfig.isPkceEnabled) {
-        Pkce|error result = generatePKCE();
+        Pkce|error result = generatePkce();
         if result is error {
             log:printError("Failed to create pkce value", 'error = result, agentId = agentId, 
                 toolName = toolName);
@@ -125,9 +124,9 @@ isolated function getFreshToken(AgentCredential agentCredential, AgentIdAuthConf
             "but the redirect uri is not configured.");
     } 
     invokeAuthorizeEndpointSpan.addAuthRequestDetails(clientId, scopes, baseUrl, 
-            challenge= pkce is Pkce ? pkce.challenge : ());
+            challenge = pkce is Pkce ? pkce.challenge : ());
     AuthResponse|error flowId = getFlowId(clientId, redirectUri , agentId, scopes, 
-            pkce, httpclient);
+            pkce, httpclient, agentIdConfig?.clientSecret);
     if flowId is error {
         invokeAuthorizeEndpointSpan.close(flowId);
         log:printError("Failed to obtain flow id for token acquisition",
@@ -155,7 +154,8 @@ isolated function getFreshToken(AgentCredential agentCredential, AgentIdAuthConf
 
     observe:ExchangeTokenSpan exchangeTokenSpan = observe:createExchangeTokenSpan();
     exchangeTokenSpan.addExchangeDetails(clientId);
-    error|Token token = getToken(code.authData.code, clientId, redirectUri , agentId, pkce, httpclient);
+    error|Token token = getToken(code.authData.code, clientId, redirectUri , agentId, pkce, httpclient, 
+        agentIdConfig?.clientSecret);
     if token is error {
         exchangeTokenSpan.close(token);
         log:printError("Failed to obtain access token", 'error = token, 
@@ -170,7 +170,7 @@ isolated function getFreshToken(AgentCredential agentCredential, AgentIdAuthConf
 }
 
 isolated function getFlowId(string clientId, string redirectUri, string agentId, string|string[] scope, Pkce? pkce, 
-                http:Client httpclient) returns error|AuthResponse {
+                http:Client httpclient, string? clientSecret = ()) returns error|AuthResponse {
     log:printDebug("Requesting flow id and authenticator id for token acquisition", 
         agentId = agentId, scope = scope);
     string scopes = scope is string[] ? string:'join(SPACE, ...scope) : scope;
@@ -181,6 +181,9 @@ isolated function getFlowId(string clientId, string redirectUri, string agentId,
         redirect_uri: redirectUri,
         response_mode: DIRECT
     };
+    if clientSecret is string {
+        formData["client_secret"] =  clientSecret;
+    }
     if pkce is Pkce {
         formData["code_challenge"] = pkce.challenge;
         formData["code_challenge_method"] = CODE_CHALLENGE_S256;
@@ -192,34 +195,27 @@ isolated function getFlowId(string clientId, string redirectUri, string agentId,
         messageParams.push(string `${k}=${encoded}`);
     }
     output = strings:'join(AMPERSAND, ...messageParams);
-
-    http:Request req = new;
-    req.setHeader("Content-Type", APPLICATION_X_WWW_FORM_URLENCODED);
-    req.setPayload(output);
-    return httpclient->post(AUTHORIZE, req);
+    return httpclient->/authorize.post(output, {"Content-Type": APPLICATION_X_WWW_FORM_URLENCODED});
 }
 
-isolated function getCode(AuthResponse authResponse, AgentCredential agentCredential, http:Client httpclient) returns error|Code {
-    log:printDebug("Requesting authorization code for token acquisition", agentId = agentCredential.agentId);
+isolated function getCode(AuthResponse authResponse, Credential agentCredential, http:Client httpclient) returns error|Code {
+    log:printDebug("Requesting authorization code for token acquisition", agentId = agentCredential.id);
     json payload = {
         "flowId": authResponse.flowId,
         "selectedAuthenticator": {
-            "authenticatorId": authResponse.nextStep.authenticators[0].authenticatorId,
+            "authenticatorId": authResponse.nextStep.authenticators[0].authenticatorId, // check allow authencator value
             "params": {
-                "username": agentCredential.agentId,
-                "password": agentCredential.agentSecret
+                "username": agentCredential.id,
+                "password": agentCredential.secret
 
             }
         }
     };
-    http:Request req = new;
-    req.setHeader("Content-Type", APPLICATION_JSON);
-    req.setJsonPayload(payload);
-    return httpclient->post(AUTHN_HEADER, req);
+    return httpclient->/authn.post(payload, {"Content-Type": APPLICATION_JSON}); 
 }
 
 isolated function getToken(string code, string clientId, string redirectUri, string agentId, Pkce? pkce, 
-                http:Client httpclient) returns error|Token {
+                http:Client httpclient, string? clientSecret = ()) returns error|Token {
     log:printDebug("Requesting access token for token acquisition", agentId = agentId);
     map<string> formData = {
         client_id: clientId,
@@ -227,6 +223,9 @@ isolated function getToken(string code, string clientId, string redirectUri, str
         code: code,
         redirect_uri: redirectUri
     };
+    if clientSecret is string {
+        formData["client_secret"] =  clientSecret;
+    }
     if pkce is Pkce {
         formData["code_verifier"] = pkce.verifier;
     }
@@ -235,10 +234,8 @@ isolated function getToken(string code, string clientId, string redirectUri, str
         string encoded = check url:encode(v.toString(), UTF8_ENCODING);
         messageParams.push(string `${k}=${encoded}`);
     }
-    http:Request req = new;
-    req.setHeader("Content-Type", APPLICATION_X_WWW_FORM_URLENCODED);
-    req.setPayload(strings:'join(AMPERSAND, ...messageParams));
-    return httpclient->post(TOKEN, req);
+    return httpclient->/token.post(strings:'join(AMPERSAND, ...messageParams), 
+        {"Content-Type": APPLICATION_X_WWW_FORM_URLENCODED});
 }
 
 isolated function addToken(string toolName, Token token, cache:Cache tokenManager) returns map<()> {
@@ -304,14 +301,14 @@ isolated function generateVerifier(int length) returns string|error {
 }
 
 isolated function base64UrlEncode(byte[] data) returns string {
-    string base = data.toBase64();
+    string base = data.toBase64(); // use mime 
     base = regexp:replaceAll(re `\+`, base, DASH);
     base = regexp:replaceAll(re `/`, base, UNDERSCORE);
     base = regexp:replaceAll(re `=`, base, EMPTY_STRING);
     return base;
 }
 
-isolated function generatePKCE() returns Pkce|error {
+isolated function generatePkce() returns Pkce|error {
     string verifier = check generateVerifier(64);
     byte[] hash = crypto:hashSha256(verifier.toBytes());
     return {

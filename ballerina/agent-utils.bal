@@ -90,7 +90,7 @@ type BaseAgent distinct isolated object {
     Memory memory;
     boolean stateless;
     cache:Cache tokenManager;
-    AgentCredential? agentCredential;
+    Credential? agentCredential;
 
     # Parse the llm response and extract the tool to be executed.
     #
@@ -130,9 +130,9 @@ class Executor {
         self.sessionId = sessionId;
         self.agent = agent;
         self.progress = progress;
-        AgentCredential? agentCredential = agent.agentCredential;
-        if agentCredential is AgentCredential {
-            self.agentId = agentCredential.agentId;
+        Credential? agentCredential = agent.agentCredential;
+        if agentCredential is Credential {
+            self.agentId = agentCredential.id;
         }
     }
 
@@ -181,7 +181,7 @@ class Executor {
     #
     # + llmResponse - LLM response containing the tool to be executed and the raw LLM output
     # + return - Observations from the tool can be any|error|null
-    public isolated function act(json llmResponse) returns ExecutionResult|LlmChatResponse|ExecutionError {
+    public isolated function act(json llmResponse) returns ExecutionResult|LlmChatResponse|ExecutionError{
         LlmToolResponse|LlmChatResponse|LlmInvalidGenerationError parsedOutput = self.agent.parseLlmResponse(llmResponse);
         if parsedOutput is LlmChatResponse {
             if self.agentId is string {

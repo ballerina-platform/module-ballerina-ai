@@ -65,7 +65,7 @@ public isolated distinct class InvokeAuthorizeEndpointSpan {
       self.addTag(OPERATION_NAME, INVOKE_AUTHORIZE_ENDPOINT);
    }
 
-      # Records the URL of the identity provider used for this agent.
+   # Records the URL of the identity provider used for this agent.
    # 
    # + url - The base URL of the Identity Server
    public isolated function addProviderUrl(string url) {

@@ -35,7 +35,7 @@ isolated distinct class FunctionCallAgent {
     # Cache used to store and reuse authentication tokens for tool access.
     final cache:Cache tokenManager;
     # Authentication configuration used for acquiring OAuth tokens when accessing secured tools.
-    final readonly & AgentCredential? agentCredential;
+    final readonly & Credential? agentCredential;
 
     # Initialize an Agent.
     #
@@ -43,7 +43,7 @@ isolated distinct class FunctionCallAgent {
     # + tools - Tools to be used by the agent
     # + memory - The memory associated with the agent.
     isolated function init(ModelProvider model, (BaseToolKit|ToolConfig|FunctionTool)[] tools, cache:Cache tokenManager, 
-        AgentCredential? agentCredential, Memory? memory = (), ToolLoadingStrategy toolLoadingStrategy = NO_FILTER) returns Error? {
+        Credential? agentCredential, Memory? memory = (), ToolLoadingStrategy toolLoadingStrategy = NO_FILTER) returns Error? {
         self.toolStore = check new (...tools);
         self.model = model;
         self.memory = memory ?: check new ShortTermMemory();
@@ -143,8 +143,8 @@ isolated distinct class FunctionCallAgent {
     isolated function run(string query, string instruction, int maxIter = 5, boolean verbose = true,
             string sessionId = DEFAULT_SESSION_ID, Context context = new, string executionId = DEFAULT_EXECUTION_ID)
             returns ExecutionTrace {
-        AgentCredential? & readonly agentConfig = self.agentCredential.cloneReadOnly();
-        string? agentId = agentConfig is AgentCredential ? agentConfig.agentId : ();
+        Credential? & readonly agentConfig = self.agentCredential.cloneReadOnly();
+        string? agentId = agentConfig is Credential ? agentConfig.id : ();
         return run(self, instruction, query, maxIter, verbose, agentId, sessionId, context, executionId);
     }
 }

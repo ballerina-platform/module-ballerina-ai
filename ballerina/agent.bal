@@ -48,15 +48,15 @@ public enum AgentType {
 
 # Represents the authentication credentials of an autonomous agent.
 @display {label: "Agent Credential"}
-public type AgentCredential record {|
+public type Credential record {|
 
     # The unique identifier assigned to the agent.
     @display {label: "Agent ID"}
-    string agentId;
+    string id;
 
     # The secret associated with the agent.
     @display {label: "Agent Secret"}
-    string agentSecret;
+    string secret;
 |};
 
 # Provides a set of configurations for the agent.
@@ -96,7 +96,7 @@ public type AgentConfiguration record {|
 
     # Optional authentication details of the agent.
     @display {label: "Agent Credential"}
-    AgentCredential agentCredential?;
+    Credential credential?;
 |};
 
 # Represents an agent.
@@ -124,10 +124,10 @@ public isolated distinct class Agent {
         self.systemPrompt = config.systemPrompt.cloneReadOnly();
         Memory? memory = config.hasKey("memory") ? config?.memory : check new ShortTermMemory();
         observe:CreateAgentIdentitySpan? agentIdentitySpan = ();
-        AgentCredential? agentCredential = config.agentCredential;
-        if agentCredential is AgentCredential {
+        Credential? agentCredential = config.credential;
+        if agentCredential is Credential {
             agentIdentitySpan = observe:createCreateAgentIdentitySpan(config.systemPrompt.role);
-            self.agentId = agentCredential.agentId.cloneReadOnly();
+            self.agentId = agentCredential.id.cloneReadOnly();
             if agentIdentitySpan is observe:CreateAgentIdentitySpan {
                 lock {
                     agentIdentitySpan.addId(self.agentId);

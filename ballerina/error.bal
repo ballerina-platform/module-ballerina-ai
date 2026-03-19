@@ -65,6 +65,9 @@ public type HttpResponseParsingError distinct HttpServiceToolKitError;
 # Errors during tool execution.
 public type ToolExecutionError distinct Error;
 
+# Error returned when the request is unauthorized.
+public type UnauthorizedError distinct Error;
+
 # Error during unexpected output by the tool
 public type ToolInvalidOutputError distinct ToolExecutionError;
 

@@ -213,6 +213,10 @@ public type AgentIdAuthConfig record {|
     @display {label: "Client ID"}
     string clientId?;
 
+    # The OAuth 2.0 client secret issued to this client application.
+    @display {label: "Client Secret"}
+    string clientSecret?;
+
     # The redirect URI registered for the OAuth client and used
     # in the Authorization Code flow.
     @display {label: "Redirect URI"}
