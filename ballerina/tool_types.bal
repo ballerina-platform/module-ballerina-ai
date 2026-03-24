@@ -146,7 +146,7 @@ public type ToolConfig record {|
     FunctionTool caller;
     # Optional authorization configuration required to invoke this tool.
     @display {label: "Authorization Configuration"}
-    AgentIdAuthConfig auth?;
+    AgentIdAuthConfig|Scopes auth?;
 |};
 
 # Defines the configuration of the Tool annotation.
@@ -161,7 +161,7 @@ public type ToolAnnotationConfig record {|
     ObjectInputSchema? parameters?;
     # Optional authorization configuration required to invoke this tool.
     @display {label: "Authorization Configuration"}
-    AgentIdAuthConfig auth?;
+    AgentIdAuthConfig|Scopes auth?;
 |};
 
 # Represents the annotation of a function tool.

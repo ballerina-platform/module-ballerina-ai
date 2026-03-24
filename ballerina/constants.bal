@@ -52,7 +52,7 @@ const TOKEN = "token";
 const INTROSPECT = "introspect";
 const TOKEN_WITH_EQUAL = "token=";
 const TOKEN_TYPE_HINT = "&token_type_hint=";
-const CHARSET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";
+const PKCE_CODE_VERIFIER_CHARSET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";
 const EMPTY_STRING = "";
 const SPACE = " ";
 const DASH = "-";

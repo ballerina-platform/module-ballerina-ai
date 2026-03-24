@@ -65,18 +65,20 @@ type Code record {
     record {string code;} authData;
 };
 
-isolated function getToolScopes(Credential agentCredential, AgentIdAuthConfig agentIdConfig, string baseUrl, 
-        cache:Cache tokenManager, string toolName, string|string[] scopes, Context context, http:Client httpclient) 
-        returns TokenAcquisitionError|InsufficientScopeError|TokenValidationError|map<()>?  {
+isolated function getToolScopes(Credential agentCredential, AgentIdAuthConfig agentIdAuthConfig, 
+    cache:Cache tokenManager, string toolName, Context context) returns 
+    TokenAcquisitionError|InsufficientScopeError|TokenValidationError|map<()>?  {
     string agentId = agentCredential.id;
     boolean needsRefresh = true;
     map<()> scopeInToken = {};
+    string|string[]? scopes = agentIdAuthConfig.scopes;
+    string baseUrl = agentIdAuthConfig.baseAuthUrl;
+    baseUrl = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() -1) : baseUrl;
     if tokenManager.hasKey(toolName) {
         any|error token = tokenManager.get(toolName);
         if token is TokenCache {
             needsRefresh = token.isAccessTokenExpired();
             scopeInToken = token.getScopes();
-            context.setAccessToken(toolName, token.getAccessToken());
         }
     }
     if needsRefresh {
@@ -85,8 +87,12 @@ isolated function getToolScopes(Credential agentCredential, AgentIdAuthConfig ag
                 toolName = toolName,
                 scopes = scopes
         );
-        
-        Token freshToken = check getFreshToken(agentCredential, agentIdConfig, agentId, 
+        http:Client|http:ClientError httpclient = new (baseUrl, 
+            secureSocket = agentIdAuthConfig.secureSocket);
+        if  httpclient is http:ClientError {
+            return error TokenAcquisitionError(httpclient.message());
+        }   
+        Token freshToken = check getFreshToken(agentCredential, agentIdAuthConfig, agentId, 
                 scopes, toolName, httpclient, baseUrl);
         error|map<()> validateTokenResult = validateToken(toolName, freshToken, tokenManager);
         if validateTokenResult is error {
@@ -98,8 +104,8 @@ isolated function getToolScopes(Credential agentCredential, AgentIdAuthConfig ag
 }
 
 isolated function getFreshToken(Credential agentCredential, AgentIdAuthConfig agentIdConfig, 
-        string agentId, string|string[] scopes, string toolName, http:Client httpclient, string baseUrl) 
-            returns TokenAcquisitionError|Token {
+        string agentId, string|string[]? scopes, string toolName, http:Client httpclient, 
+        string baseUrl) returns TokenAcquisitionError|Token {
     observe:InvokeAuthorizeEndpointSpan invokeAuthorizeEndpointSpan = 
                     observe:createInvokeAuthorizeEndpointSpan("WSO2");
     Pkce? pkce = ();
@@ -134,7 +140,7 @@ isolated function getFreshToken(Credential agentCredential, AgentIdAuthConfig ag
         return error TokenAcquisitionError("Failed to obtain flow id", detail = {cause: flowId});
     }
     invokeAuthorizeEndpointSpan.close();
-    log:printInfo("Successfully obtained flow id for token acquisition", agentId = agentId, 
+    log:printDebug("Successfully obtained flow id for token acquisition", agentId = agentId, 
             toolName = toolName);
 
     observe:AgentAuthenticationSpan authenticationSpan = 
@@ -149,7 +155,7 @@ isolated function getFreshToken(Credential agentCredential, AgentIdAuthConfig ag
             detail = {cause: code});
     }
     authenticationSpan.close();
-    log:printInfo("Successfully obtained authorization code", agentId = agentId,
+    log:printDebug("Successfully obtained authorization code", agentId = agentId,
              toolName = toolName);
 
     observe:ExchangeTokenSpan exchangeTokenSpan = observe:createExchangeTokenSpan();
@@ -164,16 +170,16 @@ isolated function getFreshToken(Credential agentCredential, AgentIdAuthConfig ag
             detail = {cause: token});
     }
     exchangeTokenSpan.close();
-    log:printInfo("Successfully obtained access token", agentId = agentId, 
+    log:printDebug("Successfully obtained access token", agentId = agentId, 
         toolName = toolName);
     return token;
 }
 
-isolated function getFlowId(string clientId, string redirectUri, string agentId, string|string[] scope, Pkce? pkce, 
+isolated function getFlowId(string clientId, string redirectUri, string agentId, string|string[]? scope, Pkce? pkce, 
                 http:Client httpclient, string? clientSecret = ()) returns error|AuthResponse {
     log:printDebug("Requesting flow id and authenticator id for token acquisition", 
         agentId = agentId, scope = scope);
-    string scopes = scope is string[] ? string:'join(SPACE, ...scope) : scope;
+    string scopes = scope is string[] ? string:'join(SPACE, ...scope) : (scope is string ? scope : "");
     map<string> formData = {
         client_id: clientId,
         response_type: CODE,
@@ -201,12 +207,12 @@ isolated function getFlowId(string clientId, string redirectUri, string agentId,
 isolated function getCode(AuthResponse authResponse, Credential agentCredential, http:Client httpclient) returns error|Code {
     log:printDebug("Requesting authorization code for token acquisition", agentId = agentCredential.id);
     json payload = {
-        "flowId": authResponse.flowId,
-        "selectedAuthenticator": {
-            "authenticatorId": authResponse.nextStep.authenticators[0].authenticatorId, // check allow authencator value
-            "params": {
-                "username": agentCredential.id,
-                "password": agentCredential.secret
+        flowId: authResponse.flowId,
+        selectedAuthenticator: {
+            authenticatorId: authResponse.nextStep.authenticators[0].authenticatorId,
+            params: {
+                username: agentCredential.id,
+                password: agentCredential.secret
 
             }
         }
@@ -263,7 +269,7 @@ isolated function validateToken(string toolName, Token token, cache:Cache tokenM
     return {};
 } 
 
-isolated function validateToolScope(map<()> scopesInToken, string toolName, string|string[] scopes, 
+isolated function validateToolScope(map<()> scopesInToken, string toolName, string|string[]? scopes, 
         string agentId) returns InsufficientScopeError? {
     observe:ValidateToolAuthorizationSpan toolAuthorizationSpan = observe:createValidateToolAuthorizationSpan(toolName);
     log:printDebug("Validating scopes for tool: ",
@@ -271,7 +277,7 @@ isolated function validateToolScope(map<()> scopesInToken, string toolName, stri
             toolName = toolName,
             requiredScopes = scopes
     );
-    string[] requiredScopes = scopes is string[] ? scopes : [scopes];
+    string[] requiredScopes = getRequiredScope(scopes);
     toolAuthorizationSpan.addScopeCheck(requiredScopes, scopesInToken.keys());
     foreach string scope in requiredScopes {
         if !scopesInToken.hasKey(scope) {
@@ -287,21 +293,31 @@ isolated function validateToolScope(map<()> scopesInToken, string toolName, stri
         }
     }
     toolAuthorizationSpan.close();
-    log:printInfo("Successfully validated scopes", agentId = agentId, toolName = toolName);
+    log:printDebug("Successfully validated scopes", agentId = agentId, toolName = toolName);
     return;
+}
+
+isolated function getRequiredScope(string|string[]? scopes) returns string[] {
+    if scopes is string[] {
+        return scopes;
+    } else if scopes is string {
+        return [scopes];
+    } else {
+        return [];
+    }
 }
 
 isolated function generateVerifier(int length) returns string|error {
     string out = EMPTY_STRING;
     foreach int i in 0 ... length - 1 {
-        int idx = check random:createIntInRange(0, CHARSET.length());
-        out += CHARSET.substring(idx, idx + 1);
+        int idx = check random:createIntInRange(0, PKCE_CODE_VERIFIER_CHARSET.length());
+        out += PKCE_CODE_VERIFIER_CHARSET.substring(idx, idx + 1);
     }
     return out;
 }
 
 isolated function base64UrlEncode(byte[] data) returns string {
-    string base = data.toBase64(); // use mime 
+    string base = data.toBase64();
     base = regexp:replaceAll(re `\+`, base, DASH);
     base = regexp:replaceAll(re `/`, base, UNDERSCORE);
     base = regexp:replaceAll(re `=`, base, EMPTY_STRING);

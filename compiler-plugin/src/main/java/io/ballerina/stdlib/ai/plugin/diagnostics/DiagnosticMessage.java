@@ -34,6 +34,10 @@ public enum DiagnosticMessage {
     ERROR_105("Agent must be marked as 'final'."),
     ERROR_106("the function ''{0}'' has a parameter ''{1}'' of type `ai:Context`." +
             "`ai:Context` is only allowed as the first parameter in the tool."),
+    ERROR_109("Invalid auth configuration: `AgentIdAuthConfig` type is not " +
+            "supported; expected `Scopes` type"),
+    ERROR_110("Invalid auth configuration: `Scopes` type is not " +
+            "supported; expected `AgentIdAuthConfig` type"),
     WARNING_107("unable to determine a valid port from the expression ''{0}''." +
             " Default port ''{1}'' will be used as the server port in the generated OpenAPI specification."),
     WARNING_108("unable to determine a valid port for the 'ai:ChatService'." +

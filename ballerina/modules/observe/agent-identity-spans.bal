@@ -79,16 +79,15 @@ public isolated distinct class InvokeAuthorizeEndpointSpan {
    # + url - The authorize endpoint URL of the Identity Server
    # + 'resource - The resource indicator (e.g., booking_api)
    # + challenge - The PKCE code_challenge
-   # + method - The PKCE transformation method (S256)
-   public isolated function addAuthRequestDetails(string clientId, string[]|string scopes, string url, string 'resource = "", 
-                                                string? challenge = (), string method = "S256") {
+   public isolated function addAuthRequestDetails(string clientId, string[]|string? scopes, string url, 
+         string 'resource = "", string? challenge = ()) {
       self.addTag(IDENTITY_PROVIDER_URL, url);
       self.addTag(CLIENT_ID, clientId);
       self.addTag(AUTH_SCOPES, scopes.toString());
       self.addTag(RESOURCE_INDICATOR, 'resource);
       if challenge is string {
          self.addTag(PKCE_CHALLENGE, challenge);
-         self.addTag(PKCE_METHOD, method);
+         self.addTag(PKCE_METHOD, "S256");
       }
    }
 

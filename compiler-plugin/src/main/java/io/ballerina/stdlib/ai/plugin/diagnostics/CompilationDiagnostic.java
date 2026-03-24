@@ -38,7 +38,9 @@ public enum CompilationDiagnostic {
     AGENT_MUST_BE_FINAL(DiagnosticMessage.ERROR_105, DiagnosticCode.AI_105, ERROR),
     CONTEXT_PARAM_MUST_BE_FIRST(DiagnosticMessage.ERROR_106, DiagnosticCode.AI_106, ERROR),
     UNABLE_TO_OBTAIN_VALID_SERVER_PORT_FROM_EXPRESSION(DiagnosticMessage.WARNING_107, DiagnosticCode.AI_107, WARNING),
-    UNABLE_TO_OBTAIN_VALID_SERVER_PORT(DiagnosticMessage.WARNING_108, DiagnosticCode.AI_108, WARNING);
+    UNABLE_TO_OBTAIN_VALID_SERVER_PORT(DiagnosticMessage.WARNING_108, DiagnosticCode.AI_108, WARNING),
+    INVALID_AUTH_CONFIG(DiagnosticMessage.ERROR_109, DiagnosticCode.AI_109, ERROR),
+    INVALID_AGENT_ID_AUTH_CONFIG(DiagnosticMessage.ERROR_110, DiagnosticCode.AI_110, ERROR);
 
     private final String diagnostic;
     private final String diagnosticCode;

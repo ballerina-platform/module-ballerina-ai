@@ -39,7 +39,7 @@ public type Tool record {|
     # Function that should be called to execute the tool
     isolated function caller;
     # Optional authorization configuration required to invoke this tool.
-    AgentIdAuthConfig auth?;
+    AgentIdAuthConfig|Scopes auth?;
 |};
 type ToolInfo record {|
     string name;
@@ -373,7 +373,8 @@ isolated function mergeInputs(map<json>? inputs, map<json> constants) returns ma
 }
 
 isolated function validateTool(LlmToolResponse action, Credential? agentCredential, cache:Cache tokenManager, 
-    Context context, map<Tool> & readonly tool, boolean isMcpTool) returns ToolNotFoundError|ToolInvalidInputError|TokenAcquisitionError|TokenValidationError? {
+    Context context, map<Tool> & readonly tool, boolean isMcpTool) returns 
+    ToolNotFoundError|ToolInvalidInputError|TokenAcquisitionError|TokenValidationError? {
     string toolName = action.name;
     map<json>? inputs = action.arguments;
     string? agentId = agentCredential is Credential ? agentCredential.id : ();
@@ -396,31 +397,30 @@ isolated function validateTool(LlmToolResponse action, Credential? agentCredenti
         );
         string instruction = string `Tool "${toolName}"  execution failed due to invalid inputs provided.` +
             string ` Use the schema to provide inputs: ${tool.get(toolName).variables.toString()}`;
-        return error ToolInvalidInputError("Tool is provided with invalid inputs.", inputValues, toolName = toolName,
-            inputs = inputs ?: (), instruction = instruction);
+        return error ToolInvalidInputError("Tool is provided with invalid inputs.", inputValues, 
+            toolName = toolName, inputs = inputs ?: (), instruction = instruction);
     }
 
+    check authorizeToolInvocation(agentCredential, tokenManager, context, tool, toolName);
+    
     log:printDebug("Executing tool",
         agentId = agentId,
         toolName = toolName,
         arguments = inputValues.keys()
     );
-    AgentIdAuthConfig? auth = tool.get(toolName).auth;
-    string[]|string? scopes = auth?.scopes;
-    if agentCredential is Credential && auth is AgentIdAuthConfig && 
-            auth.clientId !is () && scopes !is () {
-        string? baseUrl = auth.baseAuthUrl;
-        if baseUrl is () {
-            return error TokenAcquisitionError("Authorization is required to use this tool, " + 
-                "but the base URL is not configured.");
-        }
-        http:Client|http:ClientError httpclient = new 
-            (baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() -1) : baseUrl);
-        if  httpclient is http:ClientError {
-            return error TokenAcquisitionError(httpclient.message());
-        }        
-        map<()>? result = check getToolScopes(agentCredential, auth, baseUrl, tokenManager, 
-        toolName, scopes, context, httpclient);
+}
+
+isolated function authorizeToolInvocation (Credential? agentCredential, cache:Cache tokenManager, 
+    Context context, map<Tool> & readonly tool, string toolName) returns 
+    TokenAcquisitionError|TokenValidationError? {
+    AgentIdAuthConfig|Scopes? auth = tool.get(toolName).auth;
+    string? agentId = agentCredential is Credential ? agentCredential.id : ();
+    string[]|string? scopes = ();
+    if auth is AgentIdAuthConfig|Scopes {
+        scopes = auth?.scopes;
+    }
+    if agentCredential is Credential && auth is AgentIdAuthConfig {     
+        map<()>? result = check getToolScopes(agentCredential, auth, tokenManager, toolName, context);
         if result is () {
             return;
         }
@@ -429,11 +429,10 @@ isolated function validateTool(LlmToolResponse action, Credential? agentCredenti
         if token is TokenCache {
             context.setAccessToken(toolName, token.getAccessToken());
         }
-    } else if scopes !is () && (auth?.clientId is () || agentCredential is ()) {
+    } else if scopes !is () && (auth !is  AgentIdAuthConfig|| agentCredential is ()) {
         log:printError("Authorization is required for the tool, but no agent credential " +
             "or auth configuration was provided.", toolName = toolName, agentId = agentId);
         return error TokenAcquisitionError("Authorization is required for the tool, but no agent " +
                     "credential or auth configuration was provided.");
     }
-    return;  
 }

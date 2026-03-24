@@ -565,7 +565,7 @@ public isolated function getPermittedMcpToolConfigs(mcp:StreamableHttpClient mcp
 }
 
 isolated function addScopeInConfig(map<FunctionTool>|FunctionTool permittedTools, string toolName, 
-        AgentIdAuthConfig? clientConfig) returns AgentIdAuthConfig {
+        AgentIdAuthConfig? clientConfig) returns AgentIdAuthConfig|Scopes {
     string|string[]? clientToolScopes = getClientToolScopes(permittedTools, toolName);
     if clientToolScopes !is () {
         if clientConfig is AgentIdAuthConfig {

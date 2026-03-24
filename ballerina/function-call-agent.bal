@@ -143,7 +143,7 @@ isolated distinct class FunctionCallAgent {
     isolated function run(string query, string instruction, int maxIter = 5, boolean verbose = true,
             string sessionId = DEFAULT_SESSION_ID, Context context = new, string executionId = DEFAULT_EXECUTION_ID)
             returns ExecutionTrace {
-        Credential? & readonly agentConfig = self.agentCredential.cloneReadOnly();
+        Credential? & readonly agentConfig = self.agentCredential;
         string? agentId = agentConfig is Credential ? agentConfig.id : ();
         return run(self, instruction, query, maxIter, verbose, agentId, sessionId, context, executionId);
     }

@@ -18,16 +18,21 @@
 
 package io.ballerina.stdlib.ai.plugin;
 
+import io.ballerina.compiler.api.ModuleID;
 import io.ballerina.compiler.api.symbols.AnnotationSymbol;
 import io.ballerina.compiler.api.symbols.FunctionSymbol;
 import io.ballerina.compiler.api.symbols.FunctionTypeSymbol;
+import io.ballerina.compiler.api.symbols.ModuleSymbol;
 import io.ballerina.compiler.api.symbols.ParameterSymbol;
 import io.ballerina.compiler.api.symbols.Symbol;
 import io.ballerina.compiler.api.symbols.SymbolKind;
+import io.ballerina.compiler.api.symbols.TypeReferenceTypeSymbol;
 import io.ballerina.compiler.api.symbols.TypeSymbol;
+import io.ballerina.compiler.api.symbols.UnionTypeSymbol;
 import io.ballerina.compiler.syntax.tree.AnnotationNode;
 import io.ballerina.compiler.syntax.tree.ExpressionNode;
 import io.ballerina.compiler.syntax.tree.FunctionDefinitionNode;
+import io.ballerina.compiler.syntax.tree.MappingConstructorExpressionNode;
 import io.ballerina.compiler.syntax.tree.MappingFieldNode;
 import io.ballerina.compiler.syntax.tree.NodeFactory;
 import io.ballerina.compiler.syntax.tree.NodeParser;
@@ -53,8 +58,9 @@ import static io.ballerina.stdlib.ai.plugin.ToolAnnotationConfig.AUTH;
 import static io.ballerina.stdlib.ai.plugin.ToolAnnotationConfig.DESCRIPTION_FIELD_NAME;
 import static io.ballerina.stdlib.ai.plugin.ToolAnnotationConfig.NAME_FIELD_NAME;
 import static io.ballerina.stdlib.ai.plugin.ToolAnnotationConfig.PARAMETERS_FIELD_NAME;
-import static io.ballerina.stdlib.ai.plugin.ToolAnnotationConfig.SCOPES;
 import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.CONTEXT_PARAM_MUST_BE_FIRST;
+import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.INVALID_AGENT_ID_AUTH_CONFIG;
+import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.INVALID_AUTH_CONFIG;
 import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.INVALID_RETURN_TYPE_IN_TOOL;
 import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.PARAMETER_IS_NOT_A_SUBTYPE_OF_ANYDATA;
 import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.UNABLE_TO_GENERATE_SCHEMA_FOR_FUNCTION;
@@ -95,7 +101,8 @@ class ToolAnnotationAnalysisTask implements AnalysisTask<SyntaxNodeAnalysisConte
             return;
         }
 
-        Location functionLocation = functionSymbol.get().getLocation()
+        FunctionSymbol function = functionSymbol.get();
+        Location functionLocation = function.getLocation()
                 .orElse(functionDefinitionNode.get().location());
         if (!hasValidParameterTypes(functionSymbol.get(), functionLocation)
                 || !hasValidateReturnType(functionSymbol.get(), functionLocation)) {
@@ -104,7 +111,8 @@ class ToolAnnotationAnalysisTask implements AnalysisTask<SyntaxNodeAnalysisConte
         if (hasSpreadAnnotationFieldValue(toolAnnotationNode)) {
             return;
         }
-        ToolAnnotationConfig config = createAnnotationConfig(toolAnnotationNode, functionDefinitionNode.get());
+        ToolAnnotationConfig config = createAnnotationConfig(toolAnnotationNode,
+                functionDefinitionNode.get(), isMcpFunction(function));
         addToModifierContext(context, toolAnnotationNode, config);
     }
 
@@ -112,6 +120,50 @@ class ToolAnnotationAnalysisTask implements AnalysisTask<SyntaxNodeAnalysisConte
         return toolAnnotationNode.annotValue().isPresent()
                 && toolAnnotationNode.annotValue().get().fields().size() == 1
                 && toolAnnotationNode.annotValue().get().fields().get(0).kind() == SyntaxKind.SPREAD_FIELD;
+    }
+
+    private boolean isMcpFunction(FunctionSymbol functionSymbol) {
+        // check return type
+        Optional<TypeSymbol> returnTypeDesc =
+                functionSymbol.typeDescriptor().returnTypeDescriptor();
+        if (returnTypeDesc.isPresent()) {
+            TypeSymbol returnType = returnTypeDesc.get();
+            if (returnType instanceof UnionTypeSymbol union) {
+                for (TypeSymbol member : union.memberTypeDescriptors()) {
+                    if (member instanceof TypeReferenceTypeSymbol ref &&
+                            isMcpType(ref, "CallToolResult")) {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        // check params
+        Optional<List<ParameterSymbol>> params =
+                functionSymbol.typeDescriptor().params();
+        if (params.isPresent()) {
+            for (ParameterSymbol param : params.get()) {
+                TypeSymbol type = param.typeDescriptor();
+                if (type instanceof TypeReferenceTypeSymbol ref &&
+                        isMcpType(ref, "CallToolParams")) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private boolean isMcpType(TypeReferenceTypeSymbol ref, String expectedType) {
+        Optional<ModuleSymbol> module = ref.getModule();
+        if (module.isEmpty()) {
+            return false;
+        }
+        ModuleID id = module.get().id();
+        boolean isMcpModule = id.orgName().equals("ballerina") &&
+                id.moduleName().equals("mcp");
+        boolean isExpectedType = ref.getName().isPresent() &&
+                ref.getName().get().equals(expectedType);
+        return isMcpModule && isExpectedType;
     }
 
     private boolean hasValidateReturnType(FunctionSymbol functionSymbol, Location functionLocation) {
@@ -195,7 +247,8 @@ class ToolAnnotationAnalysisTask implements AnalysisTask<SyntaxNodeAnalysisConte
     }
 
     private ToolAnnotationConfig createAnnotationConfig(AnnotationNode annotationNode,
-                                                        FunctionDefinitionNode functionDefinitionNode) {
+                                                        FunctionDefinitionNode functionDefinitionNode,
+                                                        boolean isMcp) {
         @SuppressWarnings("OptionalGetWithoutIsPresent") // is present already check in perform method
         FunctionSymbol functionSymbol = getFunctionSymbol(functionDefinitionNode).get();
         String functionName = functionSymbol.getName().orElse("unknownFunction");
@@ -210,11 +263,30 @@ class ToolAnnotationAnalysisTask implements AnalysisTask<SyntaxNodeAnalysisConte
         String parameters = fieldValues.containsKey(PARAMETERS_FIELD_NAME)
                 ? fieldValues.get(PARAMETERS_FIELD_NAME).toSourceCode()
                 : getParameterSchema(functionSymbol, functionDefinitionNode.location());
-        String scopes = fieldValues.containsKey(SCOPES) ? fieldValues.get(SCOPES).toSourceCode()
-                : null;
-        String auth = fieldValues.containsKey(AUTH) ? fieldValues.get(AUTH).toSourceCode()
-                : null;
-        return new ToolAnnotationConfig(name, description, parameters, scopes, auth);
+        String authString = null;
+        if (fieldValues.containsKey(AUTH)) {
+            ExpressionNode auth = fieldValues.get(AUTH);
+            validateAuthConfig(auth, isMcp);
+            authString = auth.toSourceCode();
+        }
+        String auth = authString;
+        return new ToolAnnotationConfig(name, description, parameters, auth);
+    }
+
+    private void validateAuthConfig(ExpressionNode expressionNode, boolean isMcp) {
+        if (!(expressionNode instanceof MappingConstructorExpressionNode mapping)) {
+            return;
+        }
+        SeparatedNodeList<MappingFieldNode> configs = mapping.fields();
+        if (isMcp && configs.size() != 1) {
+            Diagnostic diagnostic = CompilationDiagnostic.getDiagnostic(INVALID_AUTH_CONFIG,
+                    expressionNode.location());
+            reportDiagnostic(diagnostic);
+        } else if (!isMcp && configs.size() == 1) {
+            Diagnostic diagnostic = CompilationDiagnostic.getDiagnostic(INVALID_AGENT_ID_AUTH_CONFIG,
+                    expressionNode.location());
+            reportDiagnostic(diagnostic);
+        }
     }
 
     private Map<String, ExpressionNode> extractFieldValues(SeparatedNodeList<MappingFieldNode> fields) {

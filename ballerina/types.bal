@@ -207,11 +207,11 @@ public type AgentIdAuthConfig record {|
     # The base URL of the Authorization Server used to resolve
     # OAuth 2.0 endpoints such as authorization, token, and introspection.
     @display {label: "Authorization Server Base URL"}
-    string baseAuthUrl?;
+    string baseAuthUrl;
 
     # The OAuth 2.0 client identifier issued to this client application.
     @display {label: "Client ID"}
-    string clientId?;
+    string clientId;
 
     # The OAuth 2.0 client secret issued to this client application.
     @display {label: "Client Secret"}
@@ -220,7 +220,7 @@ public type AgentIdAuthConfig record {|
     # The redirect URI registered for the OAuth client and used
     # in the Authorization Code flow.
     @display {label: "Redirect URI"}
-    string redirectUri?;
+    string redirectUri;
 
     # Scopes required to invoke this tool
     @display {label: "Required Scopes"}
@@ -230,4 +230,13 @@ public type AgentIdAuthConfig record {|
     # for the Authorization Code flow.
     @display {label: "Enable PKCE"}
     boolean isPkceEnabled = false;
+    
+    # SSL/TLS-related options
+    http:ClientSecureSocket? secureSocket = ();
+|};
+
+# Represents the OAuth scopes required for invoking a tool.
+public type Scopes record {|
+    # The required OAuth scope or list of scopes.
+    string|string[] scopes?;
 |};

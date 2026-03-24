@@ -129,9 +129,7 @@ public isolated distinct class Agent {
             agentIdentitySpan = observe:createCreateAgentIdentitySpan(config.systemPrompt.role);
             self.agentId = agentCredential.id.cloneReadOnly();
             if agentIdentitySpan is observe:CreateAgentIdentitySpan {
-                lock {
-                    agentIdentitySpan.addId(self.agentId);
-                }
+                agentIdentitySpan.addId(agentCredential.id);
             }
         }
         do {
@@ -139,17 +137,13 @@ public isolated distinct class Agent {
                 agentCredential, memory, config.toolLoadingStrategy);
             self.toolSchemas = self.functionCallAgent.toolStore.getToolSchema().cloneReadOnly();
             span.addTools(self.functionCallAgent.toolStore.getToolsInfo());
-            lock {
-                if agentIdentitySpan is observe:CreateAgentIdentitySpan {
-                    agentIdentitySpan.close();
-                }
+            if agentIdentitySpan is observe:CreateAgentIdentitySpan {
+                agentIdentitySpan.close();
             }
             span.close();
         } on fail Error err {
-            lock {
-                if agentIdentitySpan is observe:CreateAgentIdentitySpan {
-                    agentIdentitySpan.close(err);
-                }
+            if agentIdentitySpan is observe:CreateAgentIdentitySpan {
+                agentIdentitySpan.close(err);
             }
             span.close(err);
             return err;
@@ -178,22 +172,12 @@ public isolated distinct class Agent {
             Context context = new, boolean withTrace = false) returns string|Trace|Error {
         time:Utc startTime = time:utcNow();
         string executionId = uuid:createRandomUuid();
-        lock {
-            if self.agentId is string {
-                log:printDebug("Agent execution started",
-                        executionId = executionId,
-                        agentId = self.agentId,
-                        query = query,
-                        sessionId = sessionId
-                );
-            } else {
-                log:printDebug("Agent execution started",
-                        executionId = executionId,
-                        query = query,
-                        sessionId = sessionId
-                );
-            }
-        }
+        log:printDebug("Agent execution started",
+            executionId = executionId,
+            agentId = self.agentId,
+            query = query,
+            sessionId = sessionId
+        );
 
         observe:InvokeAgentSpan span = observe:createInvokeAgentSpan(self.systemPrompt.role);
         span.addId(self.uniqueId);
@@ -209,20 +193,12 @@ public isolated distinct class Agent {
         FunctionCall[]? toolCalls = executionTrace.toolCalls.length() == 0 ? () : executionTrace.toolCalls;
         do {
             string answer = check getAnswer(executionTrace, self.maxIter);
-            lock {
-                if self.agentId is string {
-                    log:printInfo("Agent execution completed successfully",
-                            executionId = executionId,
-                            agentId = self.agentId
-                    );
-                } else {
-                    log:printDebug("Agent execution completed successfully",
-                            executionId = executionId,
-                            steps = executionTrace.steps.toString(),
-                            answer = answer
-                    );
-                }
-            }
+            log:printDebug("Agent execution completed successfully",
+                executionId = executionId,
+                agentId = self.agentId,
+                steps = executionTrace.steps.toString(),
+                answer = answer
+            );
             span.addOutput(observe:TEXT, answer);
             span.close();
 
@@ -239,23 +215,12 @@ public isolated distinct class Agent {
                 }
                 : answer;
         } on fail Error err {
-            lock {
-                if self.agentId is string {
-                    log:printError("Agent execution failed",
-                            err,
-                            executionId = executionId,
-                            agentId = self.agentId,
-                            steps = executionTrace.steps.toString()
-                    );
-                } else {
-                    log:printDebug("Agent execution failed",
-                            err,
-                            executionId = executionId,
-                            steps = executionTrace.steps.toString()
-                    );
-                }
-            }
-
+            log:printDebug("Agent execution failed",
+                err,
+                executionId = executionId,
+                agentId = self.agentId,
+                steps = executionTrace.steps.toString()
+            );
             span.close(err);
 
             return withTrace
@@ -301,17 +266,5 @@ ${systemPrompt.role}
 
 # Instructions  
 ${systemPrompt.instructions}
-
-# Instructions for Tool Validation Failure Handling (Scope / Permission):
-Apply the following guidance ONLY when a tool response explicitly indicates that execution failed due to a validation error, permission issue, or missing scope.  
-Do NOT assume validation failure unless it is clearly stated in the tool result.
-When such a validation failure is confirmed:
-- Do not retry executing the same tool call automatically.
-- Inform the user that the tool execution could not be completed due to a validation or permission-related issue.
-- Explain that the issue may be caused by missing or insufficient scopes or permissions for the agent or the user.
-- Suggest that the user verify and grant the required scopes or permissions before attempting the request again.
-- If other available tools can help complete the task, continue planning using those tools.
-- If no alternative tool is available, provide the most helpful possible response using available knowledge without attempting further tool execution.
-- Clearly mention that the task could not be completed using the tool due to scope or permission limitations.
 `;
 }
