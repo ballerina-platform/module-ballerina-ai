@@ -188,7 +188,8 @@ public isolated distinct class ValidateTokenSpan {
    # + clientId - The client ID associated with the token
    # + subject - The agent or user identifier (sub claim)
    public isolated function addValidationResult(boolean? active, string? clientId = (), string? subject = ()) {
-      self.addTag(TOKEN_STATUS, active is boolean && active ? "active" : "inactive");
+      string status = active is () ? "unknown" : (active ? "active" : "inactive");
+      self.addTag(TOKEN_STATUS, status);
       if clientId is string { self.addTag(CLIENT_ID, clientId); }
       if subject is string { self.addTag(AGENT_ID, subject); }
    }

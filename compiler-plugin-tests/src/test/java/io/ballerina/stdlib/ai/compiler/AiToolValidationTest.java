@@ -37,6 +37,8 @@ import java.util.Iterator;
 
 import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.AGENT_MUST_BE_FINAL;
 import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.CONTEXT_PARAM_MUST_BE_FIRST;
+import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.INVALID_AGENT_ID_AUTH_CONFIG;
+import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.INVALID_AUTH_CONFIG;
 import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.INVALID_RETURN_TYPE_IN_TOOL;
 import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.PARAMETER_IS_NOT_A_SUBTYPE_OF_ANYDATA;
 import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.UNABLE_TO_GENERATE_SCHEMA_FOR_FUNCTION;
@@ -174,6 +176,22 @@ public class AiToolValidationTest {
         Diagnostic diagnostic = diagnosticIterator.next();
         String message = getErrorMessage(AGENT_MUST_BE_FINAL);
         assertErrorMessage(diagnostic, message, 105, 1);
+    }
+
+    @Test(description = "Test invalid AgentTool auth annotation validation")
+    public void testAgentToolAnnotationWithInvalidAuth() {
+        String packagePath = "08_local_tool_with_scope_annotation";
+        DiagnosticResult diagnosticResult = getDiagnosticResult(packagePath);
+        Assert.assertEquals(diagnosticResult.errorCount(), 2);
+
+        Iterator<Diagnostic> diagnosticIterator = diagnosticResult.errors().iterator();
+        Diagnostic diagnostic = diagnosticIterator.next();
+        String message = getErrorMessage(INVALID_AGENT_ID_AUTH_CONFIG);
+        assertErrorMessage(diagnostic, message, 21, 11);
+
+        diagnostic = diagnosticIterator.next();
+        message = getErrorMessage(INVALID_AUTH_CONFIG);
+        assertErrorMessage(diagnostic, message, 30, 11);
     }
 
     private DiagnosticResult getDiagnosticResult(String path) {
