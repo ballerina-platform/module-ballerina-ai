@@ -16,6 +16,7 @@
 
 import ai.observe;
 
+import ballerina/cache;
 import ballerina/jballerina.java;
 import ballerina/log;
 import ballerina/time;
@@ -44,6 +45,19 @@ public enum AgentType {
     # Represents a function call agent
     FUNCTION_CALL_AGENT
 }
+
+# Represents the authentication credentials of an autonomous agent.
+@display {label: "Agent Credential"}
+public type Credential record {|
+
+    # The unique identifier assigned to the agent.
+    @display {label: "Agent ID"}
+    string id;
+
+    # The secret associated with the agent.
+    @display {label: "Agent Secret"}
+    string secret;
+|};
 
 # Provides a set of configurations for the agent.
 @display {label: "Agent Configuration"}
@@ -79,6 +93,10 @@ public type AgentConfiguration record {|
     # By default, all tools are loaded without any filtering.
     @display {label: "Tool Loading Strategy"}
     ToolLoadingStrategy toolLoadingStrategy = NO_FILTER;
+
+    # Optional authentication details of the agent.
+    @display {label: "Agent Credential"}
+    Credential credential?;
 |};
 
 # Represents an agent.
@@ -89,6 +107,8 @@ public isolated distinct class Agent {
     private final boolean verbose;
     private final string uniqueId = uuid:createRandomUuid();
     private final readonly & ToolSchema[] toolSchemas;
+    private final cache:Cache tokenManager = new ();
+    private string? agentId = ();
 
     # Initialize an Agent.
     #
@@ -103,13 +123,28 @@ public isolated distinct class Agent {
         self.verbose = config.verbose;
         self.systemPrompt = config.systemPrompt.cloneReadOnly();
         Memory? memory = config.hasKey("memory") ? config?.memory : check new ShortTermMemory();
+        observe:CreateAgentIdentitySpan? agentIdentitySpan = ();
+        Credential? agentCredential = config.credential;
+        if agentCredential is Credential {
+            agentIdentitySpan = observe:createCreateAgentIdentitySpan(config.systemPrompt.role);
+            self.agentId = agentCredential.id.cloneReadOnly();
+            if agentIdentitySpan is observe:CreateAgentIdentitySpan {
+                agentIdentitySpan.addId(agentCredential.id);
+            }
+        }
         do {
-            self.functionCallAgent = check new FunctionCallAgent(config.model, config.tools, memory,
-                config.toolLoadingStrategy);
+            self.functionCallAgent = check new FunctionCallAgent(config.model, config.tools, self.tokenManager,
+                agentCredential, memory, config.toolLoadingStrategy);
             self.toolSchemas = self.functionCallAgent.toolStore.getToolSchema().cloneReadOnly();
             span.addTools(self.functionCallAgent.toolStore.getToolsInfo());
+            if agentIdentitySpan is observe:CreateAgentIdentitySpan {
+                agentIdentitySpan.close();
+            }
             span.close();
         } on fail Error err {
+            if agentIdentitySpan is observe:CreateAgentIdentitySpan {
+                agentIdentitySpan.close(err);
+            }
             span.close(err);
             return err;
         }
@@ -137,12 +172,13 @@ public isolated distinct class Agent {
             Context context = new, boolean withTrace = false) returns string|Trace|Error {
         time:Utc startTime = time:utcNow();
         string executionId = uuid:createRandomUuid();
-
         log:printDebug("Agent execution started",
             executionId = executionId,
+            agentId = self.agentId,
             query = query,
             sessionId = sessionId
         );
+
         observe:InvokeAgentSpan span = observe:createInvokeAgentSpan(self.systemPrompt.role);
         span.addId(self.uniqueId);
         span.addSessionId(sessionId);
@@ -159,6 +195,7 @@ public isolated distinct class Agent {
             string answer = check getAnswer(executionTrace, self.maxIter);
             log:printDebug("Agent execution completed successfully",
                 executionId = executionId,
+                agentId = self.agentId,
                 steps = executionTrace.steps.toString(),
                 answer = answer
             );
@@ -181,6 +218,7 @@ public isolated distinct class Agent {
             log:printDebug("Agent execution failed",
                 err,
                 executionId = executionId,
+                agentId = self.agentId,
                 steps = executionTrace.steps.toString()
             );
             span.close(err);
@@ -227,5 +265,6 @@ isolated function getFomatedSystemPrompt(SystemPrompt systemPrompt) returns stri
 ${systemPrompt.role}  
 
 # Instructions  
-${systemPrompt.instructions}`;
+${systemPrompt.instructions}
+`;
 }

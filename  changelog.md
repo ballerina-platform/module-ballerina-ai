@@ -4,6 +4,8 @@ This file documents all significant changes made to the Ballerina AI package acr
 
 ## [Unreleased]
 
+- [Add Agent Identity](https://github.com/ballerina-platform/module-ballerina-ai/pull/126)
+
 ## [1.10.0] - 2026-03-14
 
 ### Added

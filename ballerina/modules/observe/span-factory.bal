@@ -104,3 +104,68 @@ public isolated function createKnowledgeBaseRetrieveSpan(string kbName) returns 
     recordAiSpan(span);
     return span;
 }
+
+# Creates a span representing the creation of an agent identity.
+#
+# + agentName - The name of the agent being created
+# + return - A `CreateAgentIdentitySpan` instance
+public isolated function createCreateAgentIdentitySpan(string agentName) 
+        returns CreateAgentIdentitySpan {
+    CreateAgentIdentitySpan span = new (agentName);
+    recordAiSpan(span);
+    return span;
+}
+
+# Creates a span representing an invocation of the OIDC/OAuth2 authorization endpoint.
+#
+# + organization - The root organization handle or tenant name
+# + return - An `InvokeAuthorizeEndpointSpan` instance
+public isolated function createInvokeAuthorizeEndpointSpan(string organization) 
+        returns InvokeAuthorizeEndpointSpan {
+    InvokeAuthorizeEndpointSpan span = new (organization);
+    recordAiSpan(span);
+    return span;
+}
+
+# Creates a span representing the agent authentication process (AuthN).
+#
+# + flowId - The unique identifier for the authentication flow
+# + return - An `AgentAuthenticationSpan` instance
+public isolated function createAgentAuthenticationSpan(string flowId) 
+        returns AgentAuthenticationSpan {
+    AgentAuthenticationSpan span = new (flowId);
+    recordAiSpan(span);
+    return span;
+}
+
+# Creates a span representing the exchange of an authorization code for a token.
+#
+# + return - An `ExchangeTokenSpan` instance
+public isolated function createExchangeTokenSpan() 
+        returns ExchangeTokenSpan {
+    ExchangeTokenSpan span = new ();
+    recordAiSpan(span);
+    return span;
+}
+
+# Creates a span representing the validation of an access token.
+#
+# + provider - The Identity Server or Authority that issued the token
+# + return - A `ValidateTokenSpan` instance
+public isolated function createValidateTokenSpan(string provider) 
+        returns ValidateTokenSpan {
+    ValidateTokenSpan span = new (provider);
+    recordAiSpan(span);
+    return span;
+}
+
+# Creates a span representing the validation of agent permissions for a specific tool.
+#
+# + toolName - The name of the tool being authorized
+# + return - A `ValidateToolAuthorizationSpan` instance
+public isolated function createValidateToolAuthorizationSpan(string toolName) 
+        returns ValidateToolAuthorizationSpan {
+    ValidateToolAuthorizationSpan span = new (toolName);
+    recordAiSpan(span);
+    return span;
+}

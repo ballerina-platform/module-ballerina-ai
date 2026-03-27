@@ -26,6 +26,7 @@ public type ContextEntry Cloneable|isolated object {};
 # Represents a contextual storage object used to pass additional data to tools during agent execution.
 public isolated class Context {
     private final map<ContextEntry> entries = {};
+    private final map<string> toolAccessToken = {};
 
     # Adds or updates an entry in the context.
     #
@@ -73,6 +74,29 @@ public isolated class Context {
     public isolated function keys() returns string[] {
         lock {
             return self.entries.keys().clone();
+        }
+    }
+
+    # Associates an access token with a specific tool.
+    #
+    # + toolName - The name of the tool
+    # + accessToken - The access token to be stored for the tool
+    isolated function setAccessToken(string toolName, string accessToken) {
+        lock {
+            self.toolAccessToken[toolName] = accessToken;
+        }
+    }
+
+    # Retrieves the access token associated with the specified tool.
+    #
+    # + toolName - The name of the tool
+    # + return - The access token associated with the tool
+    public isolated function getAccessToken(string toolName) returns string|error {
+        lock {
+            if (self.toolAccessToken.hasKey(toolName)) {
+                return self.toolAccessToken.get(toolName);
+            }
+            return error(string `Access token not found for tool '${toolName}'.`);
         }
     }
 

@@ -14,6 +14,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
+import ballerina/cache;
 import ballerina/lang.regexp;
 import ballerina/log;
 
@@ -29,20 +30,27 @@ isolated distinct class FunctionCallAgent {
     final Memory memory;
     # Represents if the agent is stateless or not.
     final boolean stateless;
+    # Strategy used to control how and when tools are loaded for the agent.
     final ToolLoadingStrategy toolLoadingStrategy;
+    # Cache used to store and reuse authentication tokens for tool access.
+    final cache:Cache tokenManager;
+    # Authentication configuration used for acquiring OAuth tokens when accessing secured tools.
+    final readonly & Credential? agentCredential;
 
     # Initialize an Agent.
     #
     # + model - LLM model instance
     # + tools - Tools to be used by the agent
     # + memory - The memory associated with the agent.
-    isolated function init(ModelProvider model, (BaseToolKit|ToolConfig|FunctionTool)[] tools,
-            Memory? memory = (), ToolLoadingStrategy toolLoadingStrategy = NO_FILTER) returns Error? {
+    isolated function init(ModelProvider model, (BaseToolKit|ToolConfig|FunctionTool)[] tools, cache:Cache tokenManager, 
+        Credential? agentCredential, Memory? memory = (), ToolLoadingStrategy toolLoadingStrategy = NO_FILTER) returns Error? {
         self.toolStore = check new (...tools);
         self.model = model;
         self.memory = memory ?: check new ShortTermMemory();
         self.stateless = memory is ();
         self.toolLoadingStrategy = toolLoadingStrategy;
+        self.agentCredential = agentCredential.cloneReadOnly();
+        self.tokenManager = tokenManager;
     }
 
     # Parse the function calling API response and extract the tool to be executed.
@@ -135,9 +143,10 @@ isolated distinct class FunctionCallAgent {
     isolated function run(string query, string instruction, int maxIter = 5, boolean verbose = true,
             string sessionId = DEFAULT_SESSION_ID, Context context = new, string executionId = DEFAULT_EXECUTION_ID)
             returns ExecutionTrace {
-        return run(self, instruction, query, maxIter, verbose, sessionId, context, executionId);
+        Credential? & readonly agentConfig = self.agentCredential;
+        string? agentId = agentConfig is Credential ? agentConfig.id : ();
+        return run(self, instruction, query, maxIter, verbose, agentId, sessionId, context, executionId);
     }
-
 }
 
 isolated function createFunctionCallMessages(ExecutionProgress progress) returns ChatMessage[] {

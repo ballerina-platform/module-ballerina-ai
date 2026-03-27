@@ -1,4 +1,4 @@
-// Copyright (c) 2025 WSO2 LLC (http://www.wso2.com).
+// Copyright (c) 2026 WSO2 LLC (http://www.wso2.com).
 //
 // WSO2 LLC. licenses this file to you under the Apache License,
 // Version 2.0 (the "License"); you may not use this file except
@@ -15,14 +15,27 @@
 // under the License.
 
 import ballerina/ai;
-import ballerina/http;
+import ballerina/mcp;
 
-listener ai:Listener chatListener = new (check http:getDefaultListener());
-
-service /chatService on chatListener {
-    resource function post chat(@http:Payload ai:ChatReqMessage request) returns ai:ChatRespMessage|error {
-        return {
-            message: request.sessionId + ": " + request.message
-        };
+@ai:AgentTool{
+    auth: {
+        scopes: "add"
     }
 }
+isolated function addTask(string description) returns error? {
+    return;
+}
+
+@ai:AgentTool{
+    auth: {
+        clientId: "TS4Ya",
+        clientSecret: "onLw0MO5I5rLk0oa",
+        redirectUri: "http://localhost:8000/callback",
+        baseAuthUrl: "https://api.asgardeo.io/t/testchorea/oauth2",
+        scopes: "list"
+    }
+}
+public isolated function getCurrentWeather(ai:Context ctx, mcp:CallToolParams params) returns mcp:CallToolResult|error {
+   return error("");
+}
+

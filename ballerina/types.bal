@@ -150,3 +150,93 @@ public enum ToolLoadingStrategy {
      # are loaded and sent to the LLM to obtain the necessary parameters for execution.
     LLM_FILTER
 }
+
+# Configuration options for the Streamable HTTP client transport.
+public type StreamableHttpClientTransportConfig record {|
+    # HTTP protocol version supported by the client
+    http:HttpVersion httpVersion = http:HTTP_2_0;
+    # HTTP/1.x specific settings
+    http:ClientHttp1Settings http1Settings = {};
+    # HTTP/2 specific settings
+    http:ClientHttp2Settings http2Settings = {};
+    # Maximum time(in seconds) to wait for a response before the request times out
+    decimal timeout = 30;
+    # The choice of setting `Forwarded`/`X-Forwarded-For` header, when acting as a proxy
+    string forwarded = "disable";
+    # HTTP redirect handling configurations (with 3xx status codes)
+    http:FollowRedirects? followRedirects = ();
+    # Configurations associated with the request connection pool
+    http:PoolConfiguration? poolConfig = ();
+    # HTTP response caching related configurations
+    http:CacheConfig cache = {};
+    # Enable request/response compression (using `accept-encoding` header)
+    http:Compression compression = http:COMPRESSION_AUTO;
+    # Client authentication options (Basic, Bearer token, OAuth, etc.)
+    # Circuit breaker configurations to prevent cascading failures
+    http:CircuitBreakerConfig? circuitBreaker = ();
+    # Automatic retry settings for failed requests
+    http:RetryConfig? retryConfig = ();
+    # Cookie handling settings for session management
+    http:CookieConfig? cookieConfig = ();
+    # Configurations related to client authentication
+    http:ClientAuthConfig|AgentIdAuthConfig? auth = ();
+    # Limits for response size and headers (to prevent memory issues)
+    http:ResponseLimitConfigs responseLimits = {};
+    # Proxy server settings if requests need to go through a proxy
+    http:ProxyConfig? proxy = ();
+    # Enable automatic payload validation for request/response data against constraints
+    boolean validation = true;
+    # Low-level socket settings (timeouts, buffer sizes, etc.)
+    http:ClientSocketConfig socketConfig = {};
+    # Enable relaxed data binding on the client side.
+    # When enabled:
+    # - `null` values in JSON are allowed to be mapped to optional fields
+    # - missing fields in JSON are allowed to be mapped as `null` values
+    boolean laxDataBinding = false;
+    # SSL/TLS-related options
+    http:ClientSecureSocket? secureSocket = ();
+    # Optional session identifier for continued interactions
+    string sessionId?;
+|};
+
+# Represents the OAuth 2.0 client configuration required to interact
+# with an external Authorization Server and validate issued access tokens.
+@display {label: "OAuth Client Configuration"}
+public type AgentIdAuthConfig record {|
+
+    # The base URL of the Authorization Server used to resolve
+    # OAuth 2.0 endpoints such as authorization, token, and introspection.
+    @display {label: "Authorization Server Base URL"}
+    string baseAuthUrl;
+
+    # The OAuth 2.0 client identifier issued to this client application.
+    @display {label: "Client ID"}
+    string clientId;
+
+    # The OAuth 2.0 client secret issued to this client application.
+    @display {label: "Client Secret"}
+    string clientSecret?;
+
+    # The redirect URI registered for the OAuth client and used
+    # in the Authorization Code flow.
+    @display {label: "Redirect URI"}
+    string redirectUri;
+
+    # Scopes required to invoke this tool
+    @display {label: "Required Scopes"}
+    string|string[] scopes?;
+
+    # Indicates whether PKCE (Proof Key for Code Exchange) is enabled
+    # for the Authorization Code flow.
+    @display {label: "Enable PKCE"}
+    boolean isPkceEnabled = false;
+    
+    # SSL/TLS-related options
+    http:ClientSecureSocket? secureSocket = ();
+|};
+
+# Represents the OAuth scopes required for invoking a tool.
+public type Scopes record {|
+    # The required OAuth scope or list of scopes.
+    string|string[] scopes?;
+|};
