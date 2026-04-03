@@ -107,7 +107,7 @@ public isolated distinct class Agent {
     private final string uniqueId = uuid:createRandomUuid();
     private final readonly & ToolSchema[] toolSchemas;
     final cache:Cache tokenManager = new ();
-    private final  string? agentId;
+    private final string? agentId;
     final ToolStore toolStore;
     final ModelProvider model;
     final Memory memory;
@@ -129,7 +129,7 @@ public isolated distinct class Agent {
         self.systemPrompt = config.systemPrompt.cloneReadOnly();
         Memory? memory = config.hasKey("memory") ? config?.memory : check new ShortTermMemory();
         self.toolStore = check new (...config.tools);
-        self.memory = memory?: check new ShortTermMemory();
+        self.memory = memory ?: check new ShortTermMemory();
         self.model = config.model;
         self.stateless = memory is ();
         self.toolLoadingStrategy = config.toolLoadingStrategy;
@@ -248,12 +248,13 @@ public isolated distinct class Agent {
         }
     }
 
-        # Use LLM to decide the next tool/step based on the function calling APIs.
+    # Use LLM to decide the next tool/step based on the function calling APIs.
     #
     # + progress - Execution progress with the current query and execution history
     # + sessionId - The ID associated with the agent memory
     # + return - LLM response containing the tool or chat response (or an error if the call fails)
-    isolated function selectNextTool(ExecutionProgress progress, string sessionId = DEFAULT_SESSION_ID) returns json|Error {
+    isolated function selectNextTool(ExecutionProgress progress, string sessionId = DEFAULT_SESSION_ID) 
+    returns FunctionCall|string|Error {
         ChatMessage[] messages = createFunctionCallMessages(progress);
         messages.unshift(...progress.history);
         ToolLoadingStrategy toolLoadingStrategy = self.toolLoadingStrategy;
@@ -300,29 +301,8 @@ public isolated distinct class Agent {
                 sessionId = sessionId,
                 response = response?.content
         );
-        return response?.content;
-    }
-
-        # Parse the function calling API response and extract the tool to be executed.
-    #
-    # + llmResponse - Raw LLM response
-    # + return - A record containing the tool decided by the LLM, chat response or an error if the response is invalid
-    isolated function parseLlmResponse(json llmResponse) returns LlmToolResponse|LlmChatResponse|LlmInvalidGenerationError {
-        if llmResponse is string {
-            return {content: llmResponse};
-        }
-        if llmResponse !is FunctionCall {
-            return error LlmInvalidGenerationError("Invalid response", llmResponse = llmResponse);
-        }
-        string? name = llmResponse.name;
-        if name is () {
-            return error LlmInvalidGenerationError("Missing name", name = llmResponse.name, arguments = llmResponse.arguments);
-        }
-        return {
-            name,
-            arguments: llmResponse.arguments,
-            id: llmResponse.id
-        };
+        string? content = response?.content;
+        return content ?: error LlmInvalidResponseError(string `invalid response from LLM: ${response.toJsonString()}`);
     }
 }
 

@@ -43,13 +43,13 @@ function testAgentExecutorRun() returns error? {
         instruction = getFomatedSystemPrompt(systemPrompt), query = query, context = new, executionId = DEFAULT_EXECUTION_ID,
         history = []
     );
-    record {|ExecutionResult|LlmChatResponse|ExecutionError|Error value;|}? result = agentExecutor.next();
+    record {|ExecutionResult|string|ExecutionError|Error value;|}? result = agentExecutor.next();
     if result is () {
         test:assertFail("AgentExecutor.next returns an null during first iteration");
     }
-    ExecutionResult|LlmChatResponse|ExecutionError|Error output = result.value;
-    if output is Error {
-        test:assertFail("AgentExecutor.next returns an error during first iteration");
+    ExecutionResult|string|ExecutionError|Error output = result.value;
+    if output is Error|string {
+        test:assertFail(string `Expected ExecutionResult|ExecutionError, but found string|Error.`);
     }
     test:assertEquals(output?.observation, "Camila Morrone");
 
@@ -58,8 +58,8 @@ function testAgentExecutorRun() returns error? {
         test:assertFail("AgentExecutor.next returns an null during second iteration");
     }
     output = result.value;
-    if output is Error {
-        test:assertFail("AgentExecutor.next returns an error during second iteration");
+    if output is Error|string {
+        test:assertFail(string `Expected ExecutionResult|ExecutionError, but found string|Error.`);
     }
     test:assertEquals(output?.observation, "25 years");
 
@@ -68,8 +68,8 @@ function testAgentExecutorRun() returns error? {
         test:assertFail("AgentExecutor.next returns an null during third iteration");
     }
     output = result.value;
-    if output is Error {
-        test:assertFail("AgentExecutor.next returns an error during third iteration");
+    if output is Error|string {
+        test:assertFail(string `Expected ExecutionResult|ExecutionError, but found string|Error.`);
     }
     test:assertEquals(output?.observation, "Answer: 3.991298452658078");
 }
