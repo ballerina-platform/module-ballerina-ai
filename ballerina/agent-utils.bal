@@ -16,8 +16,8 @@
 
 import ai.observe;
 
-import ballerina/cache;
 import ballerina/io;
+import ballerina/lang.regexp;
 import ballerina/log;
 import ballerina/time;
 
@@ -84,38 +84,12 @@ public type ToolOutput record {|
     anydata|error value;
 |};
 
-type BaseAgent distinct isolated object {
-    ModelProvider model;
-    ToolStore toolStore;
-    Memory memory;
-    boolean stateless;
-    cache:Cache tokenManager;
-    Credential? agentCredential;
-
-    # Parse the llm response and extract the tool to be executed.
-    #
-    # + llmResponse - Raw LLM response
-    # + return - A record containing the tool decided by the LLM, chat response or an error if the response is invalid
-    isolated function parseLlmResponse(json llmResponse) returns LlmToolResponse|LlmChatResponse|LlmInvalidGenerationError;
-
-    # Use LLM to decide the next tool/step.
-    #
-    # + progress - Execution progress with the current query and execution history
-    # + sessionId - The ID associated with the agent memory
-    # + return - LLM response containing the tool or chat response (or an error if the call fails)
-    isolated function selectNextTool(ExecutionProgress progress, string sessionId = DEFAULT_SESSION_ID) returns json|Error;
-
-    isolated function run(string query, string instruction, int maxIter = 5, boolean verbose = true,
-            string sessionId = DEFAULT_SESSION_ID, Context context = new, string executionId = DEFAULT_EXECUTION_ID)
-            returns ExecutionTrace;
-};
-
 # An executor to perform step-by-step execution of the agent.
 class Executor {
     *object:Iterable;
     private boolean isCompleted = false;
     private final string sessionId;
-    private final BaseAgent agent;
+    private final Agent agent;
     # Contains the current execution progress for the agent and the query
     public ExecutionProgress progress;
     private string? agentId = ();
@@ -126,7 +100,7 @@ class Executor {
     # + query - Natural language query to be executed by the agent
     # + history - Execution history of the agent (This is used to continue an execution paused without completing)
     # + context - Contextual information to be used by the tools during the execution
-    isolated function init(BaseAgent agent, string sessionId, *ExecutionProgress progress) {
+    isolated function init(Agent agent, string sessionId, *ExecutionProgress progress) {
         self.sessionId = sessionId;
         self.agent = agent;
         self.progress = progress;
@@ -149,16 +123,16 @@ class Executor {
     public isolated function reason() returns json|Error {
         if self.isCompleted {
             log:printError("Task is already completed. No more reasoning is needed.",
-                agentId = self.agentId,
-                executionId = self.progress.executionId
+                    agentId = self.agentId,
+                    executionId = self.progress.executionId
             );
             return error TaskCompletedError("Task is already completed. No more reasoning is needed.");
         }
         log:printDebug("LLM reasoning started",
-            agentId = self.agentId,
-            executionId = self.progress.executionId,
-            sessionId = self.sessionId,
-            history = self.progress.executionSteps.toString()
+                agentId = self.agentId,
+                executionId = self.progress.executionId,
+                sessionId = self.sessionId,
+                history = self.progress.executionSteps.toString()
         );
         return check self.agent.selectNextTool(self.progress, self.sessionId);
     }
@@ -167,14 +141,14 @@ class Executor {
     #
     # + llmResponse - LLM response containing the tool to be executed and the raw LLM output
     # + return - Observations from the tool can be any|error|null
-    public isolated function act(json llmResponse) returns ExecutionResult|LlmChatResponse|ExecutionError{
+    public isolated function act(json llmResponse) returns ExecutionResult|LlmChatResponse|ExecutionError {
         LlmToolResponse|LlmChatResponse|LlmInvalidGenerationError parsedOutput = self.agent.parseLlmResponse(llmResponse);
         if parsedOutput is LlmChatResponse {
             log:printDebug("Parsed LLM response as chat response",
-                agentId = self.agentId,
-                executionId = self.progress.executionId,
-                sessionId = self.sessionId,
-                response = parsedOutput.content
+                    agentId = self.agentId,
+                    executionId = self.progress.executionId,
+                    sessionId = self.sessionId,
+                    response = parsedOutput.content
             );
             self.isCompleted = true;
             return parsedOutput;
@@ -185,11 +159,11 @@ class Executor {
         if parsedOutput is LlmToolResponse {
             string toolName = parsedOutput.name;
             log:printDebug("Parsed LLM response as tool call",
-                agentId = self.agentId,
-                executionId = self.progress.executionId,
-                sessionId = self.sessionId,
-                toolName = toolName,
-                arguments = parsedOutput.arguments
+                    agentId = self.agentId,
+                    executionId = self.progress.executionId,
+                    sessionId = self.sessionId,
+                    toolName = toolName,
+                    arguments = parsedOutput.arguments
             );
             observe:ExecuteToolSpan span = observe:createExecuteToolSpan(toolName);
             string? toolCallId = parsedOutput.id;
@@ -204,19 +178,19 @@ class Executor {
             boolean isMcpTool = toolStore.isMcpTool(toolName);
             span.addType(isMcpTool ? observe:EXTENTION : observe:FUNCTION);
             span.addArguments(parsedOutput.arguments);
-            ToolNotFoundError|ToolInvalidInputError|TokenAcquisitionError|TokenValidationError? 
-                    validateRes = validateTool(parsedOutput, self.agent.agentCredential, 
+            ToolNotFoundError|ToolInvalidInputError|TokenAcquisitionError|TokenValidationError?
+                    validateRes = validateTool(parsedOutput, self.agent.agentCredential,
                     self.agent.tokenManager, self.progress.context, toolStore.tools, isMcpTool);
             if validateRes is Error {
                 log:printError("Tool validation failed",
-                    agentId = self.agentId,
-                    executionId = self.progress.executionId,
-                    sessionId = self.sessionId,
-                    toolName = toolName,
-                    'error = validateRes
+                        agentId = self.agentId,
+                        executionId = self.progress.executionId,
+                        sessionId = self.sessionId,
+                        toolName = toolName,
+                        'error = validateRes
                 );
                 if validateRes is ToolNotFoundError|ToolInvalidInputError {
-                    observation = "Tool extraction failed due to tool validation"; 
+                    observation = "Tool extraction failed due to tool validation";
                     executionResult = {
                         llmResponse,
                         'error: validateRes,
@@ -227,14 +201,14 @@ class Executor {
                         + validateRes.message();
                     executionResult = {
                         llmResponse,
-                        'error: error UnauthorizedError (
-                            string `Tool validation failed: ${validateRes.toString()}`, 
-                            details = { parsedOutput }, cause = validateRes.cause()),
+                        'error: error UnauthorizedError(
+                            string `Tool validation failed: ${validateRes.toString()}`,
+                            details = {parsedOutput}, cause = validateRes.cause()),
                         observation: observation.toString()
                     };
                 }
                 Error toolExecutionError = error Error(observation.toString(), details = {parsedOutput});
-                span.close(toolExecutionError); 
+                span.close(toolExecutionError);
             } else {
                 ToolOutput|ToolExecutionError|LlmInvalidGenerationError output = toolStore.execute(parsedOutput,
                     self.progress.context);
@@ -253,11 +227,11 @@ class Executor {
                         observation: observation.toString()
                     };
                     log:printError("Tool execution resulted in error",
-                        agentId = self.agentId,
-                        executionId = self.progress.executionId,
-                        observation = observation.toString(),
-                        sessionId = self.sessionId,
-                        toolName = toolName
+                            agentId = self.agentId,
+                            executionId = self.progress.executionId,
+                            observation = observation.toString(),
+                            sessionId = self.sessionId,
+                            toolName = toolName
                     );
 
                     Error toolExecutionError = error Error(observation.toString(), details = {parsedOutput});
@@ -266,10 +240,10 @@ class Executor {
                     anydata|error value = output.value;
                     observation = value is error ? value.toString() : value;
                     log:printDebug("Tool execution successful",
-                        agentId = self.agentId,
-                        executionId = self.progress.executionId,
-                        sessionId = self.sessionId,
-                        toolName = toolName
+                            agentId = self.agentId,
+                            executionId = self.progress.executionId,
+                            sessionId = self.sessionId,
+                            toolName = toolName
                     );
                     executionResult = {
                         tool: parsedOutput,
@@ -282,10 +256,10 @@ class Executor {
             }
         } else {
             log:printDebug("Failed to parse LLM response as valid tool or chat",
-                agentId = self.agentId,
-                executionId = self.progress.executionId,
-                sessionId = self.sessionId,
-                errorMessage = parsedOutput.message()
+                    agentId = self.agentId,
+                    executionId = self.progress.executionId,
+                    sessionId = self.sessionId,
+                    errorMessage = parsedOutput.message()
             );
             observation = "Tool extraction failed due to invalid JSON_BLOB. Retry with correct JSON_BLOB.";
             executionResult = {
@@ -343,18 +317,18 @@ class Executor {
 # + sessionId - The ID associated with the memory
 # + executionId - Unique identifier for this execution
 # + return - Returns the execution steps tracing the agent's reasoning and outputs from the tools
-isolated function run(BaseAgent agent, string instruction, string query, int maxIter, boolean verbose, string? agentId, 
+isolated function run(Agent agent, string instruction, string query, int maxIter, boolean verbose, string? agentId,
         string sessionId = DEFAULT_SESSION_ID, Context context = new, string executionId = DEFAULT_EXECUTION_ID)
         returns ExecutionTrace {
     time:Utc startTime = time:utcNow();
     Iteration[] iterations = [];
     log:printDebug("Agent execution loop started",
-        agentId = agentId,
-        executionId = executionId,
-        sessionId = sessionId,
-        maxIterations = maxIter,
-        tools = agent.toolStore.tools.toString(),
-        isStateless = agent.stateless
+            agentId = agentId,
+            executionId = executionId,
+            sessionId = sessionId,
+            maxIterations = maxIter,
+            tools = agent.toolStore.tools.toString(),
+            isStateless = agent.stateless
     );
 
     (ExecutionResult|ExecutionError|Error)[] steps = [];
@@ -397,21 +371,21 @@ isolated function run(BaseAgent agent, string instruction, string query, int max
         }
         if iter == maxIter {
             log:printDebug("Maximum iterations reached without final answer",
-                agentId = agentId,
-                executionId = executionId,
-                iterations = iter,
-                stepsCompleted = steps.length(),
-                sessionId = sessionId
+                    agentId = agentId,
+                    executionId = executionId,
+                    iterations = iter,
+                    stepsCompleted = steps.length(),
+                    sessionId = sessionId
             );
             break;
         }
         if step is ExecutionError && step.'error is UnauthorizedError {
             error err = step.'error;
             log:printDebug("Tool validation failed: ",
-                err,
-                executionId = executionId,
-                iteration = iter,
-                sessionId = sessionId
+                    err,
+                    executionId = executionId,
+                    iteration = iter,
+                    sessionId = sessionId
             );
             steps.push(step);
             iterations.push({startTime, endTime: time:utcNow(), history: iterationHistory, output: iterationOutput});
@@ -432,11 +406,11 @@ isolated function run(BaseAgent agent, string instruction, string query, int max
         if step is LlmChatResponse {
             content = step.content;
             log:printDebug("Final answer generated by agent",
-                agentId = agentId,
-                executionId = executionId,
-                iteration = iter,
-                answer = step.content,
-                sessionId = sessionId
+                    agentId = agentId,
+                    executionId = executionId,
+                    iteration = iter,
+                    answer = step.content,
+                    sessionId = sessionId
             );
             finalAssistantMessage = {role: ASSISTANT, content: step.content};
             iterations.push({startTime, endTime: time:utcNow(), history: iterationHistory, output: iterationOutput});
@@ -444,12 +418,12 @@ isolated function run(BaseAgent agent, string instruction, string query, int max
         }
         iter += 1;
         log:printDebug("Agent iteration started",
-            agentId = agentId,
-            executionId = executionId,
-            iteration = iter,
-            maxIterations = maxIter,
-            stepsCompleted = steps.length(),
-            sessionId = sessionId
+                agentId = agentId,
+                executionId = executionId,
+                iteration = iter,
+                maxIterations = maxIter,
+                stepsCompleted = steps.length(),
+                sessionId = sessionId
         );
         steps.push(step);
         iterations.push({startTime, endTime: time:utcNow(), history: iterationHistory, output: iterationOutput});
@@ -561,11 +535,159 @@ isolated function getObservationString(anydata|error observation) returns string
 #
 # + agent - Agent instance
 # + return - Array of tools registered with the agent
-public isolated function getTools(Agent agent) returns Tool[] => agent.functionCallAgent.toolStore.tools.toArray();
+public isolated function getTools(Agent agent) returns Tool[] => agent.toolStore.tools.toArray();
 
 isolated function updateMemory(Memory memory, string sessionId, ChatMessage[] messages, string? agentId) {
     error? updationStation = memory.update(sessionId, messages);
     if updationStation is error {
         log:printError("Error occured while updating the memory", updationStation, agentId = agentId);
     }
+}
+
+isolated function createFunctionCallMessages(ExecutionProgress progress) returns ChatMessage[] {
+    ChatMessage[] messages = [];
+    foreach ExecutionStep step in progress.executionSteps {
+        FunctionCall|error functionCall = step.llmResponse.fromJsonWithType();
+        if functionCall is error {
+            panic error Error("Badly formated history for function call agent", llmResponse = step.llmResponse);
+        }
+
+        messages.push({
+            role: ASSISTANT,
+            toolCalls: [functionCall]
+        },
+        {
+            role: FUNCTION,
+            name: functionCall.name,
+            content: getObservationString(step.observation),
+            id: functionCall?.id
+        });
+    }
+    return messages;
+}
+
+isolated function modifyUserPromptWithToolsInfo(ChatUserMessage chatUserMsg, ToolInfo[] toolInfo)
+returns ChatUserMessage {
+    string toolsPrompt = string `
+
+These are the tools available to you: 
+${BACKTICKS} 
+${toolInfo.toJsonString()}
+${BACKTICKS}
+
+Select only the tools required to complete the task and return them as a JSON array of tool names:
+${BACKTICKS} 
+["toolNameOne","toolNameTwo","toolNameN"]
+${BACKTICKS}
+
+If no tools are needed, return an empty array:
+${BACKTICKS}
+[]
+${BACKTICKS}`;
+
+    string|Prompt content = chatUserMsg.content;
+    if content is string {
+        content += toolsPrompt;
+    } else {
+        content.insertions.push(toolsPrompt);
+    }
+
+    return {role: USER, content, name: chatUserMsg.name};
+}
+
+isolated function getSelectedToolsFromAssistantMessage(ChatAssistantMessage assistantMsg) returns string[]? {
+    do {
+        string rawResponse = assistantMsg.content ?: "[]";
+        string cleanedJson = regexp:replaceAll(check regexp:fromString("```"), rawResponse, "");
+        return check cleanedJson.fromJsonStringWithType();
+    } on fail error e {
+        // In case of failure try to load all tools and ignore the error
+        return;
+    }
+}
+
+isolated function cloneMessages(ChatMessage[] messages) returns ChatMessage[] {
+    ChatMessage[] clonedMessages = [];
+    foreach ChatMessage msg in messages {
+        if msg is ChatUserMessage {
+            clonedMessages.push(cloneUserMessage(msg));
+            continue;
+        }
+        if msg is ChatSystemMessage {
+            clonedMessages.push(cloneSystemMessage(msg));
+            continue;
+        }
+        if msg is ChatAssistantMessage|ChatFunctionMessage {
+            clonedMessages.push(msg.clone());
+        }
+    }
+    return clonedMessages;
+}
+
+isolated function cloneUserMessage(ChatUserMessage message) returns ChatUserMessage {
+    string|Prompt content = message.content;
+    string|Prompt clonedContent = content is string ? content
+        : createPrompt(content.strings, content.insertions.cloneReadOnly());
+    ChatUserMessage clonedMessage = {
+        role: USER,
+        content: clonedContent
+    };
+    if message?.name is string {
+        clonedMessage.name = message?.name;
+    }
+    return clonedMessage;
+}
+
+isolated function cloneSystemMessage(ChatSystemMessage message) returns ChatSystemMessage {
+    string|Prompt content = message.content;
+    string|Prompt clonedContent = content is string ? content
+        : createPrompt(content.strings, content.insertions.cloneReadOnly());
+    ChatSystemMessage clonedMessage = {
+        role: SYSTEM,
+        content: clonedContent
+    };
+    if message?.name is string {
+        clonedMessage.name = message?.name;
+    }
+    return clonedMessage;
+}
+
+isolated function lazyLoadTools(ChatMessage[] messages, ChatCompletionFunctions[] registeredTools,
+        ModelProvider model) returns ChatCompletionFunctions[]? {
+    ChatMessage lastMessage = messages[messages.length() - 1];
+    if lastMessage !is ChatUserMessage {
+        return;
+    }
+    ToolInfo[] toolInfo = registeredTools.'map(tool => {name: tool.name, description: tool.description});
+    ChatUserMessage modifiedUserMessage = modifyUserPromptWithToolsInfo(lastMessage, toolInfo);
+
+    // Replace the last user message with the modified one that includes the tools prompt
+    _ = messages.pop();
+    messages.push(modifiedUserMessage);
+
+    ChatAssistantMessage|Error response = model->chat(messages, []);
+    if response is Error {
+        return;
+    }
+
+    log:printDebug(string `Calling model for lazy tool loading. Raw response: ${response.content.toString()}`);
+    string[]? selectedTools = getSelectedToolsFromAssistantMessage(response);
+    log:printDebug(string `Extracted tools from model response: ${selectedTools.toString()}`);
+
+    if selectedTools is string[] {
+        // Only load the tool schemas picked by the model
+        return from ChatCompletionFunctions tool in registeredTools
+            let string toolName = tool.name
+            where selectedTools.some(selected => selected == toolName)
+            select tool;
+    }
+    return;
+}
+
+isolated function getFirstToolCall(ChatAssistantMessage msg) returns FunctionCall? {
+    FunctionCall[]? toolCalls = msg?.toolCalls;
+    if toolCalls is () || toolCalls.length() == 0 {
+        return;
+    }
+    return toolCalls[0];
 }

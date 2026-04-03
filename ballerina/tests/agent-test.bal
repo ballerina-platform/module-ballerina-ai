@@ -36,10 +36,11 @@ ModelProvider model = new MockLLM();
     enable: false
 }
 function testAgentExecutorRun() returns error? {
-    FunctionCallAgent agent = check new (model, [searchTool, calculatorTool], new, ());
+    SystemPrompt systemPrompt = {role: "Helpful Assistant", instructions: "Answer the questions"};
+    Agent agent = check new (model = model, tools = [searchTool, calculatorTool], systemPrompt = systemPrompt);
     string query = "Who is Leo DiCaprio's girlfriend? What is her current age raised to the 0.43 power?";
     Executor agentExecutor = new (agent, DEFAULT_SESSION_ID,
-        instruction = "Answer the questions", query = query, context = new, executionId = DEFAULT_EXECUTION_ID,
+        instruction = getFomatedSystemPrompt(systemPrompt), query = query, context = new, executionId = DEFAULT_EXECUTION_ID,
         history = []
     );
     record {|ExecutionResult|LlmChatResponse|ExecutionError|Error value;|}? result = agentExecutor.next();
@@ -75,9 +76,10 @@ function testAgentExecutorRun() returns error? {
 
 @test:Config
 function testAgentRunHavingErrorStep() returns error? {
-    FunctionCallAgent agent = check new (model, [searchTool, calculatorTool], new, ());
+    SystemPrompt systemPrompt = {role: "Helpful Assistant", instructions: "Answer the questions"};
+    Agent agent = check new (model = model, tools = [searchTool, calculatorTool], systemPrompt = systemPrompt);
     string query = "Random query";
-    ExecutionTrace trace = run(agent, instruction = "Answer the questions", query = query,
+    ExecutionTrace trace = run(agent, instruction = getFomatedSystemPrompt(systemPrompt), query = query,
             context = new, maxIter = 5, verbose = false, agentId = ());
     test:assertEquals(trace.answer is (), true);
     test:assertEquals(trace.steps.length(), 1);
