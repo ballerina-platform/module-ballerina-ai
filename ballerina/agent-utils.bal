@@ -222,19 +222,21 @@ class Executor {
                         'error: validateRes,
                         observation: observation.toString()
                     };
+                    Error toolExecutionError = error Error(observation.toString(), details = {parsedOutput});
+                    span.close(toolExecutionError); 
                 } else {
                     observation = "Tool validation failed while attempting to execute the selected tool: "
                         + validateRes.message();
                     executionResult = {
                         llmResponse,
                         'error: error UnauthorizedError (
-                            string `Tool validation failed: ${validateRes.toString()}`, 
+                            string `Tool validation failed: ${validateRes.message()}`, 
                             details = { parsedOutput }, cause = validateRes.cause()),
                         observation: observation.toString()
                     };
+                    UnauthorizedError toolExecutionError = error UnauthorizedError(observation.toString(), details = {parsedOutput});
+                    span.close(toolExecutionError); 
                 }
-                Error toolExecutionError = error Error(observation.toString(), details = {parsedOutput});
-                span.close(toolExecutionError); 
             } else {
                 ToolOutput|ToolExecutionError|LlmInvalidGenerationError output = toolStore.execute(parsedOutput,
                     self.progress.context);
@@ -414,7 +416,9 @@ isolated function run(BaseAgent agent, string instruction, string query, int max
                 sessionId = sessionId
             );
             steps.push(step);
+            finalAssistantMessage = {role: ASSISTANT, content: err.message()};
             iterations.push({startTime, endTime: time:utcNow(), history: iterationHistory, output: iterationOutput});
+            break;
         }
         if step is Error {
             error? cause = step.cause();
@@ -435,10 +439,10 @@ isolated function run(BaseAgent agent, string instruction, string query, int max
                 agentId = agentId,
                 executionId = executionId,
                 iteration = iter,
-                answer = step.content,
+                answer = content,
                 sessionId = sessionId
             );
-            finalAssistantMessage = {role: ASSISTANT, content: step.content};
+            finalAssistantMessage = {role: ASSISTANT, content: content};
             iterations.push({startTime, endTime: time:utcNow(), history: iterationHistory, output: iterationOutput});
             break;
         }

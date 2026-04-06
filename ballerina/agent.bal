@@ -244,7 +244,7 @@ isolated function getAnswer(ExecutionTrace executionTrace, int maxIter) returns 
     return answer ?: constructError(executionTrace.steps, maxIter);
 }
 
-isolated function constructError((ExecutionResult|ExecutionError|Error)[] steps, int maxIter) returns Error {
+isolated function constructError((ExecutionResult|ExecutionError|Error)[] steps, int maxIter) returns Error|string {
     if (steps.length() == maxIter) {
         return error MaxIterationExceededError("Maximum iteration limit exceeded while processing the query.",
             steps = steps);
@@ -253,9 +253,15 @@ isolated function constructError((ExecutionResult|ExecutionError|Error)[] steps,
     // If there is exactly one memory error, it is returned; otherwise, null is returned.
     if steps.length() == 1 {
         ExecutionResult|ExecutionError|Error step = steps[0];
-        if step is ExecutionError && step.'error is MemoryError {
-            return <MemoryError>step.'error;
-        }
+        if step is ExecutionError {
+            LlmInvalidGenerationError|ToolExecutionError|MemoryError|UnauthorizedError err = step.'error;
+            if err is MemoryError {
+                return <MemoryError>err;
+            }
+            if err is UnauthorizedError {
+                return err.message();
+            }
+        }        
     }
     return error Error("Unable to obtain valid answer from the agent", steps = steps);
 }
