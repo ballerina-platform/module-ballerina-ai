@@ -4,7 +4,6 @@ import ballerina/jwt;
 import ballerina/test;
 import ballerina/time;
 import ballerina/uuid;
-import ballerina/io;
 
 listener http:Listener authListener = new (8094);
 
@@ -88,7 +87,7 @@ service /oauth2 on authListener {
         string clientId = form["client_id"].toString();
         string scp = form["scope"].toString();
         if validScopes.includes(scp) {
-            scope = form["scope"].toString();
+            scope = scp;
         } else {
             scope = "default";
         }
@@ -187,11 +186,6 @@ service /llm on llmListener {
 
         string role = last.role;
 
-        io:println("==== MOCK LLM PAYLOAD ====");
-        io:println(payload);
-        io:println("==== ====");
-        io:println(role);
-
         if role == "user" {
 
             string text = check last["content"].ensureType();
@@ -211,6 +205,8 @@ service /llm on llmListener {
                 };
             } else if text.includes("date") {
                 fn = "getCurrentDate";
+            } else if text.includes("delete") {
+                fn = "deleteTask";
             }
 
             return {
@@ -348,7 +344,7 @@ final ai:Agent taskAssistantAgent = check new (
             help a user plan their schedule.`
     },
     model = taskAssistantAgentModel,
-    tools = [addTask, listTasks, getCurrentDate],
+    tools = [addTask, listTasks, getCurrentDate, deleteTask],
     credential = {
         id: "admin",
         secret: "admin"
@@ -376,6 +372,6 @@ function testAgentIdentityLocalListTool() returns error? {
     groups: ["agent-identity"]
 }
 function testAgentIdentityDeleteTask() returns error? {
-    string result = check taskAssistantAgent.run("Delete the task with description 'Buy groceries'.");
+    string result = check taskAssistantAgent.run("Run deleteTask.");
     test:assertTrue(result.includes("I could not complete your request due to an authorization issue"));
 }
