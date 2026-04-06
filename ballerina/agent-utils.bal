@@ -225,12 +225,12 @@ class Executor {
                     Error toolExecutionError = error Error(observation.toString(), details = {parsedOutput});
                     span.close(toolExecutionError); 
                 } else {
-                    observation = "Tool validation failed while attempting to execute the selected tool: "
+                    observation = "Tool execution failed while attempting to execute the selected tool: "
                         + validateRes.message();
                     executionResult = {
                         llmResponse,
                         'error: error UnauthorizedError (
-                            string `Tool validation failed: ${validateRes.message()}`, 
+                            string `Tool execution failed: ${validateRes.message()}`, 
                             details = { parsedOutput }, cause = validateRes.cause()),
                         observation: observation.toString()
                     };
@@ -410,15 +410,17 @@ isolated function run(BaseAgent agent, string instruction, string query, int max
         }
         if step is ExecutionError && step.'error is UnauthorizedError {
             error err = step.'error;
-            content = err.message();
-            log:printDebug("Tool validation failed: ",
+            content = "I could not complete your request due to an authorization issue, " +
+                "possibly related to the access token or its permissions. Please check your " +
+                "access and credentials and try again.";
+            log:printDebug("Tool execution failed: ",
                 err,
                 executionId = executionId,
                 iteration = iter,
                 sessionId = sessionId
             );
             steps.push(step);
-            finalAssistantMessage = {role: ASSISTANT, content: err.message()};
+            finalAssistantMessage = {role: ASSISTANT, content: content};
             iterations.push({startTime, endTime: time:utcNow(), history: iterationHistory, output: iterationOutput});
             break;
         }

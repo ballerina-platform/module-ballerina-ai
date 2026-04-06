@@ -22,6 +22,7 @@ final string VALID_USERNAME = "admin";
 final string VALID_PASSWORD = "admin";
 final string KEYSTORE_PATH = "resources/keystore/ballerinaKeystore.p12";
 string scope = "";
+string validScopes = "add list get";
 
 type AgentCredential record {|
     string agentId;
@@ -85,7 +86,12 @@ service /oauth2 on authListener {
             returns http:Found|http:BadRequest|http:Unauthorized|error {
         map<string|string[]> form = check req.getFormParams();
         string clientId = form["client_id"].toString();
-        scope = form["scope"].toString();
+        string scp = form["scope"].toString();
+        if validScopes.includes(scp) {
+            scope = form["scope"].toString();
+        } else {
+            scope = "default";
+        }
 
         if clientId != VALID_CLIENT_ID {
             return <http:BadRequest>{
@@ -320,6 +326,20 @@ isolated function getCurrentDate() returns time:Date {
     return {year, month, day};
 }
 
+@ai:AgentTool {
+    auth: {
+        clientId: "client123",
+        clientSecret: "secret123",
+        redirectUri: "http://localhost:8000/callback",
+        baseAuthUrl: "http://localhost:8094/oauth2",
+        scopes: "delete"
+    }
+}
+isolated function deleteTask() returns error? {
+        // This function is just a placeholder to test invalid scope handling in the agent.
+        return;
+}
+
 final ai:Agent taskAssistantAgent = check new (
     systemPrompt = {
         role: "Task Assistant",
@@ -350,4 +370,12 @@ function testAgentIdentityLocalAddTool() returns error? {
 function testAgentIdentityLocalListTool() returns error? {
     string result = check taskAssistantAgent.run("What do I have on my plate today?");
     test:assertTrue(result.includes("Here are your current tasks."));
+}
+
+@test:Config {
+    groups: ["agent-identity"]
+}
+function testAgentIdentityDeleteTask() returns error? {
+    string result = check taskAssistantAgent.run("Delete the task with description 'Buy groceries'.");
+    test:assertTrue(result.includes("I could not complete your request due to an authorization issue"));
 }
