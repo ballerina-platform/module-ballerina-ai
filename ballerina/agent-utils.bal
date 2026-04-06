@@ -234,7 +234,8 @@ class Executor {
                             details = { parsedOutput }, cause = validateRes.cause()),
                         observation: observation.toString()
                     };
-                    UnauthorizedError toolExecutionError = error UnauthorizedError(observation.toString(), details = {parsedOutput});
+                    UnauthorizedError toolExecutionError = error UnauthorizedError(observation.toString(), 
+                        details = {parsedOutput});
                     span.close(toolExecutionError); 
                 }
             } else {
@@ -409,6 +410,7 @@ isolated function run(BaseAgent agent, string instruction, string query, int max
         }
         if step is ExecutionError && step.'error is UnauthorizedError {
             error err = step.'error;
+            content = err.message();
             log:printDebug("Tool validation failed: ",
                 err,
                 executionId = executionId,
