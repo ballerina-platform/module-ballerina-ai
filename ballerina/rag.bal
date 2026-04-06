@@ -177,10 +177,10 @@ public distinct isolated class VectorKnowledgeBase {
         observe:KnowledgeBaseRetrieveSpan span = observe:createKnowledgeBaseRetrieveSpan(VECTOR_KNOWLDEGE_BASE);
         span.addId(self.id);
         if filters is MetadataFilters {
-            span.addInputQuery(query);
+            span.addFilter(filters.toJson());
         }
         span.addLimit(topK);
-        span.addFilter(filters.toJson());
+        span.addInputQuery(query);
 
         QueryMatch[]|Error queryMatch = self.retriever.retrieve(query, topK, filters);
 
@@ -188,6 +188,7 @@ public distinct isolated class VectorKnowledgeBase {
             span.close(queryMatch);
             return queryMatch;
         }
+        span.addOutput(queryMatch.toJson());
         span.close();
         return queryMatch;
     }
