@@ -197,7 +197,16 @@ public isolated distinct class Agent {
         string systemPrompt = getFomatedSystemPrompt(self.systemPrompt);
         span.addSystemInstruction(systemPrompt);
 
-        ExecutionTrace executionTrace = run(self, systemPrompt, query, self.maxIter, self.verbose, self.agentId, sessionId, context, executionId);
+        ExecutorConfig config = {
+            toolStore: self.toolStore,
+            model: self.model,
+            toolLoadingStrategy: self.toolLoadingStrategy,
+            agentCredential: self.agentCredential,
+            tokenManager: self.tokenManager,
+            memory: self.memory,
+            stateless: self.stateless
+        };
+        ExecutionTrace executionTrace = run(config, systemPrompt, query, self.maxIter, self.verbose, sessionId, context, executionId);
         ChatUserMessage userMessage = {role: USER, content: query};
         Iteration[] iterations = executionTrace.iterations;
         FunctionCall[]? toolCalls = executionTrace.toolCalls.length() == 0 ? () : executionTrace.toolCalls;
@@ -247,63 +256,57 @@ public isolated distinct class Agent {
                 : err;
         }
     }
+}
 
-    # Use LLM to decide the next tool/step based on the function calling APIs.
-    #
-    # + progress - Execution progress with the current query and execution history
-    # + sessionId - The ID associated with the agent memory
-    # + return - LLM response containing the tool or chat response (or an error if the call fails)
-    isolated function selectNextTool(ExecutionProgress progress, string sessionId = DEFAULT_SESSION_ID) 
-    returns FunctionCall|string|Error {
-        ChatMessage[] messages = createFunctionCallMessages(progress);
-        messages.unshift(...progress.history);
-        ToolLoadingStrategy toolLoadingStrategy = self.toolLoadingStrategy;
-        ChatMessage lastMessage = messages[messages.length() - 1];
-        ChatCompletionFunctions[] registeredTools = from Tool tool in self.toolStore.tools.toArray()
-            select {
-                name: tool.name,
-                description: tool.description,
-                parameters: tool.variables
-            };
-        ChatCompletionFunctions[] filteredTools = registeredTools;
-        if toolLoadingStrategy == LLM_FILTER && lastMessage is ChatUserMessage {
-            ChatCompletionFunctions[]? selectedTools = lazyLoadTools(cloneMessages(messages), registeredTools, self.model);
-            if selectedTools !is () {
-                filteredTools = selectedTools;
-            }
+isolated function selectNextTool(ExecutionProgress progress, string sessionId, ToolStore toolStore,
+        ToolLoadingStrategy toolLoadingStrategy, ModelProvider model) returns FunctionCall|string|Error {
+    ChatMessage[] messages = createFunctionCallMessages(progress);
+    messages.unshift(...progress.history);
+    ChatMessage lastMessage = messages[messages.length() - 1];
+    ChatCompletionFunctions[] registeredTools = from Tool tool in toolStore.tools.toArray()
+        select {
+            name: tool.name,
+            description: tool.description,
+            parameters: tool.variables
+        };
+    ChatCompletionFunctions[] filteredTools = registeredTools;
+    if toolLoadingStrategy == LLM_FILTER && lastMessage is ChatUserMessage {
+        ChatCompletionFunctions[]? selectedTools = lazyLoadTools(cloneMessages(messages), registeredTools, model);
+        if selectedTools !is () {
+            filteredTools = selectedTools;
         }
-
-        log:printDebug("Requesting tool selection from LLM",
-                executionId = progress.executionId,
-                sessionId = sessionId,
-                messages = messages.toString(),
-                availableTools = filteredTools.toString()
-        );
-
-        // TODO: Improve handling of multiple tool calls returned by the LLM.
-        // Currently, tool calls are executed sequentially in separate chat responses.
-        // Update the logic to execute all tool calls together and return a single response.
-        ChatAssistantMessage response = check self.model->chat(messages, filteredTools);
-        FunctionCall? toolCall = getFirstToolCall(response);
-
-        if toolCall is FunctionCall {
-            log:printDebug("LLM selected tool",
-                    executionId = progress.executionId,
-                    sessionId = sessionId,
-                    toolName = toolCall.name,
-                    toolArguments = toolCall.arguments
-            );
-            return toolCall;
-        }
-
-        log:printDebug("LLM provided chat response instead of tool call",
-                executionId = progress.executionId,
-                sessionId = sessionId,
-                response = response?.content
-        );
-        string? content = response?.content;
-        return content ?: error LlmInvalidResponseError(string `invalid response from LLM: ${response.toJsonString()}`);
     }
+
+    log:printDebug("Requesting tool selection from LLM",
+        executionId = progress.executionId,
+        sessionId = sessionId,
+        messages = messages.toString(),
+        availableTools = filteredTools.toString()
+    );
+
+    // TODO: Improve handling of multiple tool calls returned by the LLM.
+    // Currently, tool calls are executed sequentially in separate chat responses.
+    // Update the logic to execute all tool calls together and return a single response.
+    ChatAssistantMessage response = check model->chat(messages, filteredTools);
+    FunctionCall? toolCall = getFirstToolCall(response);
+
+    if toolCall is FunctionCall {
+        log:printDebug("LLM selected tool",
+            executionId = progress.executionId,
+            sessionId = sessionId,
+            toolName = toolCall.name,
+            toolArguments = toolCall.arguments
+        );
+        return toolCall;
+    }
+
+    log:printDebug("LLM provided chat response instead of tool call",
+        executionId = progress.executionId,
+        sessionId = sessionId,
+        response = response?.content
+    );
+    string? content = response?.content;
+    return content ?: error LlmInvalidResponseError(string `invalid response from LLM: ${response.toJsonString()}`);
 }
 
 isolated function getAnswer(ExecutionTrace executionTrace, int maxIter) returns string|Error {
