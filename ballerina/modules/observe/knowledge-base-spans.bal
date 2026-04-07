@@ -112,7 +112,14 @@ public isolated distinct class KnowledgeBaseRetrieveSpan {
     #
     # + query - The input query to retrieve data
     public isolated function addInputQuery(json query) {
-        self.addTag(KNOWLEDGE_BASE_INGEST_INPUT_CHUNKS, query);
+        self.addTag(KNOWLEDGE_BASE_RETRIEVE_INPUT_QUERY, query);
+    }
+
+    # Records the output retrieved from the knowledge base.
+    #
+    # + output - The retrieved result
+    public isolated function addOutput(json output) {
+        self.addTag(KNOWLEDGE_BASE_RETRIEVE_OUTPUT, output);
     }
 
     # Records the maximum limit for the retrieve operation.

@@ -57,6 +57,7 @@ enum GenAiTagNames {
     KNOWLEDGE_BASE_ID = "gen_ai.knowledge_base.id",
     KNOWLEDGE_BASE_INGEST_INPUT_CHUNKS = "gen_ai.knowledge_base.ingest.input.chunks",
     KNOWLEDGE_BASE_RETRIEVE_INPUT_QUERY = "gen_ai.knowledge_base.retrieve.input.query",
+    KNOWLEDGE_BASE_RETRIEVE_OUTPUT = "gen_ai.knowledge_base.retrieve.output",
     KNOWLEDGE_BASE_RETRIEVE_INPUT_LIMIT = "gen_ai.knowledge_base.retrieve.input.limit",
     KNOWLEDGE_BASE_RETRIEVE_INPUT_FILTER = "gen_ai.knowledge_base.retrieve.input.filter",
 
