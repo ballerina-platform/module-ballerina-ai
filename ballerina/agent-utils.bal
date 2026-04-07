@@ -574,7 +574,7 @@ isolated function getSelectedToolsFromAssistantMessage(ChatAssistantMessage assi
         string rawResponse = assistantMsg.content ?: "[]";
         string cleanedJson = regexp:replaceAll(check regexp:fromString("```"), rawResponse, "");
         return check cleanedJson.fromJsonStringWithType();
-    } on fail error e {
+    } on fail {
         // In case of failure try to load all tools and ignore the error
         return;
     }
