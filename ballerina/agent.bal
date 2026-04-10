@@ -16,7 +16,6 @@
 
 import ai.observe;
 
-import ballerina/cache;
 import ballerina/jballerina.java;
 import ballerina/log;
 import ballerina/time;
@@ -106,15 +105,14 @@ public isolated distinct class Agent {
     private final boolean verbose;
     private final string uniqueId = uuid:createRandomUuid();
     private final readonly & ToolSchema[] toolSchemas;
-    final cache:Cache tokenManager = new ();
     private final string? agentId;
+    private final ModelProvider model;
+    private final Memory memory;
+    private final boolean stateless;
+    private final ToolLoadingStrategy toolLoadingStrategy;
+    private final readonly & Credential? agentCredential;
     final ToolStore toolStore;
-    final ModelProvider model;
-    final Memory memory;
-    final boolean stateless;
-    final ToolLoadingStrategy toolLoadingStrategy;
-    final readonly & Credential? agentCredential;
-
+    
     # Initialize an Agent.
     #
     # + config - Configuration used to initialize an agent
@@ -202,7 +200,6 @@ public isolated distinct class Agent {
             model: self.model,
             toolLoadingStrategy: self.toolLoadingStrategy,
             agentCredential: self.agentCredential,
-            tokenManager: self.tokenManager,
             memory: self.memory,
             stateless: self.stateless
         };

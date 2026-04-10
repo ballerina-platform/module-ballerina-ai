@@ -79,7 +79,6 @@ type ExecutorConfig record {|
     ModelProvider model;
     ToolLoadingStrategy toolLoadingStrategy;
     Credential? agentCredential;
-    cache:Cache tokenManager;
     Memory memory;
     boolean stateless;
 |};
@@ -92,7 +91,7 @@ class Executor {
     private final ModelProvider model;
     private final ToolLoadingStrategy toolLoadingStrategy;
     private final Credential? agentCredential;
-    private final cache:Cache tokenManager;
+    private final cache:Cache tokenManager = new;
     private final int maxIter;
     private final boolean verbose;
     private final string? agentId;
@@ -113,7 +112,6 @@ class Executor {
         self.model = config.model;
         self.toolLoadingStrategy = config.toolLoadingStrategy;
         self.agentCredential = config.agentCredential;
-        self.tokenManager = config.tokenManager;
         self.maxIter = maxIter;
         self.verbose = verbose;
         self.progress = progress;
@@ -442,7 +440,7 @@ isolated function run(ExecutorConfig config, string instruction, string query, i
 # + agentId - Optional identifier of the agent handling the conversation.
 # + executionId - Unique identifier of the current execution.
 # + return - A tuple containing the updated conversation history, the system message,
-#            and the appended user message.
+# and the appended user message.
 isolated function prepareConversationHistory(Memory memory, string instruction, string query,
         string sessionId, string? agentId, string executionId)
         returns [ChatMessage[], ChatSystemMessage, ChatUserMessage] {

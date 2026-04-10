@@ -43,7 +43,6 @@ function testAgentExecutorRun() returns error? {
         model: model,
         toolLoadingStrategy: NO_FILTER,
         agentCredential: (),
-        tokenManager: new,
         memory: check new ShortTermMemory(),
         stateless: true
     };
@@ -91,7 +90,6 @@ function testAgentRunHavingErrorStep() returns error? {
         model: model,
         toolLoadingStrategy: NO_FILTER,
         agentCredential: (),
-        tokenManager: new,
         memory: check new ShortTermMemory(),
         stateless: true
     };
