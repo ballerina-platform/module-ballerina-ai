@@ -150,7 +150,13 @@ service /llm on new http:Listener(9096) {
             json chatCompletionResponse = {
                 role: "assistant",
                 content: (),
-                function_call: {name: functionName, arguments: args.toJsonString()}
+                tool_calls: [
+                    {
+                        id: "test-id",
+                        'type: "function",
+                        'function: {name: functionName, arguments: args.toJsonString()}
+                    }
+                ]
             };
             return buildAgentIdentityCompletionResponse(chatCompletionResponse);
         }
