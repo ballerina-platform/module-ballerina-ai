@@ -4,71 +4,35 @@ import ballerina/jwt;
 import ballerina/test;
 import ballerina/time;
 import ballerina/uuid;
-import ballerina/io;
-
-listener http:Listener authListener = new (8094);
 
 map<string> authCodeStore = {};
 map<string> tokenStore = {};
 map<string> agentSessionStore = {};
-
-final string VALID_CLIENT_SECRET = "secret123";
-
 map<string> flowStore = {};
 map<string> codeStore = {};
 
-final string VALID_CLIENT_ID = "client123";
-final string VALID_USERNAME = "admin";
-final string VALID_PASSWORD = "admin";
-final string KEYSTORE_PATH = "resources/keystore/ballerinaKeystore.p12";
+const VALID_CLIENT_SECRET = "secret123";
+const VALID_CLIENT_ID = "client123";
+const VALID_USERNAME = "admin";
+const VALID_PASSWORD = "admin";
+const KEYSTORE_PATH = "resources/keystore/ballerinaKeystore.p12";
 string scope = "";
 
-type AgentCredential record {|
-    string agentId;
-    string agentSecret;
-|};
-
-type TokenRequest record {|
-    string client_id;
-    string client_secret;
-    string grant_type;
-    string? code;
-    string? scope;
-|};
-
-type TokenValue record {|
-    string token;
-|};
-
-service /oauth2 on authListener {
-
-    resource function post authn(http:Request req)
-        returns http:Found|http:BadRequest|error {
-
-        json payload = check req.getJsonPayload();
-
-        json flowId = check payload.flowId;
-
-        if !flowStore.hasKey(flowId.toString()) {
-            return <http:BadRequest>{
-                body: "invalid_flow"
-            };
+service /oauth2 on new http:Listener(8094) {
+    resource function post authn(@http:Payload json payload) returns http:Found|http:BadRequest|error {
+        string flowId = check payload.flowId;
+        if !flowStore.hasKey(flowId) {
+            return <http:BadRequest>{body: "invalid_flow"};
         }
 
-        json username = check
-            payload.selectedAuthenticator.params.username;
+        string username = check payload.selectedAuthenticator.params.username;
+        string password = check payload.selectedAuthenticator.params.password;
 
-        json password = check
-            payload.selectedAuthenticator.params.password;
-
-        if username.toString() != VALID_USERNAME || password.toString() != VALID_PASSWORD {
-            return <http:BadRequest>{
-                body: "invalid_credentials"
-            };
+        if username != VALID_USERNAME || password != VALID_PASSWORD {
+            return <http:BadRequest>{body: "invalid_credentials"};
         }
 
         string code = uuid:createType1AsString();
-
         authCodeStore[code] = "default";
         return <http:Found>{
             body: {
@@ -81,16 +45,13 @@ service /oauth2 on authListener {
         };
     }
 
-    resource function post authorize(http:Request req)
-            returns http:Found|http:BadRequest|http:Unauthorized|error {
+    resource function post authorize(http:Request req) returns http:Found|http:BadRequest|http:Unauthorized|error {
         map<string|string[]> form = check req.getFormParams();
         string clientId = form["client_id"].toString();
         scope = form["scope"].toString();
 
         if clientId != VALID_CLIENT_ID {
-            return <http:BadRequest>{
-                body: "invalid_client"
-            };
+            return <http:BadRequest>{body: "invalid_client"};
         }
 
         string flowId = uuid:createType1AsString();
@@ -98,7 +59,7 @@ service /oauth2 on authListener {
 
         return <http:Found>{
             body: {
-                flowId: flowId,
+                flowId,
                 flowStatus: "INCOMPLETE",
                 flowType: "AUTHENTICATION",
                 nextStep: {
@@ -114,11 +75,8 @@ service /oauth2 on authListener {
         };
     }
 
-    resource function post token(http:Request req)
-        returns http:Found|http:BadRequest|error {
-
+    resource function post token(http:Request req) returns http:Found|http:BadRequest|error {
         map<string|string[]> form = check req.getFormParams();
-
         string grantType = form["grant_type"].toString();
         string clientId = form["client_id"].toString();
         string code = form["code"].toString();
@@ -153,48 +111,31 @@ service /oauth2 on authListener {
         };
 
         string accessToken = check jwt:issue(payload);
-        return <http:Found> {
-            body: 
-               {
-                access_token:accessToken ,
-                    token_type: "Bearer" ,
-                    expires_in: 3600
-                } 
+        return <http:Found>{
+            body: {
+                access_token: accessToken,
+                token_type: "Bearer",
+                expires_in: 3600
+            }
         };
     }
 
 }
 
-listener http:Listener llmListener = new (9096);
+service /llm on new http:Listener(9096) {
 
-service /llm on llmListener {
-
-    resource function post chat/completions(
-        @http:Payload CreateChatCompletionRequest payload
-    ) returns CreateChatCompletionResponse|error {
-
-        ChatCompletionRequestMessage[] messages =
-            check payload.messages.ensureType();
-
-        ChatCompletionRequestMessage last =
-            messages[messages.length() - 1];
-
-        string role = last.role;
-
-        io:println("==== MOCK LLM PAYLOAD ====");
-        io:println(payload);
-        io:println("==== ====");
-        io:println(role);
+    resource function post chat/completions(@http:Payload json payload) returns json|error {
+        json[] messages = check payload.messages.ensureType();
+        json last = messages[messages.length() - 1];
+        string role = check last.role.ensureType();
 
         if role == "user" {
-
-            string text = check last["content"].ensureType();
-
-            string fn = "listTasks";
+            string text = check last.content.ensureType();
+            string functionName = "listTasks";
             json args = {};
 
             if text.includes("pay") || text.includes("meet") {
-                fn = "addTask";
+                functionName = "addTask";
                 args = {
                     description: text,
                     dueBy: {
@@ -204,32 +145,24 @@ service /llm on llmListener {
                     }
                 };
             } else if text.includes("date") {
-                fn = "getCurrentDate";
+                functionName = "getCurrentDate";
             }
-
-            return {
-                id: "mock-id",
-                'object: "chat.completion",
-                created: 111111,
-                model: "mock-gpt",
-                choices: [
+            json chatCompletionResponse = {
+                role: "assistant",
+                content: (),
+                tool_calls: [
                     {
-                        index: 0,
-                        message: {
-                            role: "assistant",
-                            functionCall: {
-                                name: fn,
-                                arguments: args.toJsonString()
-                            }
-                        },
-                        finishReason: "function_call"
+                        id: "test-id",
+                        'type: "function",
+                        'function: {name: functionName, arguments: args.toJsonString()}
                     }
                 ]
             };
+            return buildAgentIdentityCompletionResponse(chatCompletionResponse);
         }
 
         if role == "function" {
-            string fnName = check last["name"].ensureType();
+            string fnName = check last.name.ensureType();
             string msg = "Operation completed.";
             if fnName == "addTask" {
                 msg = "Task added successfully.";
@@ -238,26 +171,20 @@ service /llm on llmListener {
             } else if fnName == "getCurrentDate" {
                 msg = "Retrieved today’s date successfully.";
             }
-            return {
-                id: "mock-id-2",
-                'object: "chat.completion",
-                created: 222222,
-                model: "mock-gpt",
-                choices: [
-                    {
-                        index: 0,
-                        message: {
-                            role: "assistant",
-                            content: msg
-                        },
-                        finishReason: "stop"
-                    }
-                ]
-            };
+            return buildAgentIdentityCompletionResponse({role: "assistant", content: msg});
         }
         return error("Unsupported role");
     }
 }
+
+isolated function buildAgentIdentityCompletionResponse(json message) returns json => {
+    id: "mock-id",
+    'object: "chat.completion",
+    created: 1700000000,
+    model: "mock-gpt",
+    choices: [{index: 0, message, finish_reason: "function_call"}],
+    usage: {prompt_tokens: 5, completion_tokens: 10, total_tokens: 15}
+};
 
 final ai:Wso2ModelProvider taskAssistantAgentModel = check new ("http://localhost:9096/llm", API_KEY);
 

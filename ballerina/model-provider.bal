@@ -214,7 +214,7 @@ public isolated distinct client class Wso2ModelProvider {
             temperature: self.temperature
         };
         if tools.length() > 0 {
-            request.functions = tools;
+            request.tools = self.mapToChatCompletionTool(tools);
             span.addTools(tools);
         }
         intelligence:CreateChatCompletionResponse|error response = self.llmClient->/chat/completions.post(request, headers = {
@@ -251,18 +251,18 @@ public isolated distinct client class Wso2ModelProvider {
         }
 
         ChatAssistantMessage chatAssistantMessage = {role: ASSISTANT, content: message?.content};
-        intelligence:ChatCompletionFunctionCall? functionCall = message?.functionCall;
-        if functionCall is () {
+        intelligence:ChatCompletionMessageToolCall[]? toolCalls = message?.toolCalls;
+        if toolCalls is () {
             span.addOutputMessages(chatAssistantMessage);
             span.close();
             return chatAssistantMessage;
         }
-        FunctionCall|Error toolCall = check self.mapToFunctionCall(functionCall);
-        if toolCall is Error {
-            span.close(toolCall);
-            return toolCall;
+        FunctionCall[]|Error functionCalls = self.mapToFunctionCalls(toolCalls);
+        if functionCalls is Error {
+            span.close(functionCalls);
+            return functionCalls;
         }
-        chatAssistantMessage.toolCalls = [toolCall];
+        chatAssistantMessage.toolCalls = functionCalls;
         span.addOutputType(observe:TEXT);
         span.addOutputMessages(chatAssistantMessage);
         span.close();
@@ -314,12 +314,26 @@ public isolated distinct client class Wso2ModelProvider {
         return chatCompletionRequestMessages;
     }
 
-    private isolated function mapToFunctionCall(intelligence:ChatCompletionFunctionCall functionCall)
-    returns FunctionCall|LlmError {
+    private isolated function mapToChatCompletionTool(ChatCompletionFunctions[] tools)
+    returns intelligence:ChatCompletionTool[] => from ChatCompletionFunctions tool in tools
+        select {
+            'function: {
+                name: tool.name,
+                description: tool.description,
+                parameters: tool.parameters is () ? {} : <record {}>tool.parameters
+            },
+            'type: FUNCTION
+        };
+
+    private isolated function mapToFunctionCalls(intelligence:ChatCompletionMessageToolCall[] toolCalls)
+    returns FunctionCall[]|Error {
         do {
-            json jsonArgs = check functionCall.arguments.fromJsonString();
-            map<json>? arguments = check jsonArgs.cloneWithType();
-            return {name: functionCall.name, arguments};
+            return from intelligence:ChatCompletionMessageToolCall toolCall in toolCalls
+                select {
+                    name: toolCall.'function.name,
+                    arguments: check (check toolCall.'function.arguments.fromJsonString()).cloneWithType(),
+                    id: toolCall.id
+                };
         } on fail error e {
             return error LlmError("Invalid or malformed arguments received in function call response.", e);
         }

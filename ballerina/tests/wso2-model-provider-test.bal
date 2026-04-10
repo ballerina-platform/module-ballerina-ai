@@ -25,55 +25,56 @@ const MOCK_CHAT_TEXT_RESPONSE = "Hello! How can I help you today?";
 // Mock intelligence service for Wso2ModelProvider tests.
 // Returns a function-call response when the request contains `functions`, otherwise a plain text response.
 service on new http:Listener(MOCK_CHAT_PORT) {
-
     resource function post chat/completions(@http:Payload json payload, @http:Header string Authorization)
     returns json|error {
         if Authorization != "Bearer test-token" {
-            return error("invalid authorization token");
+            return error("Unauthorized: invalid token");
         }
+        json|error tools = payload.tools;
+        if tools is json[] && tools.length() > 0 {
+            return buildCompletionResponse(toolCallMessage());
+        }
+        // In the legacy OpenAI API, functions are used in place of tools.
         json|error functions = payload.functions;
         if functions is json[] && functions.length() > 0 {
-            return {
-                id: "resp-func-call",
-                'object: "chat.completion",
-                created: 1700000000,
-                model: "gpt-4o-mini",
-                choices: [
-                    {
-                        index: 0,
-                        message: {
-                            role: "assistant",
-                            content: (),
-                            function_call: {
-                                name: "searchFunction",
-                                arguments: "{\"query\":\"test\"}"
-                            }
-                        },
-                        finish_reason: "function_call"
-                    }
-                ],
-                usage: {prompt_tokens: 5, completion_tokens: 10, total_tokens: 15}
-            };
+            return buildCompletionResponse(functionCallMessage());
         }
-        return {
-            id: "resp-text",
-            'object: "chat.completion",
-            created: 1700000000,
-            model: "gpt-4o-mini",
-            choices: [
-                {
-                    index: 0,
-                    message: {
-                        role: "assistant",
-                        content: MOCK_CHAT_TEXT_RESPONSE
-                    },
-                    finish_reason: "stop"
-                }
-            ],
-            usage: {prompt_tokens: 5, completion_tokens: 10, total_tokens: 15}
-        };
+        return buildCompletionResponse(textMessage(MOCK_CHAT_TEXT_RESPONSE));
     }
 }
+
+isolated function buildCompletionResponse(json message) returns json => {
+    id: "resp-func-call",
+    'object: "chat.completion",
+    created: 1700000000,
+    model: "gpt-4o-mini",
+    choices: [{index: 0, message, finish_reason: "function_call"}],
+    usage: {prompt_tokens: 5, completion_tokens: 10, total_tokens: 15}
+};
+
+isolated function toolCallMessage() returns json => {
+    role: "assistant",
+    content: (),
+    tool_calls: [
+        {
+            id: "test-id",
+            'type: "function",
+            'function: {name: "searchFunction", arguments: "{\"query\":\"test\"}"}
+        }
+    ]
+};
+
+isolated function functionCallMessage() returns json => {
+    role: "assistant",
+    content: (),
+    function_call: {name: "searchFunction", arguments: "{\"query\":\"test\"}"}
+};
+
+isolated function textMessage(string content) returns json => {
+    role: "assistant",
+    content,
+    finish_reason: "stop"
+};
 
 @test:Config {
     groups: ["wso2-model-provider"]
