@@ -4,6 +4,12 @@ This file documents all significant changes made to the Ballerina AI package acr
 
 ## [Unreleased]
 
+### Fixed
+[Fix Knowledge Base Retrieve Span Missing Input/Output tags](https://github.com/wso2/product-integrator/issues/635)
+
+## [1.11.0] - 2026-03-27
+
+### Added
 - [Add Agent Identity](https://github.com/ballerina-platform/module-ballerina-ai/pull/126)
 
 ## [1.10.0] - 2026-03-14
