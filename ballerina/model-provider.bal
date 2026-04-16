@@ -209,9 +209,15 @@ public isolated distinct client class Wso2ModelProvider {
         span.addTemperature(self.temperature);
         span.addInputMessages(convertMessageToJson(messages));
 
+        intelligence:ChatCompletionRequestMessage[]|Error chatCompletionMsgs 
+            = self.mapToChatCompletionRequestMessage(messages);
+        if chatCompletionMsgs is Error {
+            span.close();
+            return chatCompletionMsgs;
+        }
         intelligence:CreateChatCompletionRequest request = {
             stop,
-            messages: self.mapToChatCompletionRequestMessage(messages),
+            messages: chatCompletionMsgs,
             temperature: self.temperature
         };
         if tools.length() > 0 {
@@ -281,7 +287,7 @@ public isolated distinct client class Wso2ModelProvider {
     } external;
 
     private isolated function mapToChatCompletionRequestMessage(ChatMessage[]|ChatUserMessage messages)
-    returns intelligence:ChatCompletionRequestMessage[] {
+    returns intelligence:ChatCompletionRequestMessage[]|Error {
         if messages is ChatUserMessage {
             return [self.mapUserOrSystemMessage(messages)];
         }
@@ -316,9 +322,14 @@ public isolated distinct client class Wso2ModelProvider {
                 chatCompletionRequestMessages.push(transformedMessage);
                 continue;
             }
+            string? tool_call_id = message.id;
+            if tool_call_id is () {
+                return error Error(string `Malformed message: '${message.toJsonString()}'. ` 
+                    + "The field 'id' required either it is missing or null.");
+            }
             ChatCompletionToolMessageParam toolMessage = {
-                tool_call_id: message.id ?: "",
-                content: message.content ?: ""
+                tool_call_id,
+                content: message.content.toJsonString()
             };
             chatCompletionRequestMessages.push(toolMessage);
         }
