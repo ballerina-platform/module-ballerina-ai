@@ -161,7 +161,7 @@ service /llm on new http:Listener(9096) {
                 content: (),
                 tool_calls: [
                     {
-                        id: "test-id",
+                        id: functionName, // For simplicity, the tool name is used as the tool ID in this mock service.
                         'type: "function",
                         'function: {name: functionName, arguments: args.toJsonString()}
                     }
@@ -171,14 +171,17 @@ service /llm on new http:Listener(9096) {
         }
 
         if role == "function" || role == "tool" {
-            string toolName = check last.name.ensureType();
+            string|error toolName = last.name.ensureType();
+            if toolName is error {
+                toolName = check last.tool_call_id.ensureType();
+            }
             string message = "Operation completed.";
             if toolName == "addTask" {
                 message = "Task added successfully.";
             } else if toolName == "listTasks" {
                 message = "Here are your current tasks.";
             } else if toolName == "getCurrentDate" {
-                message = "Retrieved today’s date successfully.";
+                message = "Retrieved today's date successfully.";
             }
             return buildAgentIdentityCompletionResponse({role: "assistant", content: message});
         }
