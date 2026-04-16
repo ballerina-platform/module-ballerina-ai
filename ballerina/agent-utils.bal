@@ -411,8 +411,8 @@ isolated function run(BaseAgent agent, string instruction, string query, int max
         if step is ExecutionError && step.'error is UnauthorizedError {
             error err = step.'error;
             content = "I could not complete your request due to an authorization issue, " +
-              "possibly related to the access token or its permissions. Please check your " +
-              "access and credentials and try again.";
+              "possibly related to the access token or its permissions. Please check that your " 
+              + "credentials are valid and have the required access, then try again";
             Error newError =  error Error(content.toString(), 'error = err); 
             iterationOutput = newError;
             if verbose {
