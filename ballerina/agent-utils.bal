@@ -709,6 +709,9 @@ isolated function cloneSystemMessage(ChatSystemMessage message) returns ChatSyst
 
 isolated function lazyLoadTools(ChatMessage[] messages, ChatCompletionFunctions[] registeredTools,
         ModelProvider model) returns ChatCompletionFunctions[]? {
+    if messages.length() == 0 {
+        return;
+    }
     ChatMessage lastMessage = messages[messages.length() - 1];
     if lastMessage !is ChatUserMessage {
         return;
