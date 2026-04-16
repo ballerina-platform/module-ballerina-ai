@@ -330,6 +330,12 @@ class Executor {
                     sessionId = self.sessionId
             );
             self.isCompleted = true;
+            self.iterations.push({
+                startTime: self.iterationStartTime,
+                endTime: time:utcNow(),
+                history: iterationHistory,
+                output: iterationOutput
+            });
             return;
         }
         if step is ExecutionError && step.'error is UnauthorizedError {
