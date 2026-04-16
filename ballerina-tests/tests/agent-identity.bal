@@ -17,6 +17,7 @@ const VALID_USERNAME = "admin";
 const VALID_PASSWORD = "admin";
 const KEYSTORE_PATH = "resources/keystore/ballerinaKeystore.p12";
 string scope = "";
+string validScopes = "add list get";
 
 service /oauth2 on new http:Listener(8094) {
     resource function post authn(@http:Payload json payload) returns http:Found|http:BadRequest|error {
@@ -48,7 +49,12 @@ service /oauth2 on new http:Listener(8094) {
     resource function post authorize(http:Request req) returns http:Found|http:BadRequest|http:Unauthorized|error {
         map<string|string[]> form = check req.getFormParams();
         string clientId = form["client_id"].toString();
-        scope = form["scope"].toString();
+        string scp = form["scope"].toString();
+        if validScopes.includes(scp) {
+            scope = scp;
+        } else {
+            scope = "default";
+        }
 
         if clientId != VALID_CLIENT_ID {
             return <http:BadRequest>{body: "invalid_client"};
@@ -146,7 +152,10 @@ service /llm on new http:Listener(9096) {
                 };
             } else if text.includes("date") {
                 functionName = "getCurrentDate";
+            } else if text.includes("delete") {
+                functionName = "deleteTask";
             }
+
             json chatCompletionResponse = {
                 role: "assistant",
                 content: (),
@@ -161,17 +170,17 @@ service /llm on new http:Listener(9096) {
             return buildAgentIdentityCompletionResponse(chatCompletionResponse);
         }
 
-        if role == "function" {
-            string fnName = check last.name.ensureType();
-            string msg = "Operation completed.";
-            if fnName == "addTask" {
-                msg = "Task added successfully.";
-            } else if fnName == "listTasks" {
-                msg = "Here are your current tasks.";
-            } else if fnName == "getCurrentDate" {
-                msg = "Retrieved today’s date successfully.";
+        if role == "function" || role == "tool" {
+            string toolName = check last.name.ensureType();
+            string message = "Operation completed.";
+            if toolName == "addTask" {
+                message = "Task added successfully.";
+            } else if toolName == "listTasks" {
+                message = "Here are your current tasks.";
+            } else if toolName == "getCurrentDate" {
+                message = "Retrieved today’s date successfully.";
             }
-            return buildAgentIdentityCompletionResponse({role: "assistant", content: msg});
+            return buildAgentIdentityCompletionResponse({role: "assistant", content: message});
         }
         return error("Unsupported role");
     }
@@ -247,6 +256,20 @@ isolated function getCurrentDate() returns time:Date {
     return {year, month, day};
 }
 
+@ai:AgentTool {
+    auth: {
+        clientId: "client123",
+        clientSecret: "secret123",
+        redirectUri: "http://localhost:8000/callback",
+        baseAuthUrl: "http://localhost:8094/oauth2",
+        scopes: "delete"
+    }
+}
+isolated function deleteTask() returns error? {
+    // This function is just a placeholder to test invalid scope handling in the agent.
+    return;
+}
+
 final ai:Agent taskAssistantAgent = check new (
     systemPrompt = {
         role: "Task Assistant",
@@ -255,7 +278,7 @@ final ai:Agent taskAssistantAgent = check new (
             help a user plan their schedule.`
     },
     model = taskAssistantAgentModel,
-    tools = [addTask, listTasks, getCurrentDate],
+    tools = [addTask, listTasks, getCurrentDate, deleteTask],
     credential = {
         id: "admin",
         secret: "admin"
@@ -277,4 +300,12 @@ function testAgentIdentityLocalAddTool() returns error? {
 function testAgentIdentityLocalListTool() returns error? {
     string result = check taskAssistantAgent.run("What do I have on my plate today?");
     test:assertTrue(result.includes("Here are your current tasks."));
+}
+
+@test:Config {
+    groups: ["agent-identity"]
+}
+function testAgentIdentityDeleteTask() returns error? {
+    string result = check taskAssistantAgent.run("Run deleteTask.");
+    test:assertTrue(result.includes("I could not complete your request due to an authorization issue"));
 }

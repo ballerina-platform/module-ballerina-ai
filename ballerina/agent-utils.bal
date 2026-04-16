@@ -241,19 +241,22 @@ class Executor {
                     'error: validateRes,
                     observation: observation.toString()
                 };
+                Error toolExecutionError = error Error(observation.toString(), details = {llmResponse});
+                span.close(toolExecutionError); 
             } else {
-                observation = "Tool validation failed while attempting to execute the selected tool: "
+                observation = "Tool execution failed while attempting to execute the selected tool: "
                         + validateRes.message();
                 executionError = {
                     llmResponse,
                     'error: error UnauthorizedError(
-                            string `Tool validation failed: ${validateRes.toString()}`,
-                            details = {llmResponse}, cause = validateRes.cause()),
+                            string `Tool execution failed: ${validateRes.message()}`,
+                            details = { llmResponse }, cause = validateRes.cause(), toolName= toolName),
                     observation: observation.toString()
                 };
+                UnauthorizedError toolExecutionError = error UnauthorizedError(observation.toString(),
+                    details = {llmResponse});
+                span.close(toolExecutionError); 
             }
-            Error toolExecutionError = error Error(observation.toString(), details = {llmResponse});
-            span.close(toolExecutionError);
             return [observation, executionError];
         }
         return;
@@ -330,6 +333,9 @@ class Executor {
             return;
         }
         if step is ExecutionError && step.'error is UnauthorizedError {
+            self.answer = "I could not complete your request due to an authorization issue, " 
+                + "possibly related to the access token or its permissions. Please check that your " 
+                + "credentials are valid and have the required access, then try again";
             error err = step.'error;
             log:printDebug("Tool validation failed: ",
                     err,
@@ -338,12 +344,19 @@ class Executor {
                     sessionId = self.sessionId
             );
             self.steps.push(step);
+            self.answer = "I could not complete your request due to an authorization issue, " 
+                + "possibly related to the access token or its permissions. Please check that your " 
+                + "credentials are valid and have the required access, then try again";
+            Error unauthorizedExecution =  error Error(self.answer.toString(), 'error = err); 
+            iterationOutput = unauthorizedExecution;
             self.iterations.push({
                 startTime: self.iterationStartTime,
                 endTime: time:utcNow(),
                 history: iterationHistory,
                 output: iterationOutput
             });
+            self.isCompleted = true;
+            return;
         }
         if step is Error {
             error? cause = step.cause();
