@@ -18,6 +18,7 @@ import ai.intelligence;
 import ai.observe;
 
 import ballerina/jballerina.java;
+import ballerina/uuid;
 
 # Roles for the chat messages.
 public enum ROLE {
@@ -290,10 +291,16 @@ public isolated distinct client class Wso2ModelProvider {
                 intelligence:ChatCompletionRequestMessage assistantMessage = {role: ASSISTANT};
                 FunctionCall[]? toolCalls = message.toolCalls;
                 if toolCalls is FunctionCall[] && toolCalls.length() > 0 {
-                    assistantMessage["function_call"] = {
-                        name: toolCalls[0].name,
-                        arguments: toolCalls[0].arguments.toJsonString()
-                    };
+                    intelligence:ChatCompletionMessageToolCall[] chatCompletionMessageToolCalls = toolCalls.'map(toolCall =>
+                        <intelligence:ChatCompletionMessageToolCall>{
+                        'type: FUNCTION,
+                        id: toolCall.id ?: uuid:createRandomUuid(),
+                        'function: {
+                            name: toolCall.name,
+                            arguments: toolCall.arguments.toJsonString()
+                        }
+                    });
+                    assistantMessage ["tool_calls"] = chatCompletionMessageToolCalls;
                 }
                 if message?.content is string {
                     assistantMessage["content"] = message?.content;
