@@ -316,7 +316,11 @@ public isolated distinct client class Wso2ModelProvider {
                 chatCompletionRequestMessages.push(transformedMessage);
                 continue;
             }
-            chatCompletionRequestMessages.push(message);
+            ChatCompletionToolMessageParam toolMessage = {
+                tool_call_id: message.id ?: "",
+                content: message.content ?: ""
+            };
+            chatCompletionRequestMessages.push(toolMessage);
         }
         return chatCompletionRequestMessages;
     }
