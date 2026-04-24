@@ -170,6 +170,18 @@ final ai:Agent dynamicToolLoadingAgent = check new (model = model,
     toolLoadingStrategy = ai:LLM_FILTER
 );
 
+final ai:Agent agentWithMaxIter1 = check new (model = model, maxIter = 1,
+    systemPrompt = {role: "Math tutor", instructions: "Help the students with their questions."},
+    tools = [new SearchToolKit()],
+    verbose = true
+);
+
+final ai:Agent agentWithInferToolCount = check new (model = model,
+    systemPrompt = {role: "Math tutor", instructions: "Help the students with their questions."},
+    tools = [new SearchToolKit()],
+    verbose = true
+);
+
 isolated class SearchToolKit {
     *ai:BaseToolKit;
 
