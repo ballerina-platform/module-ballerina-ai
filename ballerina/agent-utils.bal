@@ -357,11 +357,8 @@ class Executor {
             return;
         }
         if step is ExecutionError && step.'error is UnauthorizedError {
-            self.answer = "I could not complete your request due to an authorization issue, " 
-                + "possibly related to the access token or its permissions. Please check that your " 
-                + "credentials are valid and have the required access, then try again";
             error err = step.'error;
-            log:printDebug("Tool validation failed: ",
+            log:printDebug("Tool execution failed due to authorization error: ",
                     err,
                     executionId = self.progress.executionId,
                     iteration = self.currentIter,
