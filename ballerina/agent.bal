@@ -23,6 +23,7 @@ import ballerina/time;
 import ballerina/uuid;
 
 const INFER_TOOL_COUNT = "INFER_TOOL_COUNT";
+const DEFAULT_MINIMUM_MAX_ITERATIONS = 10;
 
 # Represents the system prompt given to the agent.
 @display {label: "System Prompt"}
@@ -137,7 +138,8 @@ public isolated distinct class Agent {
                 agentCredential, memory, config.toolLoadingStrategy
             );
             self.toolSchemas = self.functionCallAgent.toolStore.getToolSchema().cloneReadOnly();
-            self.maxIter = maxIter is INFER_TOOL_COUNT ? int:max(self.toolSchemas.length(), 10) : maxIter;
+            self.maxIter = maxIter is INFER_TOOL_COUNT ?
+                int:max(self.toolSchemas.length(), DEFAULT_MINIMUM_MAX_ITERATIONS) : maxIter;
             span.addTools(self.functionCallAgent.toolStore.getToolsInfo());
             if agentIdentitySpan is observe:CreateAgentIdentitySpan {
                 agentIdentitySpan.close();
