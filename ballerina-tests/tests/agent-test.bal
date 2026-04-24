@@ -74,3 +74,19 @@ function testAgentWithDynamicToolLoadingConfig() returns error? {
         test:assertTrue(toolLoadedDynamicaly);
     }
 }
+
+@test:Config
+function testAgentWithMaxIterConfiguration() returns error? {
+    string imageUrl = "https://ballerina.io/images/ballerina.png";
+    ai:Context ctx = new;
+    ctx.set("imageUrl", imageUrl);
+    ctx.set("isImageSearchToolExecuted", false);
+
+    string|error result = agentWithMaxIter1.run("Search for a 'ballerina' image", context = ctx);
+    test:assertTrue(result is ai:MaxIterationExceededError);
+
+    string response = check agentWithInferToolCount.run("Search for a 'ballerina' image", context = ctx);
+    test:assertEquals(response, string `Answer is: ${imageUrl}`);
+    boolean isImageSearchToolExecuted = check ctx.getWithType("isImageSearchToolExecuted");
+    test:assertTrue(isImageSearchToolExecuted);
+}
