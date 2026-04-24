@@ -324,8 +324,8 @@ public isolated distinct client class Wso2ModelProvider {
             }
             string? tool_call_id = message.id;
             if tool_call_id is () {
-                return error Error(string `Malformed message: '${message.toJsonString()}'. ` 
-                    + "The field 'id' required either it is missing or null.");
+                return error Error(string `Malformed message: '${message.toJsonString()}'. `
+                    + "The field 'id' is required but is either missing or null.");
             }
             ChatCompletionToolMessageParam toolMessage = {
                 tool_call_id,
