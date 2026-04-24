@@ -4,10 +4,13 @@ This file documents all significant changes made to the Ballerina AI package acr
 
 ## [Unreleased]
 
+### Fixed
+- [Fix `maxIter` Inference with Toolkits and Efnorce Minimum of 10](https://github.com/wso2/product-integrator/issues/1112)
+
 ## [1.11.1] - 2026-04-16
 
 ### Fixed
-[Fix Knowledge Base Retrieve Span Missing Input/Output tags](https://github.com/wso2/product-integrator/issues/635)
+- [Fix Knowledge Base Retrieve Span Missing Input/Output tags](https://github.com/wso2/product-integrator/issues/635)
 
 ## [1.11.0] - 2026-03-27
 
