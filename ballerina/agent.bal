@@ -122,11 +122,11 @@ public isolated distinct class Agent {
         span.addSystemInstructions(getFomatedSystemPrompt(config.systemPrompt));
 
         INFER_TOOL_COUNT|int maxIter = config.maxIter;
-        self.maxIter = maxIter is INFER_TOOL_COUNT ? config.tools.length() + 1 : maxIter;
         self.verbose = config.verbose;
         self.systemPrompt = config.systemPrompt.cloneReadOnly();
         Memory? memory = config.hasKey("memory") ? config?.memory : check new ShortTermMemory();
         self.toolStore = check new (...config.tools);
+        self.maxIter = maxIter is INFER_TOOL_COUNT ? self.toolStore.tools.length() + 1 : maxIter;
         self.memory = memory ?: check new ShortTermMemory();
         self.model = config.model;
         self.stateless = memory is ();
