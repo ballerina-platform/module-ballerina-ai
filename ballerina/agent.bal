@@ -76,7 +76,8 @@ public type AgentConfiguration record {|
     (BaseToolKit|ToolConfig|FunctionTool)[] tools = [];
 
     # The maximum number of iterations the agent performs to complete the task.
-    # By default, it is set to the number of tools + 1.
+    # Defaults to `max(number of tools, 10)` — i.e., at least 10, or more if the
+    # agent has more tools available.
     @display {label: "Maximum Iterations"}
     INFER_TOOL_COUNT|int maxIter = INFER_TOOL_COUNT;
 
@@ -119,7 +120,6 @@ public isolated distinct class Agent {
         span.addSystemInstructions(getFomatedSystemPrompt(config.systemPrompt));
 
         INFER_TOOL_COUNT|int maxIter = config.maxIter;
-        self.maxIter = maxIter is INFER_TOOL_COUNT ? config.tools.length() + 1 : maxIter;
         self.verbose = config.verbose;
         self.systemPrompt = config.systemPrompt.cloneReadOnly();
         Memory? memory = config.hasKey("memory") ? config?.memory : check new ShortTermMemory();
@@ -134,8 +134,10 @@ public isolated distinct class Agent {
         }
         do {
             self.functionCallAgent = check new FunctionCallAgent(config.model, config.tools, self.tokenManager,
-                agentCredential, memory, config.toolLoadingStrategy);
+                agentCredential, memory, config.toolLoadingStrategy
+            );
             self.toolSchemas = self.functionCallAgent.toolStore.getToolSchema().cloneReadOnly();
+            self.maxIter = maxIter is INFER_TOOL_COUNT ? int:max(self.toolSchemas.length(), 10) : maxIter;
             span.addTools(self.functionCallAgent.toolStore.getToolsInfo());
             if agentIdentitySpan is observe:CreateAgentIdentitySpan {
                 agentIdentitySpan.close();
@@ -173,10 +175,10 @@ public isolated distinct class Agent {
         time:Utc startTime = time:utcNow();
         string executionId = uuid:createRandomUuid();
         log:printDebug("Agent execution started",
-            executionId = executionId,
-            agentId = self.agentId,
-            query = query,
-            sessionId = sessionId
+                executionId = executionId,
+                agentId = self.agentId,
+                query = query,
+                sessionId = sessionId
         );
 
         observe:InvokeAgentSpan span = observe:createInvokeAgentSpan(self.systemPrompt.role);
@@ -194,10 +196,10 @@ public isolated distinct class Agent {
         do {
             string answer = check getAnswer(executionTrace, self.maxIter);
             log:printDebug("Agent execution completed successfully",
-                executionId = executionId,
-                agentId = self.agentId,
-                steps = executionTrace.steps.toString(),
-                answer = answer
+                    executionId = executionId,
+                    agentId = self.agentId,
+                    steps = executionTrace.steps.toString(),
+                    answer = answer
             );
             span.addOutput(observe:TEXT, answer);
             span.close();
@@ -216,10 +218,10 @@ public isolated distinct class Agent {
                 : answer;
         } on fail Error err {
             log:printDebug("Agent execution failed",
-                err,
-                executionId = executionId,
-                agentId = self.agentId,
-                steps = executionTrace.steps.toString()
+                    err,
+                    executionId = executionId,
+                    agentId = self.agentId,
+                    steps = executionTrace.steps.toString()
             );
             span.close(err);
 
