@@ -16,7 +16,6 @@
 
 import ai.observe;
 
-import ballerina/cache;
 import ballerina/jballerina.java;
 import ballerina/log;
 import ballerina/time;
@@ -101,15 +100,19 @@ public type AgentConfiguration record {|
 
 # Represents an agent.
 public isolated distinct class Agent {
-    final FunctionCallAgent functionCallAgent;
     private final int maxIter;
     private final readonly & SystemPrompt systemPrompt;
     private final boolean verbose;
     private final string uniqueId = uuid:createRandomUuid();
     private final readonly & ToolSchema[] toolSchemas;
-    private final cache:Cache tokenManager = new ();
-    private string? agentId = ();
-
+    private final string? agentId;
+    private final ModelProvider model;
+    private final Memory memory;
+    private final boolean stateless;
+    private final ToolLoadingStrategy toolLoadingStrategy;
+    private final readonly & Credential? agentCredential;
+    final ToolStore toolStore;
+    
     # Initialize an Agent.
     #
     # + config - Configuration used to initialize an agent
@@ -119,24 +122,30 @@ public isolated distinct class Agent {
         span.addSystemInstructions(getFomatedSystemPrompt(config.systemPrompt));
 
         INFER_TOOL_COUNT|int maxIter = config.maxIter;
-        self.maxIter = maxIter is INFER_TOOL_COUNT ? config.tools.length() + 1 : maxIter;
         self.verbose = config.verbose;
         self.systemPrompt = config.systemPrompt.cloneReadOnly();
         Memory? memory = config.hasKey("memory") ? config?.memory : check new ShortTermMemory();
+        self.toolStore = check new (...config.tools);
+        self.maxIter = maxIter is INFER_TOOL_COUNT ? self.toolStore.tools.length() + 1 : maxIter;
+        self.memory = memory ?: check new ShortTermMemory();
+        self.model = config.model;
+        self.stateless = memory is ();
+        self.toolLoadingStrategy = config.toolLoadingStrategy;
+        self.toolSchemas = self.toolStore.getToolSchema().cloneReadOnly();
         observe:CreateAgentIdentitySpan? agentIdentitySpan = ();
         Credential? agentCredential = config.credential;
+        self.agentCredential = agentCredential.cloneReadOnly();
         if agentCredential is Credential {
             agentIdentitySpan = observe:createCreateAgentIdentitySpan(config.systemPrompt.role);
             self.agentId = agentCredential.id.cloneReadOnly();
             if agentIdentitySpan is observe:CreateAgentIdentitySpan {
                 agentIdentitySpan.addId(agentCredential.id);
             }
+        } else {
+            self.agentId = ();
         }
         do {
-            self.functionCallAgent = check new FunctionCallAgent(config.model, config.tools, self.tokenManager,
-                agentCredential, memory, config.toolLoadingStrategy);
-            self.toolSchemas = self.functionCallAgent.toolStore.getToolSchema().cloneReadOnly();
-            span.addTools(self.functionCallAgent.toolStore.getToolsInfo());
+            span.addTools(self.toolStore.getToolsInfo());
             if agentIdentitySpan is observe:CreateAgentIdentitySpan {
                 agentIdentitySpan.close();
             }
@@ -186,8 +195,15 @@ public isolated distinct class Agent {
         string systemPrompt = getFomatedSystemPrompt(self.systemPrompt);
         span.addSystemInstruction(systemPrompt);
 
-        ExecutionTrace executionTrace = self.functionCallAgent
-            .run(query, systemPrompt, self.maxIter, self.verbose, sessionId, context, executionId);
+        ExecutorConfig config = {
+            toolStore: self.toolStore,
+            model: self.model,
+            toolLoadingStrategy: self.toolLoadingStrategy,
+            agentCredential: self.agentCredential,
+            memory: self.memory,
+            stateless: self.stateless
+        };
+        ExecutionTrace executionTrace = run(config, systemPrompt, query, self.maxIter, self.verbose, sessionId, context, executionId);
         ChatUserMessage userMessage = {role: USER, content: query};
         Iteration[] iterations = executionTrace.iterations;
         FunctionCall[]? toolCalls = executionTrace.toolCalls.length() == 0 ? () : executionTrace.toolCalls;
@@ -237,6 +253,57 @@ public isolated distinct class Agent {
                 : err;
         }
     }
+}
+
+isolated function selectNextTool(ExecutionProgress progress, string sessionId, ToolStore toolStore,
+        ToolLoadingStrategy toolLoadingStrategy, ModelProvider model) returns FunctionCall|string|Error {
+    ChatMessage[] messages = createFunctionCallMessages(progress);
+    messages.unshift(...progress.history);
+    ChatMessage lastMessage = messages[messages.length() - 1];
+    ChatCompletionFunctions[] registeredTools = from Tool tool in toolStore.tools.toArray()
+        select {
+            name: tool.name,
+            description: tool.description,
+            parameters: tool.variables
+        };
+    ChatCompletionFunctions[] filteredTools = registeredTools;
+    if toolLoadingStrategy == LLM_FILTER && lastMessage is ChatUserMessage {
+        ChatCompletionFunctions[]? selectedTools = lazyLoadTools(cloneMessages(messages), registeredTools, model);
+        if selectedTools !is () {
+            filteredTools = selectedTools;
+        }
+    }
+
+    log:printDebug("Requesting tool selection from LLM",
+        executionId = progress.executionId,
+        sessionId = sessionId,
+        messages = messages.toString(),
+        availableTools = filteredTools.toString()
+    );
+
+    // TODO: Improve handling of multiple tool calls returned by the LLM.
+    // Currently, tool calls are executed sequentially in separate chat responses.
+    // Update the logic to execute all tool calls together and return a single response.
+    ChatAssistantMessage response = check model->chat(messages, filteredTools);
+    FunctionCall? toolCall = getFirstToolCall(response);
+
+    if toolCall is FunctionCall {
+        log:printDebug("LLM selected tool",
+            executionId = progress.executionId,
+            sessionId = sessionId,
+            toolName = toolCall.name,
+            toolArguments = toolCall.arguments
+        );
+        return toolCall;
+    }
+
+    log:printDebug("LLM provided chat response instead of tool call",
+        executionId = progress.executionId,
+        sessionId = sessionId,
+        response = response?.content
+    );
+    string? content = response?.content;
+    return content ?: error LlmInvalidResponseError(string `invalid response from LLM: ${response.toJsonString()}`);
 }
 
 isolated function getAnswer(ExecutionTrace executionTrace, int maxIter) returns string|Error {

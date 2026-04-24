@@ -142,12 +142,12 @@ public enum ToolLoadingStrategy {
     # Loads all available tools without any filtering.
     NO_FILTER,
 
-     # Uses a selective, double-dispatch strategy.
-     #
-     # Instead of sending all tool schemas directly to the LLM, only a list of tool names
-     # and descriptions is sent initially. The LLM then selects the tools needed to handle
-     # the user’s query. Once the required tools are identified, their corresponding schemas
-     # are loaded and sent to the LLM to obtain the necessary parameters for execution.
+    # Uses a selective, double-dispatch strategy.
+    #
+    # Instead of sending all tool schemas directly to the LLM, only a list of tool names
+    # and descriptions is sent initially. The LLM then selects the tools needed to handle
+    # the user’s query. Once the required tools are identified, their corresponding schemas
+    # are loaded and sent to the LLM to obtain the necessary parameters for execution.
     LLM_FILTER
 }
 
@@ -230,7 +230,7 @@ public type AgentIdAuthConfig record {|
     # for the Authorization Code flow.
     @display {label: "Enable PKCE"}
     boolean isPkceEnabled = false;
-    
+
     # SSL/TLS-related options
     http:ClientSecureSocket? secureSocket = ();
 |};
@@ -239,4 +239,21 @@ public type AgentIdAuthConfig record {|
 public type Scopes record {|
     # The required OAuth scope or list of scopes.
     string|string[] scopes?;
+|};
+
+# Represents a tool response message in a chat completion conversation.
+#
+# This record maps to the OpenAI chat completion tool message parameter schema:
+# https://developers.openai.com/api/reference/resources/chat#(resource)%20chat.completions%20%3E%20(model)%20chat_completion_tool_message_param%20%3E%20(schema)
+#
+# A tool message must immediately follow an assistant message that contains
+# `tool_calls`, and the `tool_call_id` must match the corresponding tool call ID.
+#
+# + role - The role of the message author, always `"tool"`
+# + tool_call_id - The identifier of the tool call this message responds to
+# + content - The tool execution result as a string
+type ChatCompletionToolMessageParam record {|
+    "tool" role = "tool";
+    string tool_call_id;
+    string content;
 |};
