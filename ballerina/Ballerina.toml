@@ -21,13 +21,13 @@ graalvmCompatible = true
 groupId = "io.ballerina.stdlib"
 artifactId = "ai-native"
 version = "1.11.2"
-path = "../native/build/libs/ai-native-1.11.2-SNAPSHOT.jar"
+path = "../native/build/libs/ai-native-1.11.2.jar"
 
 [[platform.java21.dependency]]
 groupId = "io.ballerina.stdlib"
 artifactId = "ai-native"
 version = "1.11.2"
-path = "../native/build/libs/ai-native-1.11.2-SNAPSHOT-tests.jar"
+path = "../native/build/libs/ai-native-1.11.2-tests.jar"
 testOnly = true
 
 [[platform.java21.dependency]]
@@ -45,8 +45,8 @@ path="./lib/langchain4j-core-1.1.0.jar"
 [[platform.java21.dependency]]
 groupId = "org.apache.opennlp"
 artifactId = "opennlp-tools"
-version = "2.5.4"
-path="./lib/opennlp-tools-2.5.4.jar"
+version = "2.5.9"
+path="./lib/opennlp-tools-2.5.9.jar"
 
 [[platform.java21.dependency]]
 groupId = "org.apache.tika"
