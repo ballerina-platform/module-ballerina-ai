@@ -38,15 +38,6 @@ public type SystemPrompt record {|
     string instructions;
 |};
 
-# Represents the different types of agents supported by the module.
-@display {label: "Agent Type"}
-public enum AgentType {
-    # Represents a ReAct agent
-    REACT_AGENT,
-    # Represents a function call agent
-    FUNCTION_CALL_AGENT
-}
-
 # Represents the authentication credentials of an autonomous agent.
 @display {label: "Agent Credential"}
 public type Credential record {|
@@ -101,8 +92,29 @@ public type AgentConfiguration record {|
     Credential credential?;
 |};
 
+public type AgentType InferredReturnAgent|FixedReturnAgent;
+
+public type InferredReturnAgent distinct isolated object {
+    public isolated function run(@display {label: "Query"} string query,
+            @display {label: "Session ID"} string sessionId = DEFAULT_SESSION_ID,
+            Context context = new,
+            typedesc<Trace|anydata> td = <>) returns td|Error;
+};
+
+public type FixedReturnAgent distinct isolated object {
+    public isolated function run(@display {label: "Query"} string query,
+            @display {label: "Session ID"} string sessionId = DEFAULT_SESSION_ID,
+            Context context = new) returns anydata|Error;
+    
+    public isolated function trace(@display {label: "Query"} string query,
+            @display {label: "Session ID"} string sessionId = DEFAULT_SESSION_ID,
+            Context context = new) returns Trace|Error;
+};
+
 # Represents an agent.
 public isolated distinct class Agent {
+    *InferredReturnAgent;
+
     final FunctionCallAgent functionCallAgent;
     private final int maxIter;
     private final readonly & SystemPrompt systemPrompt;
@@ -167,7 +179,9 @@ public isolated distinct class Agent {
     public isolated function run(@display {label: "Query"} string query,
             @display {label: "Session ID"} string sessionId = DEFAULT_SESSION_ID,
             Context context = new,
-            typedesc<Trace|string> td = <>) returns td|Error = @java:Method {
+            // TODO: Implementation should now support anydata subtype parsing, rather than
+            // just string return
+            typedesc<Trace|anydata> td = <>) returns td|Error = @java:Method {
         'class: "io.ballerina.stdlib.ai.Agent"
     } external;
 
