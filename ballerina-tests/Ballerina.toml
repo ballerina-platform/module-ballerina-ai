@@ -14,7 +14,7 @@ path = "../native/build/libs/ai-native-1.11.2-SNAPSHOT.jar"
 
 [[platform.java21.dependency]]
 groupId = "io.ballerina.stdlib"
-artifactId = "ai-native"
+artifactId = "ai-native-tests"
 version = "1.11.2"
 path = "../native/build/libs/ai-native-1.11.2-SNAPSHOT-tests.jar"
 testOnly = true
