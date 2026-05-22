@@ -105,7 +105,7 @@ public type FixedReturnAgent distinct isolated object {
     public isolated function run(@display {label: "Query"} string query,
             @display {label: "Session ID"} string sessionId = DEFAULT_SESSION_ID,
             Context context = new) returns anydata|Error;
-    
+
     public isolated function trace(@display {label: "Query"} string query,
             @display {label: "Session ID"} string sessionId = DEFAULT_SESSION_ID,
             Context context = new) returns Trace|Error;
@@ -179,15 +179,13 @@ public isolated distinct class Agent {
     public isolated function run(@display {label: "Query"} string query,
             @display {label: "Session ID"} string sessionId = DEFAULT_SESSION_ID,
             Context context = new,
-            // TODO: Implementation should now support anydata subtype parsing, rather than
-            // just string return
             typedesc<Trace|anydata> td = <>) returns td|Error = @java:Method {
         'class: "io.ballerina.stdlib.ai.Agent"
     } external;
 
     private isolated function runInternal(@display {label: "Query"} string query,
             @display {label: "Session ID"} string sessionId = DEFAULT_SESSION_ID,
-            Context context = new, boolean withTrace = false) returns string|Trace|Error {
+            Context context = new, typedesc<Trace|anydata> td = string) returns Trace|anydata|Error {
         time:Utc startTime = time:utcNow();
         string executionId = uuid:createRandomUuid();
         log:printDebug("Agent execution started",
@@ -202,6 +200,10 @@ public isolated distinct class Agent {
         span.addSessionId(sessionId);
         span.addInput(query);
         string systemPrompt = getFomatedSystemPrompt(self.systemPrompt);
+
+        if td !is typedesc<string> && td !is typedesc<Trace> && td is typedesc<anydata> {
+            systemPrompt = systemPrompt + check getStructuredOutputInstruction(td);
+        }
         span.addSystemInstruction(systemPrompt);
 
         ExecutionTrace executionTrace = self.functionCallAgent
@@ -220,8 +222,8 @@ public isolated distinct class Agent {
             span.addOutput(observe:TEXT, answer);
             span.close();
 
-            return withTrace
-                ? {
+            if td is typedesc<Trace> {
+                Trace trace = {
                     id: executionId,
                     userMessage,
                     iterations,
@@ -230,8 +232,16 @@ public isolated distinct class Agent {
                     endTime: time:utcNow(),
                     output: {role: ASSISTANT, content: answer},
                     toolCalls
-                }
-                : answer;
+                };
+                return trace;
+            }
+            if td is typedesc<string> {
+                return answer;
+            }
+            if td is typedesc<anydata> {
+                return parseAnswerAsType(answer, td);
+            }
+            return answer;
         } on fail Error err {
             log:printDebug("Agent execution failed",
                     err,
@@ -241,8 +251,8 @@ public isolated distinct class Agent {
             );
             span.close(err);
 
-            return withTrace
-                ? {
+            if td is typedesc<Trace> {
+                Trace trace = {
                     id: executionId,
                     userMessage,
                     iterations,
@@ -251,10 +261,55 @@ public isolated distinct class Agent {
                     endTime: time:utcNow(),
                     output: err,
                     toolCalls
-                }
-                : err;
+                };
+                return trace;
+            }
+            return err;
         }
     }
+
+}
+
+# Builds an instruction, appended to the system prompt, that guides the agent to produce its final
+# answer as a JSON value conforming to the schema of the expected return type.
+#
+# + td - Type descriptor specifying the expected return type
+# + return - The instruction text, or an error if a schema cannot be derived for the type
+isolated function getStructuredOutputInstruction(typedesc<anydata> td) returns string|Error {
+    typedesc<json>|error jsonTd = td.ensureType();
+    if jsonTd is error {
+        return error Error("Structured output is not supported for the expected return type", jsonTd);
+    }
+    map<json> schema = check generateJsonSchemaForTypedescAsJson(jsonTd);
+    return "\n\nProvide the final answer as a JSON value that strictly conforms to the following JSON " +
+        "schema. Respond with only the JSON value, without any additional text:\n" +
+        schema.toJsonString();
+}
+
+# Parses the agent's final answer into a value of the expected type.
+#
+# + answer - The agent's final answer (expected to be a JSON value)
+# + td - Type descriptor specifying the expected return type
+# + return - The bound value, or an error if the answer cannot be parsed into the type
+isolated function parseAnswerAsType(string answer, typedesc<anydata> td) returns anydata|Error {
+    string trimmed = answer.trim();
+    // Strip Markdown code fences (e.g. ```json ... ```) if the model added them.
+    if trimmed.startsWith("```") {
+        int? newlineIndex = trimmed.indexOf("\n");
+        if newlineIndex is int {
+            trimmed = trimmed.substring(newlineIndex + 1);
+        }
+        if trimmed.endsWith("```") {
+            trimmed = trimmed.substring(0, trimmed.length() - 3);
+        }
+        trimmed = trimmed.trim();
+    }
+    anydata|error result = trimmed.fromJsonStringWithType(td);
+    if result is error {
+        return error Error(string `Failed to bind the agent's response to the expected type: ${result.message()}`,
+                result);
+    }
+    return result;
 }
 
 isolated function getAnswer(ExecutionTrace executionTrace, int maxIter) returns string|Error {

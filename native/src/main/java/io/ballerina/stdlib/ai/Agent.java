@@ -19,8 +19,6 @@
 package io.ballerina.stdlib.ai;
 
 import io.ballerina.runtime.api.Environment;
-import io.ballerina.runtime.api.types.PredefinedTypes;
-import io.ballerina.runtime.api.utils.TypeUtils;
 import io.ballerina.runtime.api.values.BError;
 import io.ballerina.runtime.api.values.BObject;
 import io.ballerina.runtime.api.values.BString;
@@ -37,19 +35,11 @@ public class Agent {
                              BString query, BString sessionId, BObject context, BTypedesc td) {
         return env.yieldAndRun(() -> {
             try {
-                Object[] paramFeed = getRunInternalMethodParams(query, sessionId, context, td);
+                Object[] paramFeed = new Object[]{query, sessionId, context, td};
                 return env.getRuntime().callMethod(agent, RUN_INTERNAL_METHOD_NAME, null, paramFeed);
             } catch (BError bError) {
                 return ModuleUtils.createError("Unable to obtain valid answer from the agent", bError);
             }
         });
-    }
-
-    private static Object[] getRunInternalMethodParams(BString query, BString sessionId, BObject context,
-                                                       BTypedesc td) {
-        boolean withTrace = !TypeUtils.isSameType(PredefinedTypes.TYPE_STRING, td.getDescribingType());
-        return new Object[]{
-                query, sessionId, context, withTrace
-        };
     }
 }
