@@ -92,16 +92,16 @@ public type AgentConfiguration record {|
     Credential credential?;
 |};
 
-public type AgentType InferredReturnAgent|FixedReturnAgent;
+public type AgentType InferredReturnAgentType|FixedReturnAgentType;
 
-public type InferredReturnAgent distinct isolated object {
+public type InferredReturnAgentType distinct isolated object {
     public isolated function run(@display {label: "Query"} string query,
             @display {label: "Session ID"} string sessionId = DEFAULT_SESSION_ID,
             Context context = new,
             typedesc<Trace|anydata> td = <>) returns td|Error;
 };
 
-public type FixedReturnAgent distinct isolated object {
+public type FixedReturnAgentType distinct isolated object {
     public isolated function run(@display {label: "Query"} string query,
             @display {label: "Session ID"} string sessionId = DEFAULT_SESSION_ID,
             Context context = new) returns anydata|Error;
@@ -113,7 +113,7 @@ public type FixedReturnAgent distinct isolated object {
 
 # Represents an agent.
 public isolated distinct class Agent {
-    *InferredReturnAgent;
+    *InferredReturnAgentType;
 
     final FunctionCallAgent functionCallAgent;
     private final int maxIter;
