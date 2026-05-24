@@ -140,7 +140,7 @@ isolated distinct class FunctionCallAgent {
     # + sessionId - The ID associated with the agent memory
     # + executionId - Unique identifier for this execution
     # + return - Returns the execution steps tracing the agent's reasoning and outputs from the tools
-    isolated function run(string query, string instruction, int maxIter = 5, boolean verbose = true,
+    isolated function run(string|Prompt query, string instruction, int maxIter = 5, boolean verbose = true,
             string sessionId = DEFAULT_SESSION_ID, Context context = new, string executionId = DEFAULT_EXECUTION_ID)
             returns ExecutionTrace {
         Credential? & readonly agentConfig = self.agentCredential;

@@ -32,7 +32,7 @@ public class Agent {
 
     @SuppressWarnings("unused")
     public static Object run(Environment env, BObject agent,
-                             BString query, BString sessionId, BObject context, BTypedesc td) {
+                             Object query, BString sessionId, BObject context, BTypedesc td) {
         return env.yieldAndRun(() -> {
             try {
                 Object[] paramFeed = new Object[]{query, sessionId, context, td};

@@ -95,18 +95,18 @@ public type AgentConfiguration record {|
 public type AgentType InferredReturnAgentType|FixedReturnAgentType;
 
 public type InferredReturnAgentType distinct isolated object {
-    public isolated function run(@display {label: "Query"} string query,
+    public isolated function run(@display {label: "Query"} string|Prompt query,
             @display {label: "Session ID"} string sessionId = DEFAULT_SESSION_ID,
             Context context = new,
             typedesc<Trace|anydata> td = <>) returns td|Error;
 };
 
 public type FixedReturnAgentType distinct isolated object {
-    public isolated function run(@display {label: "Query"} string query,
+    public isolated function run(@display {label: "Query"} string|Prompt query,
             @display {label: "Session ID"} string sessionId = DEFAULT_SESSION_ID,
             Context context = new) returns anydata|Error;
 
-    public isolated function trace(@display {label: "Query"} string query,
+    public isolated function trace(@display {label: "Query"} string|Prompt query,
             @display {label: "Session ID"} string sessionId = DEFAULT_SESSION_ID,
             Context context = new) returns Trace|Error;
 };
@@ -176,29 +176,30 @@ public isolated distinct class Agent {
     # + context - The additional context that can be used during agent tool execution
     # + td - Type descriptor specifying the expected return type format
     # + return - The agent's response or an error
-    public isolated function run(@display {label: "Query"} string query,
+    public isolated function run(@display {label: "Query"} string|Prompt query,
             @display {label: "Session ID"} string sessionId = DEFAULT_SESSION_ID,
             Context context = new,
             typedesc<Trace|anydata> td = <>) returns td|Error = @java:Method {
         'class: "io.ballerina.stdlib.ai.Agent"
     } external;
 
-    private isolated function runInternal(@display {label: "Query"} string query,
+    private isolated function runInternal(@display {label: "Query"} string|Prompt query,
             @display {label: "Session ID"} string sessionId = DEFAULT_SESSION_ID,
             Context context = new, typedesc<Trace|anydata> td = string) returns Trace|anydata|Error {
         time:Utc startTime = time:utcNow();
         string executionId = uuid:createRandomUuid();
+        string queryString = toString(query);
         log:printDebug("Agent execution started",
                 executionId = executionId,
                 agentId = self.agentId,
-                query = query,
+                query = queryString,
                 sessionId = sessionId
         );
 
         observe:InvokeAgentSpan span = observe:createInvokeAgentSpan(self.systemPrompt.role);
         span.addId(self.uniqueId);
         span.addSessionId(sessionId);
-        span.addInput(query);
+        span.addInput(queryString);
         string systemPrompt = getFomatedSystemPrompt(self.systemPrompt);
 
         if td !is typedesc<string> && td !is typedesc<Trace> && td is typedesc<anydata> {

@@ -41,11 +41,11 @@ isolated class WeatherAgent {
         );
     }
 
-    public isolated function run(string query, string sessionId = "default-session",
+    public isolated function run(string|ai:Prompt query, string sessionId = "default-session",
             ai:Context context = new) returns WeatherReport|ai:Error =>
         self.agent.run(query, sessionId, context);
 
-    public isolated function trace(string query, string sessionId = "default-session",
+    public isolated function trace(string|ai:Prompt query, string sessionId = "default-session",
             ai:Context context = new) returns ai:Trace|ai:Error =>
         self.agent.run(query, sessionId, context);
 }
@@ -60,6 +60,14 @@ function testAgentRunWithRecordReturn() returns error? {
 function testAgentRunWithIntReturn() returns error? {
     int result = check agent.run("Tell me your lucky number.");
     test:assertEquals(result, 7);
+}
+
+// The agent accepts a `Prompt` (template) query in addition to a plain string.
+@test:Config
+function testAgentRunWithPromptQuery() returns error? {
+    string location = "Colombo";
+    WeatherReport report = check agent.run(`Give me the weather report for ${location}.`);
+    test:assertEquals(report, {city: "Colombo", temperature: 32, condition: "Sunny"});
 }
 
 @test:Config

@@ -26,7 +26,7 @@ type ExecutionProgress record {|
     # Unique identifier for this execution
     string executionId;
     # Question to the agent
-    string query;
+    string|Prompt query;
     # Instruction used by the agent during the execution
     string instruction;
     # Execution history of actions performed so far in the current interaction
@@ -105,7 +105,7 @@ type BaseAgent distinct isolated object {
     # + return - LLM response containing the tool or chat response (or an error if the call fails)
     isolated function selectNextTool(ExecutionProgress progress, string sessionId = DEFAULT_SESSION_ID) returns json|Error;
 
-    isolated function run(string query, string instruction, int maxIter = 5, boolean verbose = true,
+    isolated function run(string|Prompt query, string instruction, int maxIter = 5, boolean verbose = true,
             string sessionId = DEFAULT_SESSION_ID, Context context = new, string executionId = DEFAULT_EXECUTION_ID)
             returns ExecutionTrace;
 };
@@ -346,7 +346,7 @@ class Executor {
 # + sessionId - The ID associated with the memory
 # + executionId - Unique identifier for this execution
 # + return - Returns the execution steps tracing the agent's reasoning and outputs from the tools
-isolated function run(BaseAgent agent, string instruction, string query, int maxIter, boolean verbose, string? agentId, 
+isolated function run(BaseAgent agent, string instruction, string|Prompt query, int maxIter, boolean verbose, string? agentId,
         string sessionId = DEFAULT_SESSION_ID, Context context = new, string executionId = DEFAULT_EXECUTION_ID)
         returns ExecutionTrace {
     time:Utc startTime = time:utcNow();
