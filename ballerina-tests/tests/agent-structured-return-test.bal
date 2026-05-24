@@ -100,20 +100,31 @@ function testFixedReturnAgentTrace() returns error? {
     test:assertTrue(trace.id.length() > 0);
 }
 
-// Regression: the schema instruction is appended to the system prompt (which the memory layer keeps as
-// a single, per-call-overwritten message), so it must never be persisted into the conversation history.
+// Regression: the schema instruction is appended to the system prompt, which the memory layer keeps in a
+// single per-session slot that is overwritten each call. So no matter how many structured runs share a
+// session, the schema must never accumulate into more than one stored message (the original leak appended
+// it to the query, duplicating it across the accumulating user-message history).
 @test:Config
-function testStructuredRunDoesNotLeakSchemaIntoMemory() returns error? {
-    ai:Agent leakAgent = check new (
+function testStructuredRunDoesNotDuplicateSchemaInMemory() returns error? {
+    ai:MessageWindowChatMemory memory = new;
+    ai:Agent dupAgent = check new (
         systemPrompt = {role: "Weather Reporter", instructions: "Report the weather."},
         model = model,
-        tools = [sum]
+        tools = [sum],
+        memory = memory
     );
-    string session = "structured-leak-session";
+    string session = "structured-dup-session";
 
-    WeatherReport _ = check leakAgent.run("Give me the weather report.", sessionId = session);
-    ai:Trace trace = check leakAgent.run("Give me the weather report.", sessionId = session);
+    // Two structured runs on the same session — each appends the schema to the system prompt.
+    WeatherReport _ = check dupAgent.run("Give me the weather report.", sessionId = session);
+    WeatherReport _ = check dupAgent.run("Give me the weather report.", sessionId = session);
 
-    test:assertFalse(trace.toString().includes("strictly conforms"),
-            "The structured-output schema instruction must not be persisted into the conversation memory");
+    int schemaCount = 0;
+    foreach ai:ChatMessage message in check memory.get(session) {
+        if message.content.toString().includes("strictly conforms") {
+            schemaCount += 1;
+        }
+    }
+    test:assertTrue(schemaCount == 1,
+            "The structured-output schema instruction must not be duplicated across structured runs");
 }
