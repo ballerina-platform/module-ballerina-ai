@@ -97,6 +97,23 @@ isolated client distinct class MockLlm {
         if query.includes("Answer is:") {
             return {role: ai:ASSISTANT, content: getAnswer(query)};
         }
+        // Structured-output scenarios: the agent appends the JSON schema to the system prompt and
+        // parses the final answer, so the mock returns the answer directly as a JSON value.
+        if query.includes("weather report") {
+            return {role: ai:ASSISTANT, content: string `{"city": "Colombo", "temperature": 32, "condition": "Sunny"}`};
+        }
+        if query.includes("fenced json") {
+            // Wrapped in Markdown code fences to exercise fence-stripping during parsing.
+            return {
+                role: ai:ASSISTANT,
+                content: string `${"```"}json
+{"city": "Kandy", "temperature": 25, "condition": "Cloudy"}
+${"```"}`
+            };
+        }
+        if query.includes("lucky number") {
+            return {role: ai:ASSISTANT, content: "7"};
+        }
         if query.toLowerAscii().includes("mail") {
             ai:FunctionCall functionCall = {name: "getEmails"};
             return {role: ai:ASSISTANT, toolCalls: [functionCall]};
