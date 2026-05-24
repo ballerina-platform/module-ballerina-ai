@@ -50,7 +50,7 @@ public class AiCodeModifier extends CodeModifier {
                 modulesWithPredefinedInitMethods));
         codeModifierContext.addSyntaxNodeAnalysisTask(
                 new TypeMapperImplInitializer(analysisData), SyntaxKind.MODULE_PART);
-        codeModifierContext.addSourceModifierTask(new GenerateMethodModificationTask(analysisData));
+        codeModifierContext.addSourceModifierTask(new JsonSchemaModificationTask(analysisData));
     }
 
     public static final class AnalysisData {

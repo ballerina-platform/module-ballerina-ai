@@ -21,6 +21,7 @@ package io.ballerina.stdlib.ai.plugin;
 import io.ballerina.compiler.api.SemanticModel;
 import io.ballerina.compiler.api.Types;
 import io.ballerina.compiler.api.symbols.ArrayTypeSymbol;
+import io.ballerina.compiler.api.symbols.ClassSymbol;
 import io.ballerina.compiler.api.symbols.RecordTypeSymbol;
 import io.ballerina.compiler.api.symbols.Symbol;
 import io.ballerina.compiler.api.symbols.TupleTypeSymbol;
@@ -36,6 +37,7 @@ import io.ballerina.compiler.syntax.tree.ImportOrgNameNode;
 import io.ballerina.compiler.syntax.tree.ImportPrefixNode;
 import io.ballerina.compiler.syntax.tree.MappingConstructorExpressionNode;
 import io.ballerina.compiler.syntax.tree.MetadataNode;
+import io.ballerina.compiler.syntax.tree.MethodCallExpressionNode;
 import io.ballerina.compiler.syntax.tree.ModulePartNode;
 import io.ballerina.compiler.syntax.tree.Node;
 import io.ballerina.compiler.syntax.tree.NodeFactory;
@@ -72,20 +74,22 @@ import java.util.Optional;
 import static io.ballerina.projects.util.ProjectConstants.EMPTY_STRING;
 
 /**
- * Modifier to add JSON schema annotations
- * for types used in Model provider's `generate` method calls.
+ * Modifier to add JSON schema annotations for types used as the expected type of `ai:ModelProvider`'s
+ * `generate` calls and `ai:Agent`'s `run` calls.
  *
  * @since 1.0.0
  */
-public class GenerateMethodModificationTask implements ModifierTask<SourceModifierContext> {
+public class JsonSchemaModificationTask implements ModifierTask<SourceModifierContext> {
+
     private static final String AI_MODULE_NAME = "ai";
     private static final String BALLERINA_ORG_NAME = "ballerina";
     private static final String AI_MODULE_MAJOR_VERSION = "1";
     private static final String MODEL_PROVIDER_NAME = "ModelProvider";
+    private static final String AGENT_NAME = "Agent";
     private final AiCodeModifier.AnalysisData analysisData;
     private final ModifierData modifierData;
 
-    public GenerateMethodModificationTask(AiCodeModifier.AnalysisData analysisData) {
+    public JsonSchemaModificationTask(AiCodeModifier.AnalysisData analysisData) {
         this.analysisData = analysisData;
         this.modifierData = new ModifierData();
     }
@@ -107,13 +111,15 @@ public class GenerateMethodModificationTask implements ModifierTask<SourceModifi
             Types types = semanticModel.types();
             Optional<Symbol> aiModelProviderSymbol =
                 types.getTypeByName(BALLERINA_ORG_NAME, AI_MODULE_NAME, AI_MODULE_MAJOR_VERSION, MODEL_PROVIDER_NAME);
+            Optional<Symbol> aiAgentSymbol =
+                    types.getTypeByName(BALLERINA_ORG_NAME, AI_MODULE_NAME, AI_MODULE_MAJOR_VERSION, AGENT_NAME);
 
             for (DocumentId documentId : documentIds) {
-                analyzeDocument(module, documentId, semanticModel, aiModelProviderSymbol);
+                analyzeDocument(module, documentId, semanticModel, aiModelProviderSymbol, aiAgentSymbol);
             }
 
             for (DocumentId documentId : testDocumentIds) {
-                analyzeDocument(module, documentId, semanticModel, aiModelProviderSymbol);
+                analyzeDocument(module, documentId, semanticModel, aiModelProviderSymbol, aiAgentSymbol);
             }
 
             for (DocumentId documentId : documentIds) {
@@ -129,14 +135,16 @@ public class GenerateMethodModificationTask implements ModifierTask<SourceModifi
     }
 
     private void analyzeDocument(Module module, DocumentId documentId,
-                                 SemanticModel semanticModel, Optional<Symbol> aiModelProviderSymbol) {
+                                 SemanticModel semanticModel, Optional<Symbol> aiModelProviderSymbol,
+                                 Optional<Symbol> aiAgentSymbol) {
         Document document = module.document(documentId);
         Node rootNode = document.syntaxTree().rootNode();
         if (!(rootNode instanceof ModulePartNode modulePartNode)) {
             return;
         }
 
-        analyzeGenerateMethod(semanticModel, modulePartNode, aiModelProviderSymbol, this.analysisData);
+        collectExpectedTypeSchemas(semanticModel, modulePartNode, aiModelProviderSymbol, aiAgentSymbol,
+                this.analysisData);
     }
 
     private static TextDocument modifyDocument(Document document, ModifierData modifierData) {
@@ -163,10 +171,11 @@ public class GenerateMethodModificationTask implements ModifierTask<SourceModifi
         return NodeParser.parseImportDeclaration(String.format("import %s/%s;", BALLERINA_ORG_NAME, AI_MODULE_NAME));
     }
 
-    private void analyzeGenerateMethod(SemanticModel semanticModel,
+    private void collectExpectedTypeSchemas(SemanticModel semanticModel,
                                        ModulePartNode modulePartNode, Optional<Symbol> aiModelProviderSymbol,
+                                       Optional<Symbol> aiAgentSymbol,
                                        AiCodeModifier.AnalysisData analysisData) {
-        new GenerateMethodJsonSchemaGenerator(semanticModel, aiModelProviderSymbol, analysisData)
+        new ExpectedTypeCollector(semanticModel, aiModelProviderSymbol, aiAgentSymbol, analysisData)
                 .generate(modulePartNode);
     }
 
@@ -203,19 +212,24 @@ public class GenerateMethodModificationTask implements ModifierTask<SourceModifi
         return null;
     }
 
-    private class GenerateMethodJsonSchemaGenerator extends NodeVisitor {
+    private class ExpectedTypeCollector extends NodeVisitor {
+
         private static final String GENERATE_METHOD_NAME = "generate";
+        private static final String RUN_METHOD_NAME = "run";
         private static final String STRING = "string";
         private static final String BYTE = "byte";
         private static final String NUMBER = "number";
         private final SemanticModel semanticModel;
         private final TypeMapper typeMapper;
         private final TypeDefinitionSymbol modelProviderSymbol;
+        private final TypeSymbol agentTypeSymbol;
 
-        public GenerateMethodJsonSchemaGenerator(SemanticModel semanticModel, Optional<Symbol> aiModelProviderSymbolOpt,
+        public ExpectedTypeCollector(SemanticModel semanticModel, Optional<Symbol> aiModelProviderSymbolOpt,
+                                                 Optional<Symbol> aiAgentSymbolOpt,
                                                  AiCodeModifier.AnalysisData analyserData) {
             this.semanticModel = semanticModel;
             this.typeMapper = analyserData.typeMapper;
+            this.agentTypeSymbol = toTypeSymbol(aiAgentSymbolOpt);
             if (aiModelProviderSymbolOpt.isEmpty()) {
                 this.modelProviderSymbol = null;
                 return;
@@ -229,8 +243,22 @@ public class GenerateMethodModificationTask implements ModifierTask<SourceModifi
             }
         }
 
+        private static TypeSymbol toTypeSymbol(Optional<Symbol> symbolOpt) {
+            if (symbolOpt.isEmpty()) {
+                return null;
+            }
+            Symbol symbol = symbolOpt.get();
+            if (symbol instanceof ClassSymbol classSymbol) {
+                return classSymbol;
+            }
+            if (symbol instanceof TypeDefinitionSymbol typeDefSymbol) {
+                return typeDefSymbol.typeDescriptor();
+            }
+            return null;
+        }
+
         void generate(ModulePartNode modulePartNode) {
-            if (this.modelProviderSymbol == null) {
+            if (this.modelProviderSymbol == null && this.agentTypeSymbol == null) {
                 return;
             }
             visit(modulePartNode);
@@ -238,7 +266,7 @@ public class GenerateMethodModificationTask implements ModifierTask<SourceModifi
 
         public void visit(RemoteMethodCallActionNode remoteMethodCallActionNode) {
             SimpleNameReferenceNode methodName = remoteMethodCallActionNode.methodName();
-            if (!methodName.name().text().equals(GENERATE_METHOD_NAME)) {
+            if (this.modelProviderSymbol == null || !methodName.name().text().equals(GENERATE_METHOD_NAME)) {
                 this.visitSyntaxNode(remoteMethodCallActionNode);
                 return;
             }
@@ -251,8 +279,25 @@ public class GenerateMethodModificationTask implements ModifierTask<SourceModifi
             });
         }
 
-        private void updateTypeSchemaForTypeDef(RemoteMethodCallActionNode remoteMethodCallActionNode) {
-            semanticModel.typeOf(remoteMethodCallActionNode).ifPresent(symbol -> populateTypeSchema(symbol,
+        public void visit(MethodCallExpressionNode methodCallExpressionNode) {
+            if (this.agentTypeSymbol == null
+                    || !(methodCallExpressionNode.methodName() instanceof SimpleNameReferenceNode methodName)
+                    || !methodName.name().text().equals(RUN_METHOD_NAME)) {
+                this.visitSyntaxNode(methodCallExpressionNode);
+                return;
+            }
+
+            ExpressionNode expression = methodCallExpressionNode.expression();
+            semanticModel.typeOf(expression).ifPresent(expressionTypeSymbol -> {
+                if (expressionTypeSymbol.subtypeOf(this.agentTypeSymbol)) {
+                    updateTypeSchemaForTypeDef(methodCallExpressionNode);
+                }
+            });
+            this.visitSyntaxNode(methodCallExpressionNode);
+        }
+
+        private void updateTypeSchemaForTypeDef(Node methodCallNode) {
+            semanticModel.typeOf(methodCallNode).ifPresent(symbol -> populateTypeSchema(symbol,
                     this.typeMapper, modifierData.typeSchemas, this.semanticModel.types().ANYDATA));
         }
 
@@ -300,25 +345,25 @@ public class GenerateMethodModificationTask implements ModifierTask<SourceModifi
 
             Map<String, Schema> properties = schema.getProperties();
             if (properties != null) {
-                properties.values().forEach(GenerateMethodJsonSchemaGenerator::modifySchema);
+                properties.values().forEach(ExpectedTypeCollector::modifySchema);
             }
 
             List<Schema> allOf = schema.getAllOf();
             if (allOf != null) {
                 schema.setType(null);
-                allOf.forEach(GenerateMethodJsonSchemaGenerator::modifySchema);
+                allOf.forEach(ExpectedTypeCollector::modifySchema);
             }
 
             List<Schema> anyOf = schema.getAnyOf();
             if (anyOf != null) {
                 schema.setType(null);
-                anyOf.forEach(GenerateMethodJsonSchemaGenerator::modifySchema);
+                anyOf.forEach(ExpectedTypeCollector::modifySchema);
             }
 
             List<Schema> oneOf = schema.getOneOf();
             if (oneOf != null) {
                 schema.setType(null);
-                oneOf.forEach(GenerateMethodJsonSchemaGenerator::modifySchema);
+                oneOf.forEach(ExpectedTypeCollector::modifySchema);
             }
 
             // Override default ballerina byte to json schema mapping
