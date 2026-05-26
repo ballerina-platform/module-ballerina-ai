@@ -128,3 +128,33 @@ function testStructuredRunDoesNotDuplicateSchemaInMemory() returns error? {
     test:assertTrue(schemaCount == 1,
             "The structured-output schema instruction must not be duplicated across structured runs");
 }
+
+// When the agent's execution fails on a structured (non-`Trace`) run, the error is surfaced directly.
+@test:Config
+function testStructuredRunReturnsErrorOnExecutionFailure() returns error? {
+    WeatherReport|ai:Error result = agent.run("Random query");
+    test:assertTrue(result is ai:Error, "Expected an error when the agent fails to produce an answer");
+}
+
+// When the final answer cannot be bound to the expected structured type, a descriptive error is returned.
+@test:Config
+function testStructuredRunReturnsErrorOnUnparseableAnswer() returns error? {
+    WeatherReport|ai:Error result = agent.run("Give me the garbled weather.");
+    if result !is ai:Error {
+        test:assertFail("Expected a binding error for a non-JSON answer, but got a value");
+    }
+    test:assertTrue(result.message().includes("Failed to bind the agent's response to the expected type"),
+            "Error message should explain that the response could not be bound to the expected type");
+}
+
+// A non-string `anydata` return type that is not a subtype of `json` (e.g. `xml`) cannot have a schema
+// derived for it, so the agent reports that structured output is unsupported for that type.
+@test:Config
+function testStructuredRunRejectsUnsupportedReturnType() returns error? {
+    xml|ai:Error result = agent.run("Give me the weather report.");
+    if result !is ai:Error {
+        test:assertFail("Expected an unsupported-type error for an `xml` return type, but got a value");
+    }
+    test:assertTrue(result.message().includes("Structured output is not supported"),
+            "Error message should state that structured output is unsupported for the type");
+}

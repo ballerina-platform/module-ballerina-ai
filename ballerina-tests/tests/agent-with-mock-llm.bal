@@ -114,6 +114,9 @@ ${"```"}`
         if query.includes("lucky number") {
             return {role: ai:ASSISTANT, content: "7"};
         }
+        if query.includes("garbled weather") {
+            return {role: ai:ASSISTANT, content: "the weather is nice today, no json here"};
+        }
         if query.toLowerAscii().includes("mail") {
             ai:FunctionCall functionCall = {name: "getEmails"};
             return {role: ai:ASSISTANT, toolCalls: [functionCall]};

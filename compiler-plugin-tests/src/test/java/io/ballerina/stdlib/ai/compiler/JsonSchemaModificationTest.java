@@ -57,6 +57,36 @@ public class JsonSchemaModificationTest {
                 "Expected the generated schema to describe the record's fields");
     }
 
+    @Test
+    public void testSchemaAnnotationAddedForAgentRunComplexReturns() {
+        BuildProject project = BuildProject.load(getEnvironmentBuilder(),
+                RESOURCE_DIRECTORY.resolve("02_agent_run_complex_returns"));
+        DiagnosticResult diagnosticResult = project.currentPackage().runCodeGenAndModifyPlugins();
+        Assert.assertEquals(diagnosticResult.errorCount(), 0,
+                "Expected no compilation errors in the agent run complex returns source");
+
+        String modifiedSource = getModifiedSource(project);
+        Assert.assertTrue(modifiedSource.contains("@ai:JsonSchema"),
+                "Expected @ai:JsonSchema annotations for the complex agent run return types");
+        Assert.assertTrue(modifiedSource.contains("\"city\"") && modifiedSource.contains("\"country\""),
+                "Expected the nested Address record schema to be generated (record/type-reference walking)");
+        Assert.assertTrue(modifiedSource.contains("\"age\""),
+                "Expected the Person record schema to be generated for union/array/tuple members");
+    }
+
+    @Test
+    public void testNoSchemaAnnotationForNonAgentRunCalls() {
+        BuildProject project = BuildProject.load(getEnvironmentBuilder(),
+                RESOURCE_DIRECTORY.resolve("03_agent_run_negative_cases"));
+        DiagnosticResult diagnosticResult = project.currentPackage().runCodeGenAndModifyPlugins();
+        Assert.assertEquals(diagnosticResult.errorCount(), 0,
+                "Expected no compilation errors in the agent run negative cases source");
+
+        String modifiedSource = getModifiedSource(project);
+        Assert.assertFalse(modifiedSource.contains("@ai:JsonSchema"),
+                "No @ai:JsonSchema annotation should be generated for non-agent run calls");
+    }
+
     private static String getModifiedSource(BuildProject project) {
         StringBuilder builder = new StringBuilder();
         Module module = project.currentPackage().getDefaultModule();
