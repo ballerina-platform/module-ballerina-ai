@@ -92,20 +92,47 @@ public type AgentConfiguration record {|
     Credential credential?;
 |};
 
+# Represents the supported agent type abstractions: an agent whose return type is inferred from the call
+# site, or one that fixes its return type to a specific `anydata` value.
 public type AgentType InferredReturnAgentType|FixedReturnAgentType;
 
+# Represents an agent whose `run` return type is inferred from the expected type at the call site.
+# Callers decide whether they want the full `Trace`, the raw `string` answer, or the answer bound 
+# to a structured `anydata` type.
 public type InferredReturnAgentType distinct isolated object {
+    # Executes the agent for the given query and binds the result to the inferred return type.
+    #
+    # + query - The query to be executed by the agent, as a plain string or a `Prompt` template
+    # + sessionId - The ID associated with the agent memory
+    # + context - The additional context that can be used during agent tool execution
+    # + td - Type descriptor specifying the expected return type format
+    # + return - The agent's response bound to `td`, or an `Error`
     public isolated function run(@display {label: "Query"} string|Prompt query,
             @display {label: "Session ID"} string sessionId = DEFAULT_SESSION_ID,
             Context context = new,
             typedesc<Trace|anydata> td = <>) returns td|Error;
 };
 
+# Represents a reusable agent definition with a fixed `anydata` return type. Implementations typically
+# compose an `Agent` and delegate to it, exposing a domain-specific return type from `run` while still
+# surfacing the full execution `Trace` via `trace`.
 public type FixedReturnAgentType distinct isolated object {
+    # Executes the agent for the given query and returns the result bound to the implementation's fixed type.
+    #
+    # + query - The query to be executed by the agent, as a plain string or a `Prompt` template
+    # + sessionId - The ID associated with the agent memory
+    # + context - The additional context that can be used during agent tool execution
+    # + return - The agent's response as an `anydata` value, or an `Error`
     public isolated function run(@display {label: "Query"} string|Prompt query,
             @display {label: "Session ID"} string sessionId = DEFAULT_SESSION_ID,
             Context context = new) returns anydata|Error;
 
+    # Executes the agent for the given query and returns the full execution trace.
+    #
+    # + query - The query to be executed by the agent, as a plain string or a `Prompt` template
+    # + sessionId - The ID associated with the agent memory
+    # + context - The additional context that can be used during agent tool execution
+    # + return - The execution `Trace`, or an `Error`
     public isolated function trace(@display {label: "Query"} string|Prompt query,
             @display {label: "Session ID"} string sessionId = DEFAULT_SESSION_ID,
             Context context = new) returns Trace|Error;
@@ -224,7 +251,7 @@ public isolated distinct class Agent {
             span.close();
 
             if td is typedesc<Trace> {
-                Trace trace = {
+                return {
                     id: executionId,
                     userMessage,
                     iterations,
@@ -234,7 +261,6 @@ public isolated distinct class Agent {
                     output: {role: ASSISTANT, content: answer},
                     toolCalls
                 };
-                return trace;
             }
             if td is typedesc<string> {
                 return answer;
@@ -253,7 +279,7 @@ public isolated distinct class Agent {
             span.close(err);
 
             if td is typedesc<Trace> {
-                Trace trace = {
+                return {
                     id: executionId,
                     userMessage,
                     iterations,
@@ -263,7 +289,6 @@ public isolated distinct class Agent {
                     output: err,
                     toolCalls
                 };
-                return trace;
             }
             return err;
         }
