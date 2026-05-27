@@ -74,7 +74,7 @@ release {
     }
 }
 
-task build {
+tasks.named('build') {
     dependsOn(':ai-compiler-plugin:build')
     dependsOn(':ai-native:build')
     dependsOn(':ai-ballerina:build')
@@ -83,6 +83,14 @@ task build {
 }
 
 subprojects {
+    plugins.withId('java') {
+        java {
+            toolchain {
+                languageVersion = JavaLanguageVersion.of(25)
+            }
+        }
+    }
+
     configurations {
         jbalTools
         ballerinaStdLibs
