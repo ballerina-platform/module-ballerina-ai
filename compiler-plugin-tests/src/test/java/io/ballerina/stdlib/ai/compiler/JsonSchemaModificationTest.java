@@ -87,6 +87,20 @@ public class JsonSchemaModificationTest {
                 "No @ai:JsonSchema annotation should be generated for non-agent run calls");
     }
 
+    @Test
+    public void testFixedReturnAgentTypeRejectsNonAnydataRunReturn() {
+        BuildProject project = BuildProject.load(getEnvironmentBuilder(),
+                RESOURCE_DIRECTORY.resolve("04_fixed_return_agent_non_anydata"));
+        DiagnosticResult diagnosticResult = project.currentPackage().getCompilation().diagnosticResult();
+        Assert.assertTrue(diagnosticResult.errorCount() > 0,
+                "Expected a compile-time error when implementing FixedReturnAgentType with a non-anydata "
+                        + "run return type");
+        boolean hasSignatureMismatch = diagnosticResult.errors().stream()
+                .anyMatch(d -> d.message().contains("mismatched function signatures"));
+        Assert.assertTrue(hasSignatureMismatch,
+                "Expected a 'mismatched function signatures' error for the non-anydata run return type");
+    }
+
     private static String getModifiedSource(BuildProject project) {
         StringBuilder builder = new StringBuilder();
         Module module = project.currentPackage().getDefaultModule();
