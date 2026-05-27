@@ -202,8 +202,8 @@ public isolated distinct class Agent {
         span.addInput(queryString);
         string systemPrompt = getFomatedSystemPrompt(self.systemPrompt);
 
-        if td !is typedesc<string> && td !is typedesc<Trace> && td is typedesc<anydata> {
-            systemPrompt = systemPrompt + check getStructuredOutputInstruction(td);
+        if td !is typedesc<string|Trace> && td is typedesc<anydata> {
+            systemPrompt += check getStructuredOutputInstruction(td);
         }
         span.addSystemInstruction(systemPrompt);
 
