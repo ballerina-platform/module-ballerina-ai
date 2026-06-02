@@ -124,6 +124,12 @@ public type GeneratorConfig record {|
     # Configuration for retrying on response parsing failures
     @display {label: "Retry Configuration"}
     RetryConfig retryConfig?;
+
+    # Maximum number of tokens to generate in the response.
+    # Defaults to 4096 to ensure maximum compatibility across different LLM providers.
+    # The maximum allowed value depends on the model (e.g., gpt-4o-mini supports up to 16384).
+    @display {label: "Max Output Tokens"}
+    int maxTokens?;
 |};
 
 # Represents retry configuration on response parsing failures.
