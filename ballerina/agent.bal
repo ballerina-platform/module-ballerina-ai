@@ -22,6 +22,7 @@ import ballerina/time;
 import ballerina/uuid;
 
 const INFER_TOOL_COUNT = "INFER_TOOL_COUNT";
+const DEFAULT_MINIMUM_MAX_ITERATIONS = 10;
 
 # Represents the system prompt given to the agent.
 @display {label: "System Prompt"}
@@ -75,7 +76,8 @@ public type AgentConfiguration record {|
     (BaseToolKit|ToolConfig|FunctionTool)[] tools = [];
 
     # The maximum number of iterations the agent performs to complete the task.
-    # By default, it is set to the number of tools + 1.
+    # Defaults to `max(number of tools, 10)` — i.e., at least 10, or more if the
+    # agent has more tools available.
     @display {label: "Maximum Iterations"}
     INFER_TOOL_COUNT|int maxIter = INFER_TOOL_COUNT;
 
@@ -182,10 +184,10 @@ public isolated distinct class Agent {
         time:Utc startTime = time:utcNow();
         string executionId = uuid:createRandomUuid();
         log:printDebug("Agent execution started",
-            executionId = executionId,
-            agentId = self.agentId,
-            query = query,
-            sessionId = sessionId
+                executionId = executionId,
+                agentId = self.agentId,
+                query = query,
+                sessionId = sessionId
         );
 
         observe:InvokeAgentSpan span = observe:createInvokeAgentSpan(self.systemPrompt.role);
@@ -210,10 +212,10 @@ public isolated distinct class Agent {
         do {
             string answer = check getAnswer(executionTrace, self.maxIter);
             log:printDebug("Agent execution completed successfully",
-                executionId = executionId,
-                agentId = self.agentId,
-                steps = executionTrace.steps.toString(),
-                answer = answer
+                    executionId = executionId,
+                    agentId = self.agentId,
+                    steps = executionTrace.steps.toString(),
+                    answer = answer
             );
             span.addOutput(observe:TEXT, answer);
             span.close();
@@ -232,10 +234,10 @@ public isolated distinct class Agent {
                 : answer;
         } on fail Error err {
             log:printDebug("Agent execution failed",
-                err,
-                executionId = executionId,
-                agentId = self.agentId,
-                steps = executionTrace.steps.toString()
+                    err,
+                    executionId = executionId,
+                    agentId = self.agentId,
+                    steps = executionTrace.steps.toString()
             );
             span.close(err);
 
