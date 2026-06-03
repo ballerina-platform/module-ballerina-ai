@@ -17,8 +17,10 @@
 import ballerina/ai;
 import ballerina/test;
 
-// When the expected return type is a non-string, non-`Trace` `anydata` type, the agent appends the
-// target JSON schema to the system prompt and binds its final answer into that type within the same run.
+// When the expected return type is a non-string, non-`Trace` `anydata` type, the agent exposes a
+// final-answer (`getResults`) tool carrying the target JSON schema and binds the structured tool-call
+// arguments into that type within the same run. If the model replies with plain text instead, the agent
+// falls back to parsing that text.
 
 type WeatherReport record {|
     string city;
@@ -70,6 +72,8 @@ function testAgentRunWithPromptQuery() returns error? {
     test:assertEquals(report, {city: "Colombo", temperature: 32, condition: "Sunny"});
 }
 
+// Fallback path: when the model replies with plain text (here, fenced JSON) instead of calling the
+// final-answer tool, the agent strips Markdown code fences before binding the answer.
 @test:Config
 function testAgentRunStripsMarkdownCodeFences() returns error? {
     WeatherReport report = check agent.run("Give me the fenced json weather data.");
@@ -100,13 +104,13 @@ function testFixedReturnAgentTrace() returns error? {
     test:assertTrue(trace.id.length() > 0);
 }
 
-// Regression: the schema instruction is appended to the system prompt, which the memory layer keeps in a
-// single per-session slot that is overwritten each call. So no matter how many structured runs share a
-// session, the schema must never accumulate into more than one stored message (the original leak appended
-// it to the query, duplicating it across the accumulating user-message history).
+// Regression: the structured-output instruction is appended to the system prompt, which the memory layer
+// keeps in a single per-session slot that is overwritten each call. So no matter how many structured runs
+// share a session, the instruction must never accumulate into more than one stored message (the original
+// leak appended it to the query, duplicating it across the accumulating user-message history).
 @test:Config
 function testStructuredRunDoesNotDuplicateSchemaInMemory() returns error? {
-    ai:MessageWindowChatMemory memory = new;
+    ai:ShortTermMemory memory = check new;
     ai:Agent dupAgent = check new (
         systemPrompt = {role: "Weather Reporter", instructions: "Report the weather."},
         model = model,
@@ -115,18 +119,18 @@ function testStructuredRunDoesNotDuplicateSchemaInMemory() returns error? {
     );
     string session = "structured-dup-session";
 
-    // Two structured runs on the same session — each appends the schema to the system prompt.
+    // Two structured runs on the same session — each appends the instruction to the system prompt.
     WeatherReport _ = check dupAgent.run("Give me the weather report.", sessionId = session);
     WeatherReport _ = check dupAgent.run("Give me the weather report.", sessionId = session);
 
-    int schemaCount = 0;
+    int instructionCount = 0;
     foreach ai:ChatMessage message in check memory.get(session) {
-        if message.content.toString().includes("strictly conforms") {
-            schemaCount += 1;
+        if message.content.toString().includes("by calling the `getResults` tool") {
+            instructionCount += 1;
         }
     }
-    test:assertTrue(schemaCount == 1,
-            "The structured-output schema instruction must not be duplicated across structured runs");
+    test:assertTrue(instructionCount == 1,
+            "The structured-output instruction must not be duplicated across structured runs");
 }
 
 // When the agent's execution fails on a structured (non-`Trace`) run, the error is surfaced directly.
