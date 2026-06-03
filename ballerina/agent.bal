@@ -229,13 +229,15 @@ public isolated distinct class Agent {
         span.addInput(queryString);
         string systemPrompt = getFomatedSystemPrompt(self.systemPrompt);
 
+        ResponseSchema? responseSchema = ();
         if td !is typedesc<string|Trace> && td is typedesc<anydata> {
-            systemPrompt += check getStructuredOutputInstruction(td);
+            responseSchema = check getResponseSchemaForType(td);
+            systemPrompt += getStructuredOutputInstruction();
         }
         span.addSystemInstruction(systemPrompt);
 
         ExecutionTrace executionTrace = self.functionCallAgent
-            .run(query, systemPrompt, self.maxIter, self.verbose, sessionId, context, executionId);
+            .run(query, systemPrompt, self.maxIter, self.verbose, sessionId, context, executionId, responseSchema);
         ChatUserMessage userMessage = {role: USER, content: query};
         Iteration[] iterations = executionTrace.iterations;
         FunctionCall[]? toolCalls = executionTrace.toolCalls.length() == 0 ? () : executionTrace.toolCalls;
@@ -296,21 +298,28 @@ public isolated distinct class Agent {
 
 }
 
-# Builds an instruction, appended to the system prompt, that guides the agent to produce its final
-# answer as a JSON value conforming to the schema of the expected return type.
+# Derives the structured-output schema for the expected return type. The schema is attached to the
+# agent's final-answer tool so the model returns its answer as a schema-constrained tool call rather
+# than free-form text.
 #
 # + td - Type descriptor specifying the expected return type
-# + return - The instruction text, or an error if a schema cannot be derived for the type
-isolated function getStructuredOutputInstruction(typedesc<anydata> td) returns string|Error {
+# + return - The response schema, or an error if a schema cannot be derived for the type
+isolated function getResponseSchemaForType(typedesc<anydata> td) returns ResponseSchema|Error {
     typedesc<json>|error jsonTd = td.ensureType();
     if jsonTd is error {
         return error Error("Structured output is not supported for the expected return type", jsonTd);
     }
-    map<json> schema = check generateJsonSchemaForTypedescAsJson(jsonTd);
-    return "\n\nProvide the final answer as a JSON value that strictly conforms to the following JSON " +
-        "schema. Respond with only the JSON value, without any additional text:\n" +
-        schema.toJsonString();
+    return getExpectedResponseSchema(jsonTd);
 }
+
+# Builds the instruction, appended to the system prompt, that directs the agent to deliver its final
+# answer by calling the structured-output tool instead of replying with free text.
+#
+# + return - The instruction text
+isolated function getStructuredOutputInstruction() returns string =>
+    "\n\nWhen you have determined the final answer, you must return it by calling the " +
+    "`" + GET_RESULTS_TOOL + "` tool with the answer provided as its arguments. " +
+    "Do not provide the final answer as plain text.";
 
 # Parses the agent's final answer into a value of the expected type.
 #

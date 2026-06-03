@@ -42,8 +42,8 @@ isolated distinct class FunctionCallAgent {
     # + model - LLM model instance
     # + tools - Tools to be used by the agent
     # + memory - The memory associated with the agent.
-    isolated function init(ModelProvider model, (BaseToolKit|ToolConfig|FunctionTool)[] tools, cache:Cache tokenManager, 
-        Credential? agentCredential, Memory? memory = (), ToolLoadingStrategy toolLoadingStrategy = NO_FILTER) returns Error? {
+    isolated function init(ModelProvider model, (BaseToolKit|ToolConfig|FunctionTool)[] tools, cache:Cache tokenManager,
+            Credential? agentCredential, Memory? memory = (), ToolLoadingStrategy toolLoadingStrategy = NO_FILTER) returns Error? {
         self.toolStore = check new (...tools);
         self.model = model;
         self.memory = memory ?: check new ShortTermMemory();
@@ -106,6 +106,11 @@ isolated distinct class FunctionCallAgent {
                 availableTools = filteredTools.toString()
         );
 
+        ResponseSchema? responseSchema = progress.responseSchema;
+        if responseSchema is ResponseSchema {
+            filteredTools.push(getStructuredOutputTool(responseSchema.schema));
+        }
+
         // TODO: Improve handling of multiple tool calls returned by the LLM.
         // Currently, tool calls are executed sequentially in separate chat responses.
         // Update the logic to execute all tool calls together and return a single response.
@@ -113,6 +118,14 @@ isolated distinct class FunctionCallAgent {
         FunctionCall? toolCall = getFirstToolCall(response);
 
         if toolCall is FunctionCall {
+            if responseSchema is ResponseSchema && toolCall.name == GET_RESULTS_TOOL {
+                log:printDebug("LLM returned the final answer via the structured-output tool",
+                        executionId = progress.executionId,
+                        sessionId = sessionId,
+                        toolArguments = toolCall.arguments
+                );
+                return getStructuredAnswer(toolCall, responseSchema);
+            }
             log:printDebug("LLM selected tool",
                     executionId = progress.executionId,
                     sessionId = sessionId,
@@ -139,14 +152,40 @@ isolated distinct class FunctionCallAgent {
     # + verbose - If true, then print the reasoning steps (default: true)
     # + sessionId - The ID associated with the agent memory
     # + executionId - Unique identifier for this execution
+    # + responseSchema - Schema for the expected structured final answer; when set, a final-answer tool
+    # carrying this schema is exposed so the model returns its answer as a tool call
     # + return - Returns the execution steps tracing the agent's reasoning and outputs from the tools
     isolated function run(string|Prompt query, string instruction, int maxIter = 5, boolean verbose = true,
-            string sessionId = DEFAULT_SESSION_ID, Context context = new, string executionId = DEFAULT_EXECUTION_ID)
+            string sessionId = DEFAULT_SESSION_ID, Context context = new, string executionId = DEFAULT_EXECUTION_ID,
+            ResponseSchema? responseSchema = ())
             returns ExecutionTrace {
         Credential? & readonly agentConfig = self.agentCredential;
         string? agentId = agentConfig is Credential ? agentConfig.id : ();
-        return run(self, instruction, query, maxIter, verbose, agentId, sessionId, context, executionId);
+        return run(self, instruction, query, maxIter, verbose, agentId, sessionId, context, executionId, responseSchema);
     }
+}
+
+# Builds the dedicated final-answer tool that carries the structured-output schema as its parameters.
+#
+# + parameters - JSON schema describing the expected final-answer structure
+# + return - The final-answer tool definition
+isolated function getStructuredOutputTool(map<json> parameters) returns ChatCompletionFunctions => {
+    name: GET_RESULTS_TOOL,
+    description: "Call this tool to deliver the final answer once the task is complete. " +
+        "The answer must conform to the tool's parameter schema.",
+    parameters
+};
+
+# Extracts the final answer from a structured-output tool call as a JSON string, unwrapping the
+# synthetic `result` field added for expected return types that are not JSON objects.
+#
+# + toolCall - The structured-output tool call returned by the model
+# + responseSchema - The schema used to build the tool, indicating whether the type was wrapped
+# + return - The final answer serialized as a JSON string
+isolated function getStructuredAnswer(FunctionCall toolCall, ResponseSchema responseSchema) returns string {
+    map<json> arguments = toolCall.arguments ?: {};
+    json value = responseSchema.isOriginallyJsonObject ? arguments : arguments[RESULT];
+    return value.toJsonString();
 }
 
 isolated function createFunctionCallMessages(ExecutionProgress progress) returns ChatMessage[] {
