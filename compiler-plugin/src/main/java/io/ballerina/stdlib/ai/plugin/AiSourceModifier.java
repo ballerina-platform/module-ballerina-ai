@@ -53,6 +53,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static io.ballerina.compiler.syntax.tree.SyntaxKind.AT_TOKEN;
 import static io.ballerina.compiler.syntax.tree.SyntaxKind.CLOSE_BRACE_TOKEN;
 import static io.ballerina.compiler.syntax.tree.SyntaxKind.COLON_TOKEN;
 import static io.ballerina.compiler.syntax.tree.SyntaxKind.COMMA_TOKEN;
@@ -71,6 +72,8 @@ import static io.ballerina.stdlib.ai.plugin.ToolAnnotationConfig.PARAMETERS_FIEL
  */
 class AiSourceModifier implements ModifierTask<SourceModifierContext> {
     private static final String EMPTY_STRING = "";
+    private static final String AGENT_METADATA_ANNOTATION_NAME = "AgentMetadata";
+    private static final String AGENT_METADATA_TOOLS_FIELD_NAME = "tools";
     private final Map<DocumentId, ModifierContext> modifierContextMap;
     private final Set<ModuleId> modulesWithPredefinedInitMethods;
     private final Set<ModuleId> modulesWithDesugaredAgentsWithInitMethod = new HashSet<>();
@@ -111,7 +114,8 @@ class AiSourceModifier implements ModifierTask<SourceModifierContext> {
         List<ModuleMemberDeclarationNode> modifiedMembers = new ArrayList<>();
 
         for (ModuleMemberDeclarationNode member : members) {
-            modifiedMembers.add(getModifiedModuleMember(member, modifiedAnnotations, agentDeclarations));
+            modifiedMembers.add(getModifiedModuleMember(member, modifiedAnnotations, agentDeclarations,
+                    modifierContext.getAgentMetadataConfigMap()));
         }
         ModuleId moduleId = documentId.moduleId();
         if (!modulesWithPredefinedInitMethods.contains(moduleId)
@@ -278,18 +282,22 @@ class AiSourceModifier implements ModifierTask<SourceModifierContext> {
 
     private ModuleMemberDeclarationNode getModifiedModuleMember(ModuleMemberDeclarationNode member,
                                                                 Map<AnnotationNode, AnnotationNode> modifiedAnnotations,
-                                                                Set<ModuleVariableDeclarationNode> agentDeclarations) {
+                                                                Set<ModuleVariableDeclarationNode> agentDeclarations,
+                                                                Map<ClassDefinitionNode, AgentMetadataConfig>
+                                                                        agentMetadataConfigMap) {
         return switch (member.kind()) {
             case FUNCTION_DEFINITION -> modifyFunction((FunctionDefinitionNode) member, modifiedAnnotations);
             case MODULE_VAR_DECL -> modifyVariableDeclaration((ModuleVariableDeclarationNode) member,
                     agentDeclarations);
-            case CLASS_DEFINITION -> modifyClassDefinition((ClassDefinitionNode) member, modifiedAnnotations);
+            case CLASS_DEFINITION -> modifyClassDefinition((ClassDefinitionNode) member, modifiedAnnotations,
+                    agentMetadataConfigMap.get(member));
             default -> member;
         };
     }
 
     private ModuleMemberDeclarationNode modifyClassDefinition(ClassDefinitionNode classDefinitionNode,
-                                                              Map<AnnotationNode, AnnotationNode> modifiedAnnotations) {
+                                                              Map<AnnotationNode, AnnotationNode> modifiedAnnotations,
+                                                              AgentMetadataConfig agentMetadataConfig) {
         NodeList<Node> members = classDefinitionNode.members();
         ArrayList<Node> modifiedMembers = new ArrayList<>();
 
@@ -306,7 +314,50 @@ class AiSourceModifier implements ModifierTask<SourceModifierContext> {
                 modifiedMembers.add(member);
             }
         }
-        return classDefinitionNode.modify().withMembers(NodeFactory.createNodeList(modifiedMembers)).apply();
+        ClassDefinitionNode modifiedClass = classDefinitionNode.modify()
+                .withMembers(NodeFactory.createNodeList(modifiedMembers)).apply();
+        if (agentMetadataConfig == null) {
+            return modifiedClass;
+        }
+        return attachAgentMetadataAnnotation(modifiedClass, agentMetadataConfig);
+    }
+
+    /**
+     * Attaches the generated `@ai:AgentMetadata` annotation to a custom agent definition so that consumers of a shared
+     * agent can discover its tools. A user-written `@ai:AgentMetadata` annotation is left untouched. The annotation is
+     * added inline (without newlines) to preserve the original line numbers.
+     */
+    private ClassDefinitionNode attachAgentMetadataAnnotation(ClassDefinitionNode classDefinitionNode,
+                                                              AgentMetadataConfig config) {
+        MetadataNode metadataNode = classDefinitionNode.metadata().orElseGet(() ->
+                NodeFactory.createMetadataNode(null, NodeFactory.createEmptyNodeList()));
+        for (AnnotationNode annotation : metadataNode.annotations()) {
+            if (isAgentMetadataAnnotation(annotation, config.aiModulePrefix())) {
+                return classDefinitionNode;
+            }
+        }
+        NodeList<AnnotationNode> updatedAnnotations = metadataNode.annotations()
+                .add(getAgentMetadataAnnotation(config));
+        MetadataNode updatedMetadata = metadataNode.modify().withAnnotations(updatedAnnotations).apply();
+        return classDefinitionNode.modify().withMetadata(updatedMetadata).apply();
+    }
+
+    private boolean isAgentMetadataAnnotation(AnnotationNode annotationNode, String aiModulePrefix) {
+        if (!(annotationNode.annotReference() instanceof QualifiedNameReferenceNode referenceNode)) {
+            return false;
+        }
+        return aiModulePrefix.equals(referenceNode.modulePrefix().text())
+                && AGENT_METADATA_ANNOTATION_NAME.equals(referenceNode.identifier().text());
+    }
+
+    private AnnotationNode getAgentMetadataAnnotation(AgentMetadataConfig config) {
+        String tools = config.toolNames().stream().map(Utils::addDoubleQuotes)
+                .collect(Collectors.joining(COMMA_TOKEN.stringValue() + " ", "[", "]"));
+        String annotationSource = AT_TOKEN.stringValue() + config.aiModulePrefix() + COLON_TOKEN.stringValue()
+                + AGENT_METADATA_ANNOTATION_NAME + " " + OPEN_BRACE_TOKEN.stringValue()
+                + AGENT_METADATA_TOOLS_FIELD_NAME + COLON_TOKEN.stringValue() + " " + tools
+                + CLOSE_BRACE_TOKEN.stringValue() + " ";
+        return NodeParser.parseAnnotation(annotationSource);
     }
 
     private ModuleMemberDeclarationNode modifyVariableDeclaration(

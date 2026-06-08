@@ -19,10 +19,12 @@
 package io.ballerina.stdlib.ai.plugin;
 
 import io.ballerina.compiler.syntax.tree.AnnotationNode;
+import io.ballerina.compiler.syntax.tree.ClassDefinitionNode;
 import io.ballerina.compiler.syntax.tree.ModuleVariableDeclarationNode;
 
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -32,6 +34,7 @@ import java.util.Set;
 class ModifierContext {
     private final Map<AnnotationNode, ToolAnnotationConfig> annotationConfigMap = new HashMap<>();
     private final Set<ModuleVariableDeclarationNode> moduleLevelAgentDeclaration = new HashSet<>();
+    private final Map<ClassDefinitionNode, AgentMetadataConfig> agentMetadataConfigMap = new HashMap<>();
 
     void add(ModuleVariableDeclarationNode node) {
         moduleLevelAgentDeclaration.add(node);
@@ -41,6 +44,10 @@ class ModifierContext {
         annotationConfigMap.put(node, config);
     }
 
+    void add(ClassDefinitionNode node, AgentMetadataConfig config) {
+        agentMetadataConfigMap.put(node, config);
+    }
+
     Map<AnnotationNode, ToolAnnotationConfig> getAnnotationConfigMap() {
         return annotationConfigMap;
     }
@@ -48,6 +55,19 @@ class ModifierContext {
     Set<ModuleVariableDeclarationNode> getModuleLevelAgentDeclarations() {
         return moduleLevelAgentDeclaration;
     }
+
+    Map<ClassDefinitionNode, AgentMetadataConfig> getAgentMetadataConfigMap() {
+        return agentMetadataConfigMap;
+    }
+}
+
+/**
+ * Holds the metadata gathered for a custom agent definition (a class implementing `ai:AgentType`).
+ *
+ * @param aiModulePrefix the import prefix used for the `ballerina/ai` module in the document
+ * @param toolNames      the statically identified names of the tools available to the agent
+ */
+record AgentMetadataConfig(String aiModulePrefix, List<String> toolNames) {
 }
 
 record ToolAnnotationConfig(

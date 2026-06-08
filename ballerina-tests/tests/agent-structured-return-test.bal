@@ -95,6 +95,16 @@ function testFixedReturnAgentDefinition() returns error? {
     test:assertEquals(report, {city: "Colombo", temperature: 32, condition: "Sunny"});
 }
 
+// The compiler plugin attaches an `@ai:AgentMetadata` annotation to custom agent definitions with the
+// tools extracted from the composed `ai:Agent`; being a const annotation, it is accessible at runtime.
+@test:Config
+function testAgentMetadataAnnotationAttachedToCustomAgentDefinition() returns error? {
+    WeatherAgent weatherAgent = check new;
+    typedesc<object {}> weatherAgentType = typeof weatherAgent;
+    ai:AgentMetadataConfig? metadata = weatherAgentType.@ai:AgentMetadata;
+    test:assertEquals(metadata, {tools: ["sum"]});
+}
+
 // The same definition surfaces the full execution trace via its `trace` method.
 @test:Config
 function testFixedReturnAgentTrace() returns error? {

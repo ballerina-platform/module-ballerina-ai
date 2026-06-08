@@ -96,6 +96,17 @@ public type AgentConfiguration record {|
 # site, or one that fixes its return type to a specific `anydata` value.
 public type AgentType InferredReturnAgentType|FixedReturnAgentType;
 
+# Provides metadata about a custom agent definition.
+public type AgentMetadataConfig record {|
+    # The names of the tools available to the agent
+    string[] tools = [];
+|};
+
+# Metadata of a custom agent definition (a class implementing `ai:AgentType`).
+# Attached automatically by a compiler plugin; the value lists the tools that are
+# statically identifiable from the `ai:Agent` constructed in the class's `init` method.
+public const annotation AgentMetadataConfig AgentMetadata on class;
+
 # Represents an agent whose `run` return type is inferred from the expected type at the call site.
 # Callers decide whether they want the full `Trace`, the raw `string` answer, or the answer bound 
 # to a structured `anydata` type.
