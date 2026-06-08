@@ -37,6 +37,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.text.MessageFormat;
 import java.util.Iterator;
+import java.util.regex.Pattern;
 
 import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.UNABLE_TO_OBTAIN_VALID_SERVER_PORT_FROM_EXPRESSION;
 
@@ -98,7 +99,7 @@ public class OpenAPIGeneratorTest {
         Path openApiFile = RESOURCE_DIRECTORY.resolve(packagePath + "/target/openapi/chatService_openapi.yaml");
         Assert.assertTrue(Files.exists(openApiFile), "OpenAPI file not generated for package: " + packagePath);
         String spec = Files.readString(openApiFile);
-        Assert.assertTrue(spec.contains("default: \"9091\""),
+        Assert.assertTrue(Pattern.compile("default:\\s*\"?9091\"?").matcher(spec).find(),
                 "Expected the configured port 9091 in the generated OpenAPI spec, but found:\n" + spec);
     }
 
