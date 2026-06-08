@@ -89,18 +89,24 @@ public class OpenAPIGeneratorTest {
 
     @Test
     public void testOpenAPIGenerationForInlineHttpListener() throws java.io.IOException {
-        String packagePath = "13_sample";
-        DiagnosticResult diagnosticResult = getDiagnosticResult(packagePath);
-        Assert.assertEquals(diagnosticResult.errorCount(), 0,
-                "Expected no errors for package: " + packagePath);
-        Assert.assertEquals(diagnosticResult.warningCount(), 0,
-                "Expected no warnings for inline http:Listener with a literal port");
+        // 13_sample: inline http:Listener via a module-level ai:Listener declaration.
+        // 14_sample: inline http:Listener via an anonymous ai:Listener defined directly on the service.
+        // 15_sample: inline http:Listener wrapped in a parenthesized (braced) expression.
+        String[] packagePaths = {"13_sample", "14_sample", "15_sample"};
+        for (String packagePath : packagePaths) {
+            DiagnosticResult diagnosticResult = getDiagnosticResult(packagePath);
+            Assert.assertEquals(diagnosticResult.errorCount(), 0,
+                    "Expected no errors for package: " + packagePath);
+            Assert.assertEquals(diagnosticResult.warningCount(), 0,
+                    "Expected no warnings for inline http:Listener with a literal port: " + packagePath);
 
-        Path openApiFile = RESOURCE_DIRECTORY.resolve(packagePath + "/target/openapi/chatService_openapi.yaml");
-        Assert.assertTrue(Files.exists(openApiFile), "OpenAPI file not generated for package: " + packagePath);
-        String spec = Files.readString(openApiFile);
-        Assert.assertTrue(Pattern.compile("default:\\s*\"?9091\"?").matcher(spec).find(),
-                "Expected the configured port 9091 in the generated OpenAPI spec, but found:\n" + spec);
+            Path openApiFile = RESOURCE_DIRECTORY.resolve(packagePath + "/target/openapi/chatService_openapi.yaml");
+            Assert.assertTrue(Files.exists(openApiFile), "OpenAPI file not generated for package: " + packagePath);
+            String spec = Files.readString(openApiFile);
+            Assert.assertTrue(Pattern.compile("default:\\s*\"?9091\"?").matcher(spec).find(),
+                    "Expected the configured port 9091 in the generated OpenAPI spec for " + packagePath
+                            + ", but found:\n" + spec);
+        }
     }
 
     private String getWarningMessage(CompilationDiagnostic compilationDiagnostic, Object... args) {

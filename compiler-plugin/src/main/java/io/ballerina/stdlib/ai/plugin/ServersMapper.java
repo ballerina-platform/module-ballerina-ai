@@ -22,6 +22,7 @@ import io.ballerina.compiler.api.SemanticModel;
 import io.ballerina.compiler.api.symbols.Symbol;
 import io.ballerina.compiler.api.symbols.VariableSymbol;
 import io.ballerina.compiler.syntax.tree.BasicLiteralNode;
+import io.ballerina.compiler.syntax.tree.BracedExpressionNode;
 import io.ballerina.compiler.syntax.tree.CheckExpressionNode;
 import io.ballerina.compiler.syntax.tree.ExplicitNewExpressionNode;
 import io.ballerina.compiler.syntax.tree.ExpressionNode;
@@ -173,17 +174,24 @@ public class ServersMapper {
     }
 
     /**
-     * Extracts the constructor argument list from a listener initialization expression, unwrapping a
-     * leading {@code check} where present. This handles inline listener expressions such as
-     * {@code new http:Listener(9091)} and {@code check new http:Listener(9091)}.
+     * Extracts the constructor argument list from a listener initialization expression, unwrapping any
+     * leading {@code check} and parenthesized expressions where present. This handles inline listener
+     * expressions such as {@code new http:Listener(9091)}, {@code check new http:Listener(9091)} and
+     * {@code check (new http:Listener(9091))}.
      *
      * @param node the listener initialization expression (or listener declaration initializer)
      * @return the parenthesized argument list if the expression is a {@code new} expression; otherwise empty
      */
     private static Optional<ParenthesizedArgList> extractListenerArgList(Node node) {
         Node expression = node;
-        if (expression.kind() == SyntaxKind.CHECK_EXPRESSION) {
-            expression = ((CheckExpressionNode) expression).expression();
+        while (true) {
+            if (expression.kind() == SyntaxKind.CHECK_EXPRESSION) {
+                expression = ((CheckExpressionNode) expression).expression();
+            } else if (expression.kind() == SyntaxKind.BRACED_EXPRESSION) {
+                expression = ((BracedExpressionNode) expression).expression();
+            } else {
+                break;
+            }
         }
         return extractParenthesizedArgList(expression);
     }
