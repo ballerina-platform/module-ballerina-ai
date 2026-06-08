@@ -86,6 +86,22 @@ public class OpenAPIGeneratorTest {
         }
     }
 
+    @Test
+    public void testOpenAPIGenerationForInlineHttpListener() throws java.io.IOException {
+        String packagePath = "13_sample";
+        DiagnosticResult diagnosticResult = getDiagnosticResult(packagePath);
+        Assert.assertEquals(diagnosticResult.errorCount(), 0,
+                "Expected no errors for package: " + packagePath);
+        Assert.assertEquals(diagnosticResult.warningCount(), 0,
+                "Expected no warnings for inline http:Listener with a literal port");
+
+        Path openApiFile = RESOURCE_DIRECTORY.resolve(packagePath + "/target/openapi/chatService_openapi.yaml");
+        Assert.assertTrue(Files.exists(openApiFile), "OpenAPI file not generated for package: " + packagePath);
+        String spec = Files.readString(openApiFile);
+        Assert.assertTrue(spec.contains("default: \"9091\""),
+                "Expected the configured port 9091 in the generated OpenAPI spec, but found:\n" + spec);
+    }
+
     private String getWarningMessage(CompilationDiagnostic compilationDiagnostic, Object... args) {
         return MessageFormat.format(compilationDiagnostic.getDiagnostic(), args);
     }
