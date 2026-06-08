@@ -33,11 +33,11 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 
 /**
- * Tests that the compiler plugin attaches an `@ai:AgentMetadata` annotation, listing the statically
- * identifiable tool names, to custom agent definitions (classes implementing `ai:AgentType`).
+ * Tests that the compiler plugin attaches an `@ai:AgentMetadata` annotation, listing the statically identifiable tool
+ * names, to custom agent definitions (classes implementing `ai:AgentType`).
  * <p>
- * Note: there is no test for an `ai:InferredReturnAgentType` subtype because its `run` method is
- * dependently-typed and therefore cannot be implemented in user code (it would have to be `external`).
+ * Note: there is no test for an `ai:InferredReturnAgentType` subtype because its `run` method is dependently-typed and
+ * therefore cannot be implemented in user code (it would have to be `external`).
  */
 public class AgentMetadataModificationTest {
 
@@ -86,6 +86,41 @@ public class AgentMetadataModificationTest {
         String modifiedSource = getModifiedSourceForProject("05_aliased_import");
         Assert.assertTrue(modifiedSource.contains("@intelligence:AgentMetadata {tools: [\"answerMath\"]}"),
                 "Expected the generated annotation to use the aliased ballerina/ai import prefix");
+    }
+
+    @Test
+    public void testAgentMetadataAnnotationWithExplicitNewAndQualifiedTool() {
+        String modifiedSource = getModifiedSourceForProject("06_explicit_new_and_qualified");
+        Assert.assertTrue(modifiedSource.contains(
+                        "@ai:AgentMetadata {tools: [\"localTool\", \"remoteLookup\", \"inlineNamed\"]}"),
+                "Expected explicit `new ai:Agent(...)`, qualified tool references, and inline ToolConfigs "
+                        + "to be handled, skipping the variable and the non-literal name");
+    }
+
+    @Test
+    public void testAgentMetadataAnnotationForEdgeCases() {
+        String modifiedSource = getModifiedSourceForProject("07_edge_cases");
+        // `tools = <variable>` is not a list literal, so no tools are read; the directly-implemented agent
+        // has no `init`. Both are still discoverable agents, so both get an empty tools list.
+        int emptyToolsCount = countOccurrences(modifiedSource, "@ai:AgentMetadata {tools: []}");
+        Assert.assertEquals(emptyToolsCount, 2,
+                "Expected an empty tools annotation for both the dynamic-tools agent and the agent with no "
+                        + "init method");
+        // The agent that already had a `@Labelled` annotation keeps it and gains the generated annotation.
+        Assert.assertTrue(modifiedSource.contains("@Labelled"),
+                "Expected the existing class-level annotation to be preserved");
+        Assert.assertTrue(modifiedSource.contains("@ai:AgentMetadata {tools: [\"someTool\"]}"),
+                "Expected the generated annotation to be appended alongside the existing annotation");
+    }
+
+    private static int countOccurrences(String source, String target) {
+        int count = 0;
+        int index = source.indexOf(target);
+        while (index >= 0) {
+            count += 1;
+            index = source.indexOf(target, index + target.length());
+        }
+        return count;
     }
 
     private static String getModifiedSourceForProject(String packagePath) {

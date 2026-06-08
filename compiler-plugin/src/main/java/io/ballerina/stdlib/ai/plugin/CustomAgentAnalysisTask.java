@@ -89,11 +89,9 @@ class CustomAgentAnalysisTask implements AnalysisTask<SyntaxNodeAnalysisContext>
         if (aiModulePrefix.isEmpty()) {
             return;
         }
-        Optional<FunctionDefinitionNode> initMethod = getInitMethod(classDefinitionNode);
-        if (initMethod.isEmpty()) {
-            return;
-        }
-        List<String> toolNames = getToolNames(semanticModel, initMethod.get());
+        List<String> toolNames = getInitMethod(classDefinitionNode)
+                .map(initMethod -> getToolNames(semanticModel, initMethod))
+                .orElse(List.of());
         this.modifierContextMap.computeIfAbsent(context.documentId(), document -> new ModifierContext())
                 .add(classDefinitionNode, new AgentMetadataConfig(aiModulePrefix.get(), toolNames));
     }
