@@ -226,8 +226,12 @@ public class ServersMapper {
      *   <li><code>http:Listener httpListener = new(host = 9090)</code></li>
      *   <li><code>http:Listener httpListener = new(9090, host = "127.0.0.1")</code></li>
      *   <li><code>http:Listener httpListener = new(9090, { host: "127.0.0.1" })</code></li>
+     *   <li><code>http:Listener httpListener = new(host = "127.0.0.1", port = 9090)</code></li>
      *   <li><code>http:Listener httpListener = check http:getDefaultListener()</code></li>
      * </ul>
+     * <p>
+     * Named arguments may appear in any order; the {@code port}/{@code listenOn} and {@code host}
+     * arguments are resolved by name rather than by position.
      * <p>
      * For any unhandled or unexpected listener patterns, a default server instance is generated using
      * the provided base path and default host/port values along with a warning message.
@@ -243,40 +247,74 @@ public class ServersMapper {
 
         if (argListOpt.isPresent()) {
             SeparatedNodeList<FunctionArgumentNode> args = argListOpt.get().arguments();
-            if (!args.isEmpty()) {
-                FunctionArgumentNode firstArg = args.get(0);
-                ExpressionNode portExpression = null;
-                if (firstArg instanceof PositionalArgumentNode posArg) {
-                    portExpression = posArg.expression();
-                } else if (firstArg instanceof NamedArgumentNode namedArg
-                        && (namedArg.argumentName().name().text().strip().equals(PORT)
-                        || namedArg.argumentName().name().text().strip().equals(LISTEN_ON))) {
-                    portExpression = namedArg.expression();
-                }
 
-                if (portExpression != null) {
-                    Optional<Server> resolvedServer = resolveListenerServer(basePath, portExpression);
-                    if (resolvedServer.isPresent()) {
-                        return resolvedServer.get();
-                    }
-                    port = getValidPort(firstArg);
+            FunctionArgumentNode portArg = findPortArgument(args);
+            if (portArg != null) {
+                Optional<Server> resolvedServer = resolveListenerServer(basePath, getArgumentExpression(portArg));
+                if (resolvedServer.isPresent()) {
+                    return resolvedServer.get();
                 }
-
-                // The Following condition is only true when the argList is of an http:Listener
-                if (args.size() > 1) {
-                    FunctionArgumentNode secondArg = args.get(1);
-                    if (secondArg instanceof NamedArgumentNode namedArg
-                            && HOST_FIELD_NAME.equals(namedArg.argumentName().name().text())) {
-                        host = extractHost(namedArg);
-                    } else if (secondArg instanceof PositionalArgumentNode posArg
-                            && posArg.expression() instanceof MappingConstructorExpressionNode mapping) {
-                        host = extractHost(mapping);
-                    }
-                }
+                port = getValidPort(portArg);
             }
+
+            host = findHost(args);
         }
 
         return buildServer(basePath, port, host, serverVars);
+    }
+
+    /**
+     * Finds the argument that carries the port/listener value. Positional arguments must precede named
+     * arguments in Ballerina, so the first positional argument (if any) is the port; otherwise the port
+     * may be supplied as a named {@code port}/{@code listenOn} argument anywhere in the argument list.
+     *
+     * @param args the listener constructor arguments
+     * @return the argument carrying the port value, or {@code null} if none is found
+     */
+    private static FunctionArgumentNode findPortArgument(SeparatedNodeList<FunctionArgumentNode> args) {
+        for (FunctionArgumentNode arg : args) {
+            if (arg instanceof PositionalArgumentNode) {
+                return arg;
+            }
+            if (arg instanceof NamedArgumentNode namedArg
+                    && (namedArg.argumentName().name().text().strip().equals(PORT)
+                    || namedArg.argumentName().name().text().strip().equals(LISTEN_ON))) {
+                return arg;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Finds the host value from the listener constructor arguments. The host may be supplied either as a
+     * named {@code host} argument (an included {@code ListenerConfiguration} field) or as the {@code host}
+     * field of a positional configuration mapping. A named {@code host} argument takes precedence.
+     *
+     * @param args the listener constructor arguments
+     * @return the host value, or {@code null} if none is found
+     */
+    private String findHost(SeparatedNodeList<FunctionArgumentNode> args) {
+        String host = null;
+        for (FunctionArgumentNode arg : args) {
+            if (arg instanceof NamedArgumentNode namedArg
+                    && HOST_FIELD_NAME.equals(namedArg.argumentName().name().text().strip())) {
+                return extractHost(namedArg);
+            }
+            if (arg instanceof PositionalArgumentNode posArg
+                    && posArg.expression() instanceof MappingConstructorExpressionNode mapping) {
+                host = extractHost(mapping);
+            }
+        }
+        return host;
+    }
+
+    private static ExpressionNode getArgumentExpression(FunctionArgumentNode arg) {
+        if (arg instanceof PositionalArgumentNode posArg) {
+            return posArg.expression();
+        } else if (arg instanceof NamedArgumentNode namedArg) {
+            return namedArg.expression();
+        }
+        return null;
     }
 
     /**

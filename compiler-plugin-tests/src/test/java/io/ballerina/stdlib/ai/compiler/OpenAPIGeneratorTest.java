@@ -109,6 +109,26 @@ public class OpenAPIGeneratorTest {
         }
     }
 
+    @Test
+    public void testOpenAPIGenerationForReorderedNamedListenerArgs() throws java.io.IOException {
+        // Inline http:Listener where the port is a named argument that is not the first argument,
+        // alongside a named host argument: `new http:Listener(host = "127.0.0.1", port = 9091)`.
+        String packagePath = "16_sample";
+        DiagnosticResult diagnosticResult = getDiagnosticResult(packagePath);
+        Assert.assertEquals(diagnosticResult.errorCount(), 0,
+                "Expected no errors for package: " + packagePath);
+        Assert.assertEquals(diagnosticResult.warningCount(), 0,
+                "Expected no warnings when the port is a named argument that is not the first argument");
+
+        Path openApiFile = RESOURCE_DIRECTORY.resolve(packagePath + "/target/openapi/chatService_openapi.yaml");
+        Assert.assertTrue(Files.exists(openApiFile), "OpenAPI file not generated for package: " + packagePath);
+        String spec = Files.readString(openApiFile);
+        Assert.assertTrue(Pattern.compile("default:\\s*\"?9091\"?").matcher(spec).find(),
+                "Expected the configured port 9091 in the generated OpenAPI spec, but found:\n" + spec);
+        Assert.assertTrue(spec.contains("127.0.0.1"),
+                "Expected the configured host 127.0.0.1 in the generated OpenAPI spec, but found:\n" + spec);
+    }
+
     private String getWarningMessage(CompilationDiagnostic compilationDiagnostic, Object... args) {
         return MessageFormat.format(compilationDiagnostic.getDiagnostic(), args);
     }
