@@ -39,7 +39,6 @@ import io.ballerina.compiler.syntax.tree.QualifiedNameReferenceNode;
 import io.ballerina.compiler.syntax.tree.SeparatedNodeList;
 import io.ballerina.compiler.syntax.tree.ServiceDeclarationNode;
 import io.ballerina.compiler.syntax.tree.SpecificFieldNode;
-import io.ballerina.compiler.syntax.tree.SyntaxKind;
 import io.ballerina.openapi.service.mapper.utils.MapperCommonUtils;
 import io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic;
 import io.ballerina.tools.diagnostics.Diagnostic;
@@ -165,12 +164,12 @@ public class ServersMapper {
     }
 
     private static Optional<ParenthesizedArgList> extractParenthesizedArgList(Node expression) {
-        return switch (expression.kind()) {
-            case EXPLICIT_NEW_EXPRESSION ->
-                    Optional.ofNullable(((ExplicitNewExpressionNode) expression).parenthesizedArgList());
-            case IMPLICIT_NEW_EXPRESSION -> ((ImplicitNewExpressionNode) expression).parenthesizedArgList();
-            default -> Optional.empty();
-        };
+        if (expression instanceof ExplicitNewExpressionNode explicitNew) {
+            return Optional.ofNullable(explicitNew.parenthesizedArgList());
+        } else if (expression instanceof ImplicitNewExpressionNode implicitNew) {
+            return implicitNew.parenthesizedArgList();
+        }
+        return Optional.empty();
     }
 
     /**
@@ -185,10 +184,10 @@ public class ServersMapper {
     private static Optional<ParenthesizedArgList> extractListenerArgList(Node node) {
         Node expression = node;
         while (true) {
-            if (expression.kind() == SyntaxKind.CHECK_EXPRESSION) {
-                expression = ((CheckExpressionNode) expression).expression();
-            } else if (expression.kind() == SyntaxKind.BRACED_EXPRESSION) {
-                expression = ((BracedExpressionNode) expression).expression();
+            if (expression instanceof CheckExpressionNode checkExpr) {
+                expression = checkExpr.expression();
+            } else if (expression instanceof BracedExpressionNode bracedExpr) {
+                expression = bracedExpr.expression();
             } else {
                 break;
             }
@@ -201,8 +200,7 @@ public class ServersMapper {
         String basePath = getServiceBasePath();
 
         for (ExpressionNode expression : this.service.expressions()) {
-            if (expression.kind() == SyntaxKind.EXPLICIT_NEW_EXPRESSION) {
-                ExplicitNewExpressionNode explicit = (ExplicitNewExpressionNode) expression;
+            if (expression instanceof ExplicitNewExpressionNode explicit) {
                 servers.add(generateServer(basePath, Optional.ofNullable(explicit.parenthesizedArgList())));
             }
         }
