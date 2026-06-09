@@ -102,7 +102,7 @@ function testAgentMetadataAnnotationAttachedToCustomAgentDefinition() returns er
     WeatherAgent weatherAgent = check new;
     typedesc<object {}> weatherAgentType = typeof weatherAgent;
     ai:AgentMetadataConfig? metadata = weatherAgentType.@ai:AgentMetadata;
-    test:assertEquals(metadata, {tools: ["sum"]});
+    test:assertEquals(metadata, {tools: [{name: "sum", kind: ai:FUNCTION_TOOL}]});
 }
 
 // The same definition surfaces the full execution trace via its `trace` method.

@@ -48,20 +48,29 @@ public class AgentMetadataModificationTest {
     @Test
     public void testAgentMetadataAnnotationForCustomAgent() {
         String modifiedSource = getModifiedSourceForProject("01_custom_agent_basic");
+        // The object method tool, the module-level function tool, and the inline ToolConfig tool — with the
+        // `@display` label/icon read syntactically (self.method) and via the symbol API (module function).
         Assert.assertTrue(modifiedSource.contains(
-                        "@ai:AgentMetadata {tools: [\"createSchedule\", \"coordinateSpeakers\", \"searchTool\"]}"),
-                "Expected an @ai:AgentMetadata annotation listing the object method tool, the module-level "
-                        + "function tool, and the inline ToolConfig tool");
+                        "{name: \"createSchedule\", kind: ai:FUNCTION_TOOL, label: \"Create Schedule\"}"),
+                "Expected the object method tool with its @display label (read syntactically)");
+        Assert.assertTrue(modifiedSource.contains(
+                        "{name: \"coordinateSpeakers\", kind: ai:FUNCTION_TOOL, label: \"Coordinate Speakers\", "
+                                + "icon: \"speakers.png\"}"),
+                "Expected the module-level function tool with its @display label and icon (read via symbol)");
+        Assert.assertTrue(modifiedSource.contains("{name: \"searchTool\", kind: ai:FUNCTION_TOOL}"),
+                "Expected the inline ToolConfig tool with no display info");
     }
 
     @Test
     public void testAgentMetadataAnnotationWithToolKit() {
         String modifiedSource = getModifiedSourceForProject("02_custom_agent_with_toolkit");
-        Assert.assertTrue(modifiedSource.contains("@ai:AgentMetadata {tools: [\"getDiscounts\"]}"),
-                "Expected the annotation to list only the statically identifiable function tool, "
-                        + "skipping the toolkit");
-        Assert.assertTrue(modifiedSource.contains("@ai:AgentMetadata {tools: []}"),
-                "Expected an annotation with an empty tools list for the toolkit-only agent");
+        Assert.assertTrue(modifiedSource.contains("{name: \"getDiscounts\", kind: ai:FUNCTION_TOOL}"),
+                "Expected the function tool to be listed");
+        Assert.assertTrue(modifiedSource.contains("{name: \"toolKit\", kind: ai:TOOLKIT}"),
+                "Expected the non-MCP toolkit to be listed by its variable name with kind TOOLKIT");
+        Assert.assertTrue(modifiedSource.contains(
+                        "@ai:AgentMetadata {tools: [{name: \"toolKit\", kind: ai:TOOLKIT}]}"),
+                "Expected the toolkit-only agent to list just the toolkit");
     }
 
     @Test
@@ -75,26 +84,42 @@ public class AgentMetadataModificationTest {
     @Test
     public void testUserWrittenAgentMetadataAnnotationIsPreserved() {
         String modifiedSource = getModifiedSourceForProject("04_user_written_annotation");
-        Assert.assertTrue(modifiedSource.contains("@ai:AgentMetadata {tools: [\"manuallyListedTool\"]}"),
+        Assert.assertTrue(modifiedSource.contains(
+                        "@ai:AgentMetadata {tools: [{name: \"manuallyListedTool\", kind: ai:FUNCTION_TOOL}]}"),
                 "Expected the user-written @ai:AgentMetadata annotation to be preserved");
-        Assert.assertFalse(modifiedSource.contains("@ai:AgentMetadata {tools: [\"reportWeather\"]}"),
+        Assert.assertFalse(agentMetadataAnnotation(modifiedSource).contains("reportWeather"),
                 "The generated tool list must not overwrite the user-written annotation");
     }
 
     @Test
     public void testAgentMetadataAnnotationWithAliasedImport() {
         String modifiedSource = getModifiedSourceForProject("05_aliased_import");
-        Assert.assertTrue(modifiedSource.contains("@intelligence:AgentMetadata {tools: [\"answerMath\"]}"),
-                "Expected the generated annotation to use the aliased ballerina/ai import prefix");
+        Assert.assertTrue(modifiedSource.contains(
+                        "@intelligence:AgentMetadata {tools: [{name: \"answerMath\", kind: " +
+                                "intelligence:FUNCTION_TOOL}]}"),
+                "Expected the generated annotation and enum members to use the aliased ballerina/ai prefix");
     }
 
     @Test
-    public void testAgentMetadataAnnotationWithExplicitNewAndQualifiedTool() {
+    public void testAgentMetadataAnnotationWithExplicitNewQualifiedAndMcp() {
         String modifiedSource = getModifiedSourceForProject("06_explicit_new_and_qualified");
+        Assert.assertTrue(modifiedSource.contains("{name: \"localTool\", kind: ai:FUNCTION_TOOL}"),
+                "Expected the module-level function tool");
+        // The cross-module tool's @display label is read across the module boundary (const annotation).
         Assert.assertTrue(modifiedSource.contains(
-                        "@ai:AgentMetadata {tools: [\"localTool\", \"remoteLookup\", \"inlineNamed\"]}"),
-                "Expected explicit `new ai:Agent(...)`, qualified tool references, and inline ToolConfigs "
-                        + "to be handled, skipping the variable and the non-literal name");
+                        "{name: \"remoteLookup\", kind: ai:FUNCTION_TOOL, label: \"Remote Lookup\"}"),
+                "Expected the qualified cross-module tool with its @display label read across modules");
+        Assert.assertTrue(modifiedSource.contains("{name: \"inlineNamed\", kind: ai:FUNCTION_TOOL}"),
+                "Expected the inline ToolConfig tool");
+        Assert.assertTrue(modifiedSource.contains("{name: \"weatherMcp\", kind: ai:MCP_TOOLKIT}"),
+                "Expected the MCP toolkit variable, named after the variable, with kind MCP_TOOLKIT");
+        Assert.assertTrue(modifiedSource.contains("{name: \"McpToolKit\", kind: ai:MCP_TOOLKIT}"),
+                "Expected the inline MCP toolkit, named after its type, with kind MCP_TOOLKIT");
+        String annotation = agentMetadataAnnotation(modifiedSource);
+        Assert.assertFalse(annotation.contains("fromVariable"),
+                "A ToolConfig variable cannot be resolved statically and must be skipped");
+        Assert.assertFalse(annotation.contains("computed"),
+                "An inline ToolConfig with a non-literal name must be skipped");
     }
 
     @Test
@@ -109,8 +134,21 @@ public class AgentMetadataModificationTest {
         // The agent that already had a `@Labelled` annotation keeps it and gains the generated annotation.
         Assert.assertTrue(modifiedSource.contains("@Labelled"),
                 "Expected the existing class-level annotation to be preserved");
-        Assert.assertTrue(modifiedSource.contains("@ai:AgentMetadata {tools: [\"someTool\"]}"),
+        Assert.assertTrue(modifiedSource.contains(
+                        "@ai:AgentMetadata {tools: [{name: \"someTool\", kind: ai:FUNCTION_TOOL}]}"),
                 "Expected the generated annotation to be appended alongside the existing annotation");
+    }
+
+    // Returns the first generated `@ai:AgentMetadata {tools: [...]}` annotation, so negative assertions can be
+    // scoped to
+    // the annotation rather than the whole document (where a skipped tool's name may still appear in the source).
+    private static String agentMetadataAnnotation(String source) {
+        int start = source.indexOf("AgentMetadata {tools: [");
+        if (start < 0) {
+            return "";
+        }
+        int end = source.indexOf("]}", start);
+        return end < 0 ? source.substring(start) : source.substring(start, end);
     }
 
     private static int countOccurrences(String source, String target) {

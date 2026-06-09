@@ -37,11 +37,11 @@ import io.ballerina.projects.plugins.SyntaxNodeAnalysisContext;
 public class Utils {
     public static final String BALLERINA_ORG = "ballerina";
     private static final String TOOL_ANNOTATION_NAME = "AgentTool";
-    private static final String AI_PACKAGE_NAME = "ai";
+    public static final String AI_PACKAGE_NAME = "ai";
     private static final String HTTP_PACKAGE_NAME = "http";
     private static final String HTTP_RESPONSE_OBJECT_NAME = "Response";
     private static final String CONTEXT_OBJECT_TYPE_NAME = "Context";
-    private static final String AI_PACKAGE_MAJOR_VERSION = "1";
+    public static final String AI_PACKAGE_MAJOR_VERSION = "1";
 
 
     private Utils() {

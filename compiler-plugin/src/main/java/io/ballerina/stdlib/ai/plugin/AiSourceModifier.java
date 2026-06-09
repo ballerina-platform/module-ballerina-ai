@@ -74,6 +74,10 @@ class AiSourceModifier implements ModifierTask<SourceModifierContext> {
     private static final String EMPTY_STRING = "";
     private static final String AGENT_METADATA_ANNOTATION_NAME = "AgentMetadata";
     private static final String AGENT_METADATA_TOOLS_FIELD_NAME = "tools";
+    private static final String TOOL_NAME_FIELD_NAME = "name";
+    private static final String TOOL_KIND_FIELD_NAME = "kind";
+    private static final String TOOL_LABEL_FIELD_NAME = "label";
+    private static final String TOOL_ICON_FIELD_NAME = "icon";
     private final Map<DocumentId, ModifierContext> modifierContextMap;
     private final Set<ModuleId> modulesWithPredefinedInitMethods;
     private final Set<ModuleId> modulesWithDesugaredAgentsWithInitMethod = new HashSet<>();
@@ -351,13 +355,44 @@ class AiSourceModifier implements ModifierTask<SourceModifierContext> {
     }
 
     private AnnotationNode getAgentMetadataAnnotation(AgentMetadataConfig config) {
-        String tools = config.toolNames().stream().map(Utils::addDoubleQuotes)
+        String tools = config.tools().stream().map(tool -> toolMetadataSource(tool, config.aiModulePrefix()))
                 .collect(Collectors.joining(COMMA_TOKEN.stringValue() + " ", "[", "]"));
         String annotationSource = AT_TOKEN.stringValue() + config.aiModulePrefix() + COLON_TOKEN.stringValue()
                 + AGENT_METADATA_ANNOTATION_NAME + " " + OPEN_BRACE_TOKEN.stringValue()
                 + AGENT_METADATA_TOOLS_FIELD_NAME + COLON_TOKEN.stringValue() + " " + tools
                 + CLOSE_BRACE_TOKEN.stringValue() + " ";
         return NodeParser.parseAnnotation(annotationSource);
+    }
+
+    /**
+     * Renders a single tool as a `ToolMetadata` record literal, e.g.
+     * {@code {name: "search", kind: ai:FUNCTION, label: "Search"}}. The `kind` is referenced as an `ai:`-qualified enum
+     * member (a constant expression) and optional `label`/`icon` fields are emitted only when present, so the result
+     * stays a single-line constant expression.
+     */
+    private String toolMetadataSource(ToolMetadata tool, String aiModulePrefix) {
+        StringBuilder builder = new StringBuilder(OPEN_BRACE_TOKEN.stringValue());
+        builder.append(TOOL_NAME_FIELD_NAME).append(COLON_TOKEN.stringValue()).append(" ")
+                .append(toStringLiteral(tool.name()));
+        builder.append(COMMA_TOKEN.stringValue()).append(" ")
+                .append(TOOL_KIND_FIELD_NAME).append(COLON_TOKEN.stringValue()).append(" ")
+                .append(aiModulePrefix).append(COLON_TOKEN.stringValue()).append(tool.kind().name());
+        if (tool.label() != null) {
+            builder.append(COMMA_TOKEN.stringValue()).append(" ")
+                    .append(TOOL_LABEL_FIELD_NAME).append(COLON_TOKEN.stringValue()).append(" ")
+                    .append(toStringLiteral(tool.label()));
+        }
+        if (tool.icon() != null) {
+            builder.append(COMMA_TOKEN.stringValue()).append(" ")
+                    .append(TOOL_ICON_FIELD_NAME).append(COLON_TOKEN.stringValue()).append(" ")
+                    .append(toStringLiteral(tool.icon()));
+        }
+        return builder.append(CLOSE_BRACE_TOKEN.stringValue()).toString();
+    }
+
+    private String toStringLiteral(String value) {
+        String escaped = value.replace("\\", "\\\\").replace("\"", "\\\"").replaceAll("\\R", " ");
+        return "\"" + escaped + "\"";
     }
 
     private ModuleMemberDeclarationNode modifyVariableDeclaration(

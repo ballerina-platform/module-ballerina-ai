@@ -96,10 +96,33 @@ public type AgentConfiguration record {|
 # site, or one that fixes its return type to a specific `anydata` value.
 public type AgentType InferredReturnAgentType|FixedReturnAgentType;
 
+# Represents the kind of a tool entry available to an agent.
+public enum ToolKind {
+    # A function or method tool
+    FUNCTION_TOOL,
+    # An MCP toolkit; its individual tools are resolved from the MCP server at runtime
+    MCP_TOOLKIT,
+    # Any other toolkit (e.g., an HTTP toolkit); its tools are resolved at runtime
+    TOOLKIT
+}
+
+# Provides metadata about a single tool (or toolkit) available to a custom agent.
+public type ToolMetadata record {|
+    # The tool name. For toolkit entries this is the variable name used in the agent (or the
+    # toolkit's type name when the toolkit is constructed inline).
+    string name;
+    # The kind of tool entry
+    ToolKind kind;
+    # The UI label from the tool's `@display` annotation, if present
+    string label?;
+    # The icon path from the tool's `@display` annotation, if present
+    string icon?;
+|};
+
 # Provides metadata about a custom agent definition.
 public type AgentMetadataConfig record {|
-    # The names of the tools available to the agent
-    string[] tools = [];
+    # The tools available to the agent
+    ToolMetadata[] tools = [];
 |};
 
 # Metadata of a custom agent definition (a class implementing `ai:AgentType`).

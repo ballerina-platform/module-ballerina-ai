@@ -16,7 +16,8 @@
 
 import ballerina/ai;
 
-// A module-level function tool.
+// A module-level function tool with a `@display` annotation (read via the symbol API).
+@display {label: "Coordinate Speakers", iconPath: "speakers.png"}
 @ai:AgentTool
 isolated function coordinateSpeakers(string topic) returns string => "speakers coordinated";
 
@@ -49,7 +50,8 @@ public isolated class SchedulerAgent {
     public isolated function trace(string|ai:Prompt query, string sessionId = "default-session",
             ai:Context context = new) returns ai:Trace|ai:Error => self.agent.run(query, sessionId, context);
 
-    // An object method used as a tool.
+    // An object method used as a tool, with a `@display` annotation (read syntactically for `self.` methods).
+    @display {label: "Create Schedule"}
     @ai:AgentTool
     isolated function createSchedule(string eventName) returns string => "scheduled";
 }

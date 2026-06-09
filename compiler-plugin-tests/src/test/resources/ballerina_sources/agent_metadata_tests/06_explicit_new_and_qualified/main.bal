@@ -39,6 +39,8 @@ public isolated class ResearchAgent {
         ai:ToolConfig toolConfigVar =
             {name: "fromVariable", description: "Built elsewhere.", caller: configCaller};
         string dynamicName = "computed";
+        // An MCP toolkit assigned to a variable: classified as MCP_TOOLKIT, named after the variable.
+        ai:McpToolKit weatherMcp = check new ("http://localhost:3000/mcp");
         self.agent = check new ai:Agent(
             systemPrompt = {role: "Researcher", instructions: "Research things."},
             model = model,
@@ -47,7 +49,10 @@ public isolated class ResearchAgent {
                 toolmod:remoteLookup,
                 toolConfigVar,
                 {description: "Inline tool.", name: "inlineNamed", caller: configCaller},
-                {name: dynamicName, description: "Computed name.", caller: configCaller}
+                {name: dynamicName, description: "Computed name.", caller: configCaller},
+                weatherMcp,
+                // An MCP toolkit constructed inline (no variable): named after its type.
+                check new ai:McpToolKit("http://localhost:3001/mcp")
             ]
         );
     }

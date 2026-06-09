@@ -19,13 +19,21 @@
 package io.ballerina.stdlib.ai.plugin;
 
 import io.ballerina.compiler.api.SemanticModel;
+import io.ballerina.compiler.api.symbols.AnnotationAttachmentSymbol;
+import io.ballerina.compiler.api.symbols.AnnotationSymbol;
+import io.ballerina.compiler.api.symbols.ClassSymbol;
+import io.ballerina.compiler.api.symbols.FunctionSymbol;
 import io.ballerina.compiler.api.symbols.Symbol;
 import io.ballerina.compiler.api.symbols.SymbolKind;
+import io.ballerina.compiler.api.symbols.TypeDefinitionSymbol;
 import io.ballerina.compiler.api.symbols.TypeDescKind;
 import io.ballerina.compiler.api.symbols.TypeReferenceTypeSymbol;
 import io.ballerina.compiler.api.symbols.TypeSymbol;
 import io.ballerina.compiler.api.symbols.UnionTypeSymbol;
+import io.ballerina.compiler.api.values.ConstantValue;
+import io.ballerina.compiler.syntax.tree.AnnotationNode;
 import io.ballerina.compiler.syntax.tree.BasicLiteralNode;
+import io.ballerina.compiler.syntax.tree.CheckExpressionNode;
 import io.ballerina.compiler.syntax.tree.ClassDefinitionNode;
 import io.ballerina.compiler.syntax.tree.ExplicitNewExpressionNode;
 import io.ballerina.compiler.syntax.tree.ExpressionNode;
@@ -43,6 +51,7 @@ import io.ballerina.compiler.syntax.tree.NodeVisitor;
 import io.ballerina.compiler.syntax.tree.ParenthesizedArgList;
 import io.ballerina.compiler.syntax.tree.QualifiedNameReferenceNode;
 import io.ballerina.compiler.syntax.tree.SeparatedNodeList;
+import io.ballerina.compiler.syntax.tree.SimpleNameReferenceNode;
 import io.ballerina.compiler.syntax.tree.SpecificFieldNode;
 import io.ballerina.compiler.syntax.tree.SyntaxKind;
 import io.ballerina.compiler.syntax.tree.TypeReferenceNode;
@@ -51,26 +60,41 @@ import io.ballerina.projects.plugins.AnalysisTask;
 import io.ballerina.projects.plugins.SyntaxNodeAnalysisContext;
 
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 
 /**
- * Analyzes custom agent definitions (classes implementing `ai:AgentType`) and gathers the names of the tools passed to
- * the `ai:Agent` constructed within the class's `init` method. The gathered metadata is later attached to the class as
- * an `@ai:AgentMetadata` annotation by the {@link AiSourceModifier}, so that consumers of a shared agent definition can
- * discover the tools without access to the implementation.
+ * Analyzes custom agent definitions (classes implementing `ai:AgentType`) and gathers metadata about the tools passed
+ * to the `ai:Agent` constructed within the class's `init` method. The gathered metadata is later attached to the class
+ * as an `@ai:AgentMetadata` annotation by the {@link AiSourceModifier}, so consumers of a shared agent definition can
+ * discover its tools without access to the implementation.
+ *
+ * <p>For each entry in the agent's `tools` list, the following is collected (entries that cannot be resolved
+ * statically — e.g., a `ToolConfig` variable or `tools = someList` — are skipped):
+ * <ul>
+ *     <li>A function/method tool: its name and, if present, its `@display` label and icon.</li>
+ *     <li>An MCP toolkit (a subtype of `ai:McpBaseToolKit`): its variable name (or type name if constructed inline),
+ *     marked as {@link ToolKind#MCP_TOOLKIT}. Individual MCP tools are resolved from the server at runtime and so
+ *     cannot be listed.</li>
+ *     <li>Any other toolkit: its variable/type name, marked as {@link ToolKind#TOOLKIT}.</li>
+ * </ul>
  */
 class CustomAgentAnalysisTask implements AnalysisTask<SyntaxNodeAnalysisContext> {
 
     private static final String AGENT_CLASS_NAME = "Agent";
     private static final String FIXED_RETURN_AGENT_TYPE_NAME = "FixedReturnAgentType";
     private static final String INFERRED_RETURN_AGENT_TYPE_NAME = "InferredReturnAgentType";
+    private static final String MCP_BASE_TOOLKIT_NAME = "McpBaseToolKit";
+    private static final String BASE_TOOLKIT_NAME = "BaseToolKit";
     private static final String INIT_METHOD_NAME = "init";
     private static final String TOOLS_ARG_NAME = "tools";
     private static final String TOOL_CONFIG_NAME_FIELD = "name";
+    private static final String DISPLAY_ANNOTATION_NAME = "display";
+    private static final String DISPLAY_LABEL_FIELD = "label";
+    private static final String DISPLAY_ICON_FIELD = "iconPath";
     private static final String SELF_KEYWORD = "self";
 
     private final Map<DocumentId, ModifierContext> modifierContextMap;
@@ -89,11 +113,14 @@ class CustomAgentAnalysisTask implements AnalysisTask<SyntaxNodeAnalysisContext>
         if (aiModulePrefix.isEmpty()) {
             return;
         }
-        List<String> toolNames = getInitMethod(classDefinitionNode)
-                .map(initMethod -> getToolNames(semanticModel, initMethod))
+        AnalysisContext analysisContext = new AnalysisContext(semanticModel,
+                getAiType(semanticModel, MCP_BASE_TOOLKIT_NAME), getAiType(semanticModel, BASE_TOOLKIT_NAME),
+                getClassMethods(classDefinitionNode));
+        List<ToolMetadata> tools = getInitMethod(classDefinitionNode)
+                .map(initMethod -> getTools(analysisContext, initMethod))
                 .orElse(List.of());
         this.modifierContextMap.computeIfAbsent(context.documentId(), document -> new ModifierContext())
-                .add(classDefinitionNode, new AgentMetadataConfig(aiModulePrefix.get(), toolNames));
+                .add(classDefinitionNode, new AgentMetadataConfig(aiModulePrefix.get(), tools));
     }
 
     /**
@@ -135,26 +162,233 @@ class CustomAgentAnalysisTask implements AnalysisTask<SyntaxNodeAnalysisContext>
         return Optional.empty();
     }
 
+    private Map<String, FunctionDefinitionNode> getClassMethods(ClassDefinitionNode classDefinitionNode) {
+        Map<String, FunctionDefinitionNode> methods = new HashMap<>();
+        for (Node member : classDefinitionNode.members()) {
+            if (member.kind() == SyntaxKind.OBJECT_METHOD_DEFINITION
+                    && member instanceof FunctionDefinitionNode functionDefinitionNode) {
+                methods.put(functionDefinitionNode.functionName().text(), functionDefinitionNode);
+            }
+        }
+        return methods;
+    }
+
     /**
-     * Collects the statically identifiable tool names from the `tools` argument of every `ai:Agent` constructed within
-     * the given `init` method.
+     * Collects the statically identifiable tools from the `tools` argument of every `ai:Agent` constructed within the
+     * given `init` method.
      */
-    private List<String> getToolNames(SemanticModel semanticModel, FunctionDefinitionNode initMethod) {
-        AgentNewExpressionVisitor visitor = new AgentNewExpressionVisitor(semanticModel);
+    private List<ToolMetadata> getTools(AnalysisContext analysisContext, FunctionDefinitionNode initMethod) {
+        AgentNewExpressionVisitor visitor = new AgentNewExpressionVisitor(analysisContext.semanticModel());
         initMethod.accept(visitor);
-        Set<String> toolNames = new LinkedHashSet<>();
+        Map<String, ToolMetadata> tools = new LinkedHashMap<>();
         for (NewExpressionNode newExpression : visitor.getAgentNewExpressions()) {
             Optional<ListConstructorExpressionNode> toolsList = getToolsArgument(newExpression);
             if (toolsList.isEmpty()) {
                 continue;
             }
             for (Node element : toolsList.get().expressions()) {
-                // Entries that cannot be statically resolved to a tool name (e.g., toolkit instances or
-                // variable references to tool lists) are skipped.
-                getToolName(semanticModel, element).ifPresent(toolNames::add);
+                getToolMetadata(analysisContext, element)
+                        .ifPresent(tool -> tools.putIfAbsent(tool.name(), tool));
             }
         }
-        return new ArrayList<>(toolNames);
+        return new ArrayList<>(tools.values());
+    }
+
+    private Optional<ToolMetadata> getToolMetadata(AnalysisContext analysisContext, Node element) {
+        Node unwrapped = unwrapCheck(element);
+        return switch (unwrapped.kind()) {
+            case SIMPLE_NAME_REFERENCE, QUALIFIED_NAME_REFERENCE, FIELD_ACCESS ->
+                    getReferenceToolMetadata(analysisContext, unwrapped);
+            // An inline `ai:ToolConfig` mapping constructor with an explicit `name` field.
+            case MAPPING_CONSTRUCTOR ->
+                    getStringLiteralField((MappingConstructorExpressionNode) unwrapped, TOOL_CONFIG_NAME_FIELD)
+                            .map(name -> new ToolMetadata(name, ToolKind.FUNCTION_TOOL, null, null));
+            // A toolkit constructed inline (`check new ai:McpToolKit(...)`); use its type name.
+            case EXPLICIT_NEW_EXPRESSION, IMPLICIT_NEW_EXPRESSION ->
+                    getInlineToolkitMetadata(analysisContext, (ExpressionNode) unwrapped);
+            default -> Optional.empty();
+        };
+    }
+
+    /**
+     * Resolves a tool referenced by name: a function/method reference becomes a {@link ToolKind#FUNCTION_TOOL} tool
+     * (with its `@display` metadata, if any), while a variable/field whose type is a toolkit becomes a toolkit entry
+     * named after the reference. Anything else (e.g., a `ToolConfig` variable) is skipped.
+     */
+    private Optional<ToolMetadata> getReferenceToolMetadata(AnalysisContext analysisContext, Node element) {
+        SemanticModel semanticModel = analysisContext.semanticModel();
+        Optional<Symbol> symbol = semanticModel.symbol(element);
+        if (symbol.isPresent() && isFunctionOrMethod(symbol.get())) {
+            DisplayInfo display = readDisplay((FunctionSymbol) symbol.get());
+            return symbol.get().getName()
+                    .map(name -> new ToolMetadata(name, ToolKind.FUNCTION_TOOL, display.label(), display.icon()));
+        }
+        Optional<ToolKind> toolkitKind =
+                semanticModel.typeOf(element).flatMap(type -> classifyToolkit(analysisContext, type));
+        if (toolkitKind.isPresent()) {
+            return getReferenceName(element)
+                    .map(name -> new ToolMetadata(name, toolkitKind.get(), null, null));
+        }
+
+        if (element instanceof FieldAccessExpressionNode fieldAccess) {
+            if (fieldAccess.expression().kind() == SyntaxKind.SIMPLE_NAME_REFERENCE
+                    && SELF_KEYWORD.equals(fieldAccess.expression().toSourceCode().trim())) {
+                String name = fieldAccess.fieldName().toSourceCode().trim();
+                DisplayInfo display = readDisplay(analysisContext.classMethods().get(name));
+                return Optional.of(new ToolMetadata(name, ToolKind.FUNCTION_TOOL, display.label(), display.icon()));
+            }
+        }
+        return Optional.empty();
+    }
+
+    private Optional<ToolMetadata> getInlineToolkitMetadata(AnalysisContext analysisContext, ExpressionNode newExpr) {
+        Optional<TypeSymbol> type = analysisContext.semanticModel().typeOf(newExpr);
+        if (type.isEmpty()) {
+            return Optional.empty();
+        }
+        Optional<ToolKind> toolkitKind = classifyToolkit(analysisContext, type.get());
+        return toolkitKind.flatMap(kind -> toolkitTypeName(analysisContext, type.get())
+                .map(name -> new ToolMetadata(name, kind, null, null)));
+    }
+
+    private boolean isFunctionOrMethod(Symbol symbol) {
+        return symbol.kind() == SymbolKind.FUNCTION || symbol.kind() == SymbolKind.METHOD;
+    }
+
+    private Optional<String> getReferenceName(Node element) {
+        return switch (element) {
+            case SimpleNameReferenceNode refNode -> Optional.of(refNode.name().text());
+            case QualifiedNameReferenceNode refNode -> Optional.of(refNode.identifier().text());
+            case FieldAccessExpressionNode refNode -> Optional.of(refNode.fieldName().toSourceCode().trim());
+            default -> Optional.empty();
+        };
+    }
+
+    /**
+     * Classifies a type as an MCP toolkit, another toolkit, or neither. Unions (e.g., `McpToolKit|ai:Error` for an
+     * inline `check new`) are flattened and any toolkit member is matched.
+     */
+    private Optional<ToolKind> classifyToolkit(AnalysisContext analysisContext, TypeSymbol typeSymbol) {
+        List<TypeSymbol> members = flattenUnion(typeSymbol);
+        if (members.stream().anyMatch(member -> subtypeOf(member, analysisContext.mcpToolKitType()))) {
+            return Optional.of(ToolKind.MCP_TOOLKIT);
+        }
+        if (members.stream().anyMatch(member -> subtypeOf(member, analysisContext.baseToolKitType()))) {
+            return Optional.of(ToolKind.TOOLKIT);
+        }
+        return Optional.empty();
+    }
+
+    private Optional<String> toolkitTypeName(AnalysisContext analysisContext, TypeSymbol typeSymbol) {
+        return flattenUnion(typeSymbol).stream()
+                .filter(member -> subtypeOf(member, analysisContext.baseToolKitType()))
+                .findFirst()
+                .flatMap(Symbol::getName);
+    }
+
+    private List<TypeSymbol> flattenUnion(TypeSymbol typeSymbol) {
+        if (typeSymbol.typeKind() == TypeDescKind.UNION) {
+            List<TypeSymbol> members = new ArrayList<>();
+            for (TypeSymbol member : ((UnionTypeSymbol) typeSymbol).memberTypeDescriptors()) {
+                members.addAll(flattenUnion(member));
+            }
+            return members;
+        }
+        return List.of(typeSymbol);
+    }
+
+    private boolean subtypeOf(TypeSymbol typeSymbol, TypeSymbol target) {
+        return target != null && typeSymbol.subtypeOf(target);
+    }
+
+    private TypeSymbol getAiType(SemanticModel semanticModel, String typeName) {
+        Optional<Symbol> symbol = semanticModel.types()
+                .getTypeByName(Utils.BALLERINA_ORG, Utils.AI_PACKAGE_NAME, Utils.AI_PACKAGE_MAJOR_VERSION, typeName);
+        return symbol.map(value -> switch (value) {
+            case ClassSymbol classSymbol -> classSymbol;
+            case TypeDefinitionSymbol typeDefinitionSymbol -> typeDefinitionSymbol.typeDescriptor();
+            default -> null;
+        }).orElse(null);
+    }
+
+    /**
+     * Reads the `@display` annotation of a resolved function/method symbol. Since `@display` is a `const` annotation,
+     * its value is available via the symbol API for both same-module and imported tools.
+     */
+    private DisplayInfo readDisplay(FunctionSymbol functionSymbol) {
+        for (AnnotationAttachmentSymbol attachment : functionSymbol.annotAttachments()) {
+            if (!isDisplayAnnotation(attachment.typeDescriptor()) || !attachment.isConstAnnotation()) {
+                continue;
+            }
+            Optional<ConstantValue> value = attachment.attachmentValue();
+            if (value.isPresent() && value.get().value() instanceof Map<?, ?> fields) {
+                return new DisplayInfo(constStringValue(fields.get(DISPLAY_LABEL_FIELD)),
+                        constStringValue(fields.get(DISPLAY_ICON_FIELD)));
+            }
+        }
+        return DisplayInfo.EMPTY;
+    }
+
+    /**
+     * Reads the `@display` annotation from a method node syntactically. Used for `self.method` tool references, which
+     * do not resolve to a symbol.
+     */
+    private DisplayInfo readDisplay(FunctionDefinitionNode methodNode) {
+        if (methodNode == null || methodNode.metadata().isEmpty()) {
+            return DisplayInfo.EMPTY;
+        }
+        for (AnnotationNode annotation : methodNode.metadata().get().annotations()) {
+            if (annotation.annotReference().kind() == SyntaxKind.SIMPLE_NAME_REFERENCE
+                    && DISPLAY_ANNOTATION_NAME.equals(((SimpleNameReferenceNode) annotation.annotReference())
+                    .name().text())
+                    && annotation.annotValue().isPresent()) {
+                MappingConstructorExpressionNode value = annotation.annotValue().get();
+                return new DisplayInfo(getStringLiteralField(value, DISPLAY_LABEL_FIELD).orElse(null),
+                        getStringLiteralField(value, DISPLAY_ICON_FIELD).orElse(null));
+            }
+        }
+        return DisplayInfo.EMPTY;
+    }
+
+    private boolean isDisplayAnnotation(AnnotationSymbol annotationSymbol) {
+        return DISPLAY_ANNOTATION_NAME.equals(annotationSymbol.getName().orElse(""))
+                && annotationSymbol.getModule()
+                .map(module -> Utils.BALLERINA_ORG.equals(module.id().orgName()))
+                .orElse(false);
+    }
+
+    private String constStringValue(Object value) {
+        if (value instanceof ConstantValue constantValue) {
+            return constStringValue(constantValue.value());
+        }
+        return value instanceof String stringValue ? stringValue : null;
+    }
+
+    private Optional<String> getStringLiteralField(MappingConstructorExpressionNode mappingConstructor,
+                                                   String fieldName) {
+        for (MappingFieldNode field : mappingConstructor.fields()) {
+            if (field.kind() != SyntaxKind.SPECIFIC_FIELD) {
+                continue;
+            }
+            SpecificFieldNode specificField = (SpecificFieldNode) field;
+            String name = specificField.fieldName().toSourceCode().trim();
+            if (!fieldName.equals(name) && !("\"" + fieldName + "\"").equals(name)) {
+                continue;
+            }
+            Optional<ExpressionNode> valueExpression = specificField.valueExpr();
+            if (valueExpression.isPresent() && valueExpression.get().kind() == SyntaxKind.STRING_LITERAL) {
+                String literal = ((BasicLiteralNode) valueExpression.get()).literalToken().text();
+                return Optional.of(literal.substring(1, literal.length() - 1));
+            }
+        }
+        return Optional.empty();
+    }
+
+    private Node unwrapCheck(Node element) {
+        if (element.kind() == SyntaxKind.CHECK_EXPRESSION) {
+            return unwrapCheck(((CheckExpressionNode) element).expression());
+        }
+        return element;
     }
 
     private Optional<ListConstructorExpressionNode> getToolsArgument(NewExpressionNode newExpressionNode) {
@@ -186,53 +420,6 @@ class CustomAgentAnalysisTask implements AnalysisTask<SyntaxNodeAnalysisContext>
         }
         if (newExpressionNode instanceof ImplicitNewExpressionNode implicitNewExpressionNode) {
             return implicitNewExpressionNode.parenthesizedArgList().map(ParenthesizedArgList::arguments);
-        }
-        return Optional.empty();
-    }
-
-    private Optional<String> getToolName(SemanticModel semanticModel, Node element) {
-        return switch (element.kind()) {
-            // A function pointer (`searchDoc`, `mod:searchDoc`) or an object method reference
-            // (`self.searchDoc`); the runtime tool name defaults to the function/method name.
-            case SIMPLE_NAME_REFERENCE, QUALIFIED_NAME_REFERENCE, FIELD_ACCESS ->
-                    getFunctionOrMethodName(semanticModel, element);
-            // An inline `ai:ToolConfig` mapping constructor with an explicit `name` field.
-            case MAPPING_CONSTRUCTOR -> getToolConfigName((MappingConstructorExpressionNode) element);
-            default -> Optional.empty();
-        };
-    }
-
-    private Optional<String> getFunctionOrMethodName(SemanticModel semanticModel, Node element) {
-        if (element.kind() == SyntaxKind.FIELD_ACCESS) {
-            // A bound-method reference (`self.createSchedule`): the symbol API does not resolve the
-            // method symbol for these, so rely on the syntax.
-            FieldAccessExpressionNode fieldAccess = (FieldAccessExpressionNode) element;
-            if (fieldAccess.expression().kind() == SyntaxKind.SIMPLE_NAME_REFERENCE
-                    && SELF_KEYWORD.equals(fieldAccess.expression().toSourceCode().trim())) {
-                return Optional.of(fieldAccess.fieldName().toSourceCode().trim());
-            }
-            return Optional.empty();
-        }
-        return semanticModel.symbol(element)
-                .filter(value -> value.kind() == SymbolKind.FUNCTION || value.kind() == SymbolKind.METHOD)
-                .flatMap(Symbol::getName);
-    }
-
-    private Optional<String> getToolConfigName(MappingConstructorExpressionNode mappingConstructor) {
-        for (MappingFieldNode field : mappingConstructor.fields()) {
-            if (field.kind() != SyntaxKind.SPECIFIC_FIELD) {
-                continue;
-            }
-            SpecificFieldNode specificField = (SpecificFieldNode) field;
-            String fieldName = specificField.fieldName().toSourceCode().trim();
-            if (!TOOL_CONFIG_NAME_FIELD.equals(fieldName) && !"\"name\"".equals(fieldName)) {
-                continue;
-            }
-            Optional<ExpressionNode> valueExpression = specificField.valueExpr();
-            if (valueExpression.isPresent() && valueExpression.get().kind() == SyntaxKind.STRING_LITERAL) {
-                String literal = ((BasicLiteralNode) valueExpression.get()).literalToken().text();
-                return Optional.of(literal.substring(1, literal.length() - 1));
-            }
         }
         return Optional.empty();
     }
@@ -287,5 +474,17 @@ class CustomAgentAnalysisTask implements AnalysisTask<SyntaxNodeAnalysisContext>
             return AGENT_CLASS_NAME.equals(typeSymbol.getName().orElse(""))
                     && Utils.isAgentModuleSymbol(typeSymbol);
         }
+    }
+
+    // Per-class analysis state: the semantic model, the resolved toolkit base types used to classify tool entries, and
+    // the class's methods (used to read `@display` from `self.method` tool references).
+    private record AnalysisContext(SemanticModel semanticModel, TypeSymbol mcpToolKitType, TypeSymbol baseToolKitType,
+                                   Map<String, FunctionDefinitionNode> classMethods) {
+    }
+
+    // The `@display` label and icon of a tool; either field may be null.
+    private record DisplayInfo(String label, String icon) {
+
+        private static final DisplayInfo EMPTY = new DisplayInfo(null, null);
     }
 }

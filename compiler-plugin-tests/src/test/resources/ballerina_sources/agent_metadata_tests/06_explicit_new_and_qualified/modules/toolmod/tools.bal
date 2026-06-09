@@ -16,6 +16,8 @@
 
 import ballerina/ai;
 
-// A tool defined in a separate module, referenced from the agent as `toolmod:remoteLookup`.
+// A tool defined in a separate module, referenced from the agent as `toolmod:remoteLookup`. Its `@display`
+// annotation must be read across the module boundary (possible because `@display` is a const annotation).
+@display {label: "Remote Lookup"}
 @ai:AgentTool
 public isolated function remoteLookup(string id) returns string => "looked up";

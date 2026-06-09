@@ -65,9 +65,29 @@ class ModifierContext {
  * Holds the metadata gathered for a custom agent definition (a class implementing `ai:AgentType`).
  *
  * @param aiModulePrefix the import prefix used for the `ballerina/ai` module in the document
- * @param toolNames      the statically identified names of the tools available to the agent
+ * @param tools          the statically identified tools available to the agent
  */
-record AgentMetadataConfig(String aiModulePrefix, List<String> toolNames) {
+record AgentMetadataConfig(String aiModulePrefix, List<ToolMetadata> tools) {
+}
+
+/**
+ * The kind of a tool entry available to an agent. The names mirror the `ai:ToolKind` enum members.
+ */
+enum ToolKind {
+    FUNCTION_TOOL,
+    MCP_TOOLKIT,
+    TOOLKIT
+}
+
+/**
+ * Metadata about a single tool (or toolkit) available to a custom agent.
+ *
+ * @param name  the tool name, or the toolkit's variable/type name for toolkit entries
+ * @param kind  the kind of tool entry
+ * @param label the UI label from the tool's `@display` annotation, or {@code null}
+ * @param icon  the icon path from the tool's `@display` annotation, or {@code null}
+ */
+record ToolMetadata(String name, ToolKind kind, String label, String icon) {
 }
 
 record ToolAnnotationConfig(
