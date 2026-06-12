@@ -44,6 +44,9 @@ public isolated class ResearchAgent {
         self.agent = check new ai:Agent(
             systemPrompt = {role: "Researcher", instructions: "Research things."},
             model = model,
+            // The memory is created inline (not an `init` parameter reference), so no `memory` entry is
+            // recorded in the generated metadata.
+            memory = new ai:MessageWindowChatMemory(10),
             tools = [
                 localTool,
                 toolmod:remoteLookup,

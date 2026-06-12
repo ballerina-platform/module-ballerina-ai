@@ -32,6 +32,7 @@ import java.util.Set;
  * Maintains a mapping between annotation nodes and their configurations.
  */
 class ModifierContext {
+
     private final Map<AnnotationNode, ToolAnnotationConfig> annotationConfigMap = new HashMap<>();
     private final Set<ModuleVariableDeclarationNode> moduleLevelAgentDeclaration = new HashSet<>();
     private final Map<ClassDefinitionNode, AgentMetadataConfig> agentMetadataConfigMap = new HashMap<>();
@@ -64,10 +65,26 @@ class ModifierContext {
 /**
  * Holds the metadata gathered for a custom agent definition (a class implementing `ai:AgentType`).
  *
- * @param aiModulePrefix the import prefix used for the `ballerina/ai` module in the document
- * @param tools          the statically identified tools available to the agent
+ * @param aiModulePrefix         the import prefix used for the `ballerina/ai` module in the document
+ * @param tools                  the statically identified tools available to the agent
+ * @param systemPrompt           the statically resolved system prompt of the composed agent, or {@code null} when its
+ *                               role or instructions cannot be resolved at compile time
+ * @param modelProviderParamName the name of the `init` parameter supplying the agent's model, or {@code null} when the
+ *                               model is not injectable via the constructor
+ * @param memoryParamName        the name of the `init` parameter supplying the agent's memory, or {@code null} when the
+ *                               memory is not injectable via the constructor
  */
-record AgentMetadataConfig(String aiModulePrefix, List<ToolMetadata> tools) {
+record AgentMetadataConfig(String aiModulePrefix, List<ToolMetadata> tools, SystemPromptMetadata systemPrompt,
+                           String modelProviderParamName, String memoryParamName) {
+}
+
+/**
+ * The statically resolved system prompt of a composed agent.
+ *
+ * @param role         the agent's role
+ * @param instructions the agent's instructions
+ */
+record SystemPromptMetadata(String role, String instructions) {
 }
 
 /**

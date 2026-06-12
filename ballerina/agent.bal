@@ -119,15 +119,31 @@ public type ToolMetadata record {|
     string icon?;
 |};
 
+# Identifies an `init` parameter of a custom agent definition through which a dependency is supplied.
+public type ParameterInfo record {|
+    # The name of the parameter in the `init` method's signature
+    string parameterName;
+|};
+
 # Provides metadata about a custom agent definition.
 public type AgentMetadataConfig record {|
     # The tools available to the agent
     ToolMetadata[] tools = [];
+    # The system prompt of the composed agent. Present only when both the role and the instructions are
+    # statically resolvable (string literals, interpolation-free string templates, or `const` references).
+    SystemPrompt systemPrompt?;
+    # The `init` parameter through which the agent's model provider is supplied.
+    # Absent when the model is not injectable via the constructor (e.g., it is created internally).
+    ParameterInfo modelProvider?;
+    # The `init` parameter through which the agent's memory is supplied.
+    # Absent when the memory is not injectable via the constructor.
+    ParameterInfo memory?;
 |};
 
 # Metadata of a custom agent definition (a class implementing `ai:AgentType`).
 # Attached automatically by a compiler plugin; the value lists the tools that are
-# statically identifiable from the `ai:Agent` constructed in the class's `init` method.
+# statically identifiable from the `ai:Agent` constructed in the class's `init` method,
+# along with the `init` parameters that supply the agent's model provider and memory, if any.
 public const annotation AgentMetadataConfig AgentMetadata on class;
 
 # Represents an agent whose `run` return type is inferred from the expected type at the call site.

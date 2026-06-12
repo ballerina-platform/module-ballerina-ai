@@ -28,7 +28,8 @@ public isolated class MathAgent {
 
     public function init(intelligence:ModelProvider model) returns error? {
         self.agent = check new (
-            systemPrompt = {role: "Math Tutor", instructions: "Answer math questions."},
+            // The instructions use a string template without interpolations; it must still be resolved.
+            systemPrompt = {role: "Math Tutor", instructions: string `Answer math questions.`},
             model = model,
             tools = [answerMath]
         );

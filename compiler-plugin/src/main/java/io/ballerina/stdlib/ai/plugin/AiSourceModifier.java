@@ -74,6 +74,12 @@ class AiSourceModifier implements ModifierTask<SourceModifierContext> {
     private static final String EMPTY_STRING = "";
     private static final String AGENT_METADATA_ANNOTATION_NAME = "AgentMetadata";
     private static final String AGENT_METADATA_TOOLS_FIELD_NAME = "tools";
+    private static final String AGENT_METADATA_MODEL_PROVIDER_FIELD_NAME = "modelProvider";
+    private static final String AGENT_METADATA_MEMORY_FIELD_NAME = "memory";
+    private static final String AGENT_METADATA_SYSTEM_PROMPT_FIELD_NAME = "systemPrompt";
+    private static final String PARAMETER_NAME_FIELD_NAME = "parameterName";
+    private static final String SYSTEM_PROMPT_ROLE_FIELD_NAME = "role";
+    private static final String SYSTEM_PROMPT_INSTRUCTIONS_FIELD_NAME = "instructions";
     private static final String TOOL_NAME_FIELD_NAME = "name";
     private static final String TOOL_KIND_FIELD_NAME = "kind";
     private static final String TOOL_LABEL_FIELD_NAME = "label";
@@ -357,11 +363,41 @@ class AiSourceModifier implements ModifierTask<SourceModifierContext> {
     private AnnotationNode getAgentMetadataAnnotation(AgentMetadataConfig config) {
         String tools = config.tools().stream().map(tool -> toolMetadataSource(tool, config.aiModulePrefix()))
                 .collect(Collectors.joining(COMMA_TOKEN.stringValue() + " ", "[", "]"));
-        String annotationSource = AT_TOKEN.stringValue() + config.aiModulePrefix() + COLON_TOKEN.stringValue()
-                + AGENT_METADATA_ANNOTATION_NAME + " " + OPEN_BRACE_TOKEN.stringValue()
-                + AGENT_METADATA_TOOLS_FIELD_NAME + COLON_TOKEN.stringValue() + " " + tools
-                + CLOSE_BRACE_TOKEN.stringValue() + " ";
-        return NodeParser.parseAnnotation(annotationSource);
+        StringBuilder annotationSource = new StringBuilder(AT_TOKEN.stringValue())
+                .append(config.aiModulePrefix()).append(COLON_TOKEN.stringValue())
+                .append(AGENT_METADATA_ANNOTATION_NAME).append(" ").append(OPEN_BRACE_TOKEN.stringValue())
+                .append(AGENT_METADATA_TOOLS_FIELD_NAME).append(COLON_TOKEN.stringValue()).append(" ").append(tools);
+        if (config.systemPrompt() != null) {
+            annotationSource.append(COMMA_TOKEN.stringValue()).append(" ")
+                    .append(AGENT_METADATA_SYSTEM_PROMPT_FIELD_NAME).append(COLON_TOKEN.stringValue()).append(" ")
+                    .append(systemPromptSource(config.systemPrompt()));
+        }
+        if (config.modelProviderParamName() != null) {
+            annotationSource.append(COMMA_TOKEN.stringValue()).append(" ")
+                    .append(AGENT_METADATA_MODEL_PROVIDER_FIELD_NAME).append(COLON_TOKEN.stringValue()).append(" ")
+                    .append(parameterInfoSource(config.modelProviderParamName()));
+        }
+        if (config.memoryParamName() != null) {
+            annotationSource.append(COMMA_TOKEN.stringValue()).append(" ")
+                    .append(AGENT_METADATA_MEMORY_FIELD_NAME).append(COLON_TOKEN.stringValue()).append(" ")
+                    .append(parameterInfoSource(config.memoryParamName()));
+        }
+        annotationSource.append(CLOSE_BRACE_TOKEN.stringValue()).append(" ");
+        return NodeParser.parseAnnotation(annotationSource.toString());
+    }
+
+    // Renders an `ai:ParameterInfo` record literal, e.g. {@code {parameterName: "model"}}.
+    private String parameterInfoSource(String parameterName) {
+        return OPEN_BRACE_TOKEN.stringValue() + PARAMETER_NAME_FIELD_NAME + COLON_TOKEN.stringValue() + " "
+                + toStringLiteral(parameterName) + CLOSE_BRACE_TOKEN.stringValue();
+    }
+
+    // Renders an `ai:SystemPrompt` record literal, e.g. {@code {role: "Tutor", instructions: "Help."}}.
+    private String systemPromptSource(SystemPromptMetadata systemPrompt) {
+        return OPEN_BRACE_TOKEN.stringValue() + SYSTEM_PROMPT_ROLE_FIELD_NAME + COLON_TOKEN.stringValue() + " "
+                + toStringLiteral(systemPrompt.role()) + COMMA_TOKEN.stringValue() + " "
+                + SYSTEM_PROMPT_INSTRUCTIONS_FIELD_NAME + COLON_TOKEN.stringValue() + " "
+                + toStringLiteral(systemPrompt.instructions()) + CLOSE_BRACE_TOKEN.stringValue();
     }
 
     /**

@@ -32,10 +32,14 @@ public isolated class SchedulerAgent {
 
     private final ai:Agent agent;
 
-    public function init(ai:ModelProvider model) returns error? {
+    // Both the model and the memory are injected through `init` parameters, so the generated metadata
+    // records each parameter's name: modelProvider: {parameterName: "model"}, memory: {parameterName:
+    // "chatMemory"}.
+    public function init(ai:Memory chatMemory, ai:ModelProvider model) returns error? {
         self.agent = check new (
             systemPrompt = {role: "Event Schedule Manager", instructions: "Organize the event schedule."},
             model = model,
+            memory = chatMemory,
             tools = [
                 self.createSchedule,
                 coordinateSpeakers,

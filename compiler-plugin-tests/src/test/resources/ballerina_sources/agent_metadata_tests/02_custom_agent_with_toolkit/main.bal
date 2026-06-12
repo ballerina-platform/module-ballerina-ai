@@ -16,6 +16,8 @@
 
 import ballerina/ai;
 
+const string SALES_ROLE = "Sales Agent";
+
 @ai:AgentTool
 isolated function getDiscounts(string category) returns string => "10%";
 
@@ -39,7 +41,8 @@ public isolated class SalesAgent {
     public function init(ai:ModelProvider model) returns error? {
         DiscountsToolKit toolKit = new;
         self.agent = check new (
-            systemPrompt = {role: "Sales Agent", instructions: "Promote sales."},
+            // The role references a `const`; it must be resolved through the semantic model.
+            systemPrompt = {role: SALES_ROLE, instructions: "Promote sales."},
             model = model,
             tools = [toolKit, getDiscounts]
         );

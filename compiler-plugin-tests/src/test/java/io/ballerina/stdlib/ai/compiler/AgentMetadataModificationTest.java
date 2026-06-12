@@ -59,6 +59,15 @@ public class AgentMetadataModificationTest {
                 "Expected the module-level function tool with its @display label and icon (read via symbol)");
         Assert.assertTrue(modifiedSource.contains("{name: \"searchTool\", kind: ai:FUNCTION_TOOL}"),
                 "Expected the inline ToolConfig tool with no display info");
+        // The model and the memory are both injected through `init` parameters; the metadata records each
+        // parameter's name so consumers know which constructor inputs supply them.
+        Assert.assertTrue(modifiedSource.contains(
+                        "modelProvider: {parameterName: \"model\"}, memory: {parameterName: \"chatMemory\"}"),
+                "Expected the init parameter names supplying the model and the memory to be recorded");
+        // The inline system prompt uses plain string literals, so it is extracted into the metadata.
+        Assert.assertTrue(modifiedSource.contains("systemPrompt: {role: \"Event Schedule Manager\", "
+                        + "instructions: \"Organize the event schedule.\"}"),
+                "Expected the inline literal system prompt to be extracted");
     }
 
     @Test
@@ -69,8 +78,15 @@ public class AgentMetadataModificationTest {
         Assert.assertTrue(modifiedSource.contains("{name: \"toolKit\", kind: ai:TOOLKIT}"),
                 "Expected the non-MCP toolkit to be listed by its variable name with kind TOOLKIT");
         Assert.assertTrue(modifiedSource.contains(
-                        "@ai:AgentMetadata {tools: [{name: \"toolKit\", kind: ai:TOOLKIT}]}"),
-                "Expected the toolkit-only agent to list just the toolkit");
+                        "@ai:AgentMetadata {tools: [{name: \"toolKit\", kind: ai:TOOLKIT}], "
+                                + "systemPrompt: {role: \"Sales Agent\", instructions: \"Promote sales.\"}, "
+                                + "modelProvider: {parameterName: \"model\"}}"),
+                "Expected the toolkit-only agent to list just the toolkit and its model parameter");
+        // Both agents resolve to the same prompt text: one uses inline literals, the other references the
+        // SALES_ROLE constant — so two occurrences prove the const reference was resolved.
+        Assert.assertEquals(countOccurrences(modifiedSource,
+                        "systemPrompt: {role: \"Sales Agent\", instructions: \"Promote sales.\"}"), 2,
+                "Expected the const-referenced role to be resolved to its value for the second agent");
     }
 
     @Test
@@ -94,9 +110,12 @@ public class AgentMetadataModificationTest {
     @Test
     public void testAgentMetadataAnnotationWithAliasedImport() {
         String modifiedSource = getModifiedSourceForProject("05_aliased_import");
+        // The instructions use an interpolation-free string template, which still resolves statically.
         Assert.assertTrue(modifiedSource.contains(
                         "@intelligence:AgentMetadata {tools: [{name: \"answerMath\", kind: " +
-                                "intelligence:FUNCTION_TOOL}]}"),
+                                "intelligence:FUNCTION_TOOL}], systemPrompt: {role: \"Math Tutor\", " +
+                                "instructions: \"Answer math questions.\"}, " +
+                                "modelProvider: {parameterName: \"model\"}}"),
                 "Expected the generated annotation and enum members to use the aliased ballerina/ai prefix");
     }
 
@@ -120,35 +139,55 @@ public class AgentMetadataModificationTest {
                 "A ToolConfig variable cannot be resolved statically and must be skipped");
         Assert.assertFalse(annotation.contains("computed"),
                 "An inline ToolConfig with a non-literal name must be skipped");
+        // The model is an `init` parameter, but the memory is constructed inline — only the model is
+        // recorded as injectable.
+        Assert.assertTrue(annotation.contains("modelProvider: {parameterName: \"model\"}"),
+                "Expected the init parameter supplying the model to be recorded");
+        Assert.assertFalse(annotation.contains("memory:"),
+                "A memory constructed inline (not an init parameter) must not be recorded");
     }
 
     @Test
     public void testAgentMetadataAnnotationForEdgeCases() {
         String modifiedSource = getModifiedSourceForProject("07_edge_cases");
-        // `tools = <variable>` is not a list literal, so no tools are read; the directly-implemented agent
-        // has no `init`. Both are still discoverable agents, so both get an empty tools list.
+        // `tools = <variable>` is not a list literal, so no tools are read, but the model parameter is still
+        // recorded for the dynamic-tools agent. Its prompt template has an interpolation, so this exact
+        // match also verifies that no systemPrompt field is generated.
+        Assert.assertTrue(modifiedSource.contains(
+                        "@ai:AgentMetadata {tools: [], modelProvider: {parameterName: \"model\"}}"),
+                "Expected an empty tools annotation with the model parameter for the dynamic-tools agent");
+        // The directly-implemented agent has no `init`, so it has no tools and no injectable model/memory.
         int emptyToolsCount = countOccurrences(modifiedSource, "@ai:AgentMetadata {tools: []}");
-        Assert.assertEquals(emptyToolsCount, 2,
-                "Expected an empty tools annotation for both the dynamic-tools agent and the agent with no "
-                        + "init method");
+        Assert.assertEquals(emptyToolsCount, 1,
+                "Expected a bare empty annotation only for the agent with no init method");
         // The agent that already had a `@Labelled` annotation keeps it and gains the generated annotation.
         Assert.assertTrue(modifiedSource.contains("@Labelled"),
                 "Expected the existing class-level annotation to be preserved");
         Assert.assertTrue(modifiedSource.contains(
-                        "@ai:AgentMetadata {tools: [{name: \"someTool\", kind: ai:FUNCTION_TOOL}]}"),
+                        "@ai:AgentMetadata {tools: [{name: \"someTool\", kind: ai:FUNCTION_TOOL}], "
+                                + "systemPrompt: {role: \"Labelled\", instructions: \"Do work.\"}, "
+                                + "modelProvider: {parameterName: \"model\"}}"),
                 "Expected the generated annotation to be appended alongside the existing annotation");
     }
 
-    // Returns the first generated `@ai:AgentMetadata {tools: [...]}` annotation, so negative assertions can be
-    // scoped to
-    // the annotation rather than the whole document (where a skipped tool's name may still appear in the source).
+    // Returns the first generated `@ai:AgentMetadata {...}` annotation (up to its matching closing brace), so
+    // negative assertions can be scoped to the annotation rather than the whole document (where a skipped
+    // tool's name may still appear in the source).
     private static String agentMetadataAnnotation(String source) {
         int start = source.indexOf("AgentMetadata {tools: [");
         if (start < 0) {
             return "";
         }
-        int end = source.indexOf("]}", start);
-        return end < 0 ? source.substring(start) : source.substring(start, end);
+        int depth = 0;
+        for (int i = source.indexOf('{', start); i < source.length(); i++) {
+            char character = source.charAt(i);
+            if (character == '{') {
+                depth++;
+            } else if (character == '}' && --depth == 0) {
+                return source.substring(start, i + 1);
+            }
+        }
+        return source.substring(start);
     }
 
     private static int countOccurrences(String source, String target) {

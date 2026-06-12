@@ -33,8 +33,11 @@ public isolated class DynamicToolsAgent {
     private final ai:Agent agent;
 
     public function init(ai:ModelProvider model) returns error? {
+        string toolSource = "dynamically supplied";
         self.agent = check new (
-            systemPrompt = {role: "Dynamic", instructions: "Use dynamically supplied tools."},
+            // The instructions template has an interpolation, so the system prompt cannot be resolved
+            // statically and must be omitted from the generated metadata.
+            systemPrompt = {role: "Dynamic", instructions: string `Use ${toolSource} tools.`},
             model = model,
             tools = sharedTools
         );
