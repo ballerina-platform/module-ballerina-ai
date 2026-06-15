@@ -274,10 +274,11 @@ public class ServersMapper {
             if (arg instanceof PositionalArgumentNode) {
                 return arg;
             }
-            if (arg instanceof NamedArgumentNode namedArg
-                    && (namedArg.argumentName().name().text().strip().equals(PORT)
-                    || namedArg.argumentName().name().text().strip().equals(LISTEN_ON))) {
-                return arg;
+            if (arg instanceof NamedArgumentNode namedArg) {
+                String argName = namedArg.argumentName().name().text().strip();
+                if (argName.equals(PORT) || argName.equals(LISTEN_ON)) {
+                    return arg;
+                }
             }
         }
         return null;
@@ -307,12 +308,11 @@ public class ServersMapper {
     }
 
     private static ExpressionNode getArgumentExpression(FunctionArgumentNode arg) {
-        if (arg instanceof PositionalArgumentNode posArg) {
-            return posArg.expression();
-        } else if (arg instanceof NamedArgumentNode namedArg) {
-            return namedArg.expression();
-        }
-        return null;
+        return switch (arg) {
+            case PositionalArgumentNode posArg -> posArg.expression();
+            case NamedArgumentNode namedArg -> namedArg.expression();
+            default -> null;
+        };
     }
 
     /**
