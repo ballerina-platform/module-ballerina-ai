@@ -74,9 +74,9 @@ import java.util.Optional;
 
 /**
  * Analyzes custom agent definitions (classes implementing `ai:AgentType`) and gathers metadata about the tools passed
- * to the `ai:Agent` constructed within the class's `init` method. The gathered metadata is later attached to the class
- * as an `@ai:AgentMetadata` annotation by the {@link AiSourceModifier}, so consumers of a shared agent definition can
- * discover its tools without access to the implementation.
+ * to the `ai:Agent` constructed within the class's `init` method. The gathered metadata is later recorded in the
+ * `agentMetadata` field of the class's `@display` annotation by the {@link AiSourceModifier}, so consumers of a shared
+ * agent definition can discover its tools without access to the implementation.
  *
  * <p>For each entry in the agent's `tools` list, the following is collected (entries that cannot be resolved
  * statically — e.g., a `ToolConfig` variable or `tools = someList` — are skipped):

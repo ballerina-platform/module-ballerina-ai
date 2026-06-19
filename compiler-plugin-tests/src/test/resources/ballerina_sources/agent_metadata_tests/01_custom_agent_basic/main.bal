@@ -24,7 +24,7 @@ isolated function coordinateSpeakers(string topic) returns string => "speakers c
 // Used as the caller of an inline `ai:ToolConfig`; the tool name comes from the config's `name` field.
 isolated function customSearch(string query) returns string => "search result";
 
-// A custom agent definition: the compiler plugin should attach an `@ai:AgentMetadata` annotation
+// A custom agent definition: the compiler plugin should record the `agentMetadata` field within `@display`
 // listing the tools passed to the composed `ai:Agent` — the object method tool, the module-level
 // function tool, and the inline `ai:ToolConfig` (by its explicit `name`).
 public isolated class SchedulerAgent {

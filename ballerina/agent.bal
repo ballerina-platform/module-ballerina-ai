@@ -126,6 +126,11 @@ public type ParameterInfo record {|
 |};
 
 # Provides metadata about a custom agent definition.
+# A compiler plugin records this for each custom agent (a class implementing `ai:AgentType`) within the
+# `agentMetadata` field of the class's `@display` annotation, so consumers of a shared agent definition can
+# discover its composition without access to the implementation. The recorded value lists the tools that are
+# statically identifiable from the `ai:Agent` constructed in the class's `init` method, the agent's system
+# prompt when resolvable, and the `init` parameters that supply the model provider and memory, if any.
 public type AgentMetadataConfig record {|
     # The tools available to the agent
     ToolMetadata[] tools = [];
@@ -139,12 +144,6 @@ public type AgentMetadataConfig record {|
     # Absent when the memory is not injectable via the constructor.
     ParameterInfo memory?;
 |};
-
-# Metadata of a custom agent definition (a class implementing `ai:AgentType`).
-# Attached automatically by a compiler plugin; the value lists the tools that are
-# statically identifiable from the `ai:Agent` constructed in the class's `init` method,
-# along with the `init` parameters that supply the agent's model provider and memory, if any.
-public const annotation AgentMetadataConfig AgentMetadata on class;
 
 # Represents an agent whose `run` return type is inferred from the expected type at the call site.
 # Callers decide whether they want the full `Trace`, the raw `string` answer, or the answer bound 

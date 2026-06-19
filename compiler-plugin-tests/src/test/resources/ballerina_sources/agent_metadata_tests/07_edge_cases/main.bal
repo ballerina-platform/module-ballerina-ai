@@ -51,7 +51,7 @@ public isolated class DynamicToolsAgent {
 }
 
 // A custom agent that already carries another class-level annotation: the plugin must leave it in place
-// and still append its own `@ai:AgentMetadata`.
+// and still append its own synthesized `@display`.
 @Labelled
 public isolated class LabelledAgent {
     *ai:FixedReturnAgentType;

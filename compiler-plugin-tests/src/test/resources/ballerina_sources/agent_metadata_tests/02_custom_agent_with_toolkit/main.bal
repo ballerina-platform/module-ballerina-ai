@@ -32,7 +32,9 @@ isolated class DiscountsToolKit {
 }
 
 // Mixes a toolkit with a function tool: only the statically identifiable function tool should be
-// listed in the generated `@ai:AgentMetadata` annotation.
+// listed in the generated metadata. This class already has a `@display` annotation, so the plugin must
+// merge the `agentMetadata` field into it while preserving the existing `label`.
+@display {label: "Sales"}
 public isolated class SalesAgent {
     *ai:FixedReturnAgentType;
 

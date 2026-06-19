@@ -68,6 +68,10 @@ public class AgentMetadataModificationTest {
         Assert.assertTrue(modifiedSource.contains("systemPrompt: {role: \"Event Schedule Manager\", "
                         + "instructions: \"Organize the event schedule.\"}"),
                 "Expected the inline literal system prompt to be extracted");
+        // The class has no `@display`, so one is synthesized with the label defaulting to the class name and
+        // the metadata recorded under the `agentMetadata` field.
+        Assert.assertTrue(modifiedSource.contains("@display {label: \"SchedulerAgent\", agentMetadata: {tools: ["),
+                "Expected a synthesized @display with the class name as label, carrying the agentMetadata field");
     }
 
     @Test
@@ -77,10 +81,20 @@ public class AgentMetadataModificationTest {
                 "Expected the function tool to be listed");
         Assert.assertTrue(modifiedSource.contains("{name: \"toolKit\", kind: ai:TOOLKIT}"),
                 "Expected the non-MCP toolkit to be listed by its variable name with kind TOOLKIT");
+        // `SalesAgent` already has `@display {label: "Sales"}`, so the plugin merges `agentMetadata` into it
+        // and preserves the existing label.
         Assert.assertTrue(modifiedSource.contains(
-                        "@ai:AgentMetadata {tools: [{name: \"toolKit\", kind: ai:TOOLKIT}], "
+                        "@display {label: \"Sales\", agentMetadata: {tools: [{name: \"toolKit\", kind: ai:TOOLKIT}, "
+                                + "{name: \"getDiscounts\", kind: ai:FUNCTION_TOOL}], "
                                 + "systemPrompt: {role: \"Sales Agent\", instructions: \"Promote sales.\"}, "
-                                + "modelProvider: {parameterName: \"model\"}}"),
+                                + "modelProvider: {parameterName: \"model\"}}}"),
+                "Expected the agentMetadata field to be merged into the existing @display, keeping its label");
+        // `ToolKitOnlyAgent` has no `@display`, so one is synthesized with the class name as label.
+        Assert.assertTrue(modifiedSource.contains(
+                        "@display {label: \"ToolKitOnlyAgent\", agentMetadata: {tools: ["
+                                + "{name: \"toolKit\", kind: ai:TOOLKIT}], "
+                                + "systemPrompt: {role: \"Sales Agent\", instructions: \"Promote sales.\"}, "
+                                + "modelProvider: {parameterName: \"model\"}}}"),
                 "Expected the toolkit-only agent to list just the toolkit and its model parameter");
         // Both agents resolve to the same prompt text: one uses inline literals, the other references the
         // SALES_ROLE constant — so two occurrences prove the const reference was resolved.
@@ -92,31 +106,33 @@ public class AgentMetadataModificationTest {
     @Test
     public void testNoAgentMetadataAnnotationForNonAgentClass() {
         String modifiedSource = getModifiedSourceForProject("03_non_agent_class");
-        Assert.assertFalse(modifiedSource.contains("@ai:AgentMetadata"),
-                "No @ai:AgentMetadata annotation should be attached to a class that does not implement "
-                        + "ai:AgentType");
+        Assert.assertFalse(modifiedSource.contains("agentMetadata"),
+                "No agentMetadata should be recorded for a class that does not implement ai:AgentType");
     }
 
     @Test
     public void testUserWrittenAgentMetadataAnnotationIsPreserved() {
         String modifiedSource = getModifiedSourceForProject("04_user_written_annotation");
         Assert.assertTrue(modifiedSource.contains(
-                        "@ai:AgentMetadata {tools: [{name: \"manuallyListedTool\", kind: ai:FUNCTION_TOOL}]}"),
-                "Expected the user-written @ai:AgentMetadata annotation to be preserved");
+                        "@display {label: \"Weather\", agentMetadata: {tools: [{name: \"manuallyListedTool\", "
+                                + "kind: ai:FUNCTION_TOOL}]}}"),
+                "Expected the user-written agentMetadata field within @display to be preserved");
         Assert.assertFalse(agentMetadataAnnotation(modifiedSource).contains("reportWeather"),
-                "The generated tool list must not overwrite the user-written annotation");
+                "The generated tool list must not overwrite the user-written agentMetadata");
     }
 
     @Test
     public void testAgentMetadataAnnotationWithAliasedImport() {
         String modifiedSource = getModifiedSourceForProject("05_aliased_import");
-        // The instructions use an interpolation-free string template, which still resolves statically.
+        // The instructions use an interpolation-free string template, which still resolves statically. The
+        // `@display` annotation itself is a language built-in (always unqualified), but the enum members
+        // inside the record use the aliased `ballerina/ai` prefix.
         Assert.assertTrue(modifiedSource.contains(
-                        "@intelligence:AgentMetadata {tools: [{name: \"answerMath\", kind: " +
+                        "@display {label: \"MathAgent\", agentMetadata: {tools: [{name: \"answerMath\", kind: " +
                                 "intelligence:FUNCTION_TOOL}], systemPrompt: {role: \"Math Tutor\", " +
                                 "instructions: \"Answer math questions.\"}, " +
-                                "modelProvider: {parameterName: \"model\"}}"),
-                "Expected the generated annotation and enum members to use the aliased ballerina/ai prefix");
+                                "modelProvider: {parameterName: \"model\"}}}"),
+                "Expected the enum members inside agentMetadata to use the aliased ballerina/ai prefix");
     }
 
     @Test
@@ -154,27 +170,29 @@ public class AgentMetadataModificationTest {
         // recorded for the dynamic-tools agent. Its prompt template has an interpolation, so this exact
         // match also verifies that no systemPrompt field is generated.
         Assert.assertTrue(modifiedSource.contains(
-                        "@ai:AgentMetadata {tools: [], modelProvider: {parameterName: \"model\"}}"),
+                        "@display {label: \"DynamicToolsAgent\", agentMetadata: {tools: [], "
+                                + "modelProvider: {parameterName: \"model\"}}}"),
                 "Expected an empty tools annotation with the model parameter for the dynamic-tools agent");
         // The directly-implemented agent has no `init`, so it has no tools and no injectable model/memory.
-        int emptyToolsCount = countOccurrences(modifiedSource, "@ai:AgentMetadata {tools: []}");
-        Assert.assertEquals(emptyToolsCount, 1,
-                "Expected a bare empty annotation only for the agent with no init method");
-        // The agent that already had a `@Labelled` annotation keeps it and gains the generated annotation.
+        Assert.assertTrue(modifiedSource.contains(
+                        "@display {label: \"StaticAnswerAgent\", agentMetadata: {tools: []}}"),
+                "Expected a bare empty agentMetadata for the agent with no init method");
+        // The agent that already had a `@Labelled` annotation keeps it and gains a synthesized @display.
         Assert.assertTrue(modifiedSource.contains("@Labelled"),
                 "Expected the existing class-level annotation to be preserved");
         Assert.assertTrue(modifiedSource.contains(
-                        "@ai:AgentMetadata {tools: [{name: \"someTool\", kind: ai:FUNCTION_TOOL}], "
+                        "@display {label: \"LabelledAgent\", agentMetadata: "
+                                + "{tools: [{name: \"someTool\", kind: ai:FUNCTION_TOOL}], "
                                 + "systemPrompt: {role: \"Labelled\", instructions: \"Do work.\"}, "
-                                + "modelProvider: {parameterName: \"model\"}}"),
-                "Expected the generated annotation to be appended alongside the existing annotation");
+                                + "modelProvider: {parameterName: \"model\"}}}"),
+                "Expected a synthesized @display alongside the existing @Labelled annotation");
     }
 
-    // Returns the first generated `@ai:AgentMetadata {...}` annotation (up to its matching closing brace), so
-    // negative assertions can be scoped to the annotation rather than the whole document (where a skipped
-    // tool's name may still appear in the source).
+    // Returns the first generated `agentMetadata: {...}` record (up to its matching closing brace), so negative
+    // assertions can be scoped to the metadata rather than the whole document (where a skipped tool's name may
+    // still appear in the source).
     private static String agentMetadataAnnotation(String source) {
-        int start = source.indexOf("AgentMetadata {tools: [");
+        int start = source.indexOf("agentMetadata: {tools: [");
         if (start < 0) {
             return "";
         }

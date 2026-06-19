@@ -33,6 +33,7 @@ import io.ballerina.compiler.syntax.tree.NodeList;
 import io.ballerina.compiler.syntax.tree.NodeParser;
 import io.ballerina.compiler.syntax.tree.QualifiedNameReferenceNode;
 import io.ballerina.compiler.syntax.tree.SeparatedNodeList;
+import io.ballerina.compiler.syntax.tree.SimpleNameReferenceNode;
 import io.ballerina.compiler.syntax.tree.SpecificFieldNode;
 import io.ballerina.compiler.syntax.tree.SyntaxTree;
 import io.ballerina.compiler.syntax.tree.Token;
@@ -71,8 +72,11 @@ import static io.ballerina.stdlib.ai.plugin.ToolAnnotationConfig.PARAMETERS_FIEL
  * Modifies the AI tool annotations with the generated tool configuration.
  */
 class AiSourceModifier implements ModifierTask<SourceModifierContext> {
+
     private static final String EMPTY_STRING = "";
-    private static final String AGENT_METADATA_ANNOTATION_NAME = "AgentMetadata";
+    private static final String DISPLAY_ANNOTATION_NAME = "display";
+    private static final String DISPLAY_LABEL_FIELD_NAME = "label";
+    private static final String AGENT_METADATA_FIELD_NAME = "agentMetadata";
     private static final String AGENT_METADATA_TOOLS_FIELD_NAME = "tools";
     private static final String AGENT_METADATA_MODEL_PROVIDER_FIELD_NAME = "modelProvider";
     private static final String AGENT_METADATA_MEMORY_FIELD_NAME = "memory";
@@ -155,14 +159,13 @@ class AiSourceModifier implements ModifierTask<SourceModifierContext> {
     /**
      * Retrieves a map of modified annotations based on the provided modifier context.
      * <p>
-     * This method iterates through the annotation configuration map from the
-     * given {@link ModifierContext}, applies modifications to each annotation using
-     * the {@link #getModifiedAnnotation} method, and returns a new map with the
+     * This method iterates through the annotation configuration map from the given {@link ModifierContext}, applies
+     * modifications to each annotation using the {@link #getModifiedAnnotation} method, and returns a new map with the
      * original annotations as keys and the modified annotations as values.
      *
      * @param modifierContext the context containing annotation configurations to be modified
-     * @return a map where the keys are the original {@link AnnotationNode} objects
-     * and the values are the modified {@link AnnotationNode} objects
+     * @return a map where the keys are the original {@link AnnotationNode} objects and the values are the modified
+     * {@link AnnotationNode} objects
      */
     private Map<AnnotationNode, AnnotationNode> getModifiedAnnotations(ModifierContext modifierContext) {
         Map<AnnotationNode, AnnotationNode> updatedAnnotationMap = new HashMap<>();
@@ -333,57 +336,97 @@ class AiSourceModifier implements ModifierTask<SourceModifierContext> {
     }
 
     /**
-     * Attaches the generated `@ai:AgentMetadata` annotation to a custom agent definition so that consumers of a shared
-     * agent can discover its tools. A user-written `@ai:AgentMetadata` annotation is left untouched. The annotation is
-     * added inline (without newlines) to preserve the original line numbers.
+     * Records the generated agent metadata in the `agentMetadata` field of the custom agent class's `@display`
+     * annotation, so consumers of a shared agent can discover its composition. If the class already has a `@display`,
+     * the field is merged into it (preserving its existing fields); otherwise a `@display` is synthesized with a
+     * `label` defaulting to the class name. A `@display` that already carries an `agentMetadata` field (user-written)
+     * is left untouched. The annotation is written inline (without newlines) to preserve the original line numbers.
      */
     private ClassDefinitionNode attachAgentMetadataAnnotation(ClassDefinitionNode classDefinitionNode,
                                                               AgentMetadataConfig config) {
         MetadataNode metadataNode = classDefinitionNode.metadata().orElseGet(() ->
                 NodeFactory.createMetadataNode(null, NodeFactory.createEmptyNodeList()));
+        List<AnnotationNode> updatedAnnotations = new ArrayList<>();
+        boolean displayFound = false;
         for (AnnotationNode annotation : metadataNode.annotations()) {
-            if (isAgentMetadataAnnotation(annotation, config.aiModulePrefix())) {
-                return classDefinitionNode;
+            if (isDisplayAnnotation(annotation)) {
+                displayFound = true;
+                if (hasAgentMetadataField(annotation)) {
+                    return classDefinitionNode;
+                }
+                updatedAnnotations.add(mergeAgentMetadataIntoDisplay(annotation, config));
+            } else {
+                updatedAnnotations.add(annotation);
             }
         }
-        NodeList<AnnotationNode> updatedAnnotations = metadataNode.annotations()
-                .add(getAgentMetadataAnnotation(config));
-        MetadataNode updatedMetadata = metadataNode.modify().withAnnotations(updatedAnnotations).apply();
+        if (!displayFound) {
+            updatedAnnotations.add(createDisplayAnnotation(classDefinitionNode.className().text(), config));
+        }
+        MetadataNode updatedMetadata = metadataNode.modify()
+                .withAnnotations(NodeFactory.createNodeList(updatedAnnotations)).apply();
         return classDefinitionNode.modify().withMetadata(updatedMetadata).apply();
     }
 
-    private boolean isAgentMetadataAnnotation(AnnotationNode annotationNode, String aiModulePrefix) {
-        if (!(annotationNode.annotReference() instanceof QualifiedNameReferenceNode referenceNode)) {
-            return false;
-        }
-        return aiModulePrefix.equals(referenceNode.modulePrefix().text())
-                && AGENT_METADATA_ANNOTATION_NAME.equals(referenceNode.identifier().text());
+    private boolean isDisplayAnnotation(AnnotationNode annotationNode) {
+        return annotationNode.annotReference() instanceof SimpleNameReferenceNode referenceNode
+                && DISPLAY_ANNOTATION_NAME.equals(referenceNode.name().text());
     }
 
-    private AnnotationNode getAgentMetadataAnnotation(AgentMetadataConfig config) {
+    private boolean hasAgentMetadataField(AnnotationNode displayAnnotation) {
+        return displayAnnotation.annotValue()
+                .map(mapping -> mapping.fields().stream().anyMatch(field -> field instanceof SpecificFieldNode specific
+                        && AGENT_METADATA_FIELD_NAME.equals(specific.fieldName().toSourceCode().trim())))
+                .orElse(false);
+    }
+
+    private AnnotationNode mergeAgentMetadataIntoDisplay(AnnotationNode displayAnnotation, AgentMetadataConfig config) {
+        List<String> fieldSources = new ArrayList<>();
+        displayAnnotation.annotValue().ifPresent(mapping -> mapping.fields()
+                .forEach(field -> fieldSources.add(field.toSourceCode().trim())));
+        fieldSources.add(agentMetadataFieldSource(config));
+        return parseDisplayAnnotation(fieldSources);
+    }
+
+    private AnnotationNode createDisplayAnnotation(String className, AgentMetadataConfig config) {
+        List<String> fieldSources = new ArrayList<>();
+        fieldSources.add(DISPLAY_LABEL_FIELD_NAME + COLON_TOKEN.stringValue() + " " + toStringLiteral(className));
+        fieldSources.add(agentMetadataFieldSource(config));
+        return parseDisplayAnnotation(fieldSources);
+    }
+
+    private String agentMetadataFieldSource(AgentMetadataConfig config) {
+        return AGENT_METADATA_FIELD_NAME + COLON_TOKEN.stringValue() + " " + agentMetadataRecordSource(config);
+    }
+
+    private AnnotationNode parseDisplayAnnotation(List<String> fieldSources) {
+        String annotationSource = AT_TOKEN.stringValue() + DISPLAY_ANNOTATION_NAME + " "
+                + OPEN_BRACE_TOKEN.stringValue() + String.join(COMMA_TOKEN.stringValue() + " ", fieldSources)
+                + CLOSE_BRACE_TOKEN.stringValue() + " ";
+        return NodeParser.parseAnnotation(annotationSource);
+    }
+
+    // Renders the `ai:AgentMetadataConfig` record literal, e.g. {@code {tools: [...], systemPrompt: {...}}}.
+    private String agentMetadataRecordSource(AgentMetadataConfig config) {
         String tools = config.tools().stream().map(tool -> toolMetadataSource(tool, config.aiModulePrefix()))
                 .collect(Collectors.joining(COMMA_TOKEN.stringValue() + " ", "[", "]"));
-        StringBuilder annotationSource = new StringBuilder(AT_TOKEN.stringValue())
-                .append(config.aiModulePrefix()).append(COLON_TOKEN.stringValue())
-                .append(AGENT_METADATA_ANNOTATION_NAME).append(" ").append(OPEN_BRACE_TOKEN.stringValue())
+        StringBuilder record = new StringBuilder(OPEN_BRACE_TOKEN.stringValue())
                 .append(AGENT_METADATA_TOOLS_FIELD_NAME).append(COLON_TOKEN.stringValue()).append(" ").append(tools);
         if (config.systemPrompt() != null) {
-            annotationSource.append(COMMA_TOKEN.stringValue()).append(" ")
+            record.append(COMMA_TOKEN.stringValue()).append(" ")
                     .append(AGENT_METADATA_SYSTEM_PROMPT_FIELD_NAME).append(COLON_TOKEN.stringValue()).append(" ")
                     .append(systemPromptSource(config.systemPrompt()));
         }
         if (config.modelProviderParamName() != null) {
-            annotationSource.append(COMMA_TOKEN.stringValue()).append(" ")
+            record.append(COMMA_TOKEN.stringValue()).append(" ")
                     .append(AGENT_METADATA_MODEL_PROVIDER_FIELD_NAME).append(COLON_TOKEN.stringValue()).append(" ")
                     .append(parameterInfoSource(config.modelProviderParamName()));
         }
         if (config.memoryParamName() != null) {
-            annotationSource.append(COMMA_TOKEN.stringValue()).append(" ")
+            record.append(COMMA_TOKEN.stringValue()).append(" ")
                     .append(AGENT_METADATA_MEMORY_FIELD_NAME).append(COLON_TOKEN.stringValue()).append(" ")
                     .append(parameterInfoSource(config.memoryParamName()));
         }
-        annotationSource.append(CLOSE_BRACE_TOKEN.stringValue()).append(" ");
-        return NodeParser.parseAnnotation(annotationSource.toString());
+        return record.append(CLOSE_BRACE_TOKEN.stringValue()).toString();
     }
 
     // Renders an `ai:ParameterInfo` record literal, e.g. {@code {parameterName: "model"}}.

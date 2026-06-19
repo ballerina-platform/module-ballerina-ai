@@ -19,8 +19,8 @@ import ballerina/ai as intelligence;
 @intelligence:AgentTool
 isolated function answerMath(string question) returns string => "42";
 
-// The `ballerina/ai` import is aliased: the generated annotation must use the alias
-// (`@intelligence:AgentMetadata`).
+// The `ballerina/ai` import is aliased: the enum members inside the generated `agentMetadata` must use the
+// alias (`intelligence:FUNCTION_TOOL`), while `@display` itself stays unqualified.
 public isolated class MathAgent {
     *intelligence:FixedReturnAgentType;
 

@@ -19,9 +19,9 @@ import ballerina/ai;
 @ai:AgentTool
 isolated function reportWeather(string city) returns string => "sunny";
 
-// The user has written the `@ai:AgentMetadata` annotation explicitly: the compiler plugin must leave
-// it untouched instead of overwriting it with the generated tool list.
-@ai:AgentMetadata {tools: [{name: "manuallyListedTool", kind: ai:FUNCTION_TOOL}]}
+// The user has written the `agentMetadata` field within `@display` explicitly: the compiler plugin must
+// leave it untouched instead of overwriting it with the generated tool list.
+@display {label: "Weather", agentMetadata: {tools: [{name: "manuallyListedTool", kind: ai:FUNCTION_TOOL}]}}
 public isolated class WeatherAgent {
     *ai:FixedReturnAgentType;
 
