@@ -94,8 +94,8 @@ import java.util.Optional;
 class CustomAgentAnalysisTask implements AnalysisTask<SyntaxNodeAnalysisContext> {
 
     private static final String AGENT_CLASS_NAME = "Agent";
-    private static final String FIXED_RETURN_AGENT_TYPE_NAME = "FixedReturnAgentType";
-    private static final String INFERRED_RETURN_AGENT_TYPE_NAME = "InferredReturnAgentType";
+    private static final String FIXED_TYPED_AGENT_NAME = "FixedTypedAgent";
+    private static final String DEPENDENTLY_TYPED_AGENT_NAME = "DependentlyTypedAgent";
     private static final String MCP_BASE_TOOLKIT_NAME = "McpBaseToolKit";
     private static final String BASE_TOOLKIT_NAME = "BaseToolKit";
     private static final String INIT_METHOD_NAME = "init";
@@ -147,8 +147,8 @@ class CustomAgentAnalysisTask implements AnalysisTask<SyntaxNodeAnalysisContext>
     }
 
     /**
-     * Returns the `ballerina/ai` module prefix used by the class's `*ai:FixedReturnAgentType` or
-     * `*ai:InferredReturnAgentType` type inclusion, or empty if the class is not a custom agent definition.
+     * Returns the `ballerina/ai` module prefix used by the class's `*ai:FixedTypedAgent` or
+     * `*ai:DependentlyTypedAgent` type inclusion, or empty if the class is not a custom agent definition.
      */
     private Optional<String> getAgentTypeInclusionPrefix(SemanticModel semanticModel,
                                                          ClassDefinitionNode classDefinitionNode) {
@@ -158,8 +158,8 @@ class CustomAgentAnalysisTask implements AnalysisTask<SyntaxNodeAnalysisContext>
                 continue;
             }
             String identifier = qualifiedTypeName.identifier().text();
-            if (!FIXED_RETURN_AGENT_TYPE_NAME.equals(identifier)
-                    && !INFERRED_RETURN_AGENT_TYPE_NAME.equals(identifier)) {
+            if (!FIXED_TYPED_AGENT_NAME.equals(identifier)
+                    && !DEPENDENTLY_TYPED_AGENT_NAME.equals(identifier)) {
                 continue;
             }
             Optional<Symbol> typeSymbol = semanticModel.symbol(qualifiedTypeName);

@@ -36,7 +36,7 @@ import java.nio.file.Paths;
  * Tests that the compiler plugin attaches an `@ai:AgentMetadata` annotation, listing the statically identifiable tool
  * names, to custom agent definitions (classes implementing `ai:AgentType`).
  * <p>
- * Note: there is no test for an `ai:InferredReturnAgentType` subtype because its `run` method is dependently-typed and
+ * Note: there is no test for an `ai:DependentlyTypedAgent` subtype because its `run` method is dependently-typed and
  * therefore cannot be implemented in user code (it would have to be `external`).
  */
 public class AgentMetadataModificationTest {

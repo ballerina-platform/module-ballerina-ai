@@ -23,7 +23,7 @@ isolated function reportWeather(string city) returns string => "sunny";
 // leave it untouched instead of overwriting it with the generated tool list.
 @display {label: "Weather", agentMetadata: {tools: [{name: "manuallyListedTool", kind: ai:FUNCTION_TOOL}]}}
 public isolated class WeatherAgent {
-    *ai:FixedReturnAgentType;
+    *ai:FixedTypedAgent;
 
     private final ai:Agent agent;
 

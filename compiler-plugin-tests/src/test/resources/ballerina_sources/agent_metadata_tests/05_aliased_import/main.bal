@@ -22,7 +22,7 @@ isolated function answerMath(string question) returns string => "42";
 // The `ballerina/ai` import is aliased: the enum members inside the generated `agentMetadata` must use the
 // alias (`intelligence:FUNCTION_TOOL`), while `@display` itself stays unqualified.
 public isolated class MathAgent {
-    *intelligence:FixedReturnAgentType;
+    *intelligence:FixedTypedAgent;
 
     private final intelligence:Agent agent;
 

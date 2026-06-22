@@ -94,7 +94,7 @@ public type AgentConfiguration record {|
 
 # Represents the supported agent type abstractions: an agent whose return type is inferred from the call
 # site, or one that fixes its return type to a specific `anydata` value.
-public type AgentType InferredReturnAgentType|FixedReturnAgentType;
+public type AgentType DependentlyTypedAgent|FixedTypedAgent;
 
 # Represents the kind of a tool entry available to an agent.
 public enum ToolKind {
@@ -148,7 +148,7 @@ public type AgentMetadataConfig record {|
 # Represents an agent whose `run` return type is inferred from the expected type at the call site.
 # Callers decide whether they want the full `Trace`, the raw `string` answer, or the answer bound 
 # to a structured `anydata` type.
-public type InferredReturnAgentType distinct isolated object {
+public type DependentlyTypedAgent distinct isolated object {
     # Executes the agent for the given query and binds the result to the inferred return type.
     #
     # + query - The query to be executed by the agent, as a plain string or a `Prompt` template
@@ -165,7 +165,7 @@ public type InferredReturnAgentType distinct isolated object {
 # Represents a reusable agent definition with a fixed `anydata` return type. Implementations typically
 # compose an `Agent` and delegate to it, exposing a domain-specific return type from `run` while still
 # surfacing the full execution `Trace` via `trace`.
-public type FixedReturnAgentType distinct isolated object {
+public type FixedTypedAgent distinct isolated object {
     # Executes the agent for the given query and returns the result bound to the implementation's fixed type.
     #
     # + query - The query to be executed by the agent, as a plain string or a `Prompt` template
@@ -189,7 +189,7 @@ public type FixedReturnAgentType distinct isolated object {
 
 # Represents an agent.
 public isolated distinct class Agent {
-    *InferredReturnAgentType;
+    *DependentlyTypedAgent;
 
     final FunctionCallAgent functionCallAgent;
     private final int maxIter;

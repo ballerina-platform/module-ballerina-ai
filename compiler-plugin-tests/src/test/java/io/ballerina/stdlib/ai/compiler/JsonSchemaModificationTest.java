@@ -88,12 +88,12 @@ public class JsonSchemaModificationTest {
     }
 
     @Test
-    public void testFixedReturnAgentTypeRejectsNonAnydataRunReturn() {
+    public void testFixedTypedAgentRejectsNonAnydataRunReturn() {
         BuildProject project = BuildProject.load(getEnvironmentBuilder(),
                 RESOURCE_DIRECTORY.resolve("04_fixed_return_agent_non_anydata"));
         DiagnosticResult diagnosticResult = project.currentPackage().getCompilation().diagnosticResult();
         Assert.assertTrue(diagnosticResult.errorCount() > 0,
-                "Expected a compile-time error when implementing FixedReturnAgentType with a non-anydata "
+                "Expected a compile-time error when implementing FixedTypedAgent with a non-anydata "
                         + "run return type");
         boolean hasSignatureMismatch = diagnosticResult.errors().stream()
                 .anyMatch(d -> d.message().contains("mismatched function signatures"));

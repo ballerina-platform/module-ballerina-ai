@@ -28,7 +28,7 @@ isolated function customSearch(string query) returns string => "search result";
 // listing the tools passed to the composed `ai:Agent` — the object method tool, the module-level
 // function tool, and the inline `ai:ToolConfig` (by its explicit `name`).
 public isolated class SchedulerAgent {
-    *ai:FixedReturnAgentType;
+    *ai:FixedTypedAgent;
 
     private final ai:Agent agent;
 

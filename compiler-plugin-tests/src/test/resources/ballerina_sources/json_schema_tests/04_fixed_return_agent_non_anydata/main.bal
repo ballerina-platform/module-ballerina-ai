@@ -16,10 +16,10 @@
 
 import ballerina/ai;
 
-// Implementing `ai:FixedReturnAgentType` with a non-`anydata` return type (`stream<int>`) from `run` must
+// Implementing `ai:FixedTypedAgent` with a non-`anydata` return type (`stream<int>`) from `run` must
 // be a compile-time error, since the contract fixes the return type to `anydata|ai:Error`.
 isolated class BadAgent {
-    *ai:FixedReturnAgentType;
+    *ai:FixedTypedAgent;
 
     public isolated function run(string|ai:Prompt query, string sessionId = "default-session",
             ai:Context context = new) returns stream<int>|ai:Error => (<int[]>[]).toStream();

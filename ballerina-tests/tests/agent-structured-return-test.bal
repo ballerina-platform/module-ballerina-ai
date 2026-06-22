@@ -28,10 +28,10 @@ type WeatherReport record {|
     string condition;
 |};
 
-// A reusable custom agent definition: a subtype of `ai:FixedReturnAgentType` that composes an `ai:Agent`
+// A reusable custom agent definition: a subtype of `ai:FixedTypedAgent` that composes an `ai:Agent`
 // and declares a fixed `WeatherReport` return type.
 isolated class WeatherAgent {
-    *ai:FixedReturnAgentType;
+    *ai:FixedTypedAgent;
 
     private final ai:Agent agent;
 
@@ -87,7 +87,7 @@ function testAgentRunWithStringReturnIsUnchanged() returns error? {
     test:assertEquals(result, "Answer is: 244");
 }
 
-// The custom `*ai:FixedReturnAgentType` definition returns its declared structured type.
+// The custom `*ai:FixedTypedAgent` definition returns its declared structured type.
 @test:Config
 function testFixedReturnAgentDefinition() returns error? {
     WeatherAgent weatherAgent = check new;

@@ -36,7 +36,7 @@ isolated class DiscountsToolKit {
 // merge the `agentMetadata` field into it while preserving the existing `label`.
 @display {label: "Sales"}
 public isolated class SalesAgent {
-    *ai:FixedReturnAgentType;
+    *ai:FixedTypedAgent;
 
     private final ai:Agent agent;
 
@@ -59,7 +59,7 @@ public isolated class SalesAgent {
 
 // Uses only a toolkit: the annotation should still be attached, with an empty tools list.
 public isolated class ToolKitOnlyAgent {
-    *ai:FixedReturnAgentType;
+    *ai:FixedTypedAgent;
 
     private final ai:Agent agent;
 

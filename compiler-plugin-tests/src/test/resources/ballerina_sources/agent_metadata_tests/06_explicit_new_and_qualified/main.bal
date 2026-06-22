@@ -31,7 +31,7 @@ isolated function configCaller(string query) returns string => "config";
 //   - `{description, name, caller}`-> inline `ToolConfig` with `name` after `description` (name: "inlineNamed")
 //   - `{name: dynamicName, ...}`   -> inline `ToolConfig` with a non-literal `name` -> skipped
 public isolated class ResearchAgent {
-    *ai:FixedReturnAgentType;
+    *ai:FixedTypedAgent;
 
     private final ai:Agent agent;
 

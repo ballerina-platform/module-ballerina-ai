@@ -19,8 +19,8 @@ import ballerina/ai;
 @ai:AgentTool
 isolated function lookupOrder(string orderId) returns string => "order found";
 
-// Composes an `ai:Agent`, but does NOT include `*ai:FixedReturnAgentType` (or
-// `*ai:InferredReturnAgentType`), so it is not a custom agent definition and no
+// Composes an `ai:Agent`, but does NOT include `*ai:FixedTypedAgent` (or
+// `*ai:DependentlyTypedAgent`), so it is not a custom agent definition and no
 // agent metadata annotation should be attached.
 public isolated class OrderHelper {
 

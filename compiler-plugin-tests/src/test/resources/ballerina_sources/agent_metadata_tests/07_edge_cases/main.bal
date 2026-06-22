@@ -28,7 +28,7 @@ public annotation Labelled on class;
 // The `tools` argument is a variable reference, not a list literal, so the tools cannot be read
 // statically. The annotation is still attached, with an empty tools list.
 public isolated class DynamicToolsAgent {
-    *ai:FixedReturnAgentType;
+    *ai:FixedTypedAgent;
 
     private final ai:Agent agent;
 
@@ -54,7 +54,7 @@ public isolated class DynamicToolsAgent {
 // and still append its own synthesized `@display`.
 @Labelled
 public isolated class LabelledAgent {
-    *ai:FixedReturnAgentType;
+    *ai:FixedTypedAgent;
 
     private final ai:Agent agent;
 
@@ -76,7 +76,7 @@ public isolated class LabelledAgent {
 // A custom agent implemented directly, WITHOUT composing an `ai:Agent` and without an `init` method.
 // It is still a discoverable agent definition, so it gets an annotation with an empty tools list.
 public isolated class StaticAnswerAgent {
-    *ai:FixedReturnAgentType;
+    *ai:FixedTypedAgent;
 
     public isolated function run(string|ai:Prompt query, string sessionId = "default-session",
             ai:Context context = new) returns anydata|ai:Error => "static answer";
