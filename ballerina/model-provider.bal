@@ -112,6 +112,64 @@ public type Prompt object {
     public (anydata|Document|Document[]|Chunk|Chunk[])[] insertions;
 };
 
+# Builds the stream returned by `ModelProvider.generateStream`.
+#
+# Acts as the (non-dependently-typed) body behind the dependently-typed `generateStream`
+# method: a native shim trampolines here so the gating and streaming logic can stay in
+# Ballerina. Only `string` is supported as the expected type; any other type yields an
+# error, because a partial generation is a valid value only for `string`. When the type
+# is valid, the underlying `chatStream` events are projected onto their text fragments.
+#
+# + model - The model provider whose `chatStream` supplies the raw events
+# + prompt - The prompt to send to the model
+# + td - The caller's expected type; must be `string`
+# + return - A stream of text fragments, or an error if the type is unsupported or the stream cannot be opened
+function generateLlmResponseStream(ModelProvider model, Prompt prompt, typedesc<anydata> td)
+        returns stream<string, Error?>|Error {
+    if td !is typedesc<string> {
+        return error Error("This data type is not supported for streaming. " +
+            "'generateStream' supports only 'string'; use 'generate' for structured types.");
+    }
+    stream<ChatCompletionChunk, Error?> chunks = check model->chatStream({role: USER, content: prompt});
+    return new stream<string, Error?>(new GenerateStreamTextIterator(chunks));
+}
+
+# Projects a raw `ChatCompletionChunk` stream onto its text content, yielding each
+# non-empty `delta.content` fragment and skipping tool-call, reasoning, and usage-only
+# chunks. Backs `generateLlmResponseStream`.
+class GenerateStreamTextIterator {
+    private stream<ChatCompletionChunk, Error?> chunks;
+
+    isolated function init(stream<ChatCompletionChunk, Error?> chunks) {
+        self.chunks = chunks;
+    }
+
+    public isolated function next() returns record {|string value;|}|Error? {
+        while true {
+            record {|ChatCompletionChunk value;|}|Error? next = self.chunks.next();
+            if next is () {
+                return ();
+            }
+            if next is Error {
+                return next;
+            }
+            ChatCompletionChunkChoice[] choices = next.value.choices;
+            if choices.length() == 0 {
+                continue;
+            }
+            string? content = choices[0].delta.content;
+            if content is string && content.length() > 0 {
+                return {value: content};
+            }
+            // Non-content chunks (tool calls, reasoning, usage-only) carry no answer text; skip them.
+        }
+    }
+
+    public isolated function close() returns Error? {
+        return self.chunks.close();
+    }
+}
+
 # Represents an extendable client for interacting with an AI model.
 public type ModelProvider distinct isolated client object {
     # Sends a chat request to the model with the given messages and tools.
@@ -122,6 +180,14 @@ public type ModelProvider distinct isolated client object {
     isolated remote function chat(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [], string? stop = ())
         returns ChatAssistantMessage|Error;
 
+    # Sends a streaming chat request to the model with the given messages and tools.
+    # + messages - List of chat messages or a user message
+    # + tools - Tool definitions to be used for the tool call
+    # + stop - Stop sequence to stop the completion
+    # + return - A stream of chat completion chunks or an error in-case of failures
+    remote function chatStream(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [], string? stop = ())
+        returns stream<ChatCompletionChunk, Error?>|Error;
+
     # Sends a chat request to the model and generates a value that belongs to the type
     # corresponding to the type descriptor argument.
     #
@@ -129,6 +195,20 @@ public type ModelProvider distinct isolated client object {
     # + td - Type descriptor specifying the expected return type format
     # + return - Generates a value that belongs to the type, or an error if generation fails
     isolated remote function generate(Prompt prompt, @display {label: "Expected type"} typedesc<anydata> td = <>) returns td|Error;
+
+    # Sends a streaming chat request to the model using the given prompt and streams
+    # back the generated answer.
+    #
+    # Only `string` is supported as the expected type. A partial generation is a valid
+    # value only for `string`; structured types (records, ints, etc.) have no valid
+    # intermediate state and so cannot be streamed incrementally. Passing any other type
+    # returns an error - use `generate` for structured output.
+    #
+    # + prompt - The prompt to use in the chat request
+    # + td - The expected type of the streamed value; must be `string`
+    # + return - A stream of the generated value, or an error if the type is unsupported or generation fails
+    remote function generateStream(Prompt prompt, @display {label: "Expected type"} typedesc<anydata> td = <>)
+        returns stream<td, Error?>|Error;
 };
 
 # Represents configuratations of WSO2 provider.
@@ -277,6 +357,16 @@ public isolated distinct client class Wso2ModelProvider {
     # + return - Generates a value that belongs to the type, or an error if generation fails
     isolated remote function generate(Prompt prompt, @display {label: "Expected type"} typedesc<anydata> td = <>) returns td|Error = @java:Method {
         'class: "io.ballerina.stdlib.ai.wso2.Generator"
+    } external;
+
+    remote function chatStream(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [], string? stop = ())
+            returns stream<ChatCompletionChunk, Error?>|Error {
+        return error Error("chatStream is not supported by Wso2ModelProvider");
+    }
+
+    remote function generateStream(Prompt prompt, @display {label: "Expected type"} typedesc<anydata> td = <>)
+            returns stream<td, Error?>|Error = @java:Method {
+        'class: "io.ballerina.stdlib.ai.wso2.StreamGenerator"
     } external;
 
     private isolated function mapToChatCompletionRequestMessage(ChatMessage[]|ChatUserMessage messages)

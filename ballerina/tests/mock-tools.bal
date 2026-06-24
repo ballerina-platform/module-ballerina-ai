@@ -63,6 +63,16 @@ public isolated client class MockLLM {
         return error LlmError("Unexpected prompt to MockLLM");
     }
 
+    remote function chatStream(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [], string? stop = ())
+        returns stream<ChatCompletionChunk, Error?>|Error {
+        return error Error("chatStream not implemented in MockLLM");
+    }
+
+    remote function generateStream(Prompt prompt, @display {label: "Expected type"} typedesc<anydata> td = <>)
+            returns stream<td, Error?>|Error = @java:Method {
+        'class: "io.ballerina.stdlib.ai.wso2.StreamGenerator"
+    } external;
+
     isolated remote function generate(Prompt prompt, typedesc<anydata> td = <>) returns td|Error = @java:Method {
         'class: "io.ballerina.lib.ai.MockGenerator"
     } external;
