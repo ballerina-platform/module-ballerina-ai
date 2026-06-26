@@ -40,8 +40,8 @@ abstract class PatchBallerinaScriptsTask extends DefaultTask {
         [new File(jballerinaToolsBinPath.get()), new File(ballerinaRuntimeBinPath.get())].each { binDir ->
             if (binDir.exists()) {
                 binDir.eachFile { file ->
-                    file.setExecutable(true)
                     if (!file.name.endsWith('.bat') && !file.name.endsWith('.cmd')) {
+                        file.setExecutable(true)
                         def original = file.text
                         def lines = original.split('\n').toList()
                         lines = lines.collect { it.replace('--sun-misc-unsafe-memory-access=allow', '').trim() }.findAll { !it.isEmpty() }
