@@ -17,12 +17,13 @@
 import ballerina/lang.regexp;
 import ballerina/log;
 
-isolated function createFunctionCallMessages(ExecutionProgress progress) returns ChatMessage[] {
+isolated function createFunctionCallMessages(ExecutionProgress progress) returns ChatMessage[]|Error {
     ChatMessage[] messages = [];
     foreach ExecutionStep step in progress.executionSteps {
         FunctionCall|error functionCall = step.llmResponse.fromJsonWithType();
         if functionCall is error {
-            panic error Error("Badly formated history for function call agent", llmResponse = step.llmResponse);
+            return error Error("Failed to parse a persisted execution step into a function call", functionCall,
+                llmResponse = step.llmResponse);
         }
 
         messages.push({
@@ -62,7 +63,11 @@ ${BACKTICKS}`;
     if content is string {
         content += toolsPrompt;
     } else {
-        content.insertions.push(toolsPrompt);
+        // `content.insertions` is `readonly`, so it can't be mutated in place
+        // (e.g. `content.insertions.push(toolsPrompt)` would fail) — build a new
+        // array with the tools prompt appended instead.
+        anydata[] & readonly insertions = [...content.insertions, toolsPrompt].cloneReadOnly();
+        content = createPrompt(content.strings, insertions);
     }
 
     return {role: USER, content, name: chatUserMsg.name};
@@ -71,9 +76,10 @@ ${BACKTICKS}`;
 isolated function getSelectedToolsFromAssistantMessage(ChatAssistantMessage assistantMsg) returns string[]? {
     do {
         string rawResponse = assistantMsg.content ?: "[]";
-        string cleanedJson = regexp:replaceAll(check regexp:fromString("```"), rawResponse, "");
+        string cleanedJson = regexp:replaceAll(check regexp:fromString("```[a-zA-Z]*"), rawResponse, "");
         return check cleanedJson.fromJsonStringWithType();
     } on fail error e {
+        log:printDebug("Failed to parse selected tools from assistant message", 'error = e);
         // In case of failure try to load all tools and ignore the error
         return;
     }

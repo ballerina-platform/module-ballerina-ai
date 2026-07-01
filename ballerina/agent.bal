@@ -197,7 +197,7 @@ public isolated distinct class Agent {
     # + sessionId - The ID associated with the agent memory
     # + return - LLM response containing the tool or chat response (or an error if the call fails)
     isolated function selectNextTool(ExecutionProgress progress, string sessionId = DEFAULT_SESSION_ID) returns json|Error {
-        ChatMessage[] messages = createFunctionCallMessages(progress);
+        ChatMessage[] messages = check createFunctionCallMessages(progress);
         messages.unshift(...progress.history);
         ToolLoadingStrategy toolLoadingStrategy = self.toolLoadingStrategy;
         ChatMessage lastMessage = messages[messages.length() - 1];

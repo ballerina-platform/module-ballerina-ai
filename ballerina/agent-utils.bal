@@ -442,8 +442,13 @@ isolated function run(Agent agent, string instruction, string query, int maxIter
         startTime = time:utcNow();
     }
 
-    ChatMessage[] intermediateFunctionCallMessages = createFunctionCallMessages(executor.progress);
-    temporaryMemory.push(...intermediateFunctionCallMessages);
+    ChatMessage[]|Error intermediateFunctionCallMessages = createFunctionCallMessages(executor.progress);
+    if intermediateFunctionCallMessages is Error {
+        log:printError("Failed to build function call messages from execution history",
+                intermediateFunctionCallMessages, agentId = agentId, executionId = executionId, sessionId = sessionId);
+    } else {
+        temporaryMemory.push(...intermediateFunctionCallMessages);
+    }
     if finalAssistantMessage is ChatAssistantMessage {
         temporaryMemory.push(finalAssistantMessage);
     }
@@ -521,7 +526,12 @@ isolated function getOutputOfIteration(ExecutionResult|LlmChatResponse|Execution
 
 isolated function buildCurrentIterationHistory(ExecutionProgress progress,
         ChatMessage[] conversationHistoryUpToCurrentUserQuery) returns ChatMessage[] {
-    ChatMessage[] messages = createFunctionCallMessages(progress);
+    ChatMessage[]|Error messages = createFunctionCallMessages(progress);
+    if messages is Error {
+        log:printError("Failed to build function call messages from execution history",
+                messages, executionId = progress.executionId);
+        return conversationHistoryUpToCurrentUserQuery;
+    }
     messages.unshift(...conversationHistoryUpToCurrentUserQuery);
     return messages;
 }

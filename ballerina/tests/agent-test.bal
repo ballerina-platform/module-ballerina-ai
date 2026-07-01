@@ -91,3 +91,33 @@ function testAgentRunHavingErrorStep() returns error? {
     test:assertEquals(trace.steps.length(), 1);
     test:assertEquals(trace.steps[0] is Error, true);
 }
+
+@test:Config
+function testAgentRecoversFromBadlyFormattedHistoryWithoutCorruptingMemory() returns error? {
+    ModelProvider scriptedModel = new ScriptedMockLLM();
+    Agent agent = check new ({
+        systemPrompt: {role: "Test Agent", instructions: "Answer the questions"},
+        model: scriptedModel,
+        tools: [searchTool, calculatorTool]
+    });
+
+    // Turn 1: a normal, successful exchange.
+    string firstResult = check agent.run("first turn query");
+    test:assertEquals(firstResult, "first turn answer");
+
+    // Turn 2: the mock returns a response with neither `content` nor `toolCalls`, which the
+    // agent can't parse into a tool call or a final answer. It records the raw response as an
+    // execution step, and replaying that step from history on the next reasoning iteration used
+    // to `panic` and crash the whole run. It should now surface as a recoverable `Error` instead.
+    string|Error secondResult = agent.run("second turn query");
+    test:assertTrue(secondResult is Error);
+    if secondResult is Error {
+        string detail = secondResult.detail().toString();
+        test:assertEquals(detail.includes("Failed to parse a persisted execution step into a function call"), true);
+    }
+
+    // Turn 3: a normal exchange again, using the same session. If the failed turn had persisted
+    // the badly-formatted step into conversation memory, this turn would panic/fail too.
+    string thirdResult = check agent.run("third turn query");
+    test:assertEquals(thirdResult, "third turn answer");
+}
