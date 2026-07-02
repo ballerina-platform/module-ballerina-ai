@@ -169,34 +169,13 @@ public isolated distinct class Agent {
         }
     }
 
-    # Parse the function calling API response and extract the tool to be executed.
-    #
-    # + llmResponse - Raw LLM response
-    # + return - A record containing the tool decided by the LLM, chat response or an error if the response is invalid
-    isolated function parseLlmResponse(json llmResponse) returns LlmToolResponse|LlmChatResponse|LlmInvalidGenerationError {
-        if llmResponse is string {
-            return {content: llmResponse};
-        }
-        if llmResponse !is FunctionCall {
-            return error LlmInvalidGenerationError("Invalid response", llmResponse = llmResponse);
-        }
-        string? name = llmResponse.name;
-        if name is () {
-            return error LlmInvalidGenerationError("Missing name", name = llmResponse.name, arguments = llmResponse.arguments);
-        }
-        return {
-            name,
-            arguments: llmResponse.arguments,
-            id: llmResponse.id
-        };
-    }
-
     # Use LLM to decide the next tool/step based on the function calling APIs.
     #
     # + progress - Execution progress with the current query and execution history
     # + sessionId - The ID associated with the agent memory
     # + return - LLM response containing the tool or chat response (or an error if the call fails)
-    isolated function selectNextTool(ExecutionProgress progress, string sessionId = DEFAULT_SESSION_ID) returns json|Error {
+    isolated function selectNextTool(ExecutionProgress progress, string sessionId = DEFAULT_SESSION_ID)
+    returns FunctionCall[]|string|Error {
         ChatMessage[] messages = check createFunctionCallMessages(progress);
         messages.unshift(...progress.history);
         ToolLoadingStrategy toolLoadingStrategy = self.toolLoadingStrategy;
@@ -222,20 +201,21 @@ public isolated distinct class Agent {
                 availableTools = filteredTools.toString()
         );
 
-        // TODO: Improve handling of multiple tool calls returned by the LLM.
-        // Currently, tool calls are executed sequentially in separate chat responses.
-        // Update the logic to execute all tool calls together and return a single response.
         ChatAssistantMessage response = check self.model->chat(messages, filteredTools);
-        FunctionCall? toolCall = getFirstToolCall(response);
-
-        if toolCall is FunctionCall {
-            log:printDebug("LLM selected tool",
+        // All tool calls returned in this single LLM response are executed together
+        // (see `Executor.next()`) before the LLM is consulted again, instead of executing
+        // them one at a time across separate chat requests.
+        FunctionCall[]? toolCalls = getToolCalls(response);
+        if toolCalls is FunctionCall[] {
+            log:printDebug("LLM selected tool(s)",
                     executionId = progress.executionId,
                     sessionId = sessionId,
-                    toolName = toolCall.name,
-                    toolArguments = toolCall.arguments
+                    toolNames = from FunctionCall toolCall in toolCalls
+                        select toolCall.name,
+                    toolArguments = from FunctionCall toolCall in toolCalls
+                        select toolCall.arguments
             );
-            return toolCall;
+            return toolCalls;
         }
 
         log:printDebug("LLM provided chat response instead of tool call",
@@ -243,7 +223,17 @@ public isolated distinct class Agent {
                 sessionId = sessionId,
                 response = response?.content
         );
-        return response?.content;
+        string? content = response?.content;
+        if content is string {
+            return content;
+        }
+        log:printDebug("Failed to parse LLM response as valid tool or chat",
+                agentId = self.agentId,
+                executionId = progress.executionId,
+                sessionId = sessionId
+        );
+        return error LlmInvalidGenerationError("Failed to parse the LLM response into a function call or chat message.",
+            llmResponse = content);
     }
 
     # Executes the agent for a given user query.
@@ -285,7 +275,7 @@ public isolated distinct class Agent {
         Credential? & readonly agentCredential = self.agentCredential;
         string? agentId = agentCredential is Credential ? agentCredential.id : ();
         ExecutionTrace executionTrace = run(self, systemPrompt, query, self.maxIter, self.verbose, agentId,
-            sessionId, context, executionId);
+                sessionId, context, executionId);
         ChatUserMessage userMessage = {role: USER, content: query};
         Iteration[] iterations = executionTrace.iterations;
         FunctionCall[]? toolCalls = executionTrace.toolCalls.length() == 0 ? () : executionTrace.toolCalls;
