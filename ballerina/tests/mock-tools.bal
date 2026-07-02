@@ -94,6 +94,54 @@ public isolated client class ScriptedMockLLM {
     isolated remote function generate(Prompt prompt, typedesc<anydata> td = <>) returns td|Error = external;
 }
 
+// Returns both the `Search` and `Calculator` tool calls together in a single response, then, once
+// both tool results are present in the conversation history, returns the final answer.
+// Used to verify that multiple tool calls returned in one LLM response are all executed before the
+// LLM is consulted again, instead of one round-trip per tool call.
+public isolated client class MultiToolCallMockLLM {
+    *ModelProvider;
+
+    private int chatCallCount = 0;
+
+    isolated remote function chat(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [],
+            string? stop = ()) returns ChatAssistantMessage|Error {
+        lock {
+            self.chatCallCount += 1;
+        }
+        int toolResultCount = messages is ChatUserMessage ? 0
+            : messages.filter(msg => msg is ChatFunctionMessage).length();
+        if toolResultCount == 0 {
+            return {
+                role: ASSISTANT,
+                toolCalls: [
+                    {name: "Search", arguments: {params: {query: "Leo DiCaprio girlfriend"}}, id: "call-1"},
+                    {name: "Calculator", arguments: {params: {expression: "25 ^ 0.43"}}, id: "call-2"}
+                ]
+            };
+        }
+        if toolResultCount == 2 {
+            return {
+                role: ASSISTANT,
+                content: "Leo DiCaprio's girlfriend is Camila Morrone, and 25 raised to the power of 0.43 is " +
+                    "Answer: 3.991298452658078"
+            };
+        }
+        return error Error("Unexpected number of tool results in history: " + toolResultCount.toString());
+    }
+
+    isolated remote function generate(Prompt prompt, typedesc<anydata> td = <>) returns td|Error = external;
+
+    # Returns the number of times the LLM was consulted, so that tests can assert
+    # all the tool calls from one response were executed without extra round-trips.
+    #
+    # + return - The number of times `chat` has been called
+    public isolated function getChatCallCount() returns int {
+        lock {
+            return self.chatCallCount;
+        }
+    }
+}
+
 isolated function getChatAssistantMessageContent(int queryLevel) returns string|LlmError {
     match queryLevel {
         3 => {

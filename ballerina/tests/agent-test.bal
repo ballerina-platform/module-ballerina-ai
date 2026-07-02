@@ -137,3 +137,60 @@ function testAgentRecoversFromBadlyFormattedHistoryWithoutCorruptingMemory() ret
     string thirdResult = check agent.run("third turn query");
     test:assertEquals(thirdResult, "third turn answer");
 }
+
+@test:Config
+function testAgentRunExecutesMultipleToolCallsFromSingleLlmResponseTogether() returns error? {
+    MultiToolCallMockLLM scriptedModel = new;
+    Agent agent = check new ({
+        systemPrompt: {role: "Test Agent", instructions: "Answer the questions"},
+        model: scriptedModel,
+        tools: [searchTool, calculatorTool]
+    });
+
+    // The mock LLM returns both the `Search` and `Calculator` tool calls together in a single
+    // response. The agent must execute both before consulting the LLM again, and the LLM then
+    // answers both questions at once in a single final response.
+    Trace trace = check agent.run("Who is Leo DiCaprio's girlfriend, and what is 25 raised to the power of 0.43?",
+            td = Trace);
+
+    // Final answer covers both questions, generated from a single follow-up LLM call.
+    ChatAssistantMessage|Error output = trace.output;
+    test:assertTrue(output is ChatAssistantMessage);
+    if output is ChatAssistantMessage {
+        test:assertEquals(output.content, "Leo DiCaprio's girlfriend is Camila Morrone, and 25 raised to the " +
+                "power of 0.43 is Answer: 3.991298452658078");
+    }
+
+    // Both tool calls from the single LLM response were captured and executed.
+    FunctionCall[]? toolCalls = trace.toolCalls;
+    test:assertTrue(toolCalls is FunctionCall[]);
+    if toolCalls is FunctionCall[] {
+        test:assertEquals(toolCalls.length(), 2);
+        test:assertEquals(toolCalls[0].name, "Search");
+        test:assertEquals(toolCalls[1].name, "Calculator");
+    }
+
+    // Intermediate tool observations are present, one iteration per tool call, followed by the
+    // final answer iteration.
+    test:assertEquals(trace.iterations.length(), 3);
+    ChatAssistantMessage|ChatFunctionMessage|Error searchIterationOutput = trace.iterations[0].output;
+    test:assertTrue(searchIterationOutput is ChatFunctionMessage);
+    if searchIterationOutput is ChatFunctionMessage {
+        test:assertEquals(searchIterationOutput.name, "Search");
+        test:assertEquals(searchIterationOutput.content, "Camila Morrone");
+    }
+    ChatAssistantMessage|ChatFunctionMessage|Error calculatorIterationOutput = trace.iterations[1].output;
+    test:assertTrue(calculatorIterationOutput is ChatFunctionMessage);
+    if calculatorIterationOutput is ChatFunctionMessage {
+        test:assertEquals(calculatorIterationOutput.name, "Calculator");
+        test:assertEquals(calculatorIterationOutput.content, "Answer: 3.991298452658078");
+    }
+    ChatAssistantMessage|ChatFunctionMessage|Error finalIterationOutput = trace.iterations[2].output;
+    test:assertTrue(finalIterationOutput is ChatAssistantMessage);
+
+    // Only 2 LLM calls were made: one that returned both tool calls together, and one that
+    // produced the final answer after both tool results were available. Previously, executing
+    // 2 tool calls required 3 LLM calls, one per tool call plus the final answer, because only
+    // the first tool call in a response was ever acted on.
+    test:assertEquals(scriptedModel.getChatCallCount(), 2);
+}
