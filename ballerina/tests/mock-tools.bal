@@ -67,7 +67,33 @@ public isolated client class MockLLM {
         'class: "io.ballerina.lib.ai.MockGenerator"
     } external;
 }
- 
+
+// Responds based on the current turn's query, so a multi-turn conversation can be scripted:
+// - "first turn query" and "third turn query" get a normal final answer.
+// - "second turn query" gets a response with neither a tool call nor chat content, which the
+//   agent cannot parse into either a `FunctionCall` or a final answer.
+public isolated client class ScriptedMockLLM {
+    *ModelProvider;
+
+    isolated remote function chat(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [],
+            string? stop = ()) returns ChatAssistantMessage|Error {
+        ChatMessage lastMessage = messages is ChatUserMessage ? messages : messages[messages.length() - 1];
+        string prompt = lastMessage is ChatUserMessage ? getChatMessageStringContent(lastMessage.content) : "";
+        if prompt.includes("first turn query") {
+            return {role: ASSISTANT, content: "first turn answer"};
+        }
+        if prompt.includes("second turn query") {
+            return {role: ASSISTANT};
+        }
+        if prompt.includes("third turn query") {
+            return {role: ASSISTANT, content: "third turn answer"};
+        }
+        return error Error("Unexpected prompt to ScriptedMockLLM: " + prompt);
+    }
+
+    isolated remote function generate(Prompt prompt, typedesc<anydata> td = <>) returns td|Error = external;
+}
+
 isolated function getChatAssistantMessageContent(int queryLevel) returns string|LlmError {
     match queryLevel {
         3 => {
