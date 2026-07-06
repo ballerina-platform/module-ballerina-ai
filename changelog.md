@@ -8,6 +8,9 @@ This file documents all significant changes made to the Ballerina AI package acr
 - [Fix `maxIter` Inference with Toolkits and Enforce Minimum of 10](https://github.com/wso2/product-integrator/issues/1112)
 - [Fix OpenAPI Spec Defaulting to Port 9090 When an AI Agent Listener Uses an Inline `http:Listener`](https://github.com/wso2/product-integrator/issues/1676)
 
+### Updated
+- [Execute Multiple Tool Calls Returned in a Single LLM Response Together](https://github.com/wso2/product-integrator/issues/1833)
+
 ## [1.11.1] - 2026-04-16
 
 ### Fixed
