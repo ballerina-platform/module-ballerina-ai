@@ -1,6 +1,8 @@
 import ballerina/io;
 import ballerina/jballerina.java;
 import ballerina/lang.regexp;
+import ballerina/lang.runtime;
+import ballerina/time;
 
 type SearchParams record {|
     string query;
@@ -37,6 +39,41 @@ isolated function calculatorToolMock(*CalculatorParams params) returns string {
     } else {
         return "Can't compute. Some information is missing";
     }
+}
+
+// Records the execution time window of each slow mock tool, keyed by tool name, so that tests
+// can assert whether tool executions overlapped (parallel) or not (sequential).
+isolated map<[decimal, decimal]> toolExecutionWindows = {};
+
+isolated function recordToolExecutionWindow(string toolName, decimal startTime, decimal endTime) {
+    lock {
+        toolExecutionWindows[toolName] = [startTime, endTime];
+    }
+}
+
+isolated function getToolExecutionWindow(string toolName) returns [decimal, decimal]|error {
+    lock {
+        if !toolExecutionWindows.hasKey(toolName) {
+            return error(string `Execution window not recorded for ${toolName} tool`);
+        }
+        return toolExecutionWindows.get(toolName).clone();
+    }
+}
+
+// Slow variants of the mock tools that sleep before responding and record their
+// execution time windows, used to verify parallel vs sequential tool execution.
+isolated function slowSearchToolMock(*SearchParams params) returns string {
+    decimal startTime = time:monotonicNow();
+    runtime:sleep(1);
+    recordToolExecutionWindow("Search", startTime, time:monotonicNow());
+    return "Camila Morrone";
+}
+
+isolated function slowCalculatorToolMock(*CalculatorParams params) returns string {
+    decimal startTime = time:monotonicNow();
+    runtime:sleep(1);
+    recordToolExecutionWindow("Calculator", startTime, time:monotonicNow());
+    return "Answer: 3.991298452658078";
 }
 
 isolated function sendMail(record {|string senderEmail; MessageRequest messageRequest;|} 'input) returns string|error {

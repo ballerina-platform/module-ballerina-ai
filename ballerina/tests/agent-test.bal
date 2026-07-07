@@ -46,6 +46,36 @@ ToolConfig calculatorTool = {
     caller: calculatorToolMock
 };
 
+ToolConfig slowSearchTool = {
+    name: "Search",
+    description: " A search engine. Useful for when you need to answer questions about current events",
+    parameters: {
+        properties: {
+            params: {
+                properties: {
+                    query: {'type: "string", description: "The search query"}
+                }
+            }
+        }
+    },
+    caller: slowSearchToolMock
+};
+
+ToolConfig slowCalculatorTool = {
+    name: "Calculator",
+    description: "Useful for when you need to answer questions about math.",
+    parameters: {
+        properties: {
+            params: {
+                properties: {
+                    expression: {'type: "string", description: "The mathematical expression to evaluate"}
+                }
+            }
+        }
+    },
+    caller: slowCalculatorToolMock
+};
+
 ModelProvider model = new MockLLM();
 
 @test:Config {
@@ -193,4 +223,68 @@ function testAgentRunExecutesMultipleToolCallsFromSingleLlmResponseTogether() re
     // 2 tool calls required 3 LLM calls, one per tool call plus the final answer, because only
     // the first tool call in a response was ever acted on.
     test:assertEquals(scriptedModel.getChatCallCount(), 2);
+}
+
+@test:Config
+function testAgentRunExecutesToolCallsInParallel() returns error? {
+    MultiToolCallMockLLM scriptedModel = new;
+    Agent agent = check new ({
+        systemPrompt: {role: "Test Agent", instructions: "Answer the questions"},
+        model: scriptedModel,
+        tools: [slowSearchTool, slowCalculatorTool],
+        allowParallelToolCall: true
+    });
+
+    // The mock LLM returns both tool calls together, and each slow tool sleeps for 1 second
+    // while recording its execution time window.
+    Trace trace = check agent.run("Who is Leo DiCaprio's girlfriend, and what is 25 raised to the power of 0.43?");
+
+    // The answer and executed tool calls are identical to sequential execution.
+    ChatAssistantMessage|Error output = trace.output;
+    test:assertTrue(output is ChatAssistantMessage);
+    if output is ChatAssistantMessage {
+        test:assertEquals(output.content, "Leo DiCaprio's girlfriend is Camila Morrone, and 25 raised to the " +
+                "power of 0.43 is Answer: 3.991298452658078");
+    }
+    FunctionCall[]? toolCalls = trace.toolCalls;
+    test:assertTrue(toolCalls is FunctionCall[]);
+    if toolCalls is FunctionCall[] {
+        test:assertEquals(toolCalls.length(), 2);
+        test:assertEquals(toolCalls[0].name, "Search");
+        test:assertEquals(toolCalls[1].name, "Calculator");
+    }
+    test:assertEquals(trace.iterations.length(), 3);
+    test:assertEquals(scriptedModel.getChatCallCount(), 2);
+
+    // Both tool executions overlapped in time, proving they ran in parallel rather than
+    // one after the other.
+    [decimal, decimal] searchWindow = check getToolExecutionWindow("Search");
+    [decimal, decimal] calculatorWindow = check getToolExecutionWindow("Calculator");
+    test:assertTrue(searchWindow[0] < calculatorWindow[1] && calculatorWindow[0] < searchWindow[1],
+            string `Expected tool executions to overlap, but Search ran during ${searchWindow.toString()} ` +
+            string `and Calculator ran during ${calculatorWindow.toString()}`);
+}
+
+@test:Config
+function testAgentRunExecutesToolCallsSequentially() returns error? {
+    MultiToolCallMockLLM scriptedModel = new;
+    Agent agent = check new ({
+        systemPrompt: {role: "Test Agent", instructions: "Answer the questions"},
+        model: scriptedModel,
+        tools: [slowSearchTool, slowCalculatorTool]
+    });
+
+    string answer = check agent.run("Who is Leo DiCaprio's girlfriend, and what is 25 raised to the power of 0.43?");
+
+    test:assertEquals(answer, "Leo DiCaprio's girlfriend is Camila Morrone, and 25 raised to the " +
+            "power of 0.43 is Answer: 3.991298452658078");
+    test:assertEquals(scriptedModel.getChatCallCount(), 2);
+
+    // With `allowParallelToolCall` disabled (the default), the Search tool completes before
+    // the Calculator tool starts.
+    [decimal, decimal] searchWindow = check getToolExecutionWindow("Search");
+    [decimal, decimal] calculatorWindow = check getToolExecutionWindow("Calculator");
+    test:assertTrue(searchWindow[1] <= calculatorWindow[0],
+            string `Expected tool executions to run sequentially, but Search ran during ` +
+            string `${searchWindow.toString()} and Calculator ran during ${calculatorWindow.toString()}`);
 }

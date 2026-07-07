@@ -90,6 +90,9 @@ class Executor {
     # All of them are executed before the LLM is reasoned with again, so that a single
     # LLM response containing multiple tool calls does not trigger multiple round-trips.
     private FunctionCall[] pendingToolCalls = [];
+    # Results of tool calls that were already executed in parallel but not yet
+    # handed out through the iterator, one result per iteration.
+    private (ExecutionResult|ExecutionError)[] executedToolCallResults = [];
 
     # Initialize the executor with the agent and the query.
     #
@@ -131,14 +134,16 @@ class Executor {
                 sessionId = self.sessionId,
                 history = self.progress.executionSteps.toString()
         );
-        return check self.agent.selectNextTool(self.progress, self.sessionId);
+        return check self.agent.selectNextTools(self.progress, self.sessionId);
     }
 
     # Execute the next step of the agent.
     #
-    # + llmResponse - LLM response containing the tool to be executed and the raw LLM output
+    # + llmResponse - LLM response containing a chat response, the tool to be executed, or
+    # multiple tools to be executed in parallel
     # + return - Observations from the tool can be any|error|null
-    public isolated function act(FunctionCall|string llmResponse) returns ExecutionResult|string|ExecutionError {
+    public isolated function act(FunctionCall[]|FunctionCall|string llmResponse)
+            returns ExecutionResult|string|ExecutionError {
         if llmResponse is string {
             log:printDebug("Parsed LLM response as chat response",
                     agentId = self.agentId,
@@ -149,115 +154,59 @@ class Executor {
             self.isCompleted = true;
             return llmResponse;
         }
+        return llmResponse is FunctionCall
+            ? self.executeToolCalls([llmResponse], parallel = false)
+            : self.executeToolCalls(llmResponse, parallel = self.agent.allowParallelToolCall);
+    }
 
-        anydata observation;
-        ExecutionResult|ExecutionError executionResult;
-        string toolName = llmResponse.name;
-        log:printDebug("Parsed LLM response as tool call",
-                agentId = self.agentId,
-                executionId = self.progress.executionId,
-                sessionId = self.sessionId,
-                toolName = toolName,
-                arguments = llmResponse.arguments
-            );
-        observe:ExecuteToolSpan span = observe:createExecuteToolSpan(toolName);
-        string? toolCallId = llmResponse.id;
-        if toolCallId is string {
-            span.addId(toolCallId);
+    private isolated function executeToolCalls(FunctionCall[] toolCalls, boolean parallel)
+            returns ExecutionResult|ExecutionError {
+        [ExecutionResult|ExecutionError, anydata][] executionOutcomes = parallel
+            ? self.executeToolCallsParallelly(toolCalls)
+            : self.executeToolCallsSequentially(toolCalls);
+        foreach int i in 0 ..< executionOutcomes.length() {
+            var [executionResult, observation] = executionOutcomes[i];
+            self.update({llmResponse: toolCalls[i], observation});
+            self.executedToolCallResults.push(executionResult);
         }
-        ToolStore toolStore = self.agent.toolStore;
-        string? toolDescription = toolStore.getToolDescription(toolName);
-        if toolDescription is string {
-            span.addDescription(toolDescription);
+        return self.executedToolCallResults.shift();
+    }
+
+    private isolated function executeToolCallsParallelly(FunctionCall[] toolCalls)
+            returns [ExecutionResult|ExecutionError, anydata][] {
+        final Agent agent = self.agent;
+        final Context context = self.progress.context;
+        final string? agentId = self.agentId;
+        final string executionId = self.progress.executionId;
+        final string sessionId = self.sessionId;
+        future<[ExecutionResult|ExecutionError, anydata]>[] executions = [];
+        foreach FunctionCall toolCall in toolCalls {
+            final readonly & FunctionCall clonedToolCall = toolCall.cloneReadOnly();
+            var execution = start executeToolCall(agent, clonedToolCall, context, agentId, executionId, sessionId);
+            executions.push(execution);
         }
-        boolean isMcpTool = toolStore.isMcpTool(toolName);
-        span.addType(isMcpTool ? observe:EXTENTION : observe:FUNCTION);
-        span.addArguments(llmResponse.arguments);
-        ToolNotFoundError|ToolInvalidInputError|TokenAcquisitionError|TokenValidationError?
-                    validateRes = validateTool(llmResponse, self.agent.agentCredential,
-                self.agent.tokenManager, self.progress.context, toolStore.tools, isMcpTool);
-        if validateRes is Error {
-            log:printError("Tool validation failed",
-                    agentId = self.agentId,
-                    executionId = self.progress.executionId,
-                    sessionId = self.sessionId,
-                    toolName = toolName,
-                    'error = validateRes
-                );
-            if validateRes is ToolNotFoundError|ToolInvalidInputError {
-                observation = "Tool extraction failed due to tool validation";
-                executionResult = {
-                    llmResponse,
-                    'error: validateRes,
-                    observation: observation.toString()
-                };
-                Error toolExecutionError = error Error(observation.toString(), details = {llmResponse});
-                span.close(toolExecutionError);
-            } else {
-                observation = "Tool execution failed while attempting to execute the selected tool: "
-                        + validateRes.message();
-                executionResult = {
-                    llmResponse,
-                    'error: error UnauthorizedError(
-                            string `Tool execution failed: ${validateRes.message()}`,
-                            details = {llmResponse}, cause = validateRes.cause(), toolName = toolName),
-                    observation: observation.toString()
-                };
-                UnauthorizedError toolExecutionError = error UnauthorizedError(observation.toString(),
-                        details = {llmResponse});
-                span.close(toolExecutionError);
+        [ExecutionResult|ExecutionError, anydata][] executionOutcomes = [];
+        foreach var execution in executions {
+            [ExecutionResult|ExecutionError, anydata]|error executionOutcome = wait execution;
+            if executionOutcome is error {
+                // `executeToolCall` never returns an error; a waiting error means the strand
+                // terminated abnormally, which mirrors a panic during sequential execution.
+                panic executionOutcome;
             }
-        } else {
-            ToolOutput|ToolExecutionError|LlmInvalidGenerationError output = toolStore.execute(llmResponse,
-                    self.progress.context);
-            if output is Error {
-                if output is ToolNotFoundError {
-                    observation = "Tool is not found. Please check the tool name and retry.";
-                } else if output is ToolInvalidInputError {
-                    observation = "Tool execution failed due to invalid inputs. Retry with correct inputs.";
-                } else {
-                    observation = "Tool execution failed. Retry with correct inputs.";
-                }
-                observation = string `${observation.toString()} <detail>${output.toString()}</detail>`;
-                executionResult = {
-                    llmResponse,
-                    'error: output,
-                    observation: observation.toString()
-                };
-                log:printError("Tool execution resulted in error",
-                        agentId = self.agentId,
-                        executionId = self.progress.executionId,
-                        observation = observation.toString(),
-                        sessionId = self.sessionId,
-                        toolName = toolName
-                    );
-
-                Error toolExecutionError = error Error(observation.toString(), details = {llmResponse});
-                span.close(toolExecutionError);
-            } else {
-                anydata|error value = output.value;
-                observation = value is error ? value.toString() : value;
-                log:printDebug("Tool execution successful",
-                        agentId = self.agentId,
-                        executionId = self.progress.executionId,
-                        sessionId = self.sessionId,
-                        toolName = toolName
-                    );
-                executionResult = {
-                    tool: llmResponse,
-                    observation: value
-                };
-
-                span.addOutput(observation);
-                span.close();
-            }
+            executionOutcomes.push(executionOutcome);
         }
+        return executionOutcomes;
+    }
 
-        self.update({
-            llmResponse,
-            observation
-        });
-        return executionResult;
+    private isolated function executeToolCallsSequentially(FunctionCall[] toolCalls)
+            returns [ExecutionResult|ExecutionError, anydata][] {
+        [ExecutionResult|ExecutionError, anydata][] executionOutcomes = [];
+        foreach FunctionCall toolCall in toolCalls {
+            var executionOutcome = executeToolCall(self.agent, toolCall, self.progress.context,
+                    self.agentId, self.progress.executionId, self.sessionId);
+            executionOutcomes.push(executionOutcome);
+        }
+        return executionOutcomes;
     }
 
     # Update the agent with an execution step.
@@ -283,6 +232,9 @@ class Executor {
         if self.isCompleted {
             return ();
         }
+        if self.executedToolCallResults.length() > 0 {
+            return {value: self.executedToolCallResults.shift()};
+        }
         if self.pendingToolCalls.length() == 0 {
             FunctionCall[]|string|Error llmResponse = self.reason();
             if llmResponse is Error {
@@ -295,9 +247,120 @@ class Executor {
                 self.pendingToolCalls = llmResponse;
             }
         }
+        if self.agent.allowParallelToolCall && self.pendingToolCalls.length() > 1 {
+            FunctionCall[] toolCalls = self.pendingToolCalls;
+            self.pendingToolCalls = [];
+            return {value: self.act(toolCalls)};
+        }
         FunctionCall nextToolCall = self.pendingToolCalls.shift();
         return {value: self.act(nextToolCall)};
     }
+}
+
+isolated function executeToolCall(Agent agent, FunctionCall llmResponse, Context context, string? agentId,
+        string executionId, string sessionId) returns [ExecutionResult|ExecutionError, anydata] {
+    anydata observation;
+    ExecutionResult|ExecutionError executionResult;
+    string toolName = llmResponse.name;
+    log:printDebug("Parsed LLM response as tool call",
+            agentId = agentId,
+            executionId = executionId,
+            sessionId = sessionId,
+            toolName = toolName,
+            arguments = llmResponse.arguments
+        );
+    observe:ExecuteToolSpan span = observe:createExecuteToolSpan(toolName);
+    string? toolCallId = llmResponse.id;
+    if toolCallId is string {
+        span.addId(toolCallId);
+    }
+    ToolStore toolStore = agent.toolStore;
+    string? toolDescription = toolStore.getToolDescription(toolName);
+    if toolDescription is string {
+        span.addDescription(toolDescription);
+    }
+    boolean isMcpTool = toolStore.isMcpTool(toolName);
+    span.addType(isMcpTool ? observe:EXTENTION : observe:FUNCTION);
+    span.addArguments(llmResponse.arguments);
+    ToolNotFoundError|ToolInvalidInputError|TokenAcquisitionError|TokenValidationError?
+                validateRes = validateTool(llmResponse, agent.agentCredential,
+            agent.tokenManager, context, toolStore.tools, isMcpTool);
+    if validateRes is Error {
+        log:printError("Tool validation failed",
+                agentId = agentId,
+                executionId = executionId,
+                sessionId = sessionId,
+                toolName = toolName,
+                'error = validateRes
+            );
+        if validateRes is ToolNotFoundError|ToolInvalidInputError {
+            observation = "Tool extraction failed due to tool validation";
+            executionResult = {
+                llmResponse,
+                'error: validateRes,
+                observation: observation.toString()
+            };
+            Error toolExecutionError = error Error(observation.toString(), details = {llmResponse});
+            span.close(toolExecutionError);
+        } else {
+            observation = "Tool execution failed while attempting to execute the selected tool: "
+                    + validateRes.message();
+            executionResult = {
+                llmResponse,
+                'error: error UnauthorizedError(
+                        string `Tool execution failed: ${validateRes.message()}`,
+                        details = {llmResponse}, cause = validateRes.cause(), toolName = toolName),
+                observation: observation.toString()
+            };
+            UnauthorizedError toolExecutionError = error UnauthorizedError(observation.toString(),
+                    details = {llmResponse});
+            span.close(toolExecutionError);
+        }
+    } else {
+        ToolOutput|ToolExecutionError|LlmInvalidGenerationError output = toolStore.execute(llmResponse, context);
+        if output is Error {
+            if output is ToolNotFoundError {
+                observation = "Tool is not found. Please check the tool name and retry.";
+            } else if output is ToolInvalidInputError {
+                observation = "Tool execution failed due to invalid inputs. Retry with correct inputs.";
+            } else {
+                observation = "Tool execution failed. Retry with correct inputs.";
+            }
+            observation = string `${observation.toString()} <detail>${output.toString()}</detail>`;
+            executionResult = {
+                llmResponse,
+                'error: output,
+                observation: observation.toString()
+            };
+            log:printError("Tool execution resulted in error",
+                    agentId = agentId,
+                    executionId = executionId,
+                    observation = observation.toString(),
+                    sessionId = sessionId,
+                    toolName = toolName
+                );
+
+            Error toolExecutionError = error Error(observation.toString(), details = {llmResponse});
+            span.close(toolExecutionError);
+        } else {
+            anydata|error value = output.value;
+            observation = value is error ? value.toString() : value;
+            log:printDebug("Tool execution successful",
+                    agentId = agentId,
+                    executionId = executionId,
+                    sessionId = sessionId,
+                    toolName = toolName
+                );
+            executionResult = {
+                tool: llmResponse,
+                observation: value
+            };
+
+            span.addOutput(observation);
+            span.close();
+        }
+    }
+    return [executionResult, observation];
 }
 
 # Execute the agent for a given user's query.

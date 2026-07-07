@@ -91,10 +91,16 @@ public type AgentConfiguration record {|
     @display {label: "Memory"}
     Memory? memory?;
 
-    # Defines the strategies for loading tool schemas into an Agent. 
+    # Defines the strategies for loading tool schemas into an Agent.
     # By default, all tools are loaded without any filtering.
     @display {label: "Tool Loading Strategy"}
     ToolLoadingStrategy toolLoadingStrategy = NO_FILTER;
+
+    # Specifies whether multiple tool calls returned in a single LLM response are executed in parallel.
+    # If `true`, all tool calls from one LLM response are executed concurrently;
+    # otherwise, they are executed sequentially, one after another.
+    @display {label: "Allow Parallel Tool Call"}
+    boolean allowParallelToolCall = false;
 
     # Optional authentication details of the agent.
     @display {label: "Agent Credential"}
@@ -117,6 +123,8 @@ public isolated distinct class Agent {
     final cache:Cache tokenManager = new ();
     # Authentication configuration used for acquiring OAuth tokens when accessing secured tools.
     final readonly & Credential? agentCredential;
+    # Indicates whether multiple tool calls from a single LLM response are executed in parallel.
+    final boolean allowParallelToolCall;
     private final int maxIter;
     private final readonly & SystemPrompt systemPrompt;
     private final boolean verbose;
@@ -151,6 +159,7 @@ public isolated distinct class Agent {
             self.memory = memory ?: check new ShortTermMemory();
             self.stateless = memory is ();
             self.toolLoadingStrategy = config.toolLoadingStrategy;
+            self.allowParallelToolCall = config.allowParallelToolCall;
             self.agentCredential = agentCredential.cloneReadOnly();
             self.toolSchemas = self.toolStore.getToolSchema().cloneReadOnly();
             self.maxIter = maxIter is INFER_TOOL_COUNT ?
@@ -169,12 +178,12 @@ public isolated distinct class Agent {
         }
     }
 
-    # Use LLM to decide the next tool/step based on the function calling APIs.
+    # Use LLM to decide the next tool/step(s) based on the function calling APIs.
     #
     # + progress - Execution progress with the current query and execution history
     # + sessionId - The ID associated with the agent memory
     # + return - LLM response containing the tool or chat response (or an error if the call fails)
-    isolated function selectNextTool(ExecutionProgress progress, string sessionId = DEFAULT_SESSION_ID)
+    isolated function selectNextTools(ExecutionProgress progress, string sessionId = DEFAULT_SESSION_ID)
     returns FunctionCall[]|string|Error {
         ChatMessage[] messages = check createFunctionCallMessages(progress);
         messages.unshift(...progress.history);
