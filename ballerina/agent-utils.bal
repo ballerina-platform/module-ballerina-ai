@@ -156,7 +156,7 @@ class Executor {
         }
         return llmResponse is FunctionCall
             ? self.executeToolCalls([llmResponse], parallel = false)
-            : self.executeToolCalls(llmResponse, parallel = self.agent.allowParallelToolCall);
+            : self.executeToolCalls(llmResponse, parallel = self.agent.executeToolCallsInParallel);
     }
 
     private isolated function executeToolCalls(FunctionCall[] toolCalls, boolean parallel)
@@ -247,7 +247,7 @@ class Executor {
                 self.pendingToolCalls = llmResponse;
             }
         }
-        if self.agent.allowParallelToolCall && self.pendingToolCalls.length() > 1 {
+        if self.agent.executeToolCallsInParallel && self.pendingToolCalls.length() > 1 {
             FunctionCall[] toolCalls = self.pendingToolCalls;
             self.pendingToolCalls = [];
             return {value: self.act(toolCalls)};

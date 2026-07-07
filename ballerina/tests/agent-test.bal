@@ -232,7 +232,7 @@ function testAgentRunExecutesToolCallsInParallel() returns error? {
         systemPrompt: {role: "Test Agent", instructions: "Answer the questions"},
         model: scriptedModel,
         tools: [slowSearchTool, slowCalculatorTool],
-        allowParallelToolCall: true
+        executeToolCallsInParallel: true
     });
 
     // The mock LLM returns both tool calls together, and each slow tool sleeps for 1 second
@@ -271,7 +271,8 @@ function testAgentRunExecutesToolCallsSequentially() returns error? {
     Agent agent = check new ({
         systemPrompt: {role: "Test Agent", instructions: "Answer the questions"},
         model: scriptedModel,
-        tools: [slowSearchTool, slowCalculatorTool]
+        tools: [slowSearchTool, slowCalculatorTool],
+        executeToolCallsInParallel: false
     });
 
     string answer = check agent.run("Who is Leo DiCaprio's girlfriend, and what is 25 raised to the power of 0.43?");
@@ -280,7 +281,7 @@ function testAgentRunExecutesToolCallsSequentially() returns error? {
             "power of 0.43 is Answer: 3.991298452658078");
     test:assertEquals(scriptedModel.getChatCallCount(), 2);
 
-    // With `allowParallelToolCall` disabled (the default), the Search tool completes before
+    // With `executeToolCallsInParallel` disabled, the Search tool completes before
     // the Calculator tool starts.
     [decimal, decimal] searchWindow = check getToolExecutionWindow("Search");
     [decimal, decimal] calculatorWindow = check getToolExecutionWindow("Calculator");

@@ -99,8 +99,8 @@ public type AgentConfiguration record {|
     # Specifies whether multiple tool calls returned in a single LLM response are executed in parallel.
     # If `true`, all tool calls from one LLM response are executed concurrently;
     # otherwise, they are executed sequentially, one after another.
-    @display {label: "Allow Parallel Tool Call"}
-    boolean allowParallelToolCall = false;
+    @display {label: "Execute Tool Calls in Parallel"}
+    boolean executeToolCallsInParallel = true;
 
     # Optional authentication details of the agent.
     @display {label: "Agent Credential"}
@@ -124,7 +124,7 @@ public isolated distinct class Agent {
     # Authentication configuration used for acquiring OAuth tokens when accessing secured tools.
     final readonly & Credential? agentCredential;
     # Indicates whether multiple tool calls from a single LLM response are executed in parallel.
-    final boolean allowParallelToolCall;
+    final boolean executeToolCallsInParallel;
     private final int maxIter;
     private final readonly & SystemPrompt systemPrompt;
     private final boolean verbose;
@@ -159,7 +159,7 @@ public isolated distinct class Agent {
             self.memory = memory ?: check new ShortTermMemory();
             self.stateless = memory is ();
             self.toolLoadingStrategy = config.toolLoadingStrategy;
-            self.allowParallelToolCall = config.allowParallelToolCall;
+            self.executeToolCallsInParallel = config.executeToolCallsInParallel;
             self.agentCredential = agentCredential.cloneReadOnly();
             self.toolSchemas = self.toolStore.getToolSchema().cloneReadOnly();
             self.maxIter = maxIter is INFER_TOOL_COUNT ?
