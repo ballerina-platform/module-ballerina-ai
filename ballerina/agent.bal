@@ -103,13 +103,25 @@ public type AgentConfiguration record {|
 
 # Represents an agent.
 public isolated distinct class Agent {
-    final FunctionCallAgent functionCallAgent;
+    # Tool store to be used by the agent
+    final ToolStore toolStore;
+    # LLM model instance (should be a function call model)
+    final ModelProvider model;
+    # The memory associated with the agent.
+    final Memory memory;
+    # Represents if the agent is stateless or not.
+    final boolean stateless;
+    # Strategy used to control how and when tools are loaded for the agent.
+    final ToolLoadingStrategy toolLoadingStrategy;
+    # Cache used to store and reuse authentication tokens for tool access.
+    final cache:Cache tokenManager = new ();
+    # Authentication configuration used for acquiring OAuth tokens when accessing secured tools.
+    final readonly & Credential? agentCredential;
     private final int maxIter;
     private final readonly & SystemPrompt systemPrompt;
     private final boolean verbose;
     private final string uniqueId = uuid:createRandomUuid();
     private final readonly & ToolSchema[] toolSchemas;
-    private final cache:Cache tokenManager = new ();
     private string? agentId = ();
 
     # Initialize an Agent.
@@ -134,13 +146,16 @@ public isolated distinct class Agent {
             }
         }
         do {
-            self.functionCallAgent = check new FunctionCallAgent(config.model, config.tools, self.tokenManager,
-                agentCredential, memory, config.toolLoadingStrategy
-            );
-            self.toolSchemas = self.functionCallAgent.toolStore.getToolSchema().cloneReadOnly();
+            self.toolStore = check new (...config.tools);
+            self.model = config.model;
+            self.memory = memory ?: check new ShortTermMemory();
+            self.stateless = memory is ();
+            self.toolLoadingStrategy = config.toolLoadingStrategy;
+            self.agentCredential = agentCredential.cloneReadOnly();
+            self.toolSchemas = self.toolStore.getToolSchema().cloneReadOnly();
             self.maxIter = maxIter is INFER_TOOL_COUNT ?
                 int:max(self.toolSchemas.length(), DEFAULT_MINIMUM_MAX_ITERATIONS) : maxIter;
-            span.addTools(self.functionCallAgent.toolStore.getToolsInfo());
+            span.addTools(self.toolStore.getToolsInfo());
             if agentIdentitySpan is observe:CreateAgentIdentitySpan {
                 agentIdentitySpan.close();
             }
@@ -152,6 +167,73 @@ public isolated distinct class Agent {
             span.close(err);
             return err;
         }
+    }
+
+    # Use LLM to decide the next tool/step based on the function calling APIs.
+    #
+    # + progress - Execution progress with the current query and execution history
+    # + sessionId - The ID associated with the agent memory
+    # + return - LLM response containing the tool or chat response (or an error if the call fails)
+    isolated function selectNextTool(ExecutionProgress progress, string sessionId = DEFAULT_SESSION_ID)
+    returns FunctionCall[]|string|Error {
+        ChatMessage[] messages = check createFunctionCallMessages(progress);
+        messages.unshift(...progress.history);
+        ToolLoadingStrategy toolLoadingStrategy = self.toolLoadingStrategy;
+        ChatMessage lastMessage = messages[messages.length() - 1];
+        ChatCompletionFunctions[] registeredTools = from Tool tool in self.toolStore.tools.toArray()
+            select {
+                name: tool.name,
+                description: tool.description,
+                parameters: tool.variables
+            };
+        ChatCompletionFunctions[] filteredTools = registeredTools;
+        if toolLoadingStrategy == LLM_FILTER && lastMessage is ChatUserMessage {
+            ChatCompletionFunctions[]? selectedTools = lazyLoadTools(cloneMessages(messages), registeredTools, self.model);
+            if selectedTools !is () {
+                filteredTools = selectedTools;
+            }
+        }
+
+        log:printDebug("Requesting tool selection from LLM",
+                executionId = progress.executionId,
+                sessionId = sessionId,
+                messages = messages.toString(),
+                availableTools = filteredTools.toString()
+        );
+
+        ChatAssistantMessage response = check self.model->chat(messages, filteredTools);
+        // All tool calls returned in this single LLM response are executed together
+        // (see `Executor.next()`) before the LLM is consulted again, instead of executing
+        // them one at a time across separate chat requests.
+        FunctionCall[]? toolCalls = getToolCalls(response);
+        if toolCalls is FunctionCall[] {
+            log:printDebug("LLM selected tool(s)",
+                    executionId = progress.executionId,
+                    sessionId = sessionId,
+                    toolNames = from FunctionCall toolCall in toolCalls
+                        select toolCall.name,
+                    toolArguments = from FunctionCall toolCall in toolCalls
+                        select toolCall.arguments
+            );
+            return toolCalls;
+        }
+
+        log:printDebug("LLM provided chat response instead of tool call",
+                executionId = progress.executionId,
+                sessionId = sessionId,
+                response = response?.content
+        );
+        string? content = response?.content;
+        if content is string {
+            return content;
+        }
+        log:printDebug("Failed to parse LLM response as valid tool or chat",
+                agentId = self.agentId,
+                executionId = progress.executionId,
+                sessionId = sessionId
+        );
+        return error LlmInvalidGenerationError("Failed to parse the LLM response into a function call or chat message.",
+            llmResponse = content);
     }
 
     # Executes the agent for a given user query.
@@ -190,8 +272,10 @@ public isolated distinct class Agent {
         string systemPrompt = getFomatedSystemPrompt(self.systemPrompt);
         span.addSystemInstruction(systemPrompt);
 
-        ExecutionTrace executionTrace = self.functionCallAgent
-            .run(query, systemPrompt, self.maxIter, self.verbose, sessionId, context, executionId);
+        Credential? & readonly agentCredential = self.agentCredential;
+        string? agentId = agentCredential is Credential ? agentCredential.id : ();
+        ExecutionTrace executionTrace = run(self, systemPrompt, query, self.maxIter, self.verbose, agentId,
+                sessionId, context, executionId);
         ChatUserMessage userMessage = {role: USER, content: query};
         Iteration[] iterations = executionTrace.iterations;
         FunctionCall[]? toolCalls = executionTrace.toolCalls.length() == 0 ? () : executionTrace.toolCalls;

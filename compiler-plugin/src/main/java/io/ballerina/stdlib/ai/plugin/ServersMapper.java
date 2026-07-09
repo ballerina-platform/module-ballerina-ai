@@ -22,6 +22,7 @@ import io.ballerina.compiler.api.SemanticModel;
 import io.ballerina.compiler.api.symbols.Symbol;
 import io.ballerina.compiler.api.symbols.VariableSymbol;
 import io.ballerina.compiler.syntax.tree.BasicLiteralNode;
+import io.ballerina.compiler.syntax.tree.BracedExpressionNode;
 import io.ballerina.compiler.syntax.tree.CheckExpressionNode;
 import io.ballerina.compiler.syntax.tree.ExplicitNewExpressionNode;
 import io.ballerina.compiler.syntax.tree.ExpressionNode;
@@ -38,7 +39,6 @@ import io.ballerina.compiler.syntax.tree.QualifiedNameReferenceNode;
 import io.ballerina.compiler.syntax.tree.SeparatedNodeList;
 import io.ballerina.compiler.syntax.tree.ServiceDeclarationNode;
 import io.ballerina.compiler.syntax.tree.SpecificFieldNode;
-import io.ballerina.compiler.syntax.tree.SyntaxKind;
 import io.ballerina.openapi.service.mapper.utils.MapperCommonUtils;
 import io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic;
 import io.ballerina.tools.diagnostics.Diagnostic;
@@ -160,25 +160,39 @@ public class ServersMapper {
     }
 
     private Server extractServer(ListenerDeclarationNode endpoint, String basePath) {
-        Node initializer = endpoint.initializer();
-        Optional<ParenthesizedArgList> argList;
-
-        if (initializer.kind() == SyntaxKind.CHECK_EXPRESSION) {
-            ExpressionNode innerExpr = ((CheckExpressionNode) initializer).expression();
-            argList = extractParenthesizedArgList(innerExpr);
-        } else {
-            argList = extractParenthesizedArgList(initializer);
-        }
-        return generateServer(basePath, argList);
+        return generateServer(basePath, extractListenerArgList(endpoint.initializer()));
     }
 
     private static Optional<ParenthesizedArgList> extractParenthesizedArgList(Node expression) {
-        return switch (expression.kind()) {
-            case EXPLICIT_NEW_EXPRESSION ->
-                    Optional.ofNullable(((ExplicitNewExpressionNode) expression).parenthesizedArgList());
-            case IMPLICIT_NEW_EXPRESSION -> ((ImplicitNewExpressionNode) expression).parenthesizedArgList();
-            default -> Optional.empty();
-        };
+        if (expression instanceof ExplicitNewExpressionNode explicitNew) {
+            return Optional.ofNullable(explicitNew.parenthesizedArgList());
+        } else if (expression instanceof ImplicitNewExpressionNode implicitNew) {
+            return implicitNew.parenthesizedArgList();
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * Extracts the constructor argument list from a listener initialization expression, unwrapping any
+     * leading {@code check} and parenthesized expressions where present. This handles inline listener
+     * expressions such as {@code new http:Listener(9091)}, {@code check new http:Listener(9091)} and
+     * {@code check (new http:Listener(9091))}.
+     *
+     * @param node the listener initialization expression (or listener declaration initializer)
+     * @return the parenthesized argument list if the expression is a {@code new} expression; otherwise empty
+     */
+    private static Optional<ParenthesizedArgList> extractListenerArgList(Node node) {
+        Node expression = node;
+        while (true) {
+            if (expression instanceof CheckExpressionNode checkExpr) {
+                expression = checkExpr.expression();
+            } else if (expression instanceof BracedExpressionNode bracedExpr) {
+                expression = bracedExpr.expression();
+            } else {
+                break;
+            }
+        }
+        return extractParenthesizedArgList(expression);
     }
 
     private void extractServersFromServiceExpressions() {
@@ -186,8 +200,7 @@ public class ServersMapper {
         String basePath = getServiceBasePath();
 
         for (ExpressionNode expression : this.service.expressions()) {
-            if (expression.kind() == SyntaxKind.EXPLICIT_NEW_EXPRESSION) {
-                ExplicitNewExpressionNode explicit = (ExplicitNewExpressionNode) expression;
+            if (expression instanceof ExplicitNewExpressionNode explicit) {
                 servers.add(generateServer(basePath, Optional.ofNullable(explicit.parenthesizedArgList())));
             }
         }
@@ -211,8 +224,12 @@ public class ServersMapper {
      *   <li><code>http:Listener httpListener = new(host = 9090)</code></li>
      *   <li><code>http:Listener httpListener = new(9090, host = "127.0.0.1")</code></li>
      *   <li><code>http:Listener httpListener = new(9090, { host: "127.0.0.1" })</code></li>
+     *   <li><code>http:Listener httpListener = new(host = "127.0.0.1", port = 9090)</code></li>
      *   <li><code>http:Listener httpListener = check http:getDefaultListener()</code></li>
      * </ul>
+     * <p>
+     * Named arguments may appear in any order; the {@code port}/{@code listenOn} and {@code host}
+     * arguments are resolved by name rather than by position.
      * <p>
      * For any unhandled or unexpected listener patterns, a default server instance is generated using
      * the provided base path and default host/port values along with a warning message.
@@ -228,44 +245,104 @@ public class ServersMapper {
 
         if (argListOpt.isPresent()) {
             SeparatedNodeList<FunctionArgumentNode> args = argListOpt.get().arguments();
-            if (!args.isEmpty()) {
-                FunctionArgumentNode firstArg = args.get(0);
-                if (firstArg instanceof PositionalArgumentNode posArg) {
-                    Optional<Symbol> symbol = semanticModel.symbol(posArg.expression());
-                    if (symbol.isPresent() && symbol.get() instanceof VariableSymbol
-                            && endpoints.containsKey(posArg.expression().toSourceCode().strip())) {
-                        String varName = posArg.expression().toSourceCode().strip();
-                        var httpListenerArgList = extractParenthesizedArgList(endpoints.get(varName).initializer());
-                        return generateServer(basePath, httpListenerArgList);
-                    }
-                    port = getValidPort(firstArg);
-                } else if (firstArg instanceof NamedArgumentNode namedArg
-                        && (namedArg.argumentName().name().text().strip().equals(PORT)
-                        || namedArg.argumentName().name().text().strip().equals(LISTEN_ON))) {
-                    Optional<Symbol> symbol = semanticModel.symbol(namedArg.expression());
-                    if (symbol.isPresent() && symbol.get() instanceof VariableSymbol
-                            && endpoints.containsKey(namedArg.expression().toSourceCode().strip())) {
-                        String varName = namedArg.expression().toSourceCode().strip();
-                        var httpListenerArgList = extractParenthesizedArgList(endpoints.get(varName).initializer());
-                        return generateServer(basePath, httpListenerArgList);
-                    }
-                    port = getValidPort(firstArg);
+
+            FunctionArgumentNode portArg = findPortArgument(args);
+            if (portArg != null) {
+                Optional<Server> resolvedServer = resolveListenerServer(basePath, getArgumentExpression(portArg));
+                if (resolvedServer.isPresent()) {
+                    return resolvedServer.get();
                 }
-                // The Following condition is only true when the argList is of an http:Listener
-                if (args.size() > 1) {
-                    FunctionArgumentNode secondArg = args.get(1);
-                    if (secondArg instanceof NamedArgumentNode namedArg
-                            && HOST_FIELD_NAME.equals(namedArg.argumentName().name().text())) {
-                        host = extractHost(namedArg);
-                    } else if (secondArg instanceof PositionalArgumentNode posArg
-                            && posArg.expression() instanceof MappingConstructorExpressionNode mapping) {
-                        host = extractHost(mapping);
-                    }
-                }
+                port = getValidPort(portArg);
             }
+
+            host = findHost(args);
         }
 
         return buildServer(basePath, port, host, serverVars);
+    }
+
+    /**
+     * Finds the argument that carries the port/listener value. Positional arguments must precede named
+     * arguments in Ballerina, so the first positional argument (if any) is the port; otherwise the port
+     * may be supplied as a named {@code port}/{@code listenOn} argument anywhere in the argument list.
+     *
+     * @param args the listener constructor arguments
+     * @return the argument carrying the port value, or {@code null} if none is found
+     */
+    private static FunctionArgumentNode findPortArgument(SeparatedNodeList<FunctionArgumentNode> args) {
+        for (FunctionArgumentNode arg : args) {
+            if (arg instanceof PositionalArgumentNode) {
+                return arg;
+            }
+            if (arg instanceof NamedArgumentNode namedArg) {
+                String argName = namedArg.argumentName().name().text().strip();
+                if (argName.equals(PORT) || argName.equals(LISTEN_ON)) {
+                    return arg;
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Finds the host value from the listener constructor arguments. The host may be supplied either as a
+     * named {@code host} argument (an included {@code ListenerConfiguration} field) or as the {@code host}
+     * field of a positional configuration mapping. A named {@code host} argument takes precedence.
+     *
+     * @param args the listener constructor arguments
+     * @return the host value, or {@code null} if none is found
+     */
+    private String findHost(SeparatedNodeList<FunctionArgumentNode> args) {
+        String host = null;
+        for (FunctionArgumentNode arg : args) {
+            if (arg instanceof NamedArgumentNode namedArg
+                    && HOST_FIELD_NAME.equals(namedArg.argumentName().name().text().strip())) {
+                return extractHost(namedArg);
+            }
+            if (arg instanceof PositionalArgumentNode posArg
+                    && posArg.expression() instanceof MappingConstructorExpressionNode mapping) {
+                host = extractHost(mapping);
+            }
+        }
+        return host;
+    }
+
+    private static ExpressionNode getArgumentExpression(FunctionArgumentNode arg) {
+        return switch (arg) {
+            case PositionalArgumentNode posArg -> posArg.expression();
+            case NamedArgumentNode namedArg -> namedArg.expression();
+            default -> null;
+        };
+    }
+
+    /**
+     * Resolves a {@link Server} when the given listener argument expression references another listener
+     * rather than directly specifying a port. This covers two cases:
+     * <ul>
+     *   <li>a reference to a module-level listener variable (e.g. {@code listenOn = httpListener})</li>
+     *   <li>an inline listener expression (e.g. {@code listenOn = check new http:Listener(9091)})</li>
+     * </ul>
+     * In both cases the referenced listener's argument list is extracted and {@link #generateServer} is
+     * applied recursively so the real port and host are used.
+     *
+     * @param basePath   the absolute base path of the service
+     * @param expression the listener argument expression
+     * @return the resolved server if the expression refers to another listener; otherwise empty
+     */
+    private Optional<Server> resolveListenerServer(String basePath, ExpressionNode expression) {
+        Optional<Symbol> symbol = semanticModel.symbol(expression);
+        if (symbol.isPresent() && symbol.get() instanceof VariableSymbol) {
+            String varName = expression.toSourceCode().strip();
+            if (endpoints.containsKey(varName)) {
+                return Optional.of(generateServer(basePath,
+                        extractListenerArgList(endpoints.get(varName).initializer())));
+            }
+        }
+        Optional<ParenthesizedArgList> inlineArgList = extractListenerArgList(expression);
+        if (inlineArgList.isPresent()) {
+            return Optional.of(generateServer(basePath, inlineArgList));
+        }
+        return Optional.empty();
     }
 
     private String extractHost(NamedArgumentNode namedArg) {
