@@ -5,7 +5,7 @@ This file documents all significant changes made to the Ballerina AI package acr
 ## [Unreleased]
 
 ### Added
-- [Add Agent Configuration to Execute Tool Calls in Parallel](https://github.com/wso2/product-integrator/issues/1833)
+- [Add Agent Configuration to Execute Tool Calls in Parallel](https://github.com/wso2/product-integrator/issues/1856)
 
 ### Fixed
 - [Fix `maxIter` Inference with Toolkits and Enforce Minimum of 10](https://github.com/wso2/product-integrator/issues/1112)
