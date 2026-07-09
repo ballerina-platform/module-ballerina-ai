@@ -179,6 +179,41 @@ public isolated client class MultiToolCallMockLLM {
     }
 }
 
+// Always responds with a `Search` tool call and never produces a final answer, so an
+// execution can only terminate by exhausting the agent's iteration limit.
+// Used to verify `maxIter` enforcement.
+public isolated client class NeverAnsweringMockLLM {
+    *ModelProvider;
+    private int chatCallCount = 0;
+
+    isolated remote function chat(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [],
+            string? stop = ()) returns ChatAssistantMessage|Error {
+        int callCount;
+        lock {
+            self.chatCallCount += 1;
+            callCount = self.chatCallCount;
+        }
+        return {
+            role: ASSISTANT,
+            toolCalls: [
+                {
+                    name: "Search",
+                    arguments: {params: {query: "Leo DiCaprio girlfriend"}},
+                    id: string `call-${callCount}`
+                }
+            ]
+        };
+    }
+
+    isolated remote function generate(Prompt prompt, typedesc<anydata> td = <>) returns td|Error = external;
+
+    public isolated function getChatCallCount() returns int {
+        lock {
+            return self.chatCallCount;
+        }
+    }
+}
+
 isolated function getChatAssistantMessageContent(int queryLevel) returns string|LlmError {
     match queryLevel {
         3 => {

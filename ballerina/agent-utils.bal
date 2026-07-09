@@ -77,7 +77,9 @@ public type ToolOutput record {|
     anydata|error value;
 |};
 
-# An executor to perform step-by-step execution of the agent.
+# An executor that runs the agent's reasoning-action cycles one at a time.
+# Each iteration is a complete cycle: one LLM call (reason) followed by the
+# execution of every tool call returned in that response (act).
 class Executor {
     *object:Iterable;
     private boolean isCompleted = false;
@@ -86,23 +88,22 @@ class Executor {
     # Contains the current execution progress for the agent and the query
     public ExecutionProgress progress;
     private string? agentId = ();
-    # Tool calls from the LLM's latest response that are still pending execution.
-    # All of them are executed before the LLM is reasoned with again, so that a single
-    # LLM response containing multiple tool calls does not trigger multiple round-trips.
-    private FunctionCall[] pendingToolCalls = [];
-    # Results of tool calls that were already executed in parallel but not yet
-    # handed out through the iterator, one result per iteration.
-    private (ExecutionResult|ExecutionError)[] executedToolCallResults = [];
+    # Number of reasoning-action cycles the executor may still run.
+    private int remainingIterations;
+    # Set when the executor stops because the iteration limit was reached without a final answer.
+    private boolean maxIterationsExceeded = false;
 
     # Initialize the executor with the agent and the query.
     #
     # + agent - Agent instance to be executed
+    # + maxIter - Maximum number of reasoning-action cycles allowed for this execution
     # + query - Natural language query to be executed by the agent
     # + history - Execution history of the agent (This is used to continue an execution paused without completing)
     # + context - Contextual information to be used by the tools during the execution
-    isolated function init(Agent agent, string sessionId, *ExecutionProgress progress) {
+    isolated function init(Agent agent, string sessionId, int maxIter, *ExecutionProgress progress) {
         self.sessionId = sessionId;
         self.agent = agent;
+        self.remainingIterations = maxIter;
         self.progress = progress;
         Credential? agentCredential = agent.agentCredential;
         if agentCredential is Credential {
@@ -137,13 +138,12 @@ class Executor {
         return check self.agent.selectNextTools(self.progress, self.sessionId);
     }
 
-    # Execute the next step of the agent.
+    # Execute the action decided by the LLM during the reasoning.
     #
-    # + llmResponse - LLM response containing a chat response, the tool to be executed, or
-    # multiple tools to be executed in parallel
-    # + return - Observations from the tool can be any|error|null
-    public isolated function act(FunctionCall[]|FunctionCall|string llmResponse)
-            returns ExecutionResult|string|ExecutionError {
+    # + llmResponse - LLM response containing a chat response or the tool calls to be executed
+    # + return - Results of every executed tool call, or the final chat response
+    public isolated function act(FunctionCall[]|string llmResponse)
+            returns (ExecutionResult|ExecutionError)[]|string {
         if llmResponse is string {
             log:printDebug("Parsed LLM response as chat response",
                     agentId = self.agentId,
@@ -154,22 +154,22 @@ class Executor {
             self.isCompleted = true;
             return llmResponse;
         }
-        return llmResponse is FunctionCall
-            ? self.executeToolCalls([llmResponse], parallel = false)
-            : self.executeToolCalls(llmResponse, parallel = self.agent.executeToolCallsInParallel);
+        boolean isParallel = self.agent.executeToolCallsInParallel && llmResponse.length() > 1;
+        return self.executeToolCalls(llmResponse, isParallel);
     }
 
-    private isolated function executeToolCalls(FunctionCall[] toolCalls, boolean parallel)
-            returns ExecutionResult|ExecutionError {
-        [ExecutionResult|ExecutionError, anydata][] executionOutcomes = parallel
+    private isolated function executeToolCalls(FunctionCall[] toolCalls, boolean isParallel)
+            returns (ExecutionResult|ExecutionError)[] {
+        [ExecutionResult|ExecutionError, anydata][] executionOutcomes = isParallel
             ? self.executeToolCallsParallelly(toolCalls)
             : self.executeToolCallsSequentially(toolCalls);
+        (ExecutionResult|ExecutionError)[] executionResults = [];
         foreach int i in 0 ..< executionOutcomes.length() {
             var [executionResult, observation] = executionOutcomes[i];
             self.update({llmResponse: toolCalls[i], observation});
-            self.executedToolCallResults.push(executionResult);
+            executionResults.push(executionResult);
         }
-        return self.executedToolCallResults.shift();
+        return executionResults;
     }
 
     private isolated function executeToolCallsParallelly(FunctionCall[] toolCalls)
@@ -216,44 +216,46 @@ class Executor {
         self.progress.executionSteps.push(step);
     }
 
-    # Iterate over the agent's execution steps.
+    # Iterate over the agent's reasoning-action cycles.
     #
-    # + return - a record with the execution step or an error if the agent failed
+    # + return - a record with the results of a reasoning-action cycle or an error if the agent failed
     public function iterator() returns object {
-        public function next() returns record {|ExecutionResult|string|ExecutionError|Error value;|}?;
+        public function next() returns record {|(ExecutionResult|ExecutionError)[]|string|Error value;|}?;
     } {
         return self;
     }
 
-    # Reason and execute the next step of the agent.
+    # Run the next reasoning-action cycle of the agent: reason with the LLM once and
+    # execute every tool call returned in that response.
     #
-    # + return - A record with ExecutionResult, chat response or an error 
-    public isolated function next() returns record {|ExecutionResult|string|ExecutionError|Error value;|}? {
+    # + return - A record with the results of the executed tool calls, the final chat
+    # response, or an error; nil once the execution has completed
+    public isolated function next() returns record {|(ExecutionResult|ExecutionError)[]|string|Error value;|}? {
         if self.isCompleted {
             return ();
         }
-        if self.executedToolCallResults.length() > 0 {
-            return {value: self.executedToolCallResults.shift()};
+        // A reasoning-action cycle starts with an LLM call. Stop before making it if the
+        // iteration budget is already spent, so the limit bounds the number of LLM
+        // round-trips rather than the number of tool calls executed.
+        if self.remainingIterations <= 0 {
+            self.isCompleted = true;
+            self.maxIterationsExceeded = true;
+            return ();
         }
-        if self.pendingToolCalls.length() == 0 {
-            FunctionCall[]|string|Error llmResponse = self.reason();
-            if llmResponse is Error {
-                return {value: llmResponse};
-            }
-            if llmResponse is string {
-                return {value: self.act(llmResponse)};
-            }
-            if llmResponse.length() > 0 {
-                self.pendingToolCalls = llmResponse;
-            }
+        self.remainingIterations -= 1;
+        FunctionCall[]|string|Error llmResponse = self.reason();
+        if llmResponse is Error {
+            return {value: llmResponse};
         }
-        if self.agent.executeToolCallsInParallel && self.pendingToolCalls.length() > 1 {
-            FunctionCall[] toolCalls = self.pendingToolCalls;
-            self.pendingToolCalls = [];
-            return {value: self.act(toolCalls)};
-        }
-        FunctionCall nextToolCall = self.pendingToolCalls.shift();
-        return {value: self.act(nextToolCall)};
+        return {value: self.act(llmResponse)};
+    }
+
+    # Checks whether the execution stopped due to reaching the maximum number of
+    # reasoning-action cycles without producing a final answer.
+    #
+    # + return - True if the iteration limit was exceeded, false otherwise
+    public isolated function isMaxIterationsExceeded() returns boolean {
+        return self.maxIterationsExceeded;
     }
 }
 
@@ -368,7 +370,8 @@ isolated function executeToolCall(Agent agent, FunctionCall llmResponse, Context
 # + agent - Agent to be executed
 # + instruction - Instruction that the agent uses to execute the task
 # + query - Natural langauge commands to the agent  
-# + maxIter - No. of max iterations that agent will run to execute the task (default: 5)
+# + maxIter - Maximum number of reasoning-action cycles the agent will run to execute the task.
+# A single cycle is one LLM call plus the execution of every tool call it returns.
 # + context - Context values to be used by the agent to execute the task
 # + verbose - If true, then print the reasoning steps (default: true)
 # + sessionId - The ID associated with the memory
@@ -416,62 +419,23 @@ isolated function run(Agent agent, string instruction, string query, int maxIter
     ChatUserMessage userMessage = {role: USER, content: query};
     history.push(userMessage);
 
-    Executor executor = new (agent, sessionId, progress = {instruction, query, context, executionId, history});
+    Executor executor = new (agent, sessionId, maxIter, progress = {instruction, query, context, executionId, history});
     ChatMessage[] temporaryMemory = [systemMessage, userMessage];
     ChatAssistantMessage? finalAssistantMessage = ();
-    int iter = 0;
-    foreach ExecutionResult|string|ExecutionError|Error step in executor {
-        ChatAssistantMessage|ChatFunctionMessage|Error iterationOutput = getOutputOfIteration(step);
-        ChatMessage[] iterationHistory = buildCurrentIterationHistory(executor.progress, history);
+    // Each value yielded by the executor is one complete reasoning-action cycle: the results
+    // of every tool call returned in a single LLM response, the final answer, or an error.
+    foreach (ExecutionResult|ExecutionError)[]|string|Error iterationResult in executor {
+        int iter = iterations.length() + 1;
         if verbose {
-            verbosePrint(step, iter);
+            io:println(string `${"\n\n"}Agent Iteration ${iter.toString()}`);
         }
-        if iter == maxIter {
-            log:printDebug("Maximum iterations reached without final answer",
-                    agentId = agentId,
-                    executionId = executionId,
-                    iterations = iter,
-                    stepsCompleted = steps.length(),
-                    sessionId = sessionId
-            );
-            break;
-        }
-        if step is ExecutionError && step.'error is UnauthorizedError {
-            error err = step.'error;
-            content = "I could not complete your request due to an authorization issue, " +
-            "possibly related to the access token or its permissions. Please check that your "
-            + "credentials are valid and have the required access, then try again";
-            Error newError = error Error(content.toString(), 'error = err);
-            iterationOutput = newError;
+        (ChatAssistantMessage|ChatFunctionMessage|Error)[] iterationOutputs = [];
+        boolean hasExecutionEnded = false;
+        if iterationResult is string {
+            content = iterationResult;
             if verbose {
-                verbosePrint(newError, iter);
+                verbosePrint(iterationResult);
             }
-            log:printDebug("Tool execution failed: ",
-                    err,
-                    executionId = executionId,
-                    iteration = iter,
-                    sessionId = sessionId
-            );
-            steps.push(step);
-            finalAssistantMessage = {role: ASSISTANT, content: content};
-            iterations.push({startTime, endTime: time:utcNow(), history: iterationHistory, output: iterationOutput});
-            break;
-        }
-        if step is Error {
-            error? cause = step.cause();
-            log:printDebug("Error occurred during agent iteration",
-                    step,
-                    executionId = executionId,
-                    iteration = iter,
-                    sessionId = sessionId,
-                    cause = cause !is () ? cause.toString() : "none"
-                );
-            steps.push(step);
-            iterations.push({startTime, endTime: time:utcNow(), history: iterationHistory, output: iterationOutput});
-            break;
-        }
-        if step is string {
-            content = step;
             log:printDebug("Final answer generated by agent",
                     agentId = agentId,
                     executionId = executionId,
@@ -479,22 +443,75 @@ isolated function run(Agent agent, string instruction, string query, int maxIter
                     answer = content,
                     sessionId = sessionId
             );
-            finalAssistantMessage = {role: ASSISTANT, content: content};
-            iterations.push({startTime, endTime: time:utcNow(), history: iterationHistory, output: iterationOutput});
+            finalAssistantMessage = {role: ASSISTANT, content: iterationResult};
+            iterationOutputs.push({role: ASSISTANT, content: iterationResult});
+            hasExecutionEnded = true;
+        } else if iterationResult is Error {
+            error? cause = iterationResult.cause();
+            log:printDebug("Error occurred during agent iteration",
+                    iterationResult,
+                    executionId = executionId,
+                    iteration = iter,
+                    sessionId = sessionId,
+                    cause = cause !is () ? cause.toString() : "none"
+                );
+            steps.push(iterationResult);
+            iterationOutputs.push(iterationResult);
+            hasExecutionEnded = true;
+        } else {
+            foreach ExecutionResult|ExecutionError step in iterationResult {
+                if verbose {
+                    verbosePrint(step);
+                }
+                steps.push(step);
+                if step is ExecutionError && step.'error is UnauthorizedError {
+                    error err = step.'error;
+                    content = "I could not complete your request due to an authorization issue, " +
+                    "possibly related to the access token or its permissions. Please check that your "
+                    + "credentials are valid and have the required access, then try again";
+                    Error newError = error Error(content.toString(), 'error = err);
+                    if verbose {
+                        verbosePrint(newError);
+                    }
+                    log:printDebug("Tool execution failed: ",
+                            err,
+                            executionId = executionId,
+                            iteration = iter,
+                            sessionId = sessionId
+                    );
+                    finalAssistantMessage = {role: ASSISTANT, content: content};
+                    iterationOutputs.push(newError);
+                    hasExecutionEnded = true;
+                    break;
+                }
+                iterationOutputs.push(getOutputOfStep(step));
+                log:printDebug("Agent iteration step completed",
+                        agentId = agentId,
+                        executionId = executionId,
+                        iteration = iter,
+                        maxIterations = maxIter,
+                        stepsCompleted = steps.length(),
+                        sessionId = sessionId
+                );
+            }
+        }
+        time:Utc endTime = time:utcNow();
+        iterations.push({startTime, endTime, output: iterationOutputs,
+            history: buildCurrentIterationHistory(executor.progress, history)});
+        startTime = endTime;
+        if hasExecutionEnded {
             break;
         }
-        iter += 1;
-        log:printDebug("Agent iteration started",
+    }
+    boolean maxIterationsExceeded = executor.isMaxIterationsExceeded();
+    if maxIterationsExceeded {
+        log:printDebug("Maximum iterations reached without final answer",
                 agentId = agentId,
                 executionId = executionId,
-                iteration = iter,
-                maxIterations = maxIter,
+                iterations = iterations.length(),
                 stepsCompleted = steps.length(),
                 sessionId = sessionId
         );
-        steps.push(step);
-        iterations.push({startTime, endTime: time:utcNow(), history: iterationHistory, output: iterationOutput});
-        startTime = time:utcNow();
     }
 
     ChatMessage[]|Error intermediateFunctionCallMessages = createFunctionCallMessages(executor.progress);
@@ -520,11 +537,10 @@ isolated function run(Agent agent, string instruction, string query, int maxIter
         let var llmResponse = step.llmResponse
         where llmResponse is FunctionCall
         select llmResponse;
-    return {steps, iterations, answer: content, toolCalls};
+    return {steps, iterations, answer: content, toolCalls, maxIterationsExceeded};
 }
 
-isolated function verbosePrint(ExecutionResult|string|ExecutionError|Error step, int iter) {
-    io:println(string `${"\n\n"}Agent Iteration ${iter.toString()}`);
+isolated function verbosePrint(ExecutionResult|string|ExecutionError|Error step) {
     if step is string {
         io:println(string `${"\n\n"}Final Answer: ${step}${"\n\n"}`);
         return;
@@ -560,14 +576,7 @@ isolated function verbosePrint(ExecutionResult|string|ExecutionError|Error step,
     }
 }
 
-isolated function getOutputOfIteration(ExecutionResult|string|ExecutionError|Error step)
-    returns ChatAssistantMessage|ChatFunctionMessage|Error {
-    if step is Error {
-        return step;
-    }
-    if step is string {
-        return {role: ASSISTANT, content: step};
-    }
+isolated function getOutputOfStep(ExecutionResult|ExecutionError step) returns ChatFunctionMessage|Error {
     if step is ExecutionError {
         return step.'error;
     }
