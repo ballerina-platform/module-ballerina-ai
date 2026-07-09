@@ -163,10 +163,10 @@ isolated function lazyLoadTools(ChatMessage[] messages, ChatCompletionFunctions[
     return;
 }
 
-isolated function getFirstToolCall(ChatAssistantMessage msg) returns FunctionCall? {
+isolated function getToolCalls(ChatAssistantMessage msg) returns FunctionCall[]? {
     FunctionCall[]? toolCalls = msg?.toolCalls;
     if toolCalls is () || toolCalls.length() == 0 {
         return;
     }
-    return toolCalls[0];
+    return toolCalls;
 }
