@@ -40,7 +40,10 @@ public type Tool record {|
     isolated function caller;
     # Optional authorization configuration required to invoke this tool.
     AgentIdAuthConfig|Scopes auth?;
+    # When `true`, the agent pauses and requests human approval before invoking this tool.
+    boolean requiresApproval = false;
 |};
+
 type ToolInfo record {|
     string name;
     string description;
@@ -225,7 +228,8 @@ isolated function getToolConfig(FunctionTool tool) returns ToolConfig|Error {
             description: check config?.description.ensureType(),
             parameters: check config?.parameters.ensureType(),
             caller: tool,
-            auth: check config?.auth.ensureType()
+            auth: check config?.auth.ensureType(),
+            requiresApproval: config.requiresApproval
         };
     } on fail error e {
         return error Error("Unable to register the function '" + getFunctionName(tool) + "' as agent tool", e);
@@ -307,7 +311,8 @@ isolated function registerTool(map<Tool & readonly> toolMap, ToolConfig[] tools)
             variables,
             constants,
             caller: tool.caller,
-            auth: tool.auth
+            auth: tool.auth,
+            requiresApproval: tool.requiresApproval
         };
         toolMap[name] = agentTool.cloneReadOnly();
     }

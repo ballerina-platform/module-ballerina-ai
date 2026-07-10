@@ -94,3 +94,12 @@ public type MaxIterationExceededError distinct (Error & error<record {|(Executio
 
 # Represents errors that occur during memory-related operations.  
 public type MemoryError distinct Error;
+
+# Raised when the agent pauses to request human approval for a sensitive tool call.
+public type ApprovalRequiredError distinct (Error & error<record {| ApprovalRequest request; |}>);
+
+# Raised on `resume` when the pending approval has expired.
+public type ApprovalExpiredError distinct Error;
+
+# Raised on `resume` when no approval is pending for the session.
+public type ApprovalNotFoundError distinct Error;

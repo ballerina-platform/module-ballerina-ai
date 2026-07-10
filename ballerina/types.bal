@@ -48,6 +48,7 @@ type ExecutionTrace record {|
     string answer?;
     Iteration[] iterations;
     FunctionCall[] toolCalls;
+    ApprovalRequiredError? pendingApproval = ();
 |};
 
 # Configurations for controlling the behaviours when communicating with a remote HTTP endpoint.
