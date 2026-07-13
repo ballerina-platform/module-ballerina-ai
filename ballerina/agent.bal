@@ -100,7 +100,7 @@ public type AgentConfiguration record {|
     @display {label: "Agent Credential"}
     Credential credential?;
 
-    # Human-in-the-loop configuration. Omit to disable HITL.
+    # Human-in-the-loop configuration.
     @display {label: "Human-in-the-loop Configuration"}
     ApprovalConfig approval?;
 |};
@@ -170,7 +170,7 @@ public isolated distinct class Agent {
             string[] annotatedApprovalTools = from Tool tool in self.toolStore.tools
                 where tool.requiresApproval
                 select tool.name;
-            self.approvalTools = [...annotatedApprovalTools, ...(approvalConfig?.tools ?: [])].cloneReadOnly();
+            self.approvalTools = [...annotatedApprovalTools, ...(approvalConfig?.tools ?: [])].cloneReadOnly(); // TODO: fix auto marked based on mcp flag
             self.approvalTimeout = approvalConfig?.timeout;
             span.addTools(self.toolStore.getToolsInfo());
             if agentIdentitySpan is observe:CreateAgentIdentitySpan {
@@ -395,7 +395,7 @@ public isolated distinct class Agent {
     #
     # + sessionId - The ID associated with the agent memory
     # + return - The pending approval request, `()` if none is pending, or an `ai:Error`
-    public isolated function getPendingApproval(string sessionId) returns ApprovalRequest?|Error {
+    public isolated function getPendingApproval(string sessionId) returns ApprovalRequest?|Error { // TODO: no usage in code?
         PendingApproval?|Error pendingApprovalResult = self.approvalStore.get(sessionId);
         if pendingApprovalResult is Error {
             return pendingApprovalResult;
@@ -443,12 +443,9 @@ public isolated distinct class Agent {
         string? agentId = agentCredential is Credential ? agentCredential.id : ();
         ExecutionTrace executionTrace = resumeRun(self, pendingApproval, feedback, self.maxIter, self.verbose,
             agentId, sessionId, context);
-        StoredChatMessage[]|error storedHistoryForTrace = pendingApproval.history.fromJsonWithType();
-        ChatMessage[] historyForTrace = storedHistoryForTrace is StoredChatMessage[]
-            ? fromStoredMessages(storedHistoryForTrace) : [];
-        ChatUserMessage userMessage = historyForTrace.length() >= pendingApproval.historyPrefixLength
-            ? <ChatUserMessage>historyForTrace[pendingApproval.historyPrefixLength - 1]
-            : {role: USER, content: ""};
+        ChatUserMessage userMessage = pendingApproval.history.length() >= pendingApproval.historyPrefixLength
+            ? <ChatUserMessage>pendingApproval.history[pendingApproval.historyPrefixLength - 1]
+            : {role: USER, content: ""}; // TODO: revisit
         Iteration[] iterations = executionTrace.iterations;
         FunctionCall[]? toolCalls = executionTrace.toolCalls.length() == 0 ? () : executionTrace.toolCalls;
 

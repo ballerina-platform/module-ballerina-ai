@@ -527,7 +527,7 @@ isolated function run(Agent agent, string instruction, string query, int maxIter
                 ...step.detail().request,
                 executionId,
                 iterationsUsed: iter,
-                history: toStoredMessages(iterationHistory).toJson(),
+                history: iterationHistory,
                 historyPrefixLength
             };
             Error? putErr = agent.approvalStore.put(pendingApprovalRecord);
@@ -664,12 +664,7 @@ isolated function resumeRun(Agent agent, PendingApproval pendingApproval, HumanF
     (ExecutionResult|ExecutionError|Error)[] steps = [];
     string? content = ();
     ApprovalRequiredError? nextPendingApproval = ();
-    StoredChatMessage[]|error storedHistory = pendingApproval.history.fromJsonWithType();
-    if storedHistory is error {
-        log:printError("Failed to reconstruct conversation history from the pending approval",
-                storedHistory, agentId = agentId, executionId = executionId, sessionId = sessionId);
-    }
-    ChatMessage[] history = storedHistory is StoredChatMessage[] ? fromStoredMessages(storedHistory) : [];
+    ChatMessage[] history = pendingApproval.history;
     int historyPrefixLength = pendingApproval.historyPrefixLength;
 
     FunctionCall seededCall = {
@@ -711,7 +706,7 @@ isolated function resumeRun(Agent agent, PendingApproval pendingApproval, HumanF
                 ...step.detail().request,
                 executionId,
                 iterationsUsed: iter,
-                history: toStoredMessages(iterationHistory).toJson(),
+                history: iterationHistory,
                 historyPrefixLength
             };
             Error? putErr = agent.approvalStore.put(nextPendingApprovalRecord);
