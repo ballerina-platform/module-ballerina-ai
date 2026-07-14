@@ -15,6 +15,7 @@
 // under the License.
 
 import ballerina/jballerina.java;
+import ballerina/mcp;
 import ballerina/test;
 
 isolated function issueRefundMock(string orderId, decimal amount) returns string {
@@ -147,6 +148,109 @@ function testGetPendingApprovalIsNilWhenNothingIsPending() returns error? {
 }
 
 @test:Config
+function testHumanInTheLoopMergesTraceAcrossPause() returns error? {
+    Agent agent = check newHitlTestAgent();
+    string sessionId = "hitl-trace-merge-session";
+
+    Trace|Error pausedTrace = agent.run("Refund order ORD-1", sessionId, td = Trace);
+    test:assertTrue(pausedTrace is Trace);
+    if pausedTrace is Trace {
+        test:assertTrue(pausedTrace.output is ApprovalRequiredError);
+        // Only the pause's own iteration has happened so far.
+        test:assertEquals(pausedTrace.iterations.length(), 1);
+
+        Trace|Error resumedTrace = agent.resume(sessionId, {approver: "tester"}, td = Trace);
+        test:assertTrue(resumedTrace is Trace);
+        if resumedTrace is Trace {
+            // The merged trace covers the pre-pause iteration plus the two iterations that
+            // happen on resume (the tool resolving, then the final answer) - not just the
+            // iterations from this one call.
+            test:assertEquals(resumedTrace.iterations.length(), 3);
+            test:assertEquals(resumedTrace.id, pausedTrace.id);
+            test:assertEquals(resumedTrace.startTime, pausedTrace.startTime);
+            test:assertNotEquals(resumedTrace.endTime, pausedTrace.endTime);
+        }
+    }
+}
+
+isolated function lookupOrderMock(string orderId) returns string {
+    return string `Order ${orderId} found`;
+}
+
+final ToolConfig hitlLookupOrderTool = {
+    name: "lookupOrder",
+    description: "Looks up an order",
+    parameters: {
+        properties: {
+            orderId: {'type: STRING}
+        }
+    },
+    caller: lookupOrderMock
+};
+
+// Proposes lookupOrder first (a normal, non-gated iteration), then the gated issueRefund
+// (which pauses), then - once resumed - proposes lookupOrder again. With a tight `maxIter`,
+// that last proposal should be discarded for exceeding the cap, spanning the pre-pause and
+// post-resume iterations, rather than being judged solely on the post-resume call's own step count.
+public isolated client class MaxIterMockLLM {
+    *ModelProvider;
+
+    isolated remote function chat(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [],
+            string? stop = ()) returns ChatAssistantMessage|Error {
+        ChatMessage[] msgs;
+        if messages is ChatUserMessage {
+            msgs = [messages];
+        } else {
+            msgs = messages;
+        }
+        int functionMessageCount = 0;
+        foreach ChatMessage msg in msgs {
+            if msg is ChatFunctionMessage {
+                functionMessageCount += 1;
+            }
+        }
+        if functionMessageCount == 0 {
+            return {
+                role: ASSISTANT,
+                toolCalls: [{name: "lookupOrder", arguments: {"orderId": "ORD-1"}, id: "call-lookup-1"}]
+            };
+        }
+        if functionMessageCount == 1 {
+            return {
+                role: ASSISTANT,
+                toolCalls: [{name: "issueRefund", arguments: {"orderId": "ORD-1", "amount": 50}, id: "call-refund"}]
+            };
+        }
+        // Proposes yet another step after resuming; this should never actually run once maxIter is hit.
+        return {
+            role: ASSISTANT,
+            toolCalls: [{name: "lookupOrder", arguments: {"orderId": "ORD-1"}, id: "call-lookup-2"}]
+        };
+    }
+
+    isolated remote function generate(Prompt prompt, typedesc<anydata> td = <>) returns td|Error = @java:Method {
+        'class: "io.ballerina.lib.ai.MockGenerator"
+    } external;
+}
+
+@test:Config
+function testMaxIterExceededAfterResumeIsClassifiedCorrectly() returns error? {
+    Agent agent = check new ({
+        systemPrompt: {role: "Test Agent", instructions: "Handle refunds"},
+        model: new MaxIterMockLLM(),
+        tools: [hitlLookupOrderTool, hitlRefundTool],
+        maxIter: 2
+    });
+    string sessionId = "hitl-maxiter-session";
+
+    string|Error result = agent.run("Refund order ORD-1", sessionId);
+    test:assertTrue(result is ApprovalRequiredError);
+
+    string|Error resumed = agent.resume(sessionId, {approver: "tester"});
+    test:assertTrue(resumed is MaxIterationExceededError);
+}
+
+@test:Config
 function testAgentWithoutApprovalToolsNeverPauses() returns error? {
     // A tool without `requiresApproval` should behave exactly as before HITL was added.
     Agent agent = check new ({
@@ -156,4 +260,19 @@ function testAgentWithoutApprovalToolsNeverPauses() returns error? {
     });
     string|Error result = agent.run("first turn query", "hitl-unaffected-session");
     test:assertEquals(result, "first turn answer");
+}
+
+@test:Config
+function testGetDestructiveToolNamesFiltersByHint() returns error? {
+    // Pure function, no live MCP server needed: only tools explicitly marked
+    // `destructiveHint: true` are returned - a false hint, an absent hint, and no
+    // annotations at all must all be excluded.
+    mcp:ToolDefinition[] tools = [
+        {name: "deleteResource", inputSchema: {'type: "object"}, annotations: {destructiveHint: true}},
+        {name: "readResource", inputSchema: {'type: "object"}, annotations: {destructiveHint: false}},
+        {name: "listResources", inputSchema: {'type: "object"}, annotations: {}},
+        {name: "pingServer", inputSchema: {'type: "object"}}
+    ];
+    string[] destructiveToolNames = getDestructiveToolNames(tools);
+    test:assertEquals(destructiveToolNames, ["deleteResource"]);
 }

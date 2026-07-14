@@ -170,7 +170,7 @@ public isolated distinct class Agent {
             string[] annotatedApprovalTools = from Tool tool in self.toolStore.tools
                 where tool.requiresApproval
                 select tool.name;
-            self.approvalTools = [...annotatedApprovalTools, ...(approvalConfig?.tools ?: [])].cloneReadOnly(); // TODO: fix auto marked based on mcp flag
+            self.approvalTools = [...annotatedApprovalTools, ...(approvalConfig?.tools ?: [])].cloneReadOnly();
             self.approvalTimeout = approvalConfig?.timeout;
             span.addTools(self.toolStore.getToolsInfo());
             if agentIdentitySpan is observe:CreateAgentIdentitySpan {
