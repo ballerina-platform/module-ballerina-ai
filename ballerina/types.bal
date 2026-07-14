@@ -49,6 +49,10 @@ type ExecutionTrace record {|
     Iteration[] iterations;
     FunctionCall[] toolCalls;
     ApprovalRequiredError? pendingApproval = ();
+    # The true iteration counter at the point this trace was produced, spanning the whole
+    # logical run (not just the current `run`/`resume` call). Used instead of `steps.length()`
+    # to correctly classify a max-iterations-exceeded error after a resume.
+    int iterationsUsed = 0;
 |};
 
 # Configurations for controlling the behaviours when communicating with a remote HTTP endpoint.

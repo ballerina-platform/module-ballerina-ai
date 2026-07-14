@@ -450,9 +450,12 @@ class Executor {
 # + verbose - If true, then print the reasoning steps (default: true)
 # + sessionId - The ID associated with the memory
 # + executionId - Unique identifier for this execution
+# + runStartTime - The true start time of this logical run, persisted across any pause so a
+# `Trace` produced after resuming still reports the original start
 # + return - Returns the execution steps tracing the agent's reasoning and outputs from the tools
 isolated function run(Agent agent, string instruction, string query, int maxIter, boolean verbose, string? agentId,
-        string sessionId = DEFAULT_SESSION_ID, Context context = new, string executionId = DEFAULT_EXECUTION_ID)
+        string sessionId = DEFAULT_SESSION_ID, Context context = new, string executionId = DEFAULT_EXECUTION_ID,
+        time:Utc runStartTime = time:utcNow())
         returns ExecutionTrace {
     time:Utc startTime = time:utcNow();
     Iteration[] iterations = [];
@@ -523,12 +526,16 @@ isolated function run(Agent agent, string instruction, string query, int maxIter
                 sessionId = sessionId,
                 toolName = step.detail().request.toolName
             );
+            iterations.push({startTime, endTime: time:utcNow(), history: iterationHistory, output: iterationOutput});
             PendingApproval pendingApprovalRecord = {
                 ...step.detail().request,
                 executionId,
                 iterationsUsed: iter,
                 history: iterationHistory,
-                historyPrefixLength
+                historyPrefixLength,
+                iterations,
+                toolCalls: collectToolCalls(executor.progress.executionSteps),
+                startTime: runStartTime
             };
             Error? putErr = agent.approvalStore.put(pendingApprovalRecord);
             if putErr is Error {
@@ -536,7 +543,6 @@ isolated function run(Agent agent, string instruction, string query, int maxIter
                     executionId = executionId, sessionId = sessionId);
             }
             pendingApproval = step;
-            iterations.push({startTime, endTime: time:utcNow(), history: iterationHistory, output: iterationOutput});
             break;
         }
         if step is ExecutionError && step.'error is UnauthorizedError {
@@ -603,11 +609,13 @@ isolated function run(Agent agent, string instruction, string query, int maxIter
     if pendingApproval is ApprovalRequiredError {
         // The interim history is captured entirely within the persisted `PendingApproval` snapshot,
         // so `Memory` is left untouched until the whole logical run completes (see `resumeRun`).
-        FunctionCall[] toolCallsSoFar = from ExecutionStep step in executor.progress.executionSteps
-            let var llmResponse = step.llmResponse
-            where llmResponse is FunctionCall
-            select llmResponse;
-        return {steps, iterations, toolCalls: toolCallsSoFar, pendingApproval};
+        return {
+            steps,
+            iterations,
+            toolCalls: collectToolCalls(executor.progress.executionSteps),
+            pendingApproval,
+            iterationsUsed: iter
+        };
     }
 
     ChatMessage[]|Error intermediateFunctionCallMessages = createFunctionCallMessages(executor.progress);
@@ -629,11 +637,8 @@ isolated function run(Agent agent, string instruction, string query, int maxIter
         // which never return an error.
     }
     // Collect all the tool call actions
-    FunctionCall[] toolCalls = from ExecutionStep step in executor.progress.executionSteps
-        let var llmResponse = step.llmResponse
-        where llmResponse is FunctionCall
-        select llmResponse;
-    return {steps, iterations, answer: content, toolCalls};
+    FunctionCall[] toolCalls = collectToolCalls(executor.progress.executionSteps);
+    return {steps, iterations, answer: content, toolCalls, iterationsUsed: iter};
 }
 
 # Resume the agent for a given session using the human's decision on a previously paused tool call.
@@ -702,12 +707,16 @@ isolated function resumeRun(Agent agent, PendingApproval pendingApproval, HumanF
                 sessionId = sessionId,
                 toolName = step.detail().request.toolName
             );
+            iterations.push({startTime, endTime: time:utcNow(), history: iterationHistory, output: iterationOutput});
             PendingApproval nextPendingApprovalRecord = {
                 ...step.detail().request,
                 executionId,
                 iterationsUsed: iter,
                 history: iterationHistory,
-                historyPrefixLength
+                historyPrefixLength,
+                iterations: [...pendingApproval.iterations, ...iterations],
+                toolCalls: [...pendingApproval.toolCalls, ...collectToolCalls(executor.progress.executionSteps)],
+                startTime: pendingApproval.startTime
             };
             Error? putErr = agent.approvalStore.put(nextPendingApprovalRecord);
             if putErr is Error {
@@ -715,7 +724,6 @@ isolated function resumeRun(Agent agent, PendingApproval pendingApproval, HumanF
                     executionId = executionId, sessionId = sessionId);
             }
             nextPendingApproval = step;
-            iterations.push({startTime, endTime: time:utcNow(), history: iterationHistory, output: iterationOutput});
             break;
         }
         if step is ExecutionError && step.'error is UnauthorizedError {
@@ -780,11 +788,13 @@ isolated function resumeRun(Agent agent, PendingApproval pendingApproval, HumanF
     }
 
     if nextPendingApproval is ApprovalRequiredError {
-        FunctionCall[] toolCallsSoFar = from ExecutionStep step in executor.progress.executionSteps
-            let var llmResponse = step.llmResponse
-            where llmResponse is FunctionCall
-            select llmResponse;
-        return {steps, iterations, toolCalls: toolCallsSoFar, pendingApproval: nextPendingApproval};
+        return {
+            steps,
+            iterations: [...pendingApproval.iterations, ...iterations],
+            toolCalls: [...pendingApproval.toolCalls, ...collectToolCalls(executor.progress.executionSteps)],
+            pendingApproval: nextPendingApproval,
+            iterationsUsed: iter
+        };
     }
 
     // Reconstruct the messages belonging to this logical turn: the original system and user
@@ -812,11 +822,13 @@ isolated function resumeRun(Agent agent, PendingApproval pendingApproval, HumanF
         // Ignore this error since the stateless agent always relies on DefaultMessageWindowChatMemoryManager,
         // which never return an error.
     }
-    FunctionCall[] toolCalls = from ExecutionStep step in executor.progress.executionSteps
-        let var llmResponse = step.llmResponse
-        where llmResponse is FunctionCall
-        select llmResponse;
-    return {steps, iterations, answer: content, toolCalls};
+    return {
+        steps,
+        iterations: [...pendingApproval.iterations, ...iterations],
+        answer: content,
+        toolCalls: [...pendingApproval.toolCalls, ...collectToolCalls(executor.progress.executionSteps)],
+        iterationsUsed: iter
+    };
 }
 
 isolated function verbosePrint(ExecutionResult|LlmChatResponse|ExecutionError|Error step, int iter) {
@@ -886,6 +898,12 @@ isolated function buildCurrentIterationHistory(ExecutionProgress progress,
     messages.unshift(...conversationHistoryUpToCurrentUserQuery);
     return messages;
 }
+
+isolated function collectToolCalls(ExecutionStep[] steps) returns FunctionCall[] =>
+    from ExecutionStep step in steps
+    let var llmResponse = step.llmResponse
+    where llmResponse is FunctionCall
+    select llmResponse;
 
 isolated function getObservationString(anydata|error observation) returns string {
     if observation is () {

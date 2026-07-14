@@ -302,7 +302,7 @@ public isolated distinct class Agent {
         Credential? & readonly agentCredential = self.agentCredential;
         string? agentId = agentCredential is Credential ? agentCredential.id : ();
         ExecutionTrace executionTrace = run(self, systemPrompt, query, self.maxIter, self.verbose, agentId,
-            sessionId, context, executionId);
+            sessionId, context, executionId, startTime);
         ChatUserMessage userMessage = {role: USER, content: query};
         Iteration[] iterations = executionTrace.iterations;
         FunctionCall[]? toolCalls = executionTrace.toolCalls.length() == 0 ? () : executionTrace.toolCalls;
@@ -412,7 +412,6 @@ public isolated distinct class Agent {
 
     private isolated function resumeInternal(string sessionId, HumanFeedback feedback,
             Context context = new, boolean withTrace = false) returns string|Trace|Error {
-        time:Utc startTime = time:utcNow();
         log:printDebug("Agent resume started",
                 agentId = self.agentId,
                 sessionId = sessionId
@@ -434,6 +433,9 @@ public isolated distinct class Agent {
             return error ApprovalExpiredError("The pending approval for session '" + sessionId + "' has expired.");
         }
 
+        // Carry the original run's start time forward, so `Trace.startTime` reflects the
+        // whole logical run rather than just this resume call.
+        time:Utc startTime = pendingApproval.startTime;
         string executionId = pendingApproval.executionId;
         observe:InvokeAgentSpan span = observe:createInvokeAgentSpan(self.systemPrompt.role);
         span.addId(self.uniqueId);
@@ -534,11 +536,15 @@ isolated function isApprovalExpired(PendingApproval pendingApproval) returns boo
 
 isolated function getAnswer(ExecutionTrace executionTrace, int maxIter) returns string|Error {
     string? answer = executionTrace.answer;
-    return answer ?: constructError(executionTrace.steps, maxIter);
+    return answer ?: constructError(executionTrace.steps, executionTrace.iterationsUsed, maxIter);
 }
 
-isolated function constructError((ExecutionResult|ExecutionError|Error)[] steps, int maxIter) returns Error {
-    if (steps.length() == maxIter) {
+isolated function constructError((ExecutionResult|ExecutionError|Error)[] steps, int iterationsUsed, int maxIter)
+        returns Error {
+    // `iterationsUsed` is the true iteration counter for the whole logical run (correct even
+    // after a resume, when `steps` only holds the current call's own steps and would otherwise
+    // never match `maxIter`).
+    if (iterationsUsed == maxIter) {
         return error MaxIterationExceededError("Maximum iteration limit exceeded while processing the query.",
             steps = steps);
     }

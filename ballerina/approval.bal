@@ -69,6 +69,13 @@ public type PendingApproval record {|
     # Number of entries at the start of `history` that belong to memory loaded
     # prior to this turn (the system message, prior turns, and the user message)
     int historyPrefixLength;
+    # Iterations accumulated in this logical run prior to this pause, so that a `Trace`
+    # produced after resuming reflects the whole run, not just the current call
+    Iteration[] iterations;
+    # Tool calls accumulated in this logical run prior to this pause
+    FunctionCall[] toolCalls;
+    # The original run's start time, carried unchanged across every subsequent pause
+    time:Utc startTime;
 |};
 
 # Persists pending human approvals across a pause/resume, keyed by session ID.
@@ -92,12 +99,68 @@ public type ApprovalStore isolated object {
     public isolated function remove(string sessionId) returns Error?;
 };
 
+# The isolated-safe form of an `Iteration` used only by `InMemoryApprovalStore`. `history` is
+# converted the same way as `PendingApproval.history` (see `StoredPendingApproval`). `output`
+# narrows `Error` to a `string` summary: `Memory` faces this exact problem for tool
+# observations already — by the time a result reaches `Memory`, any `error` has already been
+# stringified into a `ChatFunctionMessage.content` (see `getObservationString` in
+# `agent-utils.bal`), because Ballerina `error` values are never `Cloneable` and so can never
+# cross a `lock` boundary. `Iteration.output` is the one place that still carries a raw `Error`
+# (a reasoning/validation failure, not a tool result), so the same stringify-before-persist
+# convention is applied here.
+type StoredIteration record {|
+    # History of chat messages up to this iteration, in the isolated-safe stored form
+    MemoryChatMessage[] history;
+    # Output produced by the agent in this iteration; an `Error` is stringified (see above)
+    ChatAssistantMessage|ChatFunctionMessage|string output;
+    # Start time of the iteration
+    time:Utc startTime;
+    # End time of the iteration
+    time:Utc endTime;
+|};
+
+isolated function toStoredIterations(Iteration[] iterations) returns StoredIteration[]|MemoryError {
+    StoredIteration[] stored = [];
+    foreach Iteration iteration in iterations {
+        MemoryChatMessage[]|MemoryError history = mapToMemoryChatMessages(iteration.history);
+        if history is MemoryError {
+            return history;
+        }
+        ChatAssistantMessage|ChatFunctionMessage|Error output = iteration.output;
+        stored.push({
+            history,
+            output: output is Error ? summarizeIterationError(output) : output,
+            startTime: iteration.startTime,
+            endTime: iteration.endTime
+        });
+    }
+    return stored;
+}
+
+isolated function summarizeIterationError(Error err) returns string {
+    error? cause = err.cause();
+    return cause is error ? string `${err.message()} (cause: ${cause.message()})` : err.message();
+}
+
+isolated function fromStoredIterations(StoredIteration[] stored) returns Iteration[] =>
+    from StoredIteration s in stored
+    select fromStoredIteration(s);
+
+isolated function fromStoredIteration(StoredIteration stored) returns Iteration {
+    ChatAssistantMessage|ChatFunctionMessage|string output = stored.output;
+    if output is string {
+        return {history: stored.history, output: error Error(output), startTime: stored.startTime,
+            endTime: stored.endTime};
+    }
+    return {history: stored.history, output, startTime: stored.startTime, endTime: stored.endTime};
+}
+
 # The pending approval as persisted internally by `InMemoryApprovalStore`: identical to
 # `PendingApproval`, except `history` is the isolated-safe `MemoryChatMessage[]` (the same
 # type `ShortTermMemoryStore`/`MessageWindowChatMemory` already use to store messages inside
 # a `lock` block) rather than the plain `ChatMessage[]`, whose `Prompt`-typed content is not
-# provably isolated. `MemoryChatMessage` is a subtype of `ChatMessage`, so converting back on
-# `get` is a plain widening assignment; no separate reconstruction step is needed.
+# provably isolated, and `iterations` is `StoredIteration[]` for the same reason (see
+# `StoredIteration`).
 type StoredPendingApproval record {|
     *ApprovalRequest;
     # Identifier of the original execution, carried through to the resumed `Trace`
@@ -109,16 +172,13 @@ type StoredPendingApproval record {|
     # Number of entries at the start of `history` that belong to memory loaded
     # prior to this turn (the system message, prior turns, and the user message)
     int historyPrefixLength;
+    # Iterations accumulated in this logical run prior to this pause
+    StoredIteration[] iterations;
+    # Tool calls accumulated in this logical run prior to this pause
+    FunctionCall[] toolCalls;
+    # The original run's start time, carried unchanged across every subsequent pause
+    time:Utc startTime;
 |};
-
-# Converts a conversation history snapshot into the isolated-safe form used for storage,
-# reusing the same per-message conversion `Memory` implementations rely on.
-#
-# + messages - The conversation history to convert
-# + return - The stored representation of `messages`, or an `ai:MemoryError` if a message
-# could not be converted
-isolated function toStoredHistory(ChatMessage[] messages) returns MemoryChatMessage[]|MemoryError =>
-    from ChatMessage message in messages select check mapToMemoryChatMessage(message);
 
 # Default in-memory implementation of `ApprovalStore`.
 public isolated class InMemoryApprovalStore {
@@ -126,9 +186,13 @@ public isolated class InMemoryApprovalStore {
     private final map<StoredPendingApproval> pending = {};
 
     public isolated function put(PendingApproval approval) returns Error? {
-        MemoryChatMessage[]|MemoryError history = toStoredHistory(approval.history);
+        MemoryChatMessage[]|MemoryError history = mapToMemoryChatMessages(approval.history);
         if history is MemoryError {
             return history;
+        }
+        StoredIteration[]|MemoryError iterations = toStoredIterations(approval.iterations);
+        if iterations is MemoryError {
+            return iterations;
         }
         StoredPendingApproval stored = {
             id: approval.id,
@@ -142,7 +206,10 @@ public isolated class InMemoryApprovalStore {
             executionId: approval.executionId,
             iterationsUsed: approval.iterationsUsed,
             history,
-            historyPrefixLength: approval.historyPrefixLength
+            historyPrefixLength: approval.historyPrefixLength,
+            iterations,
+            toolCalls: approval.toolCalls,
+            startTime: approval.startTime
         };
         lock {
             self.pending[approval.sessionId] = stored.clone();
@@ -150,10 +217,31 @@ public isolated class InMemoryApprovalStore {
     }
 
     public isolated function get(string sessionId) returns PendingApproval?|Error {
+        StoredPendingApproval? stored;
         lock {
-            StoredPendingApproval? stored = self.pending[sessionId];
-            return stored is () ? () : stored.clone();
+            StoredPendingApproval? s = self.pending[sessionId];
+            stored = s is () ? () : s.clone();
         }
+        if stored is () {
+            return ();
+        }
+        return {
+            id: stored.id,
+            sessionId: stored.sessionId,
+            toolName: stored.toolName,
+            toolDescription: stored.toolDescription,
+            arguments: stored.arguments,
+            toolCallId: stored.toolCallId,
+            requestedAt: stored.requestedAt,
+            expiresAt: stored.expiresAt,
+            executionId: stored.executionId,
+            iterationsUsed: stored.iterationsUsed,
+            history: stored.history,
+            historyPrefixLength: stored.historyPrefixLength,
+            iterations: fromStoredIterations(stored.iterations),
+            toolCalls: stored.toolCalls,
+            startTime: stored.startTime
+        };
     }
 
     public isolated function remove(string sessionId) returns Error? {
