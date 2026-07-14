@@ -457,8 +457,6 @@ isolated function run(Agent agent, string instruction, string query, int maxIter
         string sessionId = DEFAULT_SESSION_ID, Context context = new, string executionId = DEFAULT_EXECUTION_ID,
         time:Utc runStartTime = time:utcNow())
         returns ExecutionTrace {
-    time:Utc startTime = time:utcNow();
-    Iteration[] iterations = [];
     log:printDebug("Agent execution loop started",
         agentId = agentId,
         executionId = executionId,
@@ -468,9 +466,6 @@ isolated function run(Agent agent, string instruction, string query, int maxIter
         isStateless = agent.stateless
     );
 
-    (ExecutionResult|ExecutionError|Error)[] steps = [];
-    string? content = ();
-    ApprovalRequiredError? pendingApproval = ();
     // Retrieve the conversation history from memory, update the system message at the start,
     // and append the user message for the current interaction.
     // After iterating and collecting execution steps in temporary memory,
@@ -499,146 +494,8 @@ isolated function run(Agent agent, string instruction, string query, int maxIter
     int historyPrefixLength = history.length();
 
     Executor executor = new (agent, sessionId, progress = {instruction, query, context, executionId, history});
-    ChatMessage[] temporaryMemory = [systemMessage, userMessage];
-    ChatAssistantMessage? finalAssistantMessage = ();
-    int iter = 0;
-    foreach ExecutionResult|LlmChatResponse|ExecutionError|Error step in executor {
-        ChatAssistantMessage|ChatFunctionMessage|Error iterationOutput = getOutputOfIteration(step);
-        ChatMessage[] iterationHistory = buildCurrentIterationHistory(executor.progress, history);
-        if verbose {
-            verbosePrint(step, iter);
-        }
-        if iter == maxIter {
-            log:printDebug("Maximum iterations reached without final answer",
-                agentId = agentId,
-                executionId = executionId,
-                iterations = iter,
-                stepsCompleted = steps.length(),
-                sessionId = sessionId
-            );
-            break;
-        }
-        if step is ApprovalRequiredError {
-            log:printDebug("Agent execution paused for human approval",
-                agentId = agentId,
-                executionId = executionId,
-                iteration = iter,
-                sessionId = sessionId,
-                toolName = step.detail().request.toolName
-            );
-            iterations.push({startTime, endTime: time:utcNow(), history: iterationHistory, output: iterationOutput});
-            PendingApproval pendingApprovalRecord = {
-                ...step.detail().request,
-                executionId,
-                iterationsUsed: iter,
-                history: iterationHistory,
-                historyPrefixLength,
-                iterations,
-                toolCalls: collectToolCalls(executor.progress.executionSteps),
-                startTime: runStartTime
-            };
-            Error? putErr = agent.approvalStore.put(pendingApprovalRecord);
-            if putErr is Error {
-                log:printError("Failed to persist the pending approval", putErr,
-                    executionId = executionId, sessionId = sessionId);
-            }
-            pendingApproval = step;
-            break;
-        }
-        if step is ExecutionError && step.'error is UnauthorizedError {
-            error err = step.'error;
-            content = "I could not complete your request due to an authorization issue, " +
-              "possibly related to the access token or its permissions. Please check that your "
-              + "credentials are valid and have the required access, then try again";
-            Error newError =  error Error(content.toString(), 'error = err);
-            iterationOutput = newError;
-            if verbose {
-                verbosePrint(newError, iter);
-            }
-            log:printDebug("Tool execution failed: ",
-                err,
-                executionId = executionId,
-                iteration = iter,
-                sessionId = sessionId
-            );
-            steps.push(step);
-            finalAssistantMessage = {role: ASSISTANT, content: content};
-            iterations.push({startTime, endTime: time:utcNow(), history: iterationHistory, output: iterationOutput});
-            break;
-        }
-        if step is Error {
-            error? cause = step.cause();
-            log:printDebug("Error occurred during agent iteration",
-                    step,
-                    executionId = executionId,
-                    iteration = iter,
-                    sessionId = sessionId,
-                    cause = cause !is () ? cause.toString() : "none"
-                );
-            steps.push(step);
-            iterations.push({startTime, endTime: time:utcNow(), history: iterationHistory, output: iterationOutput});
-            break;
-        }
-        if step is LlmChatResponse {
-            content = step.content;
-            log:printDebug("Final answer generated by agent",
-                agentId = agentId,
-                executionId = executionId,
-                iteration = iter,
-                answer = content,
-                sessionId = sessionId
-            );
-            finalAssistantMessage = {role: ASSISTANT, content: content};
-            iterations.push({startTime, endTime: time:utcNow(), history: iterationHistory, output: iterationOutput});
-            break;
-        }
-        iter += 1;
-        log:printDebug("Agent iteration started",
-            agentId = agentId,
-            executionId = executionId,
-            iteration = iter,
-            maxIterations = maxIter,
-            stepsCompleted = steps.length(),
-            sessionId = sessionId
-        );
-        steps.push(step);
-        iterations.push({startTime, endTime: time:utcNow(), history: iterationHistory, output: iterationOutput});
-        startTime = time:utcNow();
-    }
-
-    if pendingApproval is ApprovalRequiredError {
-        // The interim history is captured entirely within the persisted `PendingApproval` snapshot,
-        // so `Memory` is left untouched until the whole logical run completes (see `resumeRun`).
-        return {
-            steps,
-            iterations,
-            toolCalls: collectToolCalls(executor.progress.executionSteps),
-            pendingApproval,
-            iterationsUsed: iter
-        };
-    }
-
-    ChatMessage[]|Error intermediateFunctionCallMessages = createFunctionCallMessages(executor.progress);
-    if intermediateFunctionCallMessages is Error {
-        log:printError("Failed to build function call messages from execution history",
-                intermediateFunctionCallMessages, agentId = agentId, executionId = executionId, sessionId = sessionId);
-    } else {
-        temporaryMemory.push(...intermediateFunctionCallMessages);
-    }
-    if finalAssistantMessage is ChatAssistantMessage {
-        temporaryMemory.push(finalAssistantMessage);
-    }
-
-    // Batch update the memory with the user message, system message, and all intermediate steps from tool execution
-    updateMemory(agent.memory, sessionId, temporaryMemory, agentId);
-    if agent.stateless {
-        MemoryError? err = agent.memory.delete(sessionId);
-        // Ignore this error since the stateless agent always relies on DefaultMessageWindowChatMemoryManager,
-        // which never return an error.
-    }
-    // Collect all the tool call actions
-    FunctionCall[] toolCalls = collectToolCalls(executor.progress.executionSteps);
-    return {steps, iterations, answer: content, toolCalls, iterationsUsed: iter};
+    return executeAgentLoop(agent, executor, history, historyPrefixLength, maxIter, verbose, agentId, executionId,
+        sessionId, 0, [], [], runStartTime, "Agent execution paused for human approval");
 }
 
 # Resume the agent for a given session using the human's decision on a previously paused tool call.
@@ -655,9 +512,7 @@ isolated function run(Agent agent, string instruction, string query, int maxIter
 isolated function resumeRun(Agent agent, PendingApproval pendingApproval, HumanFeedback feedback, int maxIter,
         boolean verbose, string? agentId, string sessionId = DEFAULT_SESSION_ID, Context context = new)
         returns ExecutionTrace {
-    time:Utc startTime = time:utcNow();
     string executionId = pendingApproval.executionId;
-    Iteration[] iterations = [];
     log:printDebug("Agent resume loop started",
         agentId = agentId,
         executionId = executionId,
@@ -666,9 +521,6 @@ isolated function resumeRun(Agent agent, PendingApproval pendingApproval, HumanF
         isStateless = agent.stateless
     );
 
-    (ExecutionResult|ExecutionError|Error)[] steps = [];
-    string? content = ();
-    ApprovalRequiredError? nextPendingApproval = ();
     ChatMessage[] history = pendingApproval.history;
     int historyPrefixLength = pendingApproval.historyPrefixLength;
 
@@ -681,49 +533,81 @@ isolated function resumeRun(Agent agent, PendingApproval pendingApproval, HumanF
 
     Executor executor = new (agent, sessionId, seededFeedback = seeded,
         progress = {instruction: "", query: "", context, executionId, history});
+    return executeAgentLoop(agent, executor, history, historyPrefixLength, maxIter, verbose, agentId, executionId,
+        sessionId, pendingApproval.iterationsUsed, pendingApproval.iterations, pendingApproval.toolCalls,
+        pendingApproval.startTime, "Agent execution paused again for human approval");
+}
+
+# Drives the agent's step-by-step reasoning loop shared by `run` and `resumeRun`, then persists a
+# `PendingApproval` if it pauses again or batches the turn's messages into `Memory` if it completes.
+#
+# + agent - Agent being executed
+# + executor - Executor already constructed for this call (seeded with the human's decision, for a resume)
+# + history - Conversation history up to and including this turn's user message
+# + historyPrefixLength - Number of entries in `history` that belong to memory loaded prior to this turn
+# + maxIter - No. of max iterations that agent will run to execute the task
+# + verbose - If true, then print the reasoning steps
+# + agentId - Optional agent identity
+# + executionId - Unique identifier for this logical execution, carried across any pauses
+# + sessionId - The ID associated with the memory
+# + iter - Iteration count already consumed in this logical run prior to this call
+# + priorIterations - Iterations accumulated in this logical run prior to this call
+# + priorToolCalls - Tool calls accumulated in this logical run prior to this call
+# + originalStartTime - The logical run's true start time, persisted into any newly-paused `PendingApproval`
+# + pauseLogMessage - Message logged when execution pauses for human approval mid-loop
+# + return - Returns the execution steps tracing the agent's reasoning and outputs from the tools
+isolated function executeAgentLoop(Agent agent, Executor executor, ChatMessage[] history, int historyPrefixLength,
+        int maxIter, boolean verbose, string? agentId, string executionId, string sessionId, int iter,
+        Iteration[] priorIterations, FunctionCall[] priorToolCalls, time:Utc originalStartTime,
+        string pauseLogMessage) returns ExecutionTrace {
+    time:Utc startTime = time:utcNow();
+    Iteration[] iterations = [];
+    (ExecutionResult|ExecutionError|Error)[] steps = [];
+    string? content = ();
+    ApprovalRequiredError? pendingApproval = ();
     ChatAssistantMessage? finalAssistantMessage = ();
-    int iter = pendingApproval.iterationsUsed;
+    int currentIter = iter;
     foreach ExecutionResult|LlmChatResponse|ExecutionError|Error step in executor {
         ChatAssistantMessage|ChatFunctionMessage|Error iterationOutput = getOutputOfIteration(step);
         ChatMessage[] iterationHistory = buildCurrentIterationHistory(executor.progress, history);
         if verbose {
-            verbosePrint(step, iter);
+            verbosePrint(step, currentIter);
         }
-        if iter == maxIter {
+        if currentIter == maxIter {
             log:printDebug("Maximum iterations reached without final answer",
                 agentId = agentId,
                 executionId = executionId,
-                iterations = iter,
+                iterations = currentIter,
                 stepsCompleted = steps.length(),
                 sessionId = sessionId
             );
             break;
         }
         if step is ApprovalRequiredError {
-            log:printDebug("Agent execution paused again for human approval",
+            log:printDebug(pauseLogMessage,
                 agentId = agentId,
                 executionId = executionId,
-                iteration = iter,
+                iteration = currentIter,
                 sessionId = sessionId,
                 toolName = step.detail().request.toolName
             );
             iterations.push({startTime, endTime: time:utcNow(), history: iterationHistory, output: iterationOutput});
-            PendingApproval nextPendingApprovalRecord = {
+            PendingApproval pendingApprovalRecord = {
                 ...step.detail().request,
                 executionId,
-                iterationsUsed: iter,
+                iterationsUsed: currentIter,
                 history: iterationHistory,
                 historyPrefixLength,
-                iterations: [...pendingApproval.iterations, ...iterations],
-                toolCalls: [...pendingApproval.toolCalls, ...collectToolCalls(executor.progress.executionSteps)],
-                startTime: pendingApproval.startTime
+                iterations: [...priorIterations, ...iterations],
+                toolCalls: [...priorToolCalls, ...collectToolCalls(executor.progress.executionSteps)],
+                startTime: originalStartTime
             };
-            Error? putErr = agent.approvalStore.put(nextPendingApprovalRecord);
+            Error? putErr = agent.approvalStore.put(pendingApprovalRecord);
             if putErr is Error {
                 log:printError("Failed to persist the pending approval", putErr,
                     executionId = executionId, sessionId = sessionId);
             }
-            nextPendingApproval = step;
+            pendingApproval = step;
             break;
         }
         if step is ExecutionError && step.'error is UnauthorizedError {
@@ -734,12 +618,12 @@ isolated function resumeRun(Agent agent, PendingApproval pendingApproval, HumanF
             Error newError = error Error(content.toString(), 'error = err);
             iterationOutput = newError;
             if verbose {
-                verbosePrint(newError, iter);
+                verbosePrint(newError, currentIter);
             }
             log:printDebug("Tool execution failed: ",
                 err,
                 executionId = executionId,
-                iteration = iter,
+                iteration = currentIter,
                 sessionId = sessionId
             );
             steps.push(step);
@@ -752,7 +636,7 @@ isolated function resumeRun(Agent agent, PendingApproval pendingApproval, HumanF
             log:printDebug("Error occurred during agent iteration",
                     step,
                     executionId = executionId,
-                    iteration = iter,
+                    iteration = currentIter,
                     sessionId = sessionId,
                     cause = cause !is () ? cause.toString() : "none"
                 );
@@ -765,7 +649,7 @@ isolated function resumeRun(Agent agent, PendingApproval pendingApproval, HumanF
             log:printDebug("Final answer generated by agent",
                 agentId = agentId,
                 executionId = executionId,
-                iteration = iter,
+                iteration = currentIter,
                 answer = content,
                 sessionId = sessionId
             );
@@ -773,11 +657,11 @@ isolated function resumeRun(Agent agent, PendingApproval pendingApproval, HumanF
             iterations.push({startTime, endTime: time:utcNow(), history: iterationHistory, output: iterationOutput});
             break;
         }
-        iter += 1;
+        currentIter += 1;
         log:printDebug("Agent iteration started",
             agentId = agentId,
             executionId = executionId,
-            iteration = iter,
+            iteration = currentIter,
             maxIterations = maxIter,
             stepsCompleted = steps.length(),
             sessionId = sessionId
@@ -787,19 +671,22 @@ isolated function resumeRun(Agent agent, PendingApproval pendingApproval, HumanF
         startTime = time:utcNow();
     }
 
-    if nextPendingApproval is ApprovalRequiredError {
+    if pendingApproval is ApprovalRequiredError {
+        // The interim history is captured entirely within the persisted `PendingApproval` snapshot,
+        // so `Memory` is left untouched until the whole logical run completes.
         return {
             steps,
-            iterations: [...pendingApproval.iterations, ...iterations],
-            toolCalls: [...pendingApproval.toolCalls, ...collectToolCalls(executor.progress.executionSteps)],
-            pendingApproval: nextPendingApproval,
-            iterationsUsed: iter
+            iterations: [...priorIterations, ...iterations],
+            toolCalls: [...priorToolCalls, ...collectToolCalls(executor.progress.executionSteps)],
+            pendingApproval,
+            iterationsUsed: currentIter
         };
     }
 
     // Reconstruct the messages belonging to this logical turn: the original system and user
-    // messages, the tool-call pairs completed before the pause, and the ones completed after
-    // resuming. `Memory` was never touched while paused, so this whole set is appended in one batch.
+    // messages, the tool-call pairs completed before this call (empty unless resuming a pause),
+    // and the ones completed during this call. `Memory` is only touched once the whole logical
+    // run completes, so this whole set is appended in one batch.
     ChatSystemMessage systemMessage = <ChatSystemMessage>history[0];
     ChatUserMessage userMessage = <ChatUserMessage>history[historyPrefixLength - 1];
     ChatMessage[] temporaryMemory = [systemMessage, userMessage];
@@ -824,10 +711,10 @@ isolated function resumeRun(Agent agent, PendingApproval pendingApproval, HumanF
     }
     return {
         steps,
-        iterations: [...pendingApproval.iterations, ...iterations],
+        iterations: [...priorIterations, ...iterations],
         answer: content,
-        toolCalls: [...pendingApproval.toolCalls, ...collectToolCalls(executor.progress.executionSteps)],
-        iterationsUsed: iter
+        toolCalls: [...priorToolCalls, ...collectToolCalls(executor.progress.executionSteps)],
+        iterationsUsed: currentIter
     };
 }
 

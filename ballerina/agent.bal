@@ -304,75 +304,11 @@ public isolated distinct class Agent {
         ExecutionTrace executionTrace = run(self, systemPrompt, query, self.maxIter, self.verbose, agentId,
             sessionId, context, executionId, startTime);
         ChatUserMessage userMessage = {role: USER, content: query};
-        Iteration[] iterations = executionTrace.iterations;
-        FunctionCall[]? toolCalls = executionTrace.toolCalls.length() == 0 ? () : executionTrace.toolCalls;
-
-        ApprovalRequiredError? pendingApproval = executionTrace.pendingApproval;
-        if pendingApproval is ApprovalRequiredError {
-            log:printDebug("Agent execution paused pending human approval",
-                    executionId = executionId,
-                    agentId = self.agentId,
-                    sessionId = sessionId
-            );
-            span.close(pendingApproval);
-            return withTrace
-                ? {
-                    id: executionId,
-                    userMessage,
-                    iterations,
-                    tools: self.toolSchemas,
-                    startTime,
-                    endTime: time:utcNow(),
-                    output: pendingApproval,
-                    toolCalls
-                }
-                : pendingApproval;
-        }
-        do {
-            string answer = check getAnswer(executionTrace, self.maxIter);
-            log:printDebug("Agent execution completed successfully",
-                    executionId = executionId,
-                    agentId = self.agentId,
-                    steps = executionTrace.steps.toString(),
-                    answer = answer
-            );
-            span.addOutput(observe:TEXT, answer);
-            span.close();
-
-            return withTrace
-                ? {
-                    id: executionId,
-                    userMessage,
-                    iterations,
-                    tools: self.toolSchemas,
-                    startTime,
-                    endTime: time:utcNow(),
-                    output: {role: ASSISTANT, content: answer},
-                    toolCalls
-                }
-                : answer;
-        } on fail Error err {
-            log:printDebug("Agent execution failed",
-                    err,
-                    executionId = executionId,
-                    agentId = self.agentId,
-                    steps = executionTrace.steps.toString()
-            );
-            span.close(err);
-
-            return withTrace
-                ? {
-                    id: executionId,
-                    userMessage,
-                    iterations,
-                    tools: self.toolSchemas,
-                    startTime,
-                    endTime: time:utcNow(),
-                    output: err,
-                    toolCalls
-                }
-                : err;
-        }
+        return self.buildOutcome(executionId, userMessage, executionTrace, startTime, withTrace, span, sessionId,
+            false,
+            "Agent execution paused pending human approval",
+            "Agent execution completed successfully",
+            "Agent execution failed");
     }
 
     # Resumes a run that paused for human approval on `sessionId`.
@@ -461,17 +397,45 @@ public isolated distinct class Agent {
             agentId, sessionId, context);
         // Safe: `isPendingApprovalHistoryValid` above already guarantees this index is in range.
         ChatUserMessage userMessage = <ChatUserMessage>pendingApproval.history[pendingApproval.historyPrefixLength - 1];
+        return self.buildOutcome(executionId, userMessage, executionTrace, startTime, withTrace, span, sessionId,
+            true,
+            "Agent execution paused again pending human approval",
+            "Agent resume completed successfully",
+            "Agent resume failed");
+    }
+
+    # Shared by `runInternal`/`resumeInternal`: turns an `ExecutionTrace` into the agent's public
+    # `string|Trace|Error` result - a pause passthrough, a successful answer, or a failure - all
+    # three optionally wrapped in a `Trace` when the caller requested `withTrace`.
+    #
+    # + executionId - Identifier of the logical execution this outcome belongs to
+    # + userMessage - The turn's user message, for the returned `Trace`
+    # + executionTrace - The trace produced by `run`/`resumeRun` for this call
+    # + startTime - The logical run's start time, for the returned `Trace`
+    # + withTrace - Whether to wrap the result in a `Trace`
+    # + span - Observability span for this call, closed with the outcome
+    # + sessionId - The ID associated with the agent memory
+    # + removeApprovalOnResolve - Whether to clear the persisted pending approval once resolved
+    # (`true` only when resuming, since a fresh `run` never has one to clear)
+    # + pauseLogMessage - Message logged when the execution paused for human approval
+    # + successLogMessage - Message logged when the execution completed successfully
+    # + failedLogMessage - Message logged when the execution failed
+    # + return - The agent's response, wrapped in a `Trace` if `withTrace` is set, or an error
+    private isolated function buildOutcome(string executionId, ChatUserMessage userMessage,
+            ExecutionTrace executionTrace, time:Utc startTime, boolean withTrace, observe:InvokeAgentSpan span,
+            string sessionId, boolean removeApprovalOnResolve, string pauseLogMessage, string successLogMessage,
+            string failedLogMessage) returns string|Trace|Error {
         Iteration[] iterations = executionTrace.iterations;
         FunctionCall[]? toolCalls = executionTrace.toolCalls.length() == 0 ? () : executionTrace.toolCalls;
 
-        ApprovalRequiredError? nextPendingApproval = executionTrace.pendingApproval;
-        if nextPendingApproval is ApprovalRequiredError {
-            log:printDebug("Agent execution paused again pending human approval",
+        ApprovalRequiredError? pendingApproval = executionTrace.pendingApproval;
+        if pendingApproval is ApprovalRequiredError {
+            log:printDebug(pauseLogMessage,
                     executionId = executionId,
                     agentId = self.agentId,
                     sessionId = sessionId
             );
-            span.close(nextPendingApproval);
+            span.close(pendingApproval);
             return withTrace
                 ? {
                     id: executionId,
@@ -480,19 +444,21 @@ public isolated distinct class Agent {
                     tools: self.toolSchemas,
                     startTime,
                     endTime: time:utcNow(),
-                    output: nextPendingApproval,
+                    output: pendingApproval,
                     toolCalls
                 }
-                : nextPendingApproval;
+                : pendingApproval;
         }
 
         do {
             string answer = check getAnswer(executionTrace, self.maxIter);
-            Error? removeErr = self.approvalStore.remove(sessionId);
-            if removeErr is Error {
-                log:printError("Failed to remove the resolved pending approval", removeErr, sessionId = sessionId);
+            if removeApprovalOnResolve {
+                Error? removeErr = self.approvalStore.remove(sessionId);
+                if removeErr is Error {
+                    log:printError("Failed to remove the resolved pending approval", removeErr, sessionId = sessionId);
+                }
             }
-            log:printDebug("Agent resume completed successfully",
+            log:printDebug(successLogMessage,
                     executionId = executionId,
                     agentId = self.agentId,
                     steps = executionTrace.steps.toString(),
@@ -514,11 +480,13 @@ public isolated distinct class Agent {
                 }
                 : answer;
         } on fail Error err {
-            Error? removeErr = self.approvalStore.remove(sessionId);
-            if removeErr is Error {
-                log:printError("Failed to remove the resolved pending approval", removeErr, sessionId = sessionId);
+            if removeApprovalOnResolve {
+                Error? removeErr = self.approvalStore.remove(sessionId);
+                if removeErr is Error {
+                    log:printError("Failed to remove the resolved pending approval", removeErr, sessionId = sessionId);
+                }
             }
-            log:printDebug("Agent resume failed",
+            log:printDebug(failedLogMessage,
                     err,
                     executionId = executionId,
                     agentId = self.agentId,
