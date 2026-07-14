@@ -67,7 +67,9 @@ public type AgentConfiguration record {|
     @display {label: "Tools"}
     (BaseToolKit|ToolConfig|FunctionTool)[] tools = [];
 
-    # The maximum number of iterations the agent performs to complete the task.
+    # The maximum number of reasoning-action cycles the agent performs to complete the task.
+    # A single cycle is one LLM call plus the execution of every tool call returned in
+    # that response, so multiple tool calls from one response count as one iteration.
     # Defaults to `max(number of tools, 10)` — i.e., at least 10, or more if the
     # agent has more tools available.
     @display {label: "Maximum Iterations"}
@@ -82,10 +84,16 @@ public type AgentConfiguration record {|
     @display {label: "Memory"}
     Memory? memory?;
 
-    # Defines the strategies for loading tool schemas into an Agent. 
+    # Defines the strategies for loading tool schemas into an Agent.
     # By default, all tools are loaded without any filtering.
     @display {label: "Tool Loading Strategy"}
     ToolLoadingStrategy toolLoadingStrategy = NO_FILTER;
+
+    # Specifies whether multiple tool calls returned in a single LLM response are executed in parallel.
+    # If `true`, all tool calls from one LLM response are executed concurrently;
+    # otherwise, they are executed sequentially, one after another.
+    @display {label: "Execute Tool Calls in Parallel"}
+    boolean executeToolCallsInParallel = true;
 
     # Optional authentication details of the agent.
     @display {label: "Agent Credential"}
@@ -223,7 +231,7 @@ public isolated distinct class Agent {
         }
         do {
             self.functionCallAgent = check new FunctionCallAgent(config.model, config.tools, self.tokenManager,
-                agentCredential, memory, config.toolLoadingStrategy
+                agentCredential, memory, config.toolLoadingStrategy, config.executeToolCallsInParallel
             );
             self.toolSchemas = self.functionCallAgent.toolStore.getToolSchema().cloneReadOnly();
             self.maxIter = maxIter is INFER_TOOL_COUNT ?
@@ -291,7 +299,7 @@ public isolated distinct class Agent {
         Iteration[] iterations = executionTrace.iterations;
         FunctionCall[]? toolCalls = executionTrace.toolCalls.length() == 0 ? () : executionTrace.toolCalls;
         do {
-            string answer = check getAnswer(executionTrace, self.maxIter);
+            string answer = check getAnswer(executionTrace);
             log:printDebug("Agent execution completed successfully",
                     executionId = executionId,
                     agentId = self.agentId,
@@ -396,13 +404,14 @@ isolated function parseAnswerAsType(string answer, typedesc<anydata> td) returns
     return result;
 }
 
-isolated function getAnswer(ExecutionTrace executionTrace, int maxIter) returns string|Error {
+isolated function getAnswer(ExecutionTrace executionTrace) returns string|Error {
     string? answer = executionTrace.answer;
-    return answer ?: constructError(executionTrace.steps, maxIter);
+    return answer ?: constructError(executionTrace);
 }
 
-isolated function constructError((ExecutionResult|ExecutionError|Error)[] steps, int maxIter) returns Error {
-    if (steps.length() == maxIter) {
+isolated function constructError(ExecutionTrace executionTrace) returns Error {
+    (ExecutionResult|ExecutionError|Error)[] steps = executionTrace.steps;
+    if executionTrace.maxIterationsExceeded {
         return error MaxIterationExceededError("Maximum iteration limit exceeded while processing the query.",
             steps = steps);
     }

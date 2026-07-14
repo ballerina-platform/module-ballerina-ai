@@ -36,6 +36,8 @@ isolated distinct class FunctionCallAgent {
     final cache:Cache tokenManager;
     # Authentication configuration used for acquiring OAuth tokens when accessing secured tools.
     final readonly & Credential? agentCredential;
+    # Indicates whether multiple tool calls from one LLM response are executed in parallel.
+    final boolean executeToolCallsInParallel;
 
     # Initialize an Agent.
     #
@@ -43,7 +45,8 @@ isolated distinct class FunctionCallAgent {
     # + tools - Tools to be used by the agent
     # + memory - The memory associated with the agent.
     isolated function init(ModelProvider model, (BaseToolKit|ToolConfig|FunctionTool)[] tools, cache:Cache tokenManager,
-            Credential? agentCredential, Memory? memory = (), ToolLoadingStrategy toolLoadingStrategy = NO_FILTER) returns Error? {
+            Credential? agentCredential, Memory? memory = (), ToolLoadingStrategy toolLoadingStrategy = NO_FILTER,
+            boolean executeToolCallsInParallel = true) returns Error? {
         self.toolStore = check new (...tools);
         self.model = model;
         self.memory = memory ?: check new ShortTermMemory();
@@ -51,37 +54,17 @@ isolated distinct class FunctionCallAgent {
         self.toolLoadingStrategy = toolLoadingStrategy;
         self.agentCredential = agentCredential.cloneReadOnly();
         self.tokenManager = tokenManager;
+        self.executeToolCallsInParallel = executeToolCallsInParallel;
     }
 
-    # Parse the function calling API response and extract the tool to be executed.
-    #
-    # + llmResponse - Raw LLM response
-    # + return - A record containing the tool decided by the LLM, chat response or an error if the response is invalid
-    isolated function parseLlmResponse(json llmResponse) returns LlmToolResponse|LlmChatResponse|LlmInvalidGenerationError {
-        if llmResponse is string {
-            return {content: llmResponse};
-        }
-        if llmResponse !is FunctionCall {
-            return error LlmInvalidGenerationError("Invalid response", llmResponse = llmResponse);
-        }
-        string? name = llmResponse.name;
-        if name is () {
-            return error LlmInvalidGenerationError("Missing name", name = llmResponse.name, arguments = llmResponse.arguments);
-        }
-        return {
-            name,
-            arguments: llmResponse.arguments,
-            id: llmResponse.id
-        };
-    }
-
-    # Use LLM to decide the next tool/step based on the function calling APIs.
+    # Use LLM to decide the next tool/step(s) based on the function calling APIs.
     #
     # + progress - Execution progress with the current query and execution history
     # + sessionId - The ID associated with the agent memory
     # + return - LLM response containing the tool or chat response (or an error if the call fails)
-    isolated function selectNextTool(ExecutionProgress progress, string sessionId = DEFAULT_SESSION_ID) returns json|Error {
-        ChatMessage[] messages = createFunctionCallMessages(progress);
+    isolated function selectNextTools(ExecutionProgress progress, string sessionId = DEFAULT_SESSION_ID)
+            returns FunctionCall[]|string|Error {
+        ChatMessage[] messages = check createFunctionCallMessages(progress);
         messages.unshift(...progress.history);
         ToolLoadingStrategy toolLoadingStrategy = self.toolLoadingStrategy;
         ChatMessage lastMessage = messages[messages.length() - 1];
@@ -111,28 +94,28 @@ isolated distinct class FunctionCallAgent {
             filteredTools.push(getStructuredOutputTool(responseSchema.schema));
         }
 
-        // TODO: Improve handling of multiple tool calls returned by the LLM.
-        // Currently, tool calls are executed sequentially in separate chat responses.
-        // Update the logic to execute all tool calls together and return a single response.
         ChatAssistantMessage response = check self.model->chat(messages, filteredTools);
-        FunctionCall? toolCall = getFirstToolCall(response);
-
-        if toolCall is FunctionCall {
-            if responseSchema is ResponseSchema && toolCall.name == GET_RESULTS_TOOL {
-                log:printDebug("LLM returned the final answer via the structured-output tool",
-                        executionId = progress.executionId,
-                        sessionId = sessionId,
-                        toolArguments = toolCall.arguments
-                );
-                return getStructuredAnswer(toolCall, responseSchema);
+        FunctionCall[]? toolCalls = getToolCalls(response);
+        if toolCalls is FunctionCall[] {
+            if responseSchema is ResponseSchema {
+                foreach FunctionCall toolCall in toolCalls {
+                    if toolCall.name == GET_RESULTS_TOOL {
+                        log:printDebug("LLM returned the final answer via the structured-output tool",
+                                executionId = progress.executionId,
+                                sessionId = sessionId,
+                                toolArguments = toolCall.arguments
+                        );
+                        return getStructuredAnswer(toolCall, responseSchema);
+                    }
+                }
             }
-            log:printDebug("LLM selected tool",
+            log:printDebug("LLM selected tool(s)",
                     executionId = progress.executionId,
                     sessionId = sessionId,
-                    toolName = toolCall.name,
-                    toolArguments = toolCall.arguments
+                    toolNames = from FunctionCall toolCall in toolCalls select toolCall.name,
+                    toolArguments = from FunctionCall toolCall in toolCalls select toolCall.arguments
             );
-            return toolCall;
+            return toolCalls;
         }
 
         log:printDebug("LLM provided chat response instead of tool call",
@@ -140,7 +123,12 @@ isolated distinct class FunctionCallAgent {
                 sessionId = sessionId,
                 response = response?.content
         );
-        return response?.content;
+        string? content = response?.content;
+        if content is string {
+            return content;
+        }
+        return error LlmInvalidGenerationError("Failed to parse the LLM response into a function call or chat message.",
+            llmResponse = content);
     }
 
     # Execute the agent for a given user's query.
@@ -188,12 +176,13 @@ isolated function getStructuredAnswer(FunctionCall toolCall, ResponseSchema resp
     return value.toJsonString();
 }
 
-isolated function createFunctionCallMessages(ExecutionProgress progress) returns ChatMessage[] {
+isolated function createFunctionCallMessages(ExecutionProgress progress) returns ChatMessage[]|Error {
     ChatMessage[] messages = [];
     foreach ExecutionStep step in progress.executionSteps {
         FunctionCall|error functionCall = step.llmResponse.fromJsonWithType();
         if functionCall is error {
-            panic error Error("Badly formated history for function call agent", llmResponse = step.llmResponse);
+            return error Error("Failed to parse a persisted execution step into a function call", functionCall,
+                llmResponse = step.llmResponse);
         }
 
         messages.push({
@@ -233,7 +222,8 @@ ${BACKTICKS}`;
     if content is string {
         content += toolsPrompt;
     } else {
-        content.insertions.push(toolsPrompt);
+        anydata[] & readonly insertions = [...content.insertions, toolsPrompt].cloneReadOnly();
+        content = createPrompt(content.strings, insertions);
     }
 
     return {role: USER, content, name: chatUserMsg.name};
@@ -242,9 +232,10 @@ ${BACKTICKS}`;
 isolated function getSelectedToolsFromAssistantMessage(ChatAssistantMessage assistantMsg) returns string[]? {
     do {
         string rawResponse = assistantMsg.content ?: "[]";
-        string cleanedJson = regexp:replaceAll(check regexp:fromString("```"), rawResponse, "");
+        string cleanedJson = regexp:replaceAll(check regexp:fromString("```[a-zA-Z]*"), rawResponse, "");
         return check cleanedJson.fromJsonStringWithType();
     } on fail error e {
+        log:printDebug("Failed to parse selected tools from assistant message", 'error = e);
         // In case of failure try to load all tools and ignore the error
         return;
     }
@@ -328,10 +319,10 @@ isolated function lazyLoadTools(ChatMessage[] messages, ChatCompletionFunctions[
     return;
 }
 
-isolated function getFirstToolCall(ChatAssistantMessage msg) returns FunctionCall? {
+isolated function getToolCalls(ChatAssistantMessage msg) returns FunctionCall[]? {
     FunctionCall[]? toolCalls = msg?.toolCalls;
     if toolCalls is () || toolCalls.length() == 0 {
         return;
     }
-    return toolCalls[0];
+    return toolCalls;
 }

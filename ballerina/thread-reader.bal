@@ -49,16 +49,12 @@ public isolated function loadConversationThreads(string evalSetPath) returns map
                     time:Utc iterationStartTime = check getUtcTime(rawIteration.startTime);
                     time:Utc iterationEndTime = check getUtcTime(rawIteration.endTime);
 
-                    ChatAssistantMessage|ChatFunctionMessage|string rawIterationOutput = rawIteration.output;
-                    readonly & (ChatAssistantMessage|ChatFunctionMessage|Error) iterationOutput =
-                        rawIterationOutput is string ? error(rawIterationOutput) : rawIterationOutput.cloneReadOnly();
-
                     readonly & ChatMessage[] messageHistory = rawIteration.history.'map(msg => getChatMessage(msg))
                         .cloneReadOnly();
                     readonly & Iteration agentIteration = {
                         startTime: iterationStartTime,
                         endTime: iterationEndTime,
-                        output: iterationOutput,
+                        output: getIterationOutputs(rawIteration.output),
                         history: messageHistory
                     };
                     agentIterations.push(agentIteration);
@@ -89,6 +85,13 @@ public isolated function loadConversationThreads(string evalSetPath) returns map
     } on fail error e {
         return error("failed to load conversation threads", e);
     }
+}
+
+isolated function getIterationOutputs(RawIterationOutput|RawIterationOutput[] rawOutput)
+        returns readonly & (ChatAssistantMessage|ChatFunctionMessage|Error)[] {
+    RawIterationOutput[] rawOutputs = rawOutput is RawIterationOutput[] ? rawOutput : [rawOutput];
+    return rawOutputs.'map(output => output is string ? error Error(output) : output.cloneReadOnly())
+        .cloneReadOnly();
 }
 
 isolated function getUtcTime(time:Utc|string timestamp) returns time:Utc|error {
@@ -132,9 +135,11 @@ type RawTrace record {|
     FunctionCall[] toolCalls?;
 |};
 
+type RawIterationOutput ChatAssistantMessage|ChatFunctionMessage|string;
+
 type RawIteration record {|
     TraceChatMessage[] history;
-    ChatAssistantMessage|ChatFunctionMessage|string output;
+    RawIterationOutput|RawIterationOutput[] output;
     string|time:Utc startTime;
     string|time:Utc endTime;
 |};
