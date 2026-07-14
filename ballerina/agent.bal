@@ -199,13 +199,27 @@ public type FixedTypedAgent distinct isolated object {
 public isolated distinct class Agent {
     *DependentlyTypedAgent;
 
-    final FunctionCallAgent functionCallAgent;
+    # Tool store to be used by the agent
+    final ToolStore toolStore;
+    # LLM model instance (should be a function call model)
+    final ModelProvider model;
+    # The memory associated with the agent.
+    final Memory memory;
+    # Represents if the agent is stateless or not.
+    final boolean stateless;
+    # Strategy used to control how and when tools are loaded for the agent.
+    final ToolLoadingStrategy toolLoadingStrategy;
+    # Cache used to store and reuse authentication tokens for tool access.
+    final cache:Cache tokenManager = new ();
+    # Authentication configuration used for acquiring OAuth tokens when accessing secured tools.
+    final readonly & Credential? agentCredential;
+    # Indicates whether multiple tool calls from a single LLM response are executed in parallel.
+    final boolean executeToolCallsInParallel;
     private final int maxIter;
     private final readonly & SystemPrompt systemPrompt;
     private final boolean verbose;
     private final string uniqueId = uuid:createRandomUuid();
     private final readonly & ToolSchema[] toolSchemas;
-    private final cache:Cache tokenManager = new ();
     private string? agentId = ();
 
     # Initialize an Agent.
@@ -230,13 +244,17 @@ public isolated distinct class Agent {
             }
         }
         do {
-            self.functionCallAgent = check new FunctionCallAgent(config.model, config.tools, self.tokenManager,
-                agentCredential, memory, config.toolLoadingStrategy, config.executeToolCallsInParallel
-            );
-            self.toolSchemas = self.functionCallAgent.toolStore.getToolSchema().cloneReadOnly();
+            self.toolStore = check new (...config.tools);
+            self.model = config.model;
+            self.memory = memory ?: check new ShortTermMemory();
+            self.stateless = memory is ();
+            self.toolLoadingStrategy = config.toolLoadingStrategy;
+            self.executeToolCallsInParallel = config.executeToolCallsInParallel;
+            self.agentCredential = agentCredential.cloneReadOnly();
+            self.toolSchemas = self.toolStore.getToolSchema().cloneReadOnly();
             self.maxIter = maxIter is INFER_TOOL_COUNT ?
                 int:max(self.toolSchemas.length(), DEFAULT_MINIMUM_MAX_ITERATIONS) : maxIter;
-            span.addTools(self.functionCallAgent.toolStore.getToolsInfo());
+            span.addTools(self.toolStore.getToolsInfo());
             if agentIdentitySpan is observe:CreateAgentIdentitySpan {
                 agentIdentitySpan.close();
             }
@@ -248,6 +266,85 @@ public isolated distinct class Agent {
             span.close(err);
             return err;
         }
+    }
+
+    # Use LLM to decide the next tool/step(s) based on the function calling APIs.
+    #
+    # + progress - Execution progress with the current query and execution history
+    # + sessionId - The ID associated with the agent memory
+    # + return - LLM response containing the tool calls or chat response (or an error if the call fails)
+    isolated function selectNextTools(ExecutionProgress progress, string sessionId = DEFAULT_SESSION_ID)
+            returns FunctionCall[]|string|Error {
+        ChatMessage[] messages = check createFunctionCallMessages(progress);
+        messages.unshift(...progress.history);
+        ToolLoadingStrategy toolLoadingStrategy = self.toolLoadingStrategy;
+        ChatMessage lastMessage = messages[messages.length() - 1];
+        ChatCompletionFunctions[] registeredTools = from Tool tool in self.toolStore.tools.toArray()
+            select {
+                name: tool.name,
+                description: tool.description,
+                parameters: tool.variables
+            };
+        ChatCompletionFunctions[] filteredTools = registeredTools;
+        if toolLoadingStrategy == LLM_FILTER && lastMessage is ChatUserMessage {
+            ChatCompletionFunctions[]? selectedTools = lazyLoadTools(cloneMessages(messages), registeredTools, self.model);
+            if selectedTools !is () {
+                filteredTools = selectedTools;
+            }
+        }
+
+        ResponseSchema? responseSchema = progress.responseSchema;
+        if responseSchema is ResponseSchema {
+            filteredTools.push(getStructuredOutputTool(responseSchema.schema));
+        }
+
+        log:printDebug("Requesting tool selection from LLM",
+                executionId = progress.executionId,
+                sessionId = sessionId,
+                messages = messages.toString(),
+                availableTools = filteredTools.toString()
+        );
+
+        ChatAssistantMessage response = check self.model->chat(messages, filteredTools);
+        FunctionCall[]? toolCalls = getToolCalls(response);
+        if toolCalls is FunctionCall[] {
+            if responseSchema is ResponseSchema {
+                foreach FunctionCall toolCall in toolCalls {
+                    if toolCall.name == GET_RESULTS_TOOL {
+                        log:printDebug("LLM returned the final answer via the structured-output tool",
+                                executionId = progress.executionId,
+                                sessionId = sessionId,
+                                toolArguments = toolCall.arguments
+                        );
+                        return getStructuredAnswer(toolCall, responseSchema);
+                    }
+                }
+            }
+            log:printDebug("LLM selected tool(s)",
+                    executionId = progress.executionId,
+                    sessionId = sessionId,
+                    toolNames = from FunctionCall toolCall in toolCalls select toolCall.name,
+                    toolArguments = from FunctionCall toolCall in toolCalls select toolCall.arguments
+            );
+            return toolCalls;
+        }
+
+        log:printDebug("LLM provided chat response instead of tool call",
+                executionId = progress.executionId,
+                sessionId = sessionId,
+                response = response?.content
+        );
+        string? content = response?.content;
+        if content is string {
+            return content;
+        }
+        log:printDebug("Failed to parse LLM response as valid tool or chat",
+                agentId = self.agentId,
+                executionId = progress.executionId,
+                sessionId = sessionId
+        );
+        return error LlmInvalidGenerationError("Failed to parse the LLM response into a function call or chat message.",
+            llmResponse = content);
     }
 
     # Executes the agent for a given user query.
@@ -293,8 +390,10 @@ public isolated distinct class Agent {
         }
         span.addSystemInstruction(systemPrompt);
 
-        ExecutionTrace executionTrace = self.functionCallAgent
-            .run(query, systemPrompt, self.maxIter, self.verbose, sessionId, context, executionId, responseSchema);
+        Credential? & readonly agentCredential = self.agentCredential;
+        string? agentId = agentCredential is Credential ? agentCredential.id : ();
+        ExecutionTrace executionTrace = run(self, systemPrompt, query, self.maxIter, self.verbose, agentId,
+                sessionId, context, executionId, responseSchema);
         ChatUserMessage userMessage = {role: USER, content: query};
         Iteration[] iterations = executionTrace.iterations;
         FunctionCall[]? toolCalls = executionTrace.toolCalls.length() == 0 ? () : executionTrace.toolCalls;
@@ -353,6 +452,28 @@ public isolated distinct class Agent {
         }
     }
 
+}
+
+# Builds the dedicated final-answer tool that carries the structured-output schema as its parameters.
+#
+# + parameters - JSON schema describing the expected final-answer structure
+# + return - The final-answer tool definition
+isolated function getStructuredOutputTool(map<json> parameters) returns ChatCompletionFunctions => {
+    name: GET_RESULTS_TOOL,
+    description: "Call this tool to deliver the final answer once the task is complete. " +
+        "The answer must conform to the tool's parameter schema.",
+    parameters
+};
+
+# Extracts the final answer from a structured-output tool call as a JSON string.
+#
+# + toolCall - The structured-output tool call returned by the model
+# + responseSchema - The schema used to build the tool, indicating whether the type was wrapped
+# + return - The final answer serialized as a JSON string
+isolated function getStructuredAnswer(FunctionCall toolCall, ResponseSchema responseSchema) returns string {
+    map<json> arguments = toolCall.arguments ?: {};
+    json value = responseSchema.isOriginallyJsonObject ? arguments : arguments[RESULT];
+    return value.toJsonString();
 }
 
 # Derives the structured-output schema for the expected return type. The schema is attached to the

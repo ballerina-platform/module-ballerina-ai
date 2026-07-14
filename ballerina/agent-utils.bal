@@ -16,7 +16,6 @@
 
 import ai.observe;
 
-import ballerina/cache;
 import ballerina/io;
 import ballerina/log;
 import ballerina/time;
@@ -81,29 +80,6 @@ public type ToolOutput record {|
     anydata|error value;
 |};
 
-type BaseAgent distinct isolated object {
-    ModelProvider model;
-    ToolStore toolStore;
-    Memory memory;
-    boolean stateless;
-    cache:Cache tokenManager;
-    Credential? agentCredential;
-    boolean executeToolCallsInParallel;
-
-    # Use LLM to decide the next tool/step(s).
-    #
-    # + progress - Execution progress with the current query and execution history
-    # + sessionId - The ID associated with the agent memory
-    # + return - LLM response containing tool calls or a chat response (or an error if the call fails)
-    isolated function selectNextTools(ExecutionProgress progress, string sessionId = DEFAULT_SESSION_ID)
-            returns FunctionCall[]|string|Error;
-
-    isolated function run(string|Prompt query, string instruction, int maxIter = 5, boolean verbose = true,
-            string sessionId = DEFAULT_SESSION_ID, Context context = new, string executionId = DEFAULT_EXECUTION_ID,
-            ResponseSchema? responseSchema = ())
-            returns ExecutionTrace;
-};
-
 # An executor that runs the agent's reasoning-action cycles one at a time.
 # Each iteration is a complete cycle: one LLM call (reason) followed by the
 # execution of every tool call returned in that response (act).
@@ -111,7 +87,7 @@ class Executor {
     *object:Iterable;
     private boolean isCompleted = false;
     private final string sessionId;
-    private final BaseAgent agent;
+    private final Agent agent;
     # Contains the current execution progress for the agent and the query
     public ExecutionProgress progress;
     private string? agentId = ();
@@ -127,7 +103,7 @@ class Executor {
     # + query - Natural language query to be executed by the agent
     # + history - Execution history of the agent (This is used to continue an execution paused without completing)
     # + context - Contextual information to be used by the tools during the execution
-    isolated function init(BaseAgent agent, string sessionId, int maxIter, *ExecutionProgress progress) {
+    isolated function init(Agent agent, string sessionId, int maxIter, *ExecutionProgress progress) {
         self.sessionId = sessionId;
         self.agent = agent;
         self.remainingIterations = maxIter;
@@ -201,7 +177,7 @@ class Executor {
 
     private isolated function executeToolCallsParallelly(FunctionCall[] toolCalls)
             returns [ExecutionResult|ExecutionError, anydata][] {
-        final BaseAgent agent = self.agent;
+        final Agent agent = self.agent;
         final Context context = self.progress.context;
         final string? agentId = self.agentId;
         final string executionId = self.progress.executionId;
@@ -286,7 +262,7 @@ class Executor {
     }
 }
 
-isolated function executeToolCall(BaseAgent agent, FunctionCall llmResponse, Context context, string? agentId,
+isolated function executeToolCall(Agent agent, FunctionCall llmResponse, Context context, string? agentId,
         string executionId, string sessionId) returns [ExecutionResult|ExecutionError, anydata] {
     anydata observation;
     ExecutionResult|ExecutionError executionResult;
@@ -406,7 +382,7 @@ isolated function executeToolCall(BaseAgent agent, FunctionCall llmResponse, Con
 # + responseSchema - Schema for the expected structured final answer; when set, a final-answer tool
 #                    carrying this schema is exposed so the model returns its answer as a tool call
 # + return - Returns the execution steps tracing the agent's reasoning and outputs from the tools
-isolated function run(BaseAgent agent, string instruction, string|Prompt query, int maxIter, boolean verbose, string? agentId,
+isolated function run(Agent agent, string instruction, string|Prompt query, int maxIter, boolean verbose, string? agentId,
         string sessionId = DEFAULT_SESSION_ID, Context context = new, string executionId = DEFAULT_EXECUTION_ID,
         ResponseSchema? responseSchema = ())
         returns ExecutionTrace {
@@ -652,7 +628,7 @@ isolated function getObservationString(anydata|error observation) returns string
 #
 # + agent - Agent instance
 # + return - Array of tools registered with the agent
-public isolated function getTools(Agent agent) returns Tool[] => agent.functionCallAgent.toolStore.tools.toArray();
+public isolated function getTools(Agent agent) returns Tool[] => agent.toolStore.tools.toArray();
 
 isolated function updateMemory(Memory memory, string sessionId, ChatMessage[] messages, string? agentId) {
     error? updationStation = memory.update(sessionId, messages);

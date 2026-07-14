@@ -88,7 +88,7 @@ function testAgentExecutorRun() returns error? {
         tools: [searchTool, calculatorTool]
     });
     string query = "Who is Leo DiCaprio's girlfriend? What is her current age raised to the 0.43 power?";
-    Executor agentExecutor = new (agent.functionCallAgent, DEFAULT_SESSION_ID, maxIter = 5,
+    Executor agentExecutor = new (agent, DEFAULT_SESSION_ID, maxIter = 5,
         instruction = "Answer the questions", query = query, context = new, executionId = DEFAULT_EXECUTION_ID,
         history = []
     );
@@ -125,7 +125,7 @@ function testAgentRunHavingErrorStep() returns error? {
         tools: [searchTool, calculatorTool]
     });
     string query = "Random query";
-    ExecutionTrace trace = run(agent.functionCallAgent, instruction = "Answer the questions", query = query,
+    ExecutionTrace trace = run(agent, instruction = "Answer the questions", query = query,
             context = new, maxIter = 5, verbose = false, agentId = ());
     test:assertEquals(trace.answer is (), true);
     test:assertEquals(trace.steps.length(), 1);
