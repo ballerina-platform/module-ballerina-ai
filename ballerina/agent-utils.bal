@@ -179,21 +179,13 @@ class Executor {
                 toolName = toolName,
                 arguments = parsedOutput.arguments
             );
-            observe:ExecuteToolSpan span = observe:createExecuteToolSpan(toolName);
-            string? toolCallId = parsedOutput.id;
-            if toolCallId is string {
-                span.addId(toolCallId);
-            }
             ToolStore toolStore = self.agent.toolStore;
-            string? toolDescription = toolStore.getToolDescription(toolName);
-            if toolDescription is string {
-                span.addDescription(toolDescription);
-            }
+            string? toolCallId = parsedOutput.id;
             boolean isMcpTool = toolStore.isMcpTool(toolName);
-            span.addType(isMcpTool ? observe:EXTENTION : observe:FUNCTION);
-            span.addArguments(parsedOutput.arguments);
-            ToolNotFoundError|ToolInvalidInputError|TokenAcquisitionError|TokenValidationError? 
-                    validateRes = validateTool(parsedOutput, self.agent.agentCredential, 
+            [observe:ExecuteToolSpan, string?] [span, toolDescription] =
+                createToolExecutionSpan(toolStore, parsedOutput, toolName);
+            ToolNotFoundError|ToolInvalidInputError|TokenAcquisitionError|TokenValidationError?
+                    validateRes = validateTool(parsedOutput, self.agent.agentCredential,
                     self.agent.tokenManager, self.progress.context, toolStore.tools, isMcpTool);
             if validateRes is Error {
                 log:printError("Tool validation failed",
@@ -249,49 +241,9 @@ class Executor {
                 return error ApprovalRequiredError(
                     string `Human approval is required to execute tool '${toolName}'.`, request = request);
             } else {
-                ToolOutput|ToolExecutionError|LlmInvalidGenerationError output = toolStore.execute(parsedOutput,
-                    self.progress.context);
-                if output is Error {
-                    if output is ToolNotFoundError {
-                        observation = "Tool is not found. Please check the tool name and retry.";
-                    } else if output is ToolInvalidInputError {
-                        observation = "Tool execution failed due to invalid inputs. Retry with correct inputs.";
-                    } else {
-                        observation = "Tool execution failed. Retry with correct inputs.";
-                    }
-                    observation = string `${observation.toString()} <detail>${output.toString()}</detail>`;
-                    executionResult = {
-                        llmResponse,
-                        'error: output,
-                        observation: observation.toString()
-                    };
-                    log:printError("Tool execution resulted in error",
-                        agentId = self.agentId,
-                        executionId = self.progress.executionId,
-                        observation = observation.toString(),
-                        sessionId = self.sessionId,
-                        toolName = toolName
-                    );
-
-                    Error toolExecutionError = error Error(observation.toString(), details = {parsedOutput});
-                    span.close(toolExecutionError);
-                } else {
-                    anydata|error value = output.value;
-                    observation = value is error ? value.toString() : value;
-                    log:printDebug("Tool execution successful",
-                        agentId = self.agentId,
-                        executionId = self.progress.executionId,
-                        sessionId = self.sessionId,
-                        toolName = toolName
-                    );
-                    executionResult = {
-                        tool: parsedOutput,
-                        observation: value
-                    };
-
-                    span.addOutput(observation);
-                    span.close();
-                }
+                [executionResult, observation] = executeToolAndObserve(toolStore, parsedOutput,
+                    self.progress.context, llmResponse, span, self.agentId, self.progress.executionId,
+                    self.sessionId);
             }
         } else {
             log:printDebug("Failed to parse LLM response as valid tool or chat",
@@ -355,47 +307,10 @@ class Executor {
                 sessionId = self.sessionId,
                 toolName = toolName
             );
-            observe:ExecuteToolSpan span = observe:createExecuteToolSpan(toolName);
-            string? toolCallId = parsedOutput.id;
-            if toolCallId is string {
-                span.addId(toolCallId);
-            }
             ToolStore toolStore = self.agent.toolStore;
-            string? toolDescription = toolStore.getToolDescription(toolName);
-            if toolDescription is string {
-                span.addDescription(toolDescription);
-            }
-            boolean isMcpTool = toolStore.isMcpTool(toolName);
-            span.addType(isMcpTool ? observe:EXTENTION : observe:FUNCTION);
-            span.addArguments(parsedOutput.arguments);
-            ToolOutput|ToolExecutionError|LlmInvalidGenerationError output = toolStore.execute(parsedOutput,
-                self.progress.context);
-            if output is Error {
-                if output is ToolNotFoundError {
-                    observation = "Tool is not found. Please check the tool name and retry.";
-                } else if output is ToolInvalidInputError {
-                    observation = "Tool execution failed due to invalid inputs. Retry with correct inputs.";
-                } else {
-                    observation = "Tool execution failed. Retry with correct inputs.";
-                }
-                observation = string `${observation.toString()} <detail>${output.toString()}</detail>`;
-                executionResult = {
-                    llmResponse,
-                    'error: output,
-                    observation: observation.toString()
-                };
-                Error toolExecutionError = error Error(observation.toString(), details = {parsedOutput});
-                span.close(toolExecutionError);
-            } else {
-                anydata|error value = output.value;
-                observation = value is error ? value.toString() : value;
-                executionResult = {
-                    tool: parsedOutput,
-                    observation: value
-                };
-                span.addOutput(observation);
-                span.close();
-            }
+            [observe:ExecuteToolSpan, string?] [span, _] = createToolExecutionSpan(toolStore, parsedOutput, toolName);
+            [executionResult, observation] = executeToolAndObserve(toolStore, parsedOutput, self.progress.context,
+                llmResponse, span, self.agentId, self.progress.executionId, self.sessionId);
         }
         self.update({
             llmResponse,
@@ -791,6 +706,91 @@ isolated function collectToolCalls(ExecutionStep[] steps) returns FunctionCall[]
     let var llmResponse = step.llmResponse
     where llmResponse is FunctionCall
     select llmResponse;
+
+# Creates and populates the observability span for a tool call, shared by `Executor.act` (a
+# freshly-reasoned call) and `Executor.actWithFeedback` (a previously-paused call being resolved).
+#
+# + toolStore - Tool store the call will be executed against
+# + parsedOutput - The tool call to execute
+# + toolName - Name of the tool being called
+# + return - The span, and the tool's description if registered (reused by `act` for `ApprovalRequest.toolDescription`)
+isolated function createToolExecutionSpan(ToolStore toolStore, LlmToolResponse parsedOutput, string toolName)
+        returns [observe:ExecuteToolSpan, string?] {
+    observe:ExecuteToolSpan span = observe:createExecuteToolSpan(toolName);
+    string? toolCallId = parsedOutput.id;
+    if toolCallId is string {
+        span.addId(toolCallId);
+    }
+    string? toolDescription = toolStore.getToolDescription(toolName);
+    if toolDescription is string {
+        span.addDescription(toolDescription);
+    }
+    boolean isMcpTool = toolStore.isMcpTool(toolName);
+    span.addType(isMcpTool ? observe:EXTENTION : observe:FUNCTION);
+    span.addArguments(parsedOutput.arguments);
+    return [span, toolDescription];
+}
+
+# Executes a tool call and turns the outcome into an `ExecutionResult`/`ExecutionError` plus its
+# observation, shared by `Executor.act` and `Executor.actWithFeedback`.
+#
+# + toolStore - Tool store to execute the call against
+# + parsedOutput - The tool call to execute
+# + context - Contextual information to be used by the tool during execution
+# + llmResponse - The raw LLM output this call was parsed from, carried into a failed `ExecutionError`
+# + span - Observability span for this call, closed with the outcome
+# + agentId - Optional agent identity
+# + executionId - Unique identifier for this execution
+# + sessionId - The ID associated with the memory
+# + return - The execution result, and its observation (also needed by the caller to update history)
+isolated function executeToolAndObserve(ToolStore toolStore, LlmToolResponse parsedOutput, Context context,
+        json llmResponse, observe:ExecuteToolSpan span, string? agentId, string executionId, string sessionId)
+        returns [ExecutionResult|ExecutionError, anydata] {
+    string toolName = parsedOutput.name;
+    anydata observation;
+    ExecutionResult|ExecutionError executionResult;
+    ToolOutput|ToolExecutionError|LlmInvalidGenerationError output = toolStore.execute(parsedOutput, context);
+    if output is Error {
+        if output is ToolNotFoundError {
+            observation = "Tool is not found. Please check the tool name and retry.";
+        } else if output is ToolInvalidInputError {
+            observation = "Tool execution failed due to invalid inputs. Retry with correct inputs.";
+        } else {
+            observation = "Tool execution failed. Retry with correct inputs.";
+        }
+        observation = string `${observation.toString()} <detail>${output.toString()}</detail>`;
+        executionResult = {
+            llmResponse,
+            'error: output,
+            observation: observation.toString()
+        };
+        log:printError("Tool execution resulted in error",
+            agentId = agentId,
+            executionId = executionId,
+            observation = observation.toString(),
+            sessionId = sessionId,
+            toolName = toolName
+        );
+        Error toolExecutionError = error Error(observation.toString(), details = {parsedOutput});
+        span.close(toolExecutionError);
+    } else {
+        anydata|error value = output.value;
+        observation = value is error ? value.toString() : value;
+        log:printDebug("Tool execution successful",
+            agentId = agentId,
+            executionId = executionId,
+            sessionId = sessionId,
+            toolName = toolName
+        );
+        executionResult = {
+            tool: parsedOutput,
+            observation: value
+        };
+        span.addOutput(observation);
+        span.close();
+    }
+    return [executionResult, observation];
+}
 
 isolated function getObservationString(anydata|error observation) returns string {
     if observation is () {
