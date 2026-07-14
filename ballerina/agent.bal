@@ -395,7 +395,7 @@ public isolated distinct class Agent {
     #
     # + sessionId - The ID associated with the agent memory
     # + return - The pending approval request, `()` if none is pending, or an `ai:Error`
-    public isolated function getPendingApproval(string sessionId) returns ApprovalRequest?|Error { // TODO: no usage in code?
+    public isolated function getPendingApproval(string sessionId) returns ApprovalRequest?|Error {
         PendingApproval?|Error pendingApprovalResult = self.approvalStore.get(sessionId);
         if pendingApprovalResult is Error {
             return pendingApprovalResult;
@@ -432,6 +432,20 @@ public isolated distinct class Agent {
             }
             return error ApprovalExpiredError("The pending approval for session '" + sessionId + "' has expired.");
         }
+        if !isPendingApprovalHistoryValid(pendingApproval) {
+            Error? removeErr = self.approvalStore.remove(sessionId);
+            if removeErr is Error {
+                log:printError("Failed to remove the corrupted pending approval", removeErr, sessionId = sessionId);
+            }
+            log:printError("Pending approval has an invalid history snapshot",
+                    sessionId = sessionId,
+                    historyLength = pendingApproval.history.length(),
+                    historyPrefixLength = pendingApproval.historyPrefixLength
+            );
+            return error Error("The pending approval for session '" + sessionId + "' has a corrupted history " +
+                    "snapshot and cannot be resumed. This should never happen with the built-in " +
+                    "`InMemoryApprovalStore`; check any custom `ApprovalStore` implementation in use.");
+        }
 
         // Carry the original run's start time forward, so `Trace.startTime` reflects the
         // whole logical run rather than just this resume call.
@@ -445,9 +459,8 @@ public isolated distinct class Agent {
         string? agentId = agentCredential is Credential ? agentCredential.id : ();
         ExecutionTrace executionTrace = resumeRun(self, pendingApproval, feedback, self.maxIter, self.verbose,
             agentId, sessionId, context);
-        ChatUserMessage userMessage = pendingApproval.history.length() >= pendingApproval.historyPrefixLength
-            ? <ChatUserMessage>pendingApproval.history[pendingApproval.historyPrefixLength - 1]
-            : {role: USER, content: ""}; // TODO: revisit
+        // Safe: `isPendingApprovalHistoryValid` above already guarantees this index is in range.
+        ChatUserMessage userMessage = <ChatUserMessage>pendingApproval.history[pendingApproval.historyPrefixLength - 1];
         Iteration[] iterations = executionTrace.iterations;
         FunctionCall[]? toolCalls = executionTrace.toolCalls.length() == 0 ? () : executionTrace.toolCalls;
 
@@ -532,6 +545,15 @@ public isolated distinct class Agent {
 isolated function isApprovalExpired(PendingApproval pendingApproval) returns boolean {
     time:Utc? expiresAt = pendingApproval?.expiresAt;
     return expiresAt is time:Utc && time:utcDiffSeconds(time:utcNow(), expiresAt) > 0d;
+}
+
+// `history` must contain, in order, a system message followed by a user message before the
+// prefix ends (`run` always appends both - see `agent-utils.bal`), so a valid snapshot has
+// `historyPrefixLength >= 2`. The prefix may equal `history.length()` when the very first tool
+// call proposed is the one that paused, so `<=` (not `<`) is the correct upper bound.
+isolated function isPendingApprovalHistoryValid(PendingApproval pendingApproval) returns boolean {
+    int historyPrefixLength = pendingApproval.historyPrefixLength;
+    return historyPrefixLength >= 2 && historyPrefixLength <= pendingApproval.history.length();
 }
 
 isolated function getAnswer(ExecutionTrace executionTrace, int maxIter) returns string|Error {
