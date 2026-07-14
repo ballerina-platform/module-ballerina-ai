@@ -76,7 +76,9 @@ public type AgentConfiguration record {|
     @display {label: "Tools"}
     (BaseToolKit|ToolConfig|FunctionTool)[] tools = [];
 
-    # The maximum number of iterations the agent performs to complete the task.
+    # The maximum number of reasoning-action cycles the agent performs to complete the task.
+    # A single cycle is one LLM call plus the execution of every tool call returned in
+    # that response, so multiple tool calls from one response count as one iteration.
     # Defaults to `max(number of tools, 10)` — i.e., at least 10, or more if the
     # agent has more tools available.
     @display {label: "Maximum Iterations"}
@@ -91,10 +93,16 @@ public type AgentConfiguration record {|
     @display {label: "Memory"}
     Memory? memory?;
 
-    # Defines the strategies for loading tool schemas into an Agent. 
+    # Defines the strategies for loading tool schemas into an Agent.
     # By default, all tools are loaded without any filtering.
     @display {label: "Tool Loading Strategy"}
     ToolLoadingStrategy toolLoadingStrategy = NO_FILTER;
+
+    # Specifies whether multiple tool calls returned in a single LLM response are executed in parallel.
+    # If `true`, all tool calls from one LLM response are executed concurrently;
+    # otherwise, they are executed sequentially, one after another.
+    @display {label: "Execute Tool Calls in Parallel"}
+    boolean executeToolCallsInParallel = true;
 
     # Optional authentication details of the agent.
     @display {label: "Agent Credential"}
@@ -127,6 +135,8 @@ public isolated distinct class Agent {
     final readonly & string[] approvalTools;
     # Optional expiry duration (in seconds) for a pending approval.
     final decimal? approvalTimeout;
+    # Indicates whether multiple tool calls from a single LLM response are executed in parallel.
+    final boolean executeToolCallsInParallel;
     private final int maxIter;
     private final readonly & SystemPrompt systemPrompt;
     private final boolean verbose;
@@ -161,6 +171,7 @@ public isolated distinct class Agent {
             self.memory = memory ?: check new ShortTermMemory();
             self.stateless = memory is ();
             self.toolLoadingStrategy = config.toolLoadingStrategy;
+            self.executeToolCallsInParallel = config.executeToolCallsInParallel;
             self.agentCredential = agentCredential.cloneReadOnly();
             self.toolSchemas = self.toolStore.getToolSchema().cloneReadOnly();
             self.maxIter = maxIter is INFER_TOOL_COUNT ?
@@ -186,34 +197,13 @@ public isolated distinct class Agent {
         }
     }
 
-    # Parse the function calling API response and extract the tool to be executed.
-    #
-    # + llmResponse - Raw LLM response
-    # + return - A record containing the tool decided by the LLM, chat response or an error if the response is invalid
-    isolated function parseLlmResponse(json llmResponse) returns LlmToolResponse|LlmChatResponse|LlmInvalidGenerationError {
-        if llmResponse is string {
-            return {content: llmResponse};
-        }
-        if llmResponse !is FunctionCall {
-            return error LlmInvalidGenerationError("Invalid response", llmResponse = llmResponse);
-        }
-        string? name = llmResponse.name;
-        if name is () {
-            return error LlmInvalidGenerationError("Missing name", name = llmResponse.name, arguments = llmResponse.arguments);
-        }
-        return {
-            name,
-            arguments: llmResponse.arguments,
-            id: llmResponse.id
-        };
-    }
-
-    # Use LLM to decide the next tool/step based on the function calling APIs.
+    # Use LLM to decide the next tool/step(s) based on the function calling APIs.
     #
     # + progress - Execution progress with the current query and execution history
     # + sessionId - The ID associated with the agent memory
     # + return - LLM response containing the tool or chat response (or an error if the call fails)
-    isolated function selectNextTool(ExecutionProgress progress, string sessionId = DEFAULT_SESSION_ID) returns json|Error {
+    isolated function selectNextTools(ExecutionProgress progress, string sessionId = DEFAULT_SESSION_ID)
+    returns FunctionCall[]|string|Error {
         ChatMessage[] messages = check createFunctionCallMessages(progress);
         messages.unshift(...progress.history);
         ToolLoadingStrategy toolLoadingStrategy = self.toolLoadingStrategy;
@@ -239,20 +229,21 @@ public isolated distinct class Agent {
                 availableTools = filteredTools.toString()
         );
 
-        // TODO: Improve handling of multiple tool calls returned by the LLM.
-        // Currently, tool calls are executed sequentially in separate chat responses.
-        // Update the logic to execute all tool calls together and return a single response.
         ChatAssistantMessage response = check self.model->chat(messages, filteredTools);
-        FunctionCall? toolCall = getFirstToolCall(response);
-
-        if toolCall is FunctionCall {
-            log:printDebug("LLM selected tool",
+        // All tool calls returned in this single LLM response are executed together
+        // (see `Executor.next()`) before the LLM is consulted again, instead of executing
+        // them one at a time across separate chat requests.
+        FunctionCall[]? toolCalls = getToolCalls(response);
+        if toolCalls is FunctionCall[] {
+            log:printDebug("LLM selected tool(s)",
                     executionId = progress.executionId,
                     sessionId = sessionId,
-                    toolName = toolCall.name,
-                    toolArguments = toolCall.arguments
+                    toolNames = from FunctionCall toolCall in toolCalls
+                        select toolCall.name,
+                    toolArguments = from FunctionCall toolCall in toolCalls
+                        select toolCall.arguments
             );
-            return toolCall;
+            return toolCalls;
         }
 
         log:printDebug("LLM provided chat response instead of tool call",
@@ -260,7 +251,17 @@ public isolated distinct class Agent {
                 sessionId = sessionId,
                 response = response?.content
         );
-        return response?.content;
+        string? content = response?.content;
+        if content is string {
+            return content;
+        }
+        log:printDebug("Failed to parse LLM response as valid tool or chat",
+                agentId = self.agentId,
+                executionId = progress.executionId,
+                sessionId = sessionId
+        );
+        return error LlmInvalidGenerationError("Failed to parse the LLM response into a function call or chat message.",
+            llmResponse = content);
     }
 
     # Executes the agent for a given user query.
@@ -451,7 +452,7 @@ public isolated distinct class Agent {
         }
 
         do {
-            string answer = check getAnswer(executionTrace, self.maxIter);
+            string answer = check getAnswer(executionTrace);
             if removeApprovalOnResolve {
                 Error? removeErr = self.approvalStore.remove(sessionId);
                 if removeErr is Error {
@@ -524,17 +525,14 @@ isolated function isPendingApprovalHistoryValid(PendingApproval pendingApproval)
     return historyPrefixLength >= 2 && historyPrefixLength <= pendingApproval.history.length();
 }
 
-isolated function getAnswer(ExecutionTrace executionTrace, int maxIter) returns string|Error {
+isolated function getAnswer(ExecutionTrace executionTrace) returns string|Error {
     string? answer = executionTrace.answer;
-    return answer ?: constructError(executionTrace.steps, executionTrace.iterationsUsed, maxIter);
+    return answer ?: constructError(executionTrace);
 }
 
-isolated function constructError((ExecutionResult|ExecutionError|Error)[] steps, int iterationsUsed, int maxIter)
-        returns Error {
-    // `iterationsUsed` is the true iteration counter for the whole logical run (correct even
-    // after a resume, when `steps` only holds the current call's own steps and would otherwise
-    // never match `maxIter`).
-    if (iterationsUsed == maxIter) {
+isolated function constructError(ExecutionTrace executionTrace) returns Error {
+    (ExecutionResult|ExecutionError|Error)[] steps = executionTrace.steps;
+    if executionTrace.maxIterationsExceeded {
         return error MaxIterationExceededError("Maximum iteration limit exceeded while processing the query.",
             steps = steps);
     }

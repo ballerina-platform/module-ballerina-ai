@@ -76,6 +76,14 @@ public type PendingApproval record {|
     FunctionCall[] toolCalls;
     # The original run's start time, carried unchanged across every subsequent pause
     time:Utc startTime;
+    # The full batch of tool calls the LLM proposed in the turn that's currently gated
+    FunctionCall[] originalBatch = [];
+    # One slot per entry in `originalBatch`: `()` if not yet decided (or not gated at all),
+    # otherwise the human's decision already gathered for that position. `toolName`/`arguments`/
+    # `toolCallId` (from `*ApprovalRequest`) describe the call at `currentIndex` specifically.
+    HumanFeedback?[] decisions = [];
+    # Position in `originalBatch` this pending approval's `toolName`/`arguments`/`toolCallId` refers to
+    int currentIndex = 0;
 |};
 
 # Persists pending human approvals across a pause/resume, keyed by session ID.
@@ -111,8 +119,8 @@ public type ApprovalStore isolated object {
 type StoredIteration record {|
     # History of chat messages up to this iteration, in the isolated-safe stored form
     MemoryChatMessage[] history;
-    # Output produced by the agent in this iteration; an `Error` is stringified (see above)
-    ChatAssistantMessage|ChatFunctionMessage|string output;
+    # Outputs produced by the agent in this iteration; an `Error` entry is stringified (see above)
+    (ChatAssistantMessage|ChatFunctionMessage|string)[] output;
     # Start time of the iteration
     time:Utc startTime;
     # End time of the iteration
@@ -126,10 +134,9 @@ isolated function toStoredIterations(Iteration[] iterations) returns StoredItera
         if history is MemoryError {
             return history;
         }
-        ChatAssistantMessage|ChatFunctionMessage|Error output = iteration.output;
         stored.push({
             history,
-            output: output is Error ? summarizeIterationError(output) : output,
+            output: toStoredOutputs(iteration.output),
             startTime: iteration.startTime,
             endTime: iteration.endTime
         });
@@ -142,18 +149,43 @@ isolated function summarizeIterationError(Error err) returns string {
     return cause is error ? string `${err.message()} (cause: ${cause.message()})` : err.message();
 }
 
+# Ballerina query `select` clauses don't apply the same flow-typing as plain statements, so the
+# per-element narrowing is done in a plain function (`toStoredOutput`/`fromStoredOutput`) and
+# invoked here via a select clause that's just a function call, not an inline ternary.
+#
+# + output - A single iteration output to convert to its isolated-safe stored form
+# + return - The stored form, with any `Error` stringified
+isolated function toStoredOutput(ChatAssistantMessage|ChatFunctionMessage|Error output)
+        returns ChatAssistantMessage|ChatFunctionMessage|string {
+    if output is Error {
+        return summarizeIterationError(output);
+    }
+    return output;
+}
+
+isolated function toStoredOutputs((ChatAssistantMessage|ChatFunctionMessage|Error)[] outputs)
+        returns (ChatAssistantMessage|ChatFunctionMessage|string)[] =>
+    from ChatAssistantMessage|ChatFunctionMessage|Error o in outputs select toStoredOutput(o);
+
+isolated function fromStoredOutput(ChatAssistantMessage|ChatFunctionMessage|string stored)
+        returns ChatAssistantMessage|ChatFunctionMessage|Error {
+    if stored is string {
+        return error Error(stored);
+    }
+    return stored;
+}
+
+isolated function fromStoredOutputs((ChatAssistantMessage|ChatFunctionMessage|string)[] stored)
+        returns (ChatAssistantMessage|ChatFunctionMessage|Error)[] =>
+    from ChatAssistantMessage|ChatFunctionMessage|string o in stored select fromStoredOutput(o);
+
 isolated function fromStoredIterations(StoredIteration[] stored) returns Iteration[] =>
     from StoredIteration s in stored
     select fromStoredIteration(s);
 
-isolated function fromStoredIteration(StoredIteration stored) returns Iteration {
-    ChatAssistantMessage|ChatFunctionMessage|string output = stored.output;
-    if output is string {
-        return {history: stored.history, output: error Error(output), startTime: stored.startTime,
-            endTime: stored.endTime};
-    }
-    return {history: stored.history, output, startTime: stored.startTime, endTime: stored.endTime};
-}
+isolated function fromStoredIteration(StoredIteration stored) returns Iteration =>
+    {history: stored.history, output: fromStoredOutputs(stored.output), startTime: stored.startTime,
+        endTime: stored.endTime};
 
 # The pending approval as persisted internally by `InMemoryApprovalStore`: identical to
 # `PendingApproval`, except `history` is the isolated-safe `MemoryChatMessage[]` (the same
@@ -178,6 +210,12 @@ type StoredPendingApproval record {|
     FunctionCall[] toolCalls;
     # The original run's start time, carried unchanged across every subsequent pause
     time:Utc startTime;
+    # The full batch of tool calls the LLM proposed in the turn that's currently gated
+    FunctionCall[] originalBatch;
+    # One slot per entry in `originalBatch`: `()` if not yet decided, otherwise the human's decision
+    HumanFeedback?[] decisions;
+    # Position in `originalBatch` this pending approval's `toolName`/`arguments`/`toolCallId` refers to
+    int currentIndex;
 |};
 
 # Default in-memory implementation of `ApprovalStore`.
@@ -209,7 +247,10 @@ public isolated class InMemoryApprovalStore {
             historyPrefixLength: approval.historyPrefixLength,
             iterations,
             toolCalls: approval.toolCalls,
-            startTime: approval.startTime
+            startTime: approval.startTime,
+            originalBatch: approval.originalBatch,
+            decisions: approval.decisions,
+            currentIndex: approval.currentIndex
         };
         lock {
             self.pending[approval.sessionId] = stored.clone();
@@ -240,7 +281,10 @@ public isolated class InMemoryApprovalStore {
             historyPrefixLength: stored.historyPrefixLength,
             iterations: fromStoredIterations(stored.iterations),
             toolCalls: stored.toolCalls,
-            startTime: stored.startTime
+            startTime: stored.startTime,
+            originalBatch: stored.originalBatch,
+            decisions: stored.decisions,
+            currentIndex: stored.currentIndex
         };
     }
 

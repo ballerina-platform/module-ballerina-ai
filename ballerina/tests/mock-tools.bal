@@ -1,6 +1,8 @@
 import ballerina/io;
 import ballerina/jballerina.java;
 import ballerina/lang.regexp;
+import ballerina/lang.runtime;
+import ballerina/time;
 
 type SearchParams record {|
     string query;
@@ -37,6 +39,41 @@ isolated function calculatorToolMock(*CalculatorParams params) returns string {
     } else {
         return "Can't compute. Some information is missing";
     }
+}
+
+// Records the execution time window of each slow mock tool, keyed by tool name, so that tests
+// can assert whether tool executions overlapped (parallel) or not (sequential).
+isolated map<[decimal, decimal]> toolExecutionWindows = {};
+
+isolated function recordToolExecutionWindow(string toolName, decimal startTime, decimal endTime) {
+    lock {
+        toolExecutionWindows[toolName] = [startTime, endTime];
+    }
+}
+
+isolated function getToolExecutionWindow(string toolName) returns [decimal, decimal]|error {
+    lock {
+        if !toolExecutionWindows.hasKey(toolName) {
+            return error(string `Execution window not recorded for ${toolName} tool`);
+        }
+        return toolExecutionWindows.get(toolName).clone();
+    }
+}
+
+// Slow variants of the mock tools that sleep before responding and record their
+// execution time windows, used to verify parallel vs sequential tool execution.
+isolated function slowSearchToolMock(*SearchParams params) returns string {
+    decimal startTime = time:monotonicNow();
+    runtime:sleep(1);
+    recordToolExecutionWindow("Search", startTime, time:monotonicNow());
+    return "Camila Morrone";
+}
+
+isolated function slowCalculatorToolMock(*CalculatorParams params) returns string {
+    decimal startTime = time:monotonicNow();
+    runtime:sleep(1);
+    recordToolExecutionWindow("Calculator", startTime, time:monotonicNow());
+    return "Answer: 3.991298452658078";
 }
 
 isolated function sendMail(record {|string senderEmail; MessageRequest messageRequest;|} 'input) returns string|error {
@@ -92,6 +129,89 @@ public isolated client class ScriptedMockLLM {
     }
 
     isolated remote function generate(Prompt prompt, typedesc<anydata> td = <>) returns td|Error = external;
+}
+
+// Returns both the `Search` and `Calculator` tool calls together in a single response, then, once
+// both tool results are present in the conversation history, returns the final answer.
+// Used to verify that multiple tool calls returned in one LLM response are all executed before the
+// LLM is consulted again, instead of one round-trip per tool call.
+public isolated client class MultiToolCallMockLLM {
+    *ModelProvider;
+
+    private int chatCallCount = 0;
+
+    isolated remote function chat(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [],
+            string? stop = ()) returns ChatAssistantMessage|Error {
+        lock {
+            self.chatCallCount += 1;
+        }
+        int toolResultCount = messages is ChatUserMessage ? 0
+            : messages.filter(msg => msg is ChatFunctionMessage).length();
+        if toolResultCount == 0 {
+            return {
+                role: ASSISTANT,
+                toolCalls: [
+                    {name: "Search", arguments: {params: {query: "Leo DiCaprio girlfriend"}}, id: "call-1"},
+                    {name: "Calculator", arguments: {params: {expression: "25 ^ 0.43"}}, id: "call-2"}
+                ]
+            };
+        }
+        if toolResultCount == 2 {
+            return {
+                role: ASSISTANT,
+                content: "Leo DiCaprio's girlfriend is Camila Morrone, and 25 raised to the power of 0.43 is " +
+                    "Answer: 3.991298452658078"
+            };
+        }
+        return error Error("Unexpected number of tool results in history: " + toolResultCount.toString());
+    }
+
+    isolated remote function generate(Prompt prompt, typedesc<anydata> td = <>) returns td|Error = external;
+
+    # Returns the number of times the LLM was consulted, so that tests can assert
+    # all the tool calls from one response were executed without extra round-trips.
+    #
+    # + return - The number of times `chat` has been called
+    public isolated function getChatCallCount() returns int {
+        lock {
+            return self.chatCallCount;
+        }
+    }
+}
+
+// Always responds with a `Search` tool call and never produces a final answer, so an
+// execution can only terminate by exhausting the agent's iteration limit.
+// Used to verify `maxIter` enforcement.
+public isolated client class NeverAnsweringMockLLM {
+    *ModelProvider;
+    private int chatCallCount = 0;
+
+    isolated remote function chat(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [],
+            string? stop = ()) returns ChatAssistantMessage|Error {
+        int callCount;
+        lock {
+            self.chatCallCount += 1;
+            callCount = self.chatCallCount;
+        }
+        return {
+            role: ASSISTANT,
+            toolCalls: [
+                {
+                    name: "Search",
+                    arguments: {params: {query: "Leo DiCaprio girlfriend"}},
+                    id: string `call-${callCount}`
+                }
+            ]
+        };
+    }
+
+    isolated remote function generate(Prompt prompt, typedesc<anydata> td = <>) returns td|Error = external;
+
+    public isolated function getChatCallCount() returns int {
+        lock {
+            return self.chatCallCount;
+        }
+    }
 }
 
 isolated function getChatAssistantMessageContent(int queryLevel) returns string|LlmError {

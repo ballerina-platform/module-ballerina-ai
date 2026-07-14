@@ -132,13 +132,12 @@ public isolated class ToolStore {
             arguments = inputValues
         );
         isolated function caller = self.tools.get(name).caller;
-        ToolExecutionResult|error execution;
-        lock {
-            readonly & map<json> toolInput = self.isMcpTool(name)
-                ? {params: {name, arguments: inputValues}}.cloneReadOnly()
-                : inputValues.cloneReadOnly();
-            execution = trap executeTool(caller, toolInput, context);
-        }
+        // The tool is executed outside any `lock` statement so that multiple tool calls can
+        // run concurrently on the same tool store when parallel tool calling is enabled.
+        readonly & map<json> toolInput = self.isMcpTool(name)
+            ? {params: {name, arguments: inputValues}}.cloneReadOnly()
+            : inputValues.cloneReadOnly();
+        ToolExecutionResult|error execution = trap executeTool(caller, toolInput, context);
         if execution is error {
             log:printDebug("Tool execution failed",
                 execution,
