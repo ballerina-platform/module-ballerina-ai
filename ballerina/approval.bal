@@ -105,6 +105,14 @@ public type ApprovalStore isolated object {
     # + sessionId - The session to clear
     # + return - `()` on success, or an `ai:Error` if the operation fails
     public isolated function remove(string sessionId) returns Error?;
+
+    # Atomically fetches and removes the pending approval for a session, if any. Used to
+    # "claim" an approval before resolving it, so a concurrent duplicate `resume()` call for
+    # the same session cannot also claim and execute the same approved tool call.
+    #
+    # + sessionId - The session to claim
+    # + return - The claimed pending approval, `()` if none was pending, or an `ai:Error` if the operation fails
+    public isolated function take(string sessionId) returns PendingApproval?|Error;
 };
 
 # The isolated-safe form of an `Iteration` used only by `InMemoryApprovalStore`. `history` is
@@ -266,26 +274,7 @@ public isolated class InMemoryApprovalStore {
         if stored is () {
             return ();
         }
-        return {
-            id: stored.id,
-            sessionId: stored.sessionId,
-            toolName: stored.toolName,
-            toolDescription: stored.toolDescription,
-            arguments: stored.arguments,
-            toolCallId: stored.toolCallId,
-            requestedAt: stored.requestedAt,
-            expiresAt: stored.expiresAt,
-            executionId: stored.executionId,
-            iterationsUsed: stored.iterationsUsed,
-            history: stored.history,
-            historyPrefixLength: stored.historyPrefixLength,
-            iterations: fromStoredIterations(stored.iterations),
-            toolCalls: stored.toolCalls,
-            startTime: stored.startTime,
-            originalBatch: stored.originalBatch,
-            decisions: stored.decisions,
-            currentIndex: stored.currentIndex
-        };
+        return fromStoredPendingApproval(stored);
     }
 
     public isolated function remove(string sessionId) returns Error? {
@@ -293,7 +282,40 @@ public isolated class InMemoryApprovalStore {
             _ = self.pending.removeIfHasKey(sessionId);
         }
     }
+
+    public isolated function take(string sessionId) returns PendingApproval?|Error {
+        StoredPendingApproval? stored;
+        lock {
+            StoredPendingApproval? removed = self.pending.removeIfHasKey(sessionId);
+            stored = removed is () ? () : removed.clone();
+        }
+        if stored is () {
+            return ();
+        }
+        return fromStoredPendingApproval(stored);
+    }
 }
+
+isolated function fromStoredPendingApproval(StoredPendingApproval stored) returns PendingApproval => {
+    id: stored.id,
+    sessionId: stored.sessionId,
+    toolName: stored.toolName,
+    toolDescription: stored.toolDescription,
+    arguments: stored.arguments,
+    toolCallId: stored.toolCallId,
+    requestedAt: stored.requestedAt,
+    expiresAt: stored.expiresAt,
+    executionId: stored.executionId,
+    iterationsUsed: stored.iterationsUsed,
+    history: stored.history,
+    historyPrefixLength: stored.historyPrefixLength,
+    iterations: fromStoredIterations(stored.iterations),
+    toolCalls: stored.toolCalls,
+    startTime: stored.startTime,
+    originalBatch: stored.originalBatch,
+    decisions: stored.decisions,
+    currentIndex: stored.currentIndex
+};
 
 # Human-in-the-loop configuration for an agent.
 public type ApprovalConfig record {|

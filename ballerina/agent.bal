@@ -284,6 +284,27 @@ public isolated distinct class Agent {
     private isolated function runInternal(@display {label: "Query"} string query,
             @display {label: "Session ID"} string sessionId = DEFAULT_SESSION_ID,
             Context context = new, boolean withTrace = false) returns string|Trace|Error {
+        // A prior call on this session may still be awaiting a human decision. Starting a
+        // fresh run regardless would silently orphan that pending approval (and, if this new
+        // run also happens to pause, `approvalStore.put` would overwrite it outright) - so
+        // check first, rather than let a new, unrelated turn interleave with an unresolved one.
+        PendingApproval?|Error existingApprovalResult = self.approvalStore.get(sessionId);
+        if existingApprovalResult is Error {
+            return existingApprovalResult;
+        }
+        if existingApprovalResult is PendingApproval {
+            if isApprovalExpired(existingApprovalResult) || !isPendingApprovalHistoryValid(existingApprovalResult) {
+                log:printWarn("Clearing a stale pending approval to allow a new run", sessionId = sessionId);
+                Error? removeErr = self.approvalStore.remove(sessionId);
+                if removeErr is Error {
+                    log:printError("Failed to remove the stale pending approval", removeErr, sessionId = sessionId);
+                }
+                // Fall through - proceed with a fresh run below.
+            } else {
+                return self.buildPendingApprovalTrace(existingApprovalResult, withTrace);
+            }
+        }
+
         time:Utc startTime = time:utcNow();
         string executionId = uuid:createRandomUuid();
         log:printDebug("Agent execution started",
@@ -306,10 +327,41 @@ public isolated distinct class Agent {
             sessionId, context, executionId, startTime);
         ChatUserMessage userMessage = {role: USER, content: query};
         return self.buildOutcome(executionId, userMessage, executionTrace, startTime, withTrace, span, sessionId,
-            false,
             "Agent execution paused pending human approval",
             "Agent execution completed successfully",
             "Agent execution failed");
+    }
+
+    # Builds the `ApprovalRequiredError`/`Trace` for a still-live pending approval, without
+    # starting a new run - used when `run()` is called again before the pending decision on
+    # `sessionId` has been resolved, so the caller sees the same pause instead of silently
+    # starting an unrelated turn that would orphan it.
+    #
+    # + pendingApproval - The still-live pending approval found for this session
+    # + withTrace - Whether to wrap the result in a `Trace`
+    # + return - The agent's response, wrapped in a `Trace` if `withTrace` is set, or an error
+    private isolated function buildPendingApprovalTrace(PendingApproval pendingApproval, boolean withTrace)
+            returns string|Trace|Error {
+        ApprovalRequiredError stillPending = error ApprovalRequiredError(
+            string `A tool call is still awaiting approval for session '${pendingApproval.sessionId}'; ` +
+                "call resume() before starting a new run.",
+            request = toApprovalRequest(pendingApproval));
+        // Safe: `isPendingApprovalHistoryValid` was already checked by the caller.
+        ChatUserMessage userMessage =
+            <ChatUserMessage>pendingApproval.history[pendingApproval.historyPrefixLength - 1];
+        ExecutionTrace shortCircuitTrace = {
+            steps: [],
+            iterations: pendingApproval.iterations,
+            toolCalls: pendingApproval.toolCalls,
+            pendingApproval: stillPending
+        };
+        observe:InvokeAgentSpan span = observe:createInvokeAgentSpan(self.systemPrompt.role);
+        span.addId(self.uniqueId);
+        span.addSessionId(pendingApproval.sessionId);
+        return self.buildOutcome(pendingApproval.executionId, userMessage, shortCircuitTrace,
+            pendingApproval.startTime, withTrace, span, pendingApproval.sessionId,
+            "Agent execution already has a pending approval; run() was called again before resume()",
+            "", "");
     }
 
     # Resumes a run that paused for human approval on `sessionId`.
@@ -337,14 +389,11 @@ public isolated distinct class Agent {
         if pendingApprovalResult is Error {
             return pendingApprovalResult;
         }
-        if pendingApprovalResult is () || isApprovalExpired(pendingApprovalResult) {
+        if pendingApprovalResult is () || isApprovalExpired(pendingApprovalResult)
+                || !isPendingApprovalHistoryValid(pendingApprovalResult) {
             return ();
         }
-        PendingApproval {id, sessionId: sid, toolName, toolDescription, arguments, toolCallId, requestedAt,
-                expiresAt} = pendingApprovalResult;
-        ApprovalRequest request = {id, sessionId: sid, toolName, toolDescription, arguments, toolCallId,
-                requestedAt, expiresAt};
-        return request;
+        return toApprovalRequest(pendingApprovalResult);
     }
 
     private isolated function resumeInternal(string sessionId, HumanFeedback feedback,
@@ -354,7 +403,13 @@ public isolated distinct class Agent {
                 sessionId = sessionId
         );
 
-        PendingApproval?|Error pendingApprovalResult = self.approvalStore.get(sessionId);
+        // Claimed eagerly (removed from the store immediately, not just on resolution), so a
+        // concurrent duplicate `resume()` call for the same session finds nothing and fails
+        // fast with `ApprovalNotFoundError` instead of also executing the approved tool call.
+        // `executeAgentLoop`'s pause branch already unconditionally re-persists a fresh
+        // `PendingApproval` if this call pauses again (e.g. a second gate in the same batch),
+        // so claiming here composes correctly with that existing flow.
+        PendingApproval?|Error pendingApprovalResult = self.approvalStore.take(sessionId);
         if pendingApprovalResult is Error {
             return pendingApprovalResult;
         }
@@ -363,17 +418,10 @@ public isolated distinct class Agent {
         }
         PendingApproval pendingApproval = pendingApprovalResult;
         if isApprovalExpired(pendingApproval) {
-            Error? removeErr = self.approvalStore.remove(sessionId);
-            if removeErr is Error {
-                log:printError("Failed to remove the expired pending approval", removeErr, sessionId = sessionId);
-            }
+            // Already removed by `take()` above - nothing more to clean up.
             return error ApprovalExpiredError("The pending approval for session '" + sessionId + "' has expired.");
         }
         if !isPendingApprovalHistoryValid(pendingApproval) {
-            Error? removeErr = self.approvalStore.remove(sessionId);
-            if removeErr is Error {
-                log:printError("Failed to remove the corrupted pending approval", removeErr, sessionId = sessionId);
-            }
             log:printError("Pending approval has an invalid history snapshot",
                     sessionId = sessionId,
                     historyLength = pendingApproval.history.length(),
@@ -399,7 +447,6 @@ public isolated distinct class Agent {
         // Safe: `isPendingApprovalHistoryValid` above already guarantees this index is in range.
         ChatUserMessage userMessage = <ChatUserMessage>pendingApproval.history[pendingApproval.historyPrefixLength - 1];
         return self.buildOutcome(executionId, userMessage, executionTrace, startTime, withTrace, span, sessionId,
-            true,
             "Agent execution paused again pending human approval",
             "Agent resume completed successfully",
             "Agent resume failed");
@@ -416,15 +463,13 @@ public isolated distinct class Agent {
     # + withTrace - Whether to wrap the result in a `Trace`
     # + span - Observability span for this call, closed with the outcome
     # + sessionId - The ID associated with the agent memory
-    # + removeApprovalOnResolve - Whether to clear the persisted pending approval once resolved
-    # (`true` only when resuming, since a fresh `run` never has one to clear)
     # + pauseLogMessage - Message logged when the execution paused for human approval
     # + successLogMessage - Message logged when the execution completed successfully
     # + failedLogMessage - Message logged when the execution failed
     # + return - The agent's response, wrapped in a `Trace` if `withTrace` is set, or an error
     private isolated function buildOutcome(string executionId, ChatUserMessage userMessage,
             ExecutionTrace executionTrace, time:Utc startTime, boolean withTrace, observe:InvokeAgentSpan span,
-            string sessionId, boolean removeApprovalOnResolve, string pauseLogMessage, string successLogMessage,
+            string sessionId, string pauseLogMessage, string successLogMessage,
             string failedLogMessage) returns string|Trace|Error {
         Iteration[] iterations = executionTrace.iterations;
         FunctionCall[]? toolCalls = executionTrace.toolCalls.length() == 0 ? () : executionTrace.toolCalls;
@@ -453,12 +498,6 @@ public isolated distinct class Agent {
 
         do {
             string answer = check getAnswer(executionTrace);
-            if removeApprovalOnResolve {
-                Error? removeErr = self.approvalStore.remove(sessionId);
-                if removeErr is Error {
-                    log:printError("Failed to remove the resolved pending approval", removeErr, sessionId = sessionId);
-                }
-            }
             log:printDebug(successLogMessage,
                     executionId = executionId,
                     agentId = self.agentId,
@@ -481,12 +520,6 @@ public isolated distinct class Agent {
                 }
                 : answer;
         } on fail Error err {
-            if removeApprovalOnResolve {
-                Error? removeErr = self.approvalStore.remove(sessionId);
-                if removeErr is Error {
-                    log:printError("Failed to remove the resolved pending approval", removeErr, sessionId = sessionId);
-                }
-            }
             log:printDebug(failedLogMessage,
                     err,
                     executionId = executionId,
@@ -514,6 +547,12 @@ public isolated distinct class Agent {
 isolated function isApprovalExpired(PendingApproval pendingApproval) returns boolean {
     time:Utc? expiresAt = pendingApproval?.expiresAt;
     return expiresAt is time:Utc && time:utcDiffSeconds(time:utcNow(), expiresAt) > 0d;
+}
+
+isolated function toApprovalRequest(PendingApproval pendingApproval) returns ApprovalRequest {
+    PendingApproval {id, sessionId, toolName, toolDescription, arguments, toolCallId, requestedAt, expiresAt} =
+        pendingApproval;
+    return {id, sessionId, toolName, toolDescription, arguments, toolCallId, requestedAt, expiresAt};
 }
 
 // `history` must contain, in order, a system message followed by a user message before the

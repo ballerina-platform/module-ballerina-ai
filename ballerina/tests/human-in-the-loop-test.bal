@@ -17,6 +17,7 @@
 import ballerina/jballerina.java;
 import ballerina/mcp;
 import ballerina/test;
+import ballerina/time;
 
 isolated function issueRefundMock(string orderId, decimal amount) returns string {
     return string `Refunded ${amount} for ${orderId}`;
@@ -567,6 +568,189 @@ function testHumanInTheLoopUnauthorizedErrorInResolvedBatchEndsRunWithoutPersist
     // The run ended due to the auth failure - no pending approval should remain.
     ApprovalRequest? pending = check agent.getPendingApproval(sessionId);
     test:assertEquals(pending, ());
+}
+
+@test:Config
+function testRunWhilePendingApprovalReturnsSamePause() returns error? {
+    Agent agent = check newHitlTestAgent();
+    string sessionId = "hitl-run-while-pending-session";
+
+    string|Error firstResult = agent.run("Refund order ORD-1", sessionId);
+    test:assertTrue(firstResult is ApprovalRequiredError);
+
+    // A second, unrelated run() call on the same session must NOT start a new conversation
+    // turn - it should surface the SAME pending approval instead of silently orphaning it
+    // (or, worse, overwriting it with a second, unrelated pause under the same session key).
+    string|Error secondResult = agent.run("What's the weather like?", sessionId);
+    test:assertTrue(secondResult is ApprovalRequiredError);
+    if firstResult is ApprovalRequiredError && secondResult is ApprovalRequiredError {
+        test:assertEquals(secondResult.detail().request.id, firstResult.detail().request.id);
+        test:assertEquals(secondResult.detail().request.toolName, "issueRefund");
+    }
+
+    // The original pending approval is still exactly what it was.
+    ApprovalRequest? stillPending = check agent.getPendingApproval(sessionId);
+    test:assertTrue(stillPending is ApprovalRequest);
+    if stillPending is ApprovalRequest && firstResult is ApprovalRequiredError {
+        test:assertEquals(stillPending.id, firstResult.detail().request.id);
+    }
+}
+
+@test:Config
+function testRunClearsExpiredPendingApprovalAndProceeds() returns error? {
+    Agent agent = check new ({
+        systemPrompt: {role: "Test Agent", instructions: "Handle refunds"},
+        model: new HitlMockLLM(),
+        tools: [hitlRefundTool],
+        approval: {timeout: -1}
+    });
+    string sessionId = "hitl-run-clears-expired-session";
+
+    string|Error firstResult = agent.run("Refund order ORD-1", sessionId);
+    test:assertTrue(firstResult is ApprovalRequiredError);
+
+    // The pending approval is already expired the instant it's created (timeout: -1). A new
+    // run() should clear it and proceed fresh, rather than surfacing the stale pause forever.
+    string|Error secondResult = agent.run("Refund order ORD-1", sessionId);
+    test:assertTrue(secondResult is ApprovalRequiredError);
+    if firstResult is ApprovalRequiredError && secondResult is ApprovalRequiredError {
+        // It's a genuinely new pause (fresh id), not the stale one being replayed.
+        test:assertNotEquals(secondResult.detail().request.id, firstResult.detail().request.id);
+    }
+
+    // The same `timeout: -1` config applies to the second pause too, so it is also already
+    // expired - resume() correctly classifies it as such (rather than "not found"), proving
+    // the existing expiry handling in `resumeInternal` still works on top of the new guard.
+    string|Error resumed = agent.resume(sessionId, {approver: "tester"});
+    test:assertTrue(resumed is ApprovalExpiredError);
+}
+
+// A test-only store that always returns a deliberately corrupted `PendingApproval`
+// (an out-of-range `historyPrefixLength` for an empty `history`) regardless of session ID,
+// and tracks whether `remove` was ever called - used to exercise the fail-fast/self-healing
+// behavior around corrupted state without reaching into `InMemoryApprovalStore`'s private
+// state. Rebuilds the record fresh on every call instead of storing one directly, since
+// `PendingApproval` isn't provably `Cloneable` (its `history: ChatMessage[]` may carry
+// `Prompt`-typed content), so it can't be held in an `isolated class` field directly.
+isolated class FixedApprovalStore {
+    *ApprovalStore;
+    private final string fixedId;
+    private boolean removeCalled = false;
+
+    isolated function init(string fixedId) {
+        self.fixedId = fixedId;
+    }
+
+    private isolated function buildFixedApproval(string sessionId) returns PendingApproval => {
+        id: self.fixedId,
+        sessionId,
+        toolName: "issueRefund",
+        toolDescription: "Issues a refund for an order",
+        arguments: {"orderId": "ORD-1", "amount": 50},
+        requestedAt: time:utcNow(),
+        executionId: "corrupted-execution",
+        iterationsUsed: 1,
+        history: [],
+        historyPrefixLength: 5,
+        iterations: [],
+        toolCalls: [],
+        startTime: time:utcNow()
+    };
+
+    public isolated function put(PendingApproval approval) returns Error? => ();
+
+    public isolated function get(string sessionId) returns PendingApproval?|Error => self.buildFixedApproval(sessionId);
+
+    public isolated function take(string sessionId) returns PendingApproval?|Error =>
+        self.buildFixedApproval(sessionId);
+
+    public isolated function remove(string sessionId) returns Error? {
+        lock {
+            self.removeCalled = true;
+        }
+        return ();
+    }
+
+    public isolated function wasRemoveCalled() returns boolean {
+        lock {
+            return self.removeCalled;
+        }
+    }
+}
+
+@test:Config
+function testRunClearsCorruptedPendingApprovalAndProceeds() returns error? {
+    string sessionId = "hitl-run-clears-corrupted-session";
+    FixedApprovalStore store = new ("corrupted-approval-1");
+    Agent agent = check new ({
+        systemPrompt: {role: "Test Agent", instructions: "Handle refunds"},
+        model: new HitlMockLLM(),
+        tools: [hitlRefundTool],
+        approval: {store}
+    });
+
+    // The pre-existing pending approval is corrupted (historyPrefixLength out of range for an
+    // empty history). run() should clear it and proceed fresh rather than getting stuck.
+    string|Error result = agent.run("Refund order ORD-1", sessionId);
+    test:assertTrue(result is ApprovalRequiredError);
+    if result is ApprovalRequiredError {
+        test:assertNotEquals(result.detail().request.id, "corrupted-approval-1");
+    }
+}
+
+@test:Config
+function testResumeFailsFastOnCorruptedHistory() returns error? {
+    string sessionId = "hitl-resume-corrupted-session";
+    FixedApprovalStore store = new ("corrupted-approval-2");
+    Agent agent = check new ({
+        systemPrompt: {role: "Test Agent", instructions: "Handle refunds"},
+        model: new HitlMockLLM(),
+        tools: [hitlRefundTool],
+        approval: {store}
+    });
+
+    string|Error resumed = agent.resume(sessionId, {approver: "tester"});
+    test:assertTrue(resumed is Error);
+    test:assertFalse(resumed is ApprovalNotFoundError);
+    if resumed is Error {
+        test:assertTrue(resumed.message().includes("corrupted history"), resumed.message());
+    }
+}
+
+@test:Config
+function testGetPendingApprovalTreatsCorruptedAsAbsentWithoutMutating() returns error? {
+    string sessionId = "hitl-get-corrupted-session";
+    FixedApprovalStore store = new ("corrupted-approval-3");
+    Agent agent = check new ({
+        systemPrompt: {role: "Test Agent", instructions: "Handle refunds"},
+        model: new HitlMockLLM(),
+        tools: [hitlRefundTool],
+        approval: {store}
+    });
+
+    ApprovalRequest? pending = check agent.getPendingApproval(sessionId);
+    test:assertEquals(pending, ());
+    test:assertFalse(store.wasRemoveCalled());
+}
+
+@test:Config
+function testResumeClaimsApprovalPreventingDoubleExecution() returns error? {
+    Agent agent = check newHitlTestAgent();
+    string sessionId = "hitl-claim-once-session";
+    string|Error result = agent.run("Refund order ORD-1", sessionId);
+    test:assertTrue(result is ApprovalRequiredError);
+
+    string|Error firstResume = agent.resume(sessionId, {approver: "tester"});
+    test:assertTrue(firstResume is string);
+    if firstResume is string {
+        test:assertTrue(firstResume.includes("Refunded 50.0 for ORD-1"), firstResume);
+    }
+
+    // A second resume() for the same, already-claimed-and-resolved session must NOT
+    // re-execute the tool - the approval was claimed (removed) exactly once, atomically,
+    // by the first resume() call, before the tool ever ran.
+    string|Error secondResume = agent.resume(sessionId, {approver: "tester"});
+    test:assertTrue(secondResume is ApprovalNotFoundError);
 }
 
 @test:Config
