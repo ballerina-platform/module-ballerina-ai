@@ -7,7 +7,8 @@ CVE-2021-0341
 # It is not declared in Ballerina.toml and is not packed into the bala; at runtime it is
 # provided by the Ballerina distribution. The fix (1.62.0) must come from a
 # ballerina-lang/distribution upgrade and cannot be applied in this repository.
-CVE-2026-45292
+# Expiry forces re-evaluation against the then-current distribution.
+CVE-2026-45292 exp:2027-01-15
 
 # org.jline:jline-remote-telnet, bundled inside the jline 3.25.0 uber-jar (jline-3.25.0.jar)
 # Transitive dependency of the Ballerina compiler toolchain, not of this package:
@@ -15,6 +16,6 @@ CVE-2026-45292
 # (pinned to 3.25.0 by the ballerina-lang platform). Not declared in Ballerina.toml and not
 # packed into the bala. The vulnerable component is JLine's embedded telnet server, which is
 # never started by this package or the Ballerina runtime. Fixed only by a ballerina-lang
-# upgrade to jline 4.x.
-GHSA-2r2c-cx56-8933
-GHSA-47qp-hqvx-6r3f
+# upgrade to jline 4.x. Expiry forces re-evaluation against the then-current distribution.
+GHSA-2r2c-cx56-8933 exp:2027-01-15
+GHSA-47qp-hqvx-6r3f exp:2027-01-15
