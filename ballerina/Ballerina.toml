@@ -1,5 +1,5 @@
 [package]
-distribution = "2201.14.0"
+distribution = "2201.12.0"
 org = "ballerina"
 name = "ai"
 version = "1.12.0"
@@ -14,155 +14,155 @@ name = "ai.observe"
 description="This module provides an API for adding observability to AI applications."
 export=true
 
-[platform.java25]
+[platform.java21]
 graalvmCompatible = true
 
-[[platform.java25.dependency]]
+[[platform.java21.dependency]]
 groupId = "io.ballerina.stdlib"
 artifactId = "ai-native"
 version = "1.12.0"
 path = "../native/build/libs/ai-native-1.12.0-SNAPSHOT.jar"
 
-[[platform.java25.dependency]]
+[[platform.java21.dependency]]
 groupId = "io.ballerina.stdlib"
 artifactId = "ai-native"
 version = "1.12.0"
 path = "../native/build/libs/ai-native-1.12.0-SNAPSHOT-tests.jar"
 testOnly = true
 
-[[platform.java25.dependency]]
+[[platform.java21.dependency]]
 groupId = "dev.langchain4j"
 artifactId = "langchain4j"
 version = "1.1.0"
 path="./lib/langchain4j-1.1.0.jar"
 
-[[platform.java25.dependency]]
+[[platform.java21.dependency]]
 groupId = "dev.langchain4j"
 artifactId = "langchain4j-core"
 version = "1.1.0"
 path="./lib/langchain4j-core-1.1.0.jar"
 
-[[platform.java25.dependency]]
+[[platform.java21.dependency]]
 groupId = "org.apache.opennlp"
 artifactId = "opennlp-tools"
 version = "2.5.9"
 path="./lib/opennlp-tools-2.5.9.jar"
 
-[[platform.java25.dependency]]
+[[platform.java21.dependency]]
 groupId = "org.apache.tika"
 artifactId = "tika-core"
 version = "3.2.2"
 path="./lib/tika-core-3.2.2.jar"
 
-[[platform.java25.dependency]]
+[[platform.java21.dependency]]
 groupId = "org.apache.tika"
 artifactId = "tika-parser-pdf-module"
 version = "3.2.2"
 path="./lib/tika-parser-pdf-module-3.2.2.jar"
 
-[[platform.java25.dependency]]
+[[platform.java21.dependency]]
 groupId = "org.apache.tika"
 artifactId = "tika-parser-microsoft-module"
 version = "3.2.2"
 path="./lib/tika-parser-microsoft-module-3.2.2.jar"
 
-[[platform.java25.dependency]]
+[[platform.java21.dependency]]
 groupId = "org.apache.tika"
 artifactId = "tika-parser-zip-commons"
 version = "3.2.2"
 path="./lib/tika-parser-zip-commons-3.2.2.jar"
 
 # POI dependencies
-[[platform.java25.dependency]]
+[[platform.java21.dependency]]
 groupId = "org.apache.poi"
 artifactId = "poi"
 version = "5.4.1"
 path="./lib/poi-5.4.1.jar"
 
-[[platform.java25.dependency]]
+[[platform.java21.dependency]]
 groupId = "org.apache.poi"
 artifactId = "poi-scratchpad"
 version = "5.4.1"
 path="./lib/poi-scratchpad-5.4.1.jar"
 
-[[platform.java25.dependency]]
+[[platform.java21.dependency]]
 groupId = "org.apache.poi"
 artifactId = "poi-ooxml"
 version = "5.4.1"
 path="./lib/poi-ooxml-5.4.1.jar"
 
-[[platform.java25.dependency]]
+[[platform.java21.dependency]]
 groupId = "org.apache.poi"
 artifactId = "poi-ooxml-lite"
 version = "5.4.1"
 path="./lib/poi-ooxml-lite-5.4.1.jar"
 
 # PDF processing dependencies
-[[platform.java25.dependency]]
+[[platform.java21.dependency]]
 groupId = "org.apache.pdfbox"
 artifactId = "pdfbox"
 version = "3.0.5"
 path="./lib/pdfbox-3.0.5.jar"
 
-[[platform.java25.dependency]]
+[[platform.java21.dependency]]
 groupId = "org.apache.pdfbox"
 artifactId = "pdfbox-io"
 version = "3.0.5"
 path="./lib/pdfbox-io-3.0.5.jar"
 
-[[platform.java25.dependency]]
+[[platform.java21.dependency]]
 groupId = "org.apache.pdfbox"
 artifactId = "fontbox"
 version = "3.0.5"
 path="./lib/fontbox-3.0.5.jar"
 
-[[platform.java25.dependency]]
+[[platform.java21.dependency]]
 groupId = "org.apache.pdfbox"
 artifactId = "jempbox"
 version = "1.8.17"
 path="./lib/jempbox-1.8.17.jar"
 
 # Commons dependencies (tika)
-[[platform.java25.dependency]]
+[[platform.java21.dependency]]
 groupId = "commons-io"
 artifactId = "commons-io"
 version = "2.20.0"
 path="./lib/commons-io-2.20.0.jar"
 
-[[platform.java25.dependency]]
+[[platform.java21.dependency]]
 groupId = "org.apache.commons"
 artifactId = "commons-compress"
 version = "1.28.0"
 path="./lib/commons-compress-1.28.0.jar"
 
-[[platform.java25.dependency]]
+[[platform.java21.dependency]]
 groupId = "org.apache.commons"
 artifactId = "commons-collections4"
 version = "4.4"
 path="./lib/commons-collections4-4.4.jar"
 
 # Minimal logging (required by tika-parser-microsoft-module)
-[[platform.java25.dependency]]
+[[platform.java21.dependency]]
 groupId = "org.apache.logging.log4j"
 artifactId = "log4j-api"
 version = "2.25.4"
 path="./lib/log4j-api-2.25.4.jar"
 
-[[platform.java25.dependency]]
+[[platform.java21.dependency]]
 groupId = "org.apache.logging.log4j"
 artifactId = "log4j-core"
 version = "2.25.4"
 path="./lib/log4j-core-2.25.4.jar"
 
 # XMLBeans (required by POI OOXML)
-[[platform.java25.dependency]]
+[[platform.java21.dependency]]
 groupId = "org.apache.xmlbeans"
 artifactId = "xmlbeans"
 version = "5.3.0"
 path="./lib/xmlbeans-5.3.0.jar"
 
 # SparseBitSet (required by POI PPTX)
-[[platform.java25.dependency]]
+[[platform.java21.dependency]]
 groupId = "com.zaxxer"
 artifactId = "SparseBitSet"
 version = "1.3"

@@ -6,13 +6,13 @@ version = "1.12.0"
 [build-options]
 observabilityIncluded = true
 
-[[platform.java25.dependency]]
+[[platform.java21.dependency]]
 groupId = "io.ballerina.stdlib"
 artifactId = "ai-native"
 version = "1.12.0"
 path = "../native/build/libs/ai-native-1.12.0-SNAPSHOT.jar"
 
-[[platform.java25.dependency]]
+[[platform.java21.dependency]]
 groupId = "io.ballerina.stdlib"
 artifactId = "ai-native"
 version = "1.12.0"
