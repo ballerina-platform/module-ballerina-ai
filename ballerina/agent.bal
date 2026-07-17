@@ -76,7 +76,9 @@ public type AgentConfiguration record {|
     @display {label: "Tools"}
     (BaseToolKit|ToolConfig|FunctionTool)[] tools = [];
 
-    # The maximum number of iterations the agent performs to complete the task.
+    # The maximum number of reasoning-action cycles the agent performs to complete the task.
+    # A single cycle is one LLM call plus the execution of every tool call returned in
+    # that response, so multiple tool calls from one response count as one iteration.
     # Defaults to `max(number of tools, 10)` — i.e., at least 10, or more if the
     # agent has more tools available.
     @display {label: "Maximum Iterations"}
@@ -91,10 +93,16 @@ public type AgentConfiguration record {|
     @display {label: "Memory"}
     Memory? memory?;
 
-    # Defines the strategies for loading tool schemas into an Agent. 
+    # Defines the strategies for loading tool schemas into an Agent.
     # By default, all tools are loaded without any filtering.
     @display {label: "Tool Loading Strategy"}
     ToolLoadingStrategy toolLoadingStrategy = NO_FILTER;
+
+    # Specifies whether multiple tool calls returned in a single LLM response are executed in parallel.
+    # If `true`, all tool calls from one LLM response are executed concurrently;
+    # otherwise, they are executed sequentially, one after another.
+    @display {label: "Execute Tool Calls in Parallel"}
+    boolean executeToolCallsInParallel = true;
 
     # Optional authentication details of the agent.
     @display {label: "Agent Credential"}
@@ -117,6 +125,8 @@ public isolated distinct class Agent {
     final cache:Cache tokenManager = new ();
     # Authentication configuration used for acquiring OAuth tokens when accessing secured tools.
     final readonly & Credential? agentCredential;
+    # Indicates whether multiple tool calls from a single LLM response are executed in parallel.
+    final boolean executeToolCallsInParallel;
     private final int maxIter;
     private final readonly & SystemPrompt systemPrompt;
     private final boolean verbose;
@@ -151,6 +161,7 @@ public isolated distinct class Agent {
             self.memory = memory ?: check new ShortTermMemory();
             self.stateless = memory is ();
             self.toolLoadingStrategy = config.toolLoadingStrategy;
+            self.executeToolCallsInParallel = config.executeToolCallsInParallel;
             self.agentCredential = agentCredential.cloneReadOnly();
             self.toolSchemas = self.toolStore.getToolSchema().cloneReadOnly();
             self.maxIter = maxIter is INFER_TOOL_COUNT ?
@@ -169,12 +180,12 @@ public isolated distinct class Agent {
         }
     }
 
-    # Use LLM to decide the next tool/step based on the function calling APIs.
+    # Use LLM to decide the next tool/step(s) based on the function calling APIs.
     #
     # + progress - Execution progress with the current query and execution history
     # + sessionId - The ID associated with the agent memory
     # + return - LLM response containing the tool or chat response (or an error if the call fails)
-    isolated function selectNextTool(ExecutionProgress progress, string sessionId = DEFAULT_SESSION_ID)
+    isolated function selectNextTools(ExecutionProgress progress, string sessionId = DEFAULT_SESSION_ID)
     returns FunctionCall[]|string|Error {
         ChatMessage[] messages = check createFunctionCallMessages(progress);
         messages.unshift(...progress.history);
@@ -280,7 +291,7 @@ public isolated distinct class Agent {
         Iteration[] iterations = executionTrace.iterations;
         FunctionCall[]? toolCalls = executionTrace.toolCalls.length() == 0 ? () : executionTrace.toolCalls;
         do {
-            string answer = check getAnswer(executionTrace, self.maxIter);
+            string answer = check getAnswer(executionTrace);
             log:printDebug("Agent execution completed successfully",
                     executionId = executionId,
                     agentId = self.agentId,
@@ -327,13 +338,14 @@ public isolated distinct class Agent {
     }
 }
 
-isolated function getAnswer(ExecutionTrace executionTrace, int maxIter) returns string|Error {
+isolated function getAnswer(ExecutionTrace executionTrace) returns string|Error {
     string? answer = executionTrace.answer;
-    return answer ?: constructError(executionTrace.steps, maxIter);
+    return answer ?: constructError(executionTrace);
 }
 
-isolated function constructError((ExecutionResult|ExecutionError|Error)[] steps, int maxIter) returns Error {
-    if (steps.length() == maxIter) {
+isolated function constructError(ExecutionTrace executionTrace) returns Error {
+    (ExecutionResult|ExecutionError|Error)[] steps = executionTrace.steps;
+    if executionTrace.maxIterationsExceeded {
         return error MaxIterationExceededError("Maximum iteration limit exceeded while processing the query.",
             steps = steps);
     }
