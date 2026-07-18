@@ -100,13 +100,14 @@ function testAgentExecutorRun() returns error? {
 // Runs the next reasoning-action cycle of the executor and returns the observation
 // of its single tool call.
 function runNextIteration(Executor agentExecutor) returns anydata {
-    record {|(ExecutionResult|ExecutionError)[]|string|Error value;|}? result = agentExecutor.next();
+    record {|(ExecutionResult|ExecutionError)[]|string|BatchApprovalPending|Error value;|}? result =
+        agentExecutor.next();
     if result is () {
         test:assertFail("AgentExecutor.next returned null before the execution completed");
     }
-    (ExecutionResult|ExecutionError)[]|string|Error output = result.value;
+    (ExecutionResult|ExecutionError)[]|string|BatchApprovalPending|Error output = result.value;
     if output !is (ExecutionResult|ExecutionError)[] {
-        test:assertFail(string `Expected tool execution results, but got ${output is Error ? output.message() : output}`);
+        test:assertFail(string `Expected tool execution results, but got ${output is Error ? output.message() : output.toString()}`);
     }
     test:assertEquals(output.length(), 1);
     ExecutionResult|ExecutionError step = output[0];

@@ -48,6 +48,7 @@ type ExecutionTrace record {|
     string answer?;
     Iteration[] iterations;
     FunctionCall[] toolCalls;
+    ApprovalRequiredError? pendingApproval = ();
     boolean maxIterationsExceeded = false;
 |};
 

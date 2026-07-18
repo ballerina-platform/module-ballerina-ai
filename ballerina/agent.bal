@@ -107,6 +107,10 @@ public type AgentConfiguration record {|
     # Optional authentication details of the agent.
     @display {label: "Agent Credential"}
     Credential credential?;
+
+    # Human-in-the-loop configuration.
+    @display {label: "Human-in-the-loop Configuration"}
+    ApprovalConfig approval?;
 |};
 
 # Represents an agent.
@@ -125,6 +129,12 @@ public isolated distinct class Agent {
     final cache:Cache tokenManager = new ();
     # Authentication configuration used for acquiring OAuth tokens when accessing secured tools.
     final readonly & Credential? agentCredential;
+    # Store used to persist pending human approvals across pause/resume.
+    final ApprovalStore approvalStore;
+    # Names of tools that require human approval before execution.
+    final readonly & string[] approvalTools;
+    # Optional expiry duration (in seconds) for a pending approval.
+    final decimal? approvalTimeout;
     # Indicates whether multiple tool calls from a single LLM response are executed in parallel.
     final boolean executeToolCallsInParallel;
     private final int maxIter;
@@ -166,6 +176,13 @@ public isolated distinct class Agent {
             self.toolSchemas = self.toolStore.getToolSchema().cloneReadOnly();
             self.maxIter = maxIter is INFER_TOOL_COUNT ?
                 int:max(self.toolSchemas.length(), DEFAULT_MINIMUM_MAX_ITERATIONS) : maxIter;
+            ApprovalConfig? approvalConfig = config.approval;
+            self.approvalStore = approvalConfig?.store ?: new InMemoryApprovalStore();
+            string[] annotatedApprovalTools = from Tool tool in self.toolStore.tools
+                where tool.requiresApproval
+                select tool.name;
+            self.approvalTools = [...annotatedApprovalTools, ...(approvalConfig?.tools ?: [])].cloneReadOnly();
+            self.approvalTimeout = approvalConfig?.timeout;
             span.addTools(self.toolStore.getToolsInfo());
             if agentIdentitySpan is observe:CreateAgentIdentitySpan {
                 agentIdentitySpan.close();
@@ -267,6 +284,27 @@ public isolated distinct class Agent {
     private isolated function runInternal(@display {label: "Query"} string query,
             @display {label: "Session ID"} string sessionId = DEFAULT_SESSION_ID,
             Context context = new, boolean withTrace = false) returns string|Trace|Error {
+        // A prior call on this session may still be awaiting a human decision. Starting a
+        // fresh run regardless would silently orphan that pending approval (and, if this new
+        // run also happens to pause, `approvalStore.put` would overwrite it outright) - so
+        // check first, rather than let a new, unrelated turn interleave with an unresolved one.
+        PendingApproval?|Error existingApprovalResult = self.approvalStore.get(sessionId);
+        if existingApprovalResult is Error {
+            return existingApprovalResult;
+        }
+        if existingApprovalResult is PendingApproval {
+            if isApprovalExpired(existingApprovalResult) || !isPendingApprovalHistoryValid(existingApprovalResult) {
+                log:printWarn("Clearing a stale pending approval to allow a new run", sessionId = sessionId);
+                Error? removeErr = self.approvalStore.remove(sessionId);
+                if removeErr is Error {
+                    log:printError("Failed to remove the stale pending approval", removeErr, sessionId = sessionId);
+                }
+                // Fall through - proceed with a fresh run below.
+            } else {
+                return self.buildPendingApprovalTrace(existingApprovalResult, withTrace);
+            }
+        }
+
         time:Utc startTime = time:utcNow();
         string executionId = uuid:createRandomUuid();
         log:printDebug("Agent execution started",
@@ -286,13 +324,181 @@ public isolated distinct class Agent {
         Credential? & readonly agentCredential = self.agentCredential;
         string? agentId = agentCredential is Credential ? agentCredential.id : ();
         ExecutionTrace executionTrace = run(self, systemPrompt, query, self.maxIter, self.verbose, agentId,
-                sessionId, context, executionId);
+            sessionId, context, executionId, startTime);
         ChatUserMessage userMessage = {role: USER, content: query};
+        return self.buildOutcome(executionId, userMessage, executionTrace, startTime, withTrace, span, sessionId,
+            "Agent execution paused pending human approval",
+            "Agent execution completed successfully",
+            "Agent execution failed");
+    }
+
+    # Builds the `ApprovalRequiredError`/`Trace` for a still-live pending approval, without
+    # starting a new run - used when `run()` is called again before the pending decision on
+    # `sessionId` has been resolved, so the caller sees the same pause instead of silently
+    # starting an unrelated turn that would orphan it.
+    #
+    # + pendingApproval - The still-live pending approval found for this session
+    # + withTrace - Whether to wrap the result in a `Trace`
+    # + return - The agent's response, wrapped in a `Trace` if `withTrace` is set, or an error
+    private isolated function buildPendingApprovalTrace(PendingApproval pendingApproval, boolean withTrace)
+            returns string|Trace|Error {
+        ApprovalRequiredError stillPending = error ApprovalRequiredError(
+            string `A tool call is still awaiting approval for session '${pendingApproval.sessionId}'; ` +
+                "call resume() before starting a new run.",
+            request = toApprovalRequest(pendingApproval));
+        // Safe: `isPendingApprovalHistoryValid` was already checked by the caller.
+        ChatUserMessage userMessage =
+            <ChatUserMessage>pendingApproval.history[pendingApproval.historyPrefixLength - 1];
+        ExecutionTrace shortCircuitTrace = {
+            steps: [],
+            iterations: pendingApproval.iterations,
+            toolCalls: pendingApproval.toolCalls,
+            pendingApproval: stillPending
+        };
+        observe:InvokeAgentSpan span = observe:createInvokeAgentSpan(self.systemPrompt.role);
+        span.addId(self.uniqueId);
+        span.addSessionId(pendingApproval.sessionId);
+        return self.buildOutcome(pendingApproval.executionId, userMessage, shortCircuitTrace,
+            pendingApproval.startTime, withTrace, span, pendingApproval.sessionId,
+            "Agent execution already has a pending approval; run() was called again before resume()",
+            "", "");
+    }
+
+    # Resumes a run that paused for human approval on `sessionId`.
+    #
+    # **Note:** like `run`, calls for the same session ID must be sequential.
+    #
+    # + sessionId - The ID associated with the agent memory
+    # + feedback - The human's decision on the pending tool call
+    # + context - The additional context that can be used during agent tool execution
+    # + td - Type descriptor specifying the expected return type format
+    # + return - The agent's response or an error
+    public isolated function resume(@display {label: "Session ID"} string sessionId,
+            @display {label: "Human Feedback"} HumanFeedback feedback,
+            Context context = new,
+            typedesc<Trace|string> td = <>) returns td|Error = @java:Method {
+        'class: "io.ballerina.stdlib.ai.Agent"
+    } external;
+
+    # Returns the approval currently pending on `sessionId`, if any.
+    #
+    # + sessionId - The ID associated with the agent memory
+    # + return - The pending approval request, `()` if none is pending, or an `ai:Error`
+    public isolated function getPendingApproval(string sessionId) returns ApprovalRequest?|Error {
+        PendingApproval?|Error pendingApprovalResult = self.approvalStore.get(sessionId);
+        if pendingApprovalResult is Error {
+            return pendingApprovalResult;
+        }
+        if pendingApprovalResult is () || isApprovalExpired(pendingApprovalResult)
+                || !isPendingApprovalHistoryValid(pendingApprovalResult) {
+            return ();
+        }
+        return toApprovalRequest(pendingApprovalResult);
+    }
+
+    private isolated function resumeInternal(string sessionId, HumanFeedback feedback,
+            Context context = new, boolean withTrace = false) returns string|Trace|Error {
+        log:printDebug("Agent resume started",
+                agentId = self.agentId,
+                sessionId = sessionId
+        );
+
+        // Claimed eagerly (removed from the store immediately, not just on resolution), so a
+        // concurrent duplicate `resume()` call for the same session finds nothing and fails
+        // fast with `ApprovalNotFoundError` instead of also executing the approved tool call.
+        // `executeAgentLoop`'s pause branch already unconditionally re-persists a fresh
+        // `PendingApproval` if this call pauses again (e.g. a second gate in the same batch),
+        // so claiming here composes correctly with that existing flow.
+        PendingApproval?|Error pendingApprovalResult = self.approvalStore.take(sessionId);
+        if pendingApprovalResult is Error {
+            return pendingApprovalResult;
+        }
+        if pendingApprovalResult is () {
+            return error ApprovalNotFoundError("No pending approval found for session '" + sessionId + "'.");
+        }
+        PendingApproval pendingApproval = pendingApprovalResult;
+        if isApprovalExpired(pendingApproval) {
+            // Already removed by `take()` above - nothing more to clean up.
+            return error ApprovalExpiredError("The pending approval for session '" + sessionId + "' has expired.");
+        }
+        if !isPendingApprovalHistoryValid(pendingApproval) {
+            log:printError("Pending approval has an invalid history snapshot",
+                    sessionId = sessionId,
+                    historyLength = pendingApproval.history.length(),
+                    historyPrefixLength = pendingApproval.historyPrefixLength
+            );
+            return error Error("The pending approval for session '" + sessionId + "' has a corrupted history " +
+                    "snapshot and cannot be resumed. This should never happen with the built-in " +
+                    "`InMemoryApprovalStore`; check any custom `ApprovalStore` implementation in use.");
+        }
+
+        // Carry the original run's start time forward, so `Trace.startTime` reflects the
+        // whole logical run rather than just this resume call.
+        time:Utc startTime = pendingApproval.startTime;
+        string executionId = pendingApproval.executionId;
+        observe:InvokeAgentSpan span = observe:createInvokeAgentSpan(self.systemPrompt.role);
+        span.addId(self.uniqueId);
+        span.addSessionId(sessionId);
+
+        Credential? & readonly agentCredential = self.agentCredential;
+        string? agentId = agentCredential is Credential ? agentCredential.id : ();
+        ExecutionTrace executionTrace = resumeRun(self, pendingApproval, feedback, self.maxIter, self.verbose,
+            agentId, sessionId, context);
+        // Safe: `isPendingApprovalHistoryValid` above already guarantees this index is in range.
+        ChatUserMessage userMessage = <ChatUserMessage>pendingApproval.history[pendingApproval.historyPrefixLength - 1];
+        return self.buildOutcome(executionId, userMessage, executionTrace, startTime, withTrace, span, sessionId,
+            "Agent execution paused again pending human approval",
+            "Agent resume completed successfully",
+            "Agent resume failed");
+    }
+
+    # Shared by `runInternal`/`resumeInternal`: turns an `ExecutionTrace` into the agent's public
+    # `string|Trace|Error` result - a pause passthrough, a successful answer, or a failure - all
+    # three optionally wrapped in a `Trace` when the caller requested `withTrace`.
+    #
+    # + executionId - Identifier of the logical execution this outcome belongs to
+    # + userMessage - The turn's user message, for the returned `Trace`
+    # + executionTrace - The trace produced by `run`/`resumeRun` for this call
+    # + startTime - The logical run's start time, for the returned `Trace`
+    # + withTrace - Whether to wrap the result in a `Trace`
+    # + span - Observability span for this call, closed with the outcome
+    # + sessionId - The ID associated with the agent memory
+    # + pauseLogMessage - Message logged when the execution paused for human approval
+    # + successLogMessage - Message logged when the execution completed successfully
+    # + failedLogMessage - Message logged when the execution failed
+    # + return - The agent's response, wrapped in a `Trace` if `withTrace` is set, or an error
+    private isolated function buildOutcome(string executionId, ChatUserMessage userMessage,
+            ExecutionTrace executionTrace, time:Utc startTime, boolean withTrace, observe:InvokeAgentSpan span,
+            string sessionId, string pauseLogMessage, string successLogMessage,
+            string failedLogMessage) returns string|Trace|Error {
         Iteration[] iterations = executionTrace.iterations;
         FunctionCall[]? toolCalls = executionTrace.toolCalls.length() == 0 ? () : executionTrace.toolCalls;
+
+        ApprovalRequiredError? pendingApproval = executionTrace.pendingApproval;
+        if pendingApproval is ApprovalRequiredError {
+            log:printDebug(pauseLogMessage,
+                    executionId = executionId,
+                    agentId = self.agentId,
+                    sessionId = sessionId
+            );
+            span.close(pendingApproval);
+            return withTrace
+                ? {
+                    id: executionId,
+                    userMessage,
+                    iterations,
+                    tools: self.toolSchemas,
+                    startTime,
+                    endTime: time:utcNow(),
+                    output: pendingApproval,
+                    toolCalls
+                }
+                : pendingApproval;
+        }
+
         do {
             string answer = check getAnswer(executionTrace);
-            log:printDebug("Agent execution completed successfully",
+            log:printDebug(successLogMessage,
                     executionId = executionId,
                     agentId = self.agentId,
                     steps = executionTrace.steps.toString(),
@@ -314,7 +520,7 @@ public isolated distinct class Agent {
                 }
                 : answer;
         } on fail Error err {
-            log:printDebug("Agent execution failed",
+            log:printDebug(failedLogMessage,
                     err,
                     executionId = executionId,
                     agentId = self.agentId,
@@ -336,6 +542,26 @@ public isolated distinct class Agent {
                 : err;
         }
     }
+}
+
+isolated function isApprovalExpired(PendingApproval pendingApproval) returns boolean {
+    time:Utc? expiresAt = pendingApproval?.expiresAt;
+    return expiresAt is time:Utc && time:utcDiffSeconds(time:utcNow(), expiresAt) > 0d;
+}
+
+isolated function toApprovalRequest(PendingApproval pendingApproval) returns ApprovalRequest {
+    PendingApproval {id, sessionId, toolName, toolDescription, arguments, toolCallId, requestedAt, expiresAt} =
+        pendingApproval;
+    return {id, sessionId, toolName, toolDescription, arguments, toolCallId, requestedAt, expiresAt};
+}
+
+// `history` must contain, in order, a system message followed by a user message before the
+// prefix ends (`run` always appends both - see `agent-utils.bal`), so a valid snapshot has
+// `historyPrefixLength >= 2`. The prefix may equal `history.length()` when the very first tool
+// call proposed is the one that paused, so `<=` (not `<`) is the correct upper bound.
+isolated function isPendingApprovalHistoryValid(PendingApproval pendingApproval) returns boolean {
+    int historyPrefixLength = pendingApproval.historyPrefixLength;
+    return historyPrefixLength >= 2 && historyPrefixLength <= pendingApproval.history.length();
 }
 
 isolated function getAnswer(ExecutionTrace executionTrace) returns string|Error {

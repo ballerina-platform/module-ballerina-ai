@@ -153,6 +153,16 @@ isolated function mapToMemoryChatInteractiveMessages(ChatInteractiveMessage[] me
         (readonly & MemoryChatInteractiveMessage[])|MemoryError =>
     from ChatMessage message in messages select check mapToMemoryChatInteractiveMessage(message);
 
+# Converts a conversation history snapshot (including any system message) into its
+# readonly, isolation-safe stored form. Unlike `mapToMemoryChatInteractiveMessages`,
+# this includes `ChatSystemMessage`.
+#
+# + messages - The conversation history to convert
+# + return - The stored representation of `messages`, or an `ai:MemoryError` if a message
+# could not be converted
+isolated function mapToMemoryChatMessages(ChatMessage[] messages) returns (readonly & MemoryChatMessage[])|MemoryError =>
+    from ChatMessage message in messages select check mapToMemoryChatMessage(message);
+
 isolated function mapToMemoryChatMessage(ChatMessage message) returns readonly & MemoryChatMessage|MemoryError {
     if message is ChatSystemMessage {
         final Prompt|string content = message.content;

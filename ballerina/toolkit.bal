@@ -132,6 +132,7 @@ public isolated class McpToolKit {
     *McpBaseToolKit;
     private final mcp:StreamableHttpClient mcpClient;
     private final ToolConfig[] & readonly tools;
+    private final string[] & readonly destructiveToolNames;
 
     public isolated function init(string serverUrl, string[]? permittedTools = (),
             mcp:Implementation info = {name: "MCP Client", version: "1.0.0"}, 
@@ -191,6 +192,7 @@ public isolated class McpToolKit {
                 parameters: check getInputSchemaValues(tool).cloneReadOnly(),
                 caller
             };
+        self.destructiveToolNames = getDestructiveToolNames(filteredTools).cloneReadOnly();
     }
 
     public isolated function callTool(mcp:CallToolParams params) returns mcp:CallToolResult|error {
@@ -198,7 +200,28 @@ public isolated class McpToolKit {
     }
 
     public isolated function getTools() returns ToolConfig[] => self.tools;
+
+    # Returns the names of tools this server marked `destructiveHint: true` in their MCP
+    # annotations. This is purely informational - it never changes what the agent does on its
+    # own. Merge the result into `ApprovalConfig.tools` to require human approval for them:
+    # ```ballerina
+    # approval: {tools: mcpToolKit.getDestructiveToolNames()}
+    # ```
+    #
+    # + return - Names of the destructive-hinted tools exposed by this toolkit
+    public isolated function getDestructiveToolNames() returns string[] => self.destructiveToolNames;
 }
+
+# Returns the names of tools marked `destructiveHint: true` in their MCP annotations. Useful
+# for merging into `ApprovalConfig.tools` to require human approval for them - see
+# `McpToolKit.getDestructiveToolNames`, which uses this internally.
+#
+# + tools - The MCP tool definitions to inspect
+# + return - Names of the destructive-hinted tools
+public isolated function getDestructiveToolNames(mcp:ToolDefinition[] tools) returns string[] =>
+    from mcp:ToolDefinition tool in tools
+    where tool.annotations?.destructiveHint == true
+    select tool.name;
 
 # Defines a HTTP tool kit. This is a special type of tool kit that can be used to invoke HTTP resources.
 # Require to initialize the toolkit with the service url and http tools that are belongs to a single API. 
