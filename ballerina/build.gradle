@@ -60,7 +60,7 @@ ballerina {
     module = packageName
     testCoverageParam = "--code-coverage --coverage-format=xml --includes=io.ballerina.stdlib.ai*:ballerina.ai*"
     langVersion = ballerinaLangVersion
-    platform = "java25"
+    platform = "java21"
 }
 
 configurations {
