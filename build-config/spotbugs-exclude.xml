@@ -35,4 +35,16 @@
             <Bug code="SF"/>
         </Or>
     </Match>
+    <Match>
+        <BugCode name="THROWS"/>
+    </Match>
+    <Match>
+        <BugCode name="AT"/>
+    </Match>
+    <Match>
+        <Bug pattern="USELESS_STRING"/>
+    </Match>
+    <Match>
+        <Bug pattern="DM_DEFAULT_ENCODING"/>
+    </Match>
 </FindBugsFilter>

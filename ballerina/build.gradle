@@ -15,6 +15,31 @@
  *
  */
 import org.apache.tools.ant.taskdefs.condition.Os
+import org.gradle.process.ExecOperations
+import javax.inject.Inject
+
+abstract class BallerinaExecHelper {
+    @Inject
+    abstract ExecOperations getExecOperations()
+}
+
+abstract class PatchBallerinaScriptsTask extends DefaultTask {
+    @Input abstract Property<String> getJballerinaToolsBinPath()
+    @Input abstract Property<String> getBallerinaRuntimeBinPath()
+
+    @TaskAction
+    void patch() {
+        [new File(jballerinaToolsBinPath.get()), new File(ballerinaRuntimeBinPath.get())].each { binDir ->
+            if (binDir.exists()) {
+                binDir.eachFile { file ->
+                    if (!file.name.endsWith('.bat') && !file.name.endsWith('.cmd')) {
+                        file.setExecutable(true)
+                    }
+                }
+            }
+        }
+    }
+}
 
 plugins {
     id 'io.ballerina.plugin'
@@ -49,7 +74,7 @@ configurations {
 
 dependencies {
     externalJars project(":ai-native")
-    
+
     externalJars(group: 'dev.langchain4j', name: 'langchain4j', version:  "${project.langchain4jVersion}") {
         transitive = false
     }
@@ -59,7 +84,7 @@ dependencies {
     externalJars(group: 'org.apache.opennlp', name: 'opennlp-tools', version: "${project.openNlpToolsVersion}") {
         transitive = false
     }
-    
+
     // Tika dependencies
     externalJars(group: 'org.apache.tika', name: 'tika-core', version: "${project.tikaVersion}") {
         transitive = false
@@ -73,8 +98,8 @@ dependencies {
     externalJars(group: 'org.apache.tika', name: 'tika-parser-zip-commons', version: "${project.tikaVersion}") {
         transitive = false
     }
-    
-    // POI dependencies  
+
+    // POI dependencies
     externalJars(group: 'org.apache.poi', name: 'poi', version: "${project.poiVersion}") {
         transitive = false
     }
@@ -87,7 +112,7 @@ dependencies {
     externalJars(group: 'org.apache.poi', name: 'poi-ooxml-lite', version: "${project.poiVersion}") {
         transitive = false
     }
-    
+
     // PDF processing dependencies
     externalJars(group: 'org.apache.pdfbox', name: 'pdfbox', version: "${project.pdfboxVersion}") {
         transitive = false
@@ -101,7 +126,7 @@ dependencies {
     externalJars(group: 'org.apache.pdfbox', name: 'jempbox', version: "${project.jempboxVersion}") {
         transitive = false
     }
-    
+
     // Commons dependencies (tika)
     externalJars(group: 'commons-io', name: 'commons-io', version: "${project.commonsIoVersion}") {
         transitive = false
@@ -112,7 +137,7 @@ dependencies {
     externalJars(group: 'org.apache.commons', name: 'commons-collections4', version: "${project.commonsCollections4Version}") {
         transitive = false
     }
-    
+
     // Minimal logging (required by tika-parser-microsoft-module)
     externalJars(group: 'org.apache.logging.log4j', name: 'log4j-api', version: "${project.log4jVersion}") {
         transitive = false
@@ -120,12 +145,12 @@ dependencies {
     externalJars(group: 'org.apache.logging.log4j', name: 'log4j-core', version: "${project.log4jVersion}") {
         transitive = false
     }
-    
+
     // XMLBeans (required by POI OOXML)
     externalJars(group: 'org.apache.xmlbeans', name: 'xmlbeans', version: "${project.xmlbeansVersion}") {
         transitive = false
     }
-    
+
     // SparseBitSet (required by POI PPTX)
     externalJars(group: 'com.zaxxer', name: 'SparseBitSet', version: "${project.sparseBitSetVersion}") {
         transitive = false
@@ -158,9 +183,11 @@ task updateTomlFiles {
     }
 }
 
+def execHelper = objects.newInstance(BallerinaExecHelper)
+
 task commitTomlFiles {
     doLast {
-        project.exec {
+        execHelper.execOperations.exec {
             ignoreExitValue true
             if (Os.isFamily(Os.FAMILY_WINDOWS)) {
                 commandLine 'cmd', '/c', "git commit -m \"[Automated] Update the native jar versions\" Ballerina.toml Dependencies.toml CompilerPlugin.toml"
@@ -188,6 +215,15 @@ publishing {
             }
         }
     }
+}
+
+task patchBallerinaScripts(type: PatchBallerinaScriptsTask) {
+    dependsOn copyStdlibs
+    dependsOn unpackJballerinaTools
+    mustRunAfter unpackJballerinaTools
+    outputs.upToDateWhen { !tasks.named('unpackJballerinaTools').get().didWork }
+    jballerinaToolsBinPath = layout.buildDirectory.dir("jballerina-tools-${project.ballerinaLangVersion}/bin").get().asFile.absolutePath
+    ballerinaRuntimeBinPath = "${rootProject.projectDir.absolutePath}/target/ballerina-runtime/bin"
 }
 
 task buildMcpServer(type: Exec) {
@@ -218,6 +254,8 @@ if (!project.gradle.startParameter.excludedTaskNames.contains('test') && !Os.isF
 
 updateTomlFiles.dependsOn copyStdlibs
 
+build.dependsOn patchBallerinaScripts
+test.dependsOn patchBallerinaScripts
 build.dependsOn "generatePomFileForMavenPublication"
 build.dependsOn ":${packageName}-native:build"
 build.dependsOn ":${packageName}-compiler-plugin:build"
