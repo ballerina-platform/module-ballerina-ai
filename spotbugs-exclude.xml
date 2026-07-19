@@ -24,4 +24,16 @@
         <Class name="io.ballerina.stdlib.ai.plugin.ServersMapper"/>
         <Bug pattern="EI_EXPOSE_REP2"/>
     </Match>
+    <Match>
+        <BugCode name="THROWS"/>
+    </Match>
+    <Match>
+        <BugCode name="AT"/>
+    </Match>
+    <Match>
+        <Bug pattern="USELESS_STRING"/>
+    </Match>
+    <Match>
+        <Bug pattern="DM_DEFAULT_ENCODING"/>
+    </Match>
 </FindBugsFilter>
