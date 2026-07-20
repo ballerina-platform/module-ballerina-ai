@@ -97,17 +97,33 @@ isolated client distinct class MockLlm {
         if query.includes("Answer is:") {
             return {role: ai:ASSISTANT, content: getAnswer(query)};
         }
-        // Structured-output scenarios: the agent exposes a `getResults` final-answer tool carrying the
-        // expected JSON schema, so the model delivers its answer as a structured tool call. For an object
-        // return type the arguments are the value directly; for non-object types they are wrapped in a
-        // synthetic `result` field.
-        if query.includes("weather report") {
+        // Structured-output scenarios: the agent exposes an internal final-answer tool carrying the expected JSON
+        // schema, so the model delivers its answer as a structured tool call. For an object return type the
+        // arguments are the value directly; for non-object types they are wrapped in a synthetic `result` field.
+        if query.includes("conflicting results tool") {
+            if !tools.some(tool => tool.name == "__ballerina_ai_structured_result__")
+                    || !tools.some(tool => tool.name == "getResults") {
+                return error ai:LlmError("Structured-output and user-defined tools were not both exposed");
+            }
             ai:FunctionCall functionCall =
-                {name: "getResults", arguments: {city: "Colombo", temperature: 32, condition: "Sunny"}};
+                {name: "__ballerina_ai_structured_result__",
+                arguments: {city: "Colombo", temperature: 32, condition: "Sunny"}};
+            return {role: ai:ASSISTANT, toolCalls: [functionCall]};
+        }
+        if query.includes("weather report") {
+            if !tools.some(tool => tool.name == "__ballerina_ai_structured_result__") {
+                return error ai:LlmError("Structured-output tool was not exposed");
+            }
+            ai:FunctionCall functionCall =
+                {name: "__ballerina_ai_structured_result__",
+                arguments: {city: "Colombo", temperature: 32, condition: "Sunny"}};
             return {role: ai:ASSISTANT, toolCalls: [functionCall]};
         }
         if query.includes("lucky number") {
-            ai:FunctionCall functionCall = {name: "getResults", arguments: {result: 7}};
+            if !tools.some(tool => tool.name == "__ballerina_ai_structured_result__") {
+                return error ai:LlmError("Structured-output tool was not exposed");
+            }
+            ai:FunctionCall functionCall = {name: "__ballerina_ai_structured_result__", arguments: {result: 7}};
             return {role: ai:ASSISTANT, toolCalls: [functionCall]};
         }
         if query.includes("fenced json") {

@@ -18,7 +18,7 @@ import ballerina/ai;
 import ballerina/test;
 
 // When the expected return type is a non-string, non-`Trace` `anydata` type, the agent exposes a
-// final-answer (`getResults`) tool carrying the target JSON schema and binds the structured tool-call
+// internal final-answer tool carrying the target JSON schema and binds the structured tool-call
 // arguments into that type within the same run. If the model replies with plain text instead, the agent
 // falls back to parsing that text.
 
@@ -27,6 +27,8 @@ type WeatherReport record {|
     int temperature;
     string condition;
 |};
+
+isolated function conflictingResultsTool() returns string => "This user-defined tool must not be used as a final answer.";
 
 // A reusable custom agent definition: a subtype of `ai:FixedTypedAgent` that composes an `ai:Agent`
 // and declares a fixed `WeatherReport` return type.
@@ -54,13 +56,13 @@ isolated class WeatherAgent {
 
 @test:Config
 function testAgentRunWithRecordReturn() returns error? {
-    WeatherReport report = check agent.run("Give me the weather report.");
+    WeatherReport report = check agent.run("Give me the weather report.", sessionId = "structured-record-return");
     test:assertEquals(report, {city: "Colombo", temperature: 32, condition: "Sunny"});
 }
 
 @test:Config
 function testAgentRunWithIntReturn() returns error? {
-    int result = check agent.run("Tell me your lucky number.");
+    int result = check agent.run("Tell me your lucky number.", sessionId = "structured-int-return");
     test:assertEquals(result, 7);
 }
 
@@ -68,7 +70,8 @@ function testAgentRunWithIntReturn() returns error? {
 @test:Config
 function testAgentRunWithPromptQuery() returns error? {
     string location = "Colombo";
-    WeatherReport report = check agent.run(`Give me the weather report for ${location}.`);
+    WeatherReport report = check agent.run(`Give me the weather report for ${location}.`,
+        sessionId = "structured-prompt-query");
     test:assertEquals(report, {city: "Colombo", temperature: 32, condition: "Sunny"});
 }
 
@@ -76,14 +79,16 @@ function testAgentRunWithPromptQuery() returns error? {
 // final-answer tool, the agent strips Markdown code fences before binding the answer.
 @test:Config
 function testAgentRunStripsMarkdownCodeFences() returns error? {
-    WeatherReport report = check agent.run("Give me the fenced json weather data.");
+    WeatherReport report = check agent.run("Give me the fenced json weather data.",
+        sessionId = "structured-fenced-json");
     test:assertEquals(report, {city: "Kandy", temperature: 25, condition: "Cloudy"});
 }
 
 // A `string` return type must keep the original behaviour: the answer is returned verbatim.
 @test:Config
 function testAgentRunWithStringReturnIsUnchanged() returns error? {
-    string result = check agent.run("What is the sum of the following numbers 78 90 45 23 8?");
+    string result = check agent.run("What is the sum of the following numbers 78 90 45 23 8?",
+        sessionId = "structured-string-return");
     test:assertEquals(result, "Answer is: 244");
 }
 
@@ -125,7 +130,7 @@ function testStructuredRunDoesNotDuplicateSchemaInMemory() returns error? {
 
     int instructionCount = 0;
     foreach ai:ChatMessage message in check memory.get(session) {
-        if message.content.toString().includes("by calling the `getResults` tool") {
+        if message.content.toString().includes("by calling the `__ballerina_ai_structured_result__` tool") {
             instructionCount += 1;
         }
     }
@@ -136,14 +141,15 @@ function testStructuredRunDoesNotDuplicateSchemaInMemory() returns error? {
 // When the agent's execution fails on a structured (non-`Trace`) run, the error is surfaced directly.
 @test:Config
 function testStructuredRunReturnsErrorOnExecutionFailure() returns error? {
-    WeatherReport|ai:Error result = agent.run("Random query");
+    WeatherReport|ai:Error result = agent.run("Random query", sessionId = "structured-execution-error");
     test:assertTrue(result is ai:Error, "Expected an error when the agent fails to produce an answer");
 }
 
 // When the final answer cannot be bound to the expected structured type, a descriptive error is returned.
 @test:Config
 function testStructuredRunReturnsErrorOnUnparseableAnswer() returns error? {
-    WeatherReport|ai:Error result = agent.run("Give me the garbled weather.");
+    WeatherReport|ai:Error result = agent.run("Give me the garbled weather.",
+        sessionId = "structured-unparseable-answer");
     if result !is ai:Error {
         test:assertFail("Expected a binding error for a non-JSON answer, but got a value");
     }
@@ -155,10 +161,26 @@ function testStructuredRunReturnsErrorOnUnparseableAnswer() returns error? {
 // derived for it, so the agent reports that structured output is unsupported for that type.
 @test:Config
 function testStructuredRunRejectsUnsupportedReturnType() returns error? {
-    xml|ai:Error result = agent.run("Give me the weather report.");
+    xml|ai:Error result = agent.run("Give me the weather report.", sessionId = "structured-unsupported-type");
     if result !is ai:Error {
         test:assertFail("Expected an unsupported-type error for an `xml` return type, but got a value");
     }
     test:assertTrue(result.message().includes("Structured output is not supported"),
             "Error message should state that structured output is unsupported for the type");
+}
+
+@test:Config
+function testStructuredRunSupportsGetResultsUserTool() returns error? {
+    ai:ToolConfig conflictingResultsToolConfig = {
+        name: "getResults",
+        description: "A user-defined tool with a commonly used name.",
+        caller: conflictingResultsTool
+    };
+    ai:Agent reservedToolAgent = check new (
+        systemPrompt = {role: "Weather Reporter", instructions: "Report the weather."},
+        model = model,
+        tools = [conflictingResultsToolConfig]
+    );
+    WeatherReport report = check reservedToolAgent.run("Give me the weather report with conflicting results tool.");
+    test:assertEquals(report, {city: "Colombo", temperature: 32, condition: "Sunny"});
 }

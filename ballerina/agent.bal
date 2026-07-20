@@ -24,6 +24,7 @@ import ballerina/uuid;
 
 const INFER_TOOL_COUNT = "INFER_TOOL_COUNT";
 const DEFAULT_MINIMUM_MAX_ITERATIONS = 10;
+const STRUCTURED_OUTPUT_TOOL = "__ballerina_ai_structured_result__";
 
 # Represents the system prompt given to the agent.
 @display {label: "System Prompt"}
@@ -310,7 +311,7 @@ public isolated distinct class Agent {
         if toolCalls is FunctionCall[] {
             if responseSchema is ResponseSchema {
                 foreach FunctionCall toolCall in toolCalls {
-                    if toolCall.name == GET_RESULTS_TOOL {
+                    if toolCall.name == STRUCTURED_OUTPUT_TOOL {
                         log:printDebug("LLM returned the final answer via the structured-output tool",
                                 executionId = progress.executionId,
                                 sessionId = sessionId,
@@ -385,7 +386,12 @@ public isolated distinct class Agent {
 
         ResponseSchema? responseSchema = ();
         if td !is typedesc<string|Trace> && td is typedesc<anydata> {
-            responseSchema = check getResponseSchemaForType(td);
+            ResponseSchema|Error schema = getResponseSchemaForType(td);
+            if schema is Error {
+                span.close(schema);
+                return schema;
+            }
+            responseSchema = schema;
             systemPrompt += getStructuredOutputInstruction();
         }
         span.addSystemInstruction(systemPrompt);
@@ -459,7 +465,7 @@ public isolated distinct class Agent {
 # + parameters - JSON schema describing the expected final-answer structure
 # + return - The final-answer tool definition
 isolated function getStructuredOutputTool(map<json> parameters) returns ChatCompletionFunctions => {
-    name: GET_RESULTS_TOOL,
+    name: STRUCTURED_OUTPUT_TOOL,
     description: "Call this tool to deliver the final answer once the task is complete. " +
         "The answer must conform to the tool's parameter schema.",
     parameters
@@ -496,7 +502,7 @@ isolated function getResponseSchemaForType(typedesc<anydata> td) returns Respons
 # + return - The instruction text
 isolated function getStructuredOutputInstruction() returns string =>
     "\n\nWhen you have determined the final answer, you must return it by calling the " +
-    "`" + GET_RESULTS_TOOL + "` tool with the answer provided as its arguments. " +
+    "`" + STRUCTURED_OUTPUT_TOOL + "` tool with the answer provided as its arguments. " +
     "Do not provide the final answer as plain text.";
 
 # Parses the agent's final answer into a value of the expected type.

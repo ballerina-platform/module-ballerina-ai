@@ -266,7 +266,7 @@ public class JsonSchemaModificationTask implements ModifierTask<SourceModifierCo
 
         public void visit(RemoteMethodCallActionNode remoteMethodCallActionNode) {
             SimpleNameReferenceNode methodName = remoteMethodCallActionNode.methodName();
-            if (!methodName.name().text().equals(GENERATE_METHOD_NAME)) {
+            if (!methodName.name().text().equals(GENERATE_METHOD_NAME) || this.modelProviderSymbol == null) {
                 this.visitSyntaxNode(remoteMethodCallActionNode);
                 return;
             }
@@ -281,7 +281,7 @@ public class JsonSchemaModificationTask implements ModifierTask<SourceModifierCo
 
         public void visit(MethodCallExpressionNode methodCallExpressionNode) {
             if (!(methodCallExpressionNode.methodName() instanceof SimpleNameReferenceNode methodName)
-                    || !methodName.name().text().equals(RUN_METHOD_NAME)) {
+                    || !methodName.name().text().equals(RUN_METHOD_NAME) || this.agentTypeSymbol == null) {
                 this.visitSyntaxNode(methodCallExpressionNode);
                 return;
             }
