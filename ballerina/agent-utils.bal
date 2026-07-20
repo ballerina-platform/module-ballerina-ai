@@ -25,7 +25,7 @@ type ExecutionProgress record {|
     # Unique identifier for this execution
     string executionId;
     # Question to the agent
-    string query;
+    string|Prompt query;
     # Instruction used by the agent during the execution
     string instruction;
     # Execution history of actions performed so far in the current interaction
@@ -34,6 +34,9 @@ type ExecutionProgress record {|
     Context context;
     # History of previous interactions with the agent, including the latest user query
     ChatMessage[] history;
+    # Schema for the expected structured final answer. When set, the agent exposes a final-answer tool
+    # carrying this schema so the model returns its answer as a structured tool call.
+    ResponseSchema? responseSchema = ();
 |};
 
 # Execution step information
@@ -376,9 +379,12 @@ isolated function executeToolCall(Agent agent, FunctionCall llmResponse, Context
 # + verbose - If true, then print the reasoning steps (default: true)
 # + sessionId - The ID associated with the memory
 # + executionId - Unique identifier for this execution
+# + responseSchema - Schema for the expected structured final answer; when set, a final-answer tool
+#                    carrying this schema is exposed so the model returns its answer as a tool call
 # + return - Returns the execution steps tracing the agent's reasoning and outputs from the tools
-isolated function run(Agent agent, string instruction, string query, int maxIter, boolean verbose, string? agentId,
-        string sessionId = DEFAULT_SESSION_ID, Context context = new, string executionId = DEFAULT_EXECUTION_ID)
+isolated function run(Agent agent, string instruction, string|Prompt query, int maxIter, boolean verbose, string? agentId,
+        string sessionId = DEFAULT_SESSION_ID, Context context = new, string executionId = DEFAULT_EXECUTION_ID,
+        ResponseSchema? responseSchema = ())
         returns ExecutionTrace {
     time:Utc startTime = time:utcNow();
     Iteration[] iterations = [];
@@ -419,7 +425,8 @@ isolated function run(Agent agent, string instruction, string query, int maxIter
     ChatUserMessage userMessage = {role: USER, content: query};
     history.push(userMessage);
 
-    Executor executor = new (agent, sessionId, maxIter, progress = {instruction, query, context, executionId, history});
+    Executor executor = new (agent, sessionId, maxIter,
+        progress = {instruction, query, context, executionId, history, responseSchema});
     ChatMessage[] temporaryMemory = [systemMessage, userMessage];
     ChatAssistantMessage? finalAssistantMessage = ();
     // Each value yielded by the executor is one complete reasoning-action cycle: the results

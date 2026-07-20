@@ -97,6 +97,48 @@ isolated client distinct class MockLlm {
         if query.includes("Answer is:") {
             return {role: ai:ASSISTANT, content: getAnswer(query)};
         }
+        // Structured-output scenarios: the agent exposes an internal final-answer tool carrying the expected JSON
+        // schema, so the model delivers its answer as a structured tool call. For an object return type the
+        // arguments are the value directly; for non-object types they are wrapped in a synthetic `result` field.
+        if query.includes("conflicting results tool") {
+            if !tools.some(tool => tool.name == "__ballerina_ai_structured_result__")
+                    || !tools.some(tool => tool.name == "getResults") {
+                return error ai:LlmError("Structured-output and user-defined tools were not both exposed");
+            }
+            ai:FunctionCall functionCall =
+                {name: "__ballerina_ai_structured_result__",
+                arguments: {city: "Colombo", temperature: 32, condition: "Sunny"}};
+            return {role: ai:ASSISTANT, toolCalls: [functionCall]};
+        }
+        if query.includes("weather report") {
+            if !tools.some(tool => tool.name == "__ballerina_ai_structured_result__") {
+                return error ai:LlmError("Structured-output tool was not exposed");
+            }
+            ai:FunctionCall functionCall =
+                {name: "__ballerina_ai_structured_result__",
+                arguments: {city: "Colombo", temperature: 32, condition: "Sunny"}};
+            return {role: ai:ASSISTANT, toolCalls: [functionCall]};
+        }
+        if query.includes("lucky number") {
+            if !tools.some(tool => tool.name == "__ballerina_ai_structured_result__") {
+                return error ai:LlmError("Structured-output tool was not exposed");
+            }
+            ai:FunctionCall functionCall = {name: "__ballerina_ai_structured_result__", arguments: {result: 7}};
+            return {role: ai:ASSISTANT, toolCalls: [functionCall]};
+        }
+        if query.includes("fenced json") {
+            // Fallback path: the model replies with plain content (wrapped in Markdown code fences)
+            // instead of calling the final-answer tool, exercising fence-stripping during parsing.
+            return {
+                role: ai:ASSISTANT,
+                content: string `${"```"}json
+{"city": "Kandy", "temperature": 25, "condition": "Cloudy"}
+${"```"}`
+            };
+        }
+        if query.includes("garbled weather") {
+            return {role: ai:ASSISTANT, content: "the weather is nice today, no json here"};
+        }
         if query.toLowerAscii().includes("mail") {
             ai:FunctionCall functionCall = {name: "getEmails"};
             return {role: ai:ASSISTANT, toolCalls: [functionCall]};

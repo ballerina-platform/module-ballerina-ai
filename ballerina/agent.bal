@@ -24,6 +24,7 @@ import ballerina/uuid;
 
 const INFER_TOOL_COUNT = "INFER_TOOL_COUNT";
 const DEFAULT_MINIMUM_MAX_ITERATIONS = 10;
+const STRUCTURED_OUTPUT_TOOL = "__ballerina_ai_structured_result__";
 
 # Represents the system prompt given to the agent.
 @display {label: "System Prompt"}
@@ -37,15 +38,6 @@ public type SystemPrompt record {|
     @display {label: "Instructions"}
     string instructions;
 |};
-
-# Represents the different types of agents supported by the module.
-@display {label: "Agent Type"}
-public enum AgentType {
-    # Represents a ReAct agent
-    REACT_AGENT,
-    # Represents a function call agent
-    FUNCTION_CALL_AGENT
-}
 
 # Represents the authentication credentials of an autonomous agent.
 @display {label: "Agent Credential"}
@@ -109,8 +101,105 @@ public type AgentConfiguration record {|
     Credential credential?;
 |};
 
+# Represents the supported agent type abstractions: an agent whose return type is inferred from the call
+# site, or one that fixes its return type to a specific `anydata` value.
+public type AgentType DependentlyTypedAgent|FixedTypedAgent;
+
+# Represents the kind of a tool entry available to an agent.
+public enum ToolKind {
+    # A function or method tool
+    FUNCTION_TOOL,
+    # An MCP toolkit; its individual tools are resolved from the MCP server at runtime
+    MCP_TOOLKIT,
+    # Any other toolkit (e.g., an HTTP toolkit); its tools are resolved at runtime
+    TOOLKIT
+}
+
+# Provides metadata about a single tool (or toolkit) available to a custom agent.
+public type ToolMetadata record {|
+    # The tool name. For toolkit entries this is the variable name used in the agent (or the
+    # toolkit's type name when the toolkit is constructed inline).
+    string name;
+    # The kind of tool entry
+    ToolKind kind;
+    # The UI label from the tool's `@display` annotation, if present
+    string label?;
+    # The icon path from the tool's `@display` annotation, if present
+    string icon?;
+|};
+
+# Identifies an `init` parameter of a custom agent definition through which a dependency is supplied.
+public type ParameterInfo record {|
+    # The name of the parameter in the `init` method's signature
+    string parameterName;
+|};
+
+# Provides metadata about a custom agent definition.
+# A compiler plugin records this for each custom agent (a class implementing `ai:AgentType`) within the
+# `agentMetadata` field of the class's `@display` annotation, so consumers of a shared agent definition can
+# discover its composition without access to the implementation. The recorded value lists the tools that are
+# statically identifiable from the `ai:Agent` constructed in the class's `init` method, the agent's system
+# prompt when resolvable, and the `init` parameters that supply the model provider and memory, if any.
+public type AgentMetadataConfig record {|
+    # The tools available to the agent
+    ToolMetadata[] tools = [];
+    # The system prompt of the composed agent. Present only when both the role and the instructions are
+    # statically resolvable (string literals, interpolation-free string templates, or `const` references).
+    SystemPrompt systemPrompt?;
+    # The `init` parameter through which the agent's model provider is supplied.
+    # Absent when the model is not injectable via the constructor (e.g., it is created internally).
+    ParameterInfo modelProvider?;
+    # The `init` parameter through which the agent's memory is supplied.
+    # Absent when the memory is not injectable via the constructor.
+    ParameterInfo memory?;
+|};
+
+# Represents an agent whose `run` return type is inferred from the expected type at the call site.
+# Callers decide whether they want the full `Trace`, the raw `string` answer, or the answer bound 
+# to a structured `anydata` type.
+public type DependentlyTypedAgent distinct isolated object {
+    # Executes the agent for the given query and binds the result to the inferred return type.
+    #
+    # + query - The query to be executed by the agent, as a plain string or a `Prompt` template
+    # + sessionId - The ID associated with the agent memory
+    # + context - The additional context that can be used during agent tool execution
+    # + td - Type descriptor specifying the expected return type format
+    # + return - The agent's response bound to `td`, or an `Error`
+    public isolated function run(@display {label: "Query"} string|Prompt query,
+            @display {label: "Session ID"} string sessionId = DEFAULT_SESSION_ID,
+            Context context = new,
+            typedesc<Trace|anydata> td = <>) returns td|Error;
+};
+
+# Represents a reusable agent definition with a fixed `anydata` return type. Implementations typically
+# compose an `Agent` and delegate to it, exposing a domain-specific return type from `run` while still
+# surfacing the full execution `Trace` via `trace`.
+public type FixedTypedAgent distinct isolated object {
+    # Executes the agent for the given query and returns the result bound to the implementation's fixed type.
+    #
+    # + query - The query to be executed by the agent, as a plain string or a `Prompt` template
+    # + sessionId - The ID associated with the agent memory
+    # + context - The additional context that can be used during agent tool execution
+    # + return - The agent's response as an `anydata` value, or an `Error`
+    public isolated function run(@display {label: "Query"} string|Prompt query,
+            @display {label: "Session ID"} string sessionId = DEFAULT_SESSION_ID,
+            Context context = new) returns anydata|Error;
+
+    # Executes the agent for the given query and returns the full execution trace.
+    #
+    # + query - The query to be executed by the agent, as a plain string or a `Prompt` template
+    # + sessionId - The ID associated with the agent memory
+    # + context - The additional context that can be used during agent tool execution
+    # + return - The execution `Trace`, or an `Error`
+    public isolated function trace(@display {label: "Query"} string|Prompt query,
+            @display {label: "Session ID"} string sessionId = DEFAULT_SESSION_ID,
+            Context context = new) returns Trace|Error;
+};
+
 # Represents an agent.
 public isolated distinct class Agent {
+    *DependentlyTypedAgent;
+
     # Tool store to be used by the agent
     final ToolStore toolStore;
     # LLM model instance (should be a function call model)
@@ -184,9 +273,9 @@ public isolated distinct class Agent {
     #
     # + progress - Execution progress with the current query and execution history
     # + sessionId - The ID associated with the agent memory
-    # + return - LLM response containing the tool or chat response (or an error if the call fails)
+    # + return - LLM response containing the tool calls or chat response (or an error if the call fails)
     isolated function selectNextTools(ExecutionProgress progress, string sessionId = DEFAULT_SESSION_ID)
-    returns FunctionCall[]|string|Error {
+            returns FunctionCall[]|string|Error {
         ChatMessage[] messages = check createFunctionCallMessages(progress);
         messages.unshift(...progress.history);
         ToolLoadingStrategy toolLoadingStrategy = self.toolLoadingStrategy;
@@ -205,6 +294,11 @@ public isolated distinct class Agent {
             }
         }
 
+        ResponseSchema? responseSchema = progress.responseSchema;
+        if responseSchema is ResponseSchema {
+            filteredTools.push(getStructuredOutputTool(responseSchema.schema));
+        }
+
         log:printDebug("Requesting tool selection from LLM",
                 executionId = progress.executionId,
                 sessionId = sessionId,
@@ -213,18 +307,25 @@ public isolated distinct class Agent {
         );
 
         ChatAssistantMessage response = check self.model->chat(messages, filteredTools);
-        // All tool calls returned in this single LLM response are executed together
-        // (see `Executor.next()`) before the LLM is consulted again, instead of executing
-        // them one at a time across separate chat requests.
         FunctionCall[]? toolCalls = getToolCalls(response);
         if toolCalls is FunctionCall[] {
+            if responseSchema is ResponseSchema {
+                foreach FunctionCall toolCall in toolCalls {
+                    if toolCall.name == STRUCTURED_OUTPUT_TOOL {
+                        log:printDebug("LLM returned the final answer via the structured-output tool",
+                                executionId = progress.executionId,
+                                sessionId = sessionId,
+                                toolArguments = toolCall.arguments
+                        );
+                        return getStructuredAnswer(toolCall, responseSchema);
+                    }
+                }
+            }
             log:printDebug("LLM selected tool(s)",
                     executionId = progress.executionId,
                     sessionId = sessionId,
-                    toolNames = from FunctionCall toolCall in toolCalls
-                        select toolCall.name,
-                    toolArguments = from FunctionCall toolCall in toolCalls
-                        select toolCall.arguments
+                    toolNames = from FunctionCall toolCall in toolCalls select toolCall.name,
+                    toolArguments = from FunctionCall toolCall in toolCalls select toolCall.arguments
             );
             return toolCalls;
         }
@@ -257,36 +358,48 @@ public isolated distinct class Agent {
     # + context - The additional context that can be used during agent tool execution
     # + td - Type descriptor specifying the expected return type format
     # + return - The agent's response or an error
-    public isolated function run(@display {label: "Query"} string query,
+    public isolated function run(@display {label: "Query"} string|Prompt query,
             @display {label: "Session ID"} string sessionId = DEFAULT_SESSION_ID,
             Context context = new,
-            typedesc<Trace|string> td = <>) returns td|Error = @java:Method {
+            typedesc<Trace|anydata> td = <>) returns td|Error = @java:Method {
         'class: "io.ballerina.stdlib.ai.Agent"
     } external;
 
-    private isolated function runInternal(@display {label: "Query"} string query,
+    private isolated function runInternal(@display {label: "Query"} string|Prompt query,
             @display {label: "Session ID"} string sessionId = DEFAULT_SESSION_ID,
-            Context context = new, boolean withTrace = false) returns string|Trace|Error {
+            Context context = new, typedesc<Trace|anydata> td = string) returns Trace|anydata|Error {
         time:Utc startTime = time:utcNow();
         string executionId = uuid:createRandomUuid();
+        string queryString = toString(query);
         log:printDebug("Agent execution started",
                 executionId = executionId,
                 agentId = self.agentId,
-                query = query,
+                query = queryString,
                 sessionId = sessionId
         );
 
         observe:InvokeAgentSpan span = observe:createInvokeAgentSpan(self.systemPrompt.role);
         span.addId(self.uniqueId);
         span.addSessionId(sessionId);
-        span.addInput(query);
+        span.addInput(queryString);
         string systemPrompt = getFomatedSystemPrompt(self.systemPrompt);
+
+        ResponseSchema? responseSchema = ();
+        if td !is typedesc<string|Trace> && td is typedesc<anydata> {
+            ResponseSchema|Error schema = getResponseSchemaForType(td);
+            if schema is Error {
+                span.close(schema);
+                return schema;
+            }
+            responseSchema = schema;
+            systemPrompt += getStructuredOutputInstruction();
+        }
         span.addSystemInstruction(systemPrompt);
 
         Credential? & readonly agentCredential = self.agentCredential;
         string? agentId = agentCredential is Credential ? agentCredential.id : ();
         ExecutionTrace executionTrace = run(self, systemPrompt, query, self.maxIter, self.verbose, agentId,
-                sessionId, context, executionId);
+                sessionId, context, executionId, responseSchema);
         ChatUserMessage userMessage = {role: USER, content: query};
         Iteration[] iterations = executionTrace.iterations;
         FunctionCall[]? toolCalls = executionTrace.toolCalls.length() == 0 ? () : executionTrace.toolCalls;
@@ -301,8 +414,8 @@ public isolated distinct class Agent {
             span.addOutput(observe:TEXT, answer);
             span.close();
 
-            return withTrace
-                ? {
+            if td is typedesc<Trace> {
+                return {
                     id: executionId,
                     userMessage,
                     iterations,
@@ -311,8 +424,15 @@ public isolated distinct class Agent {
                     endTime: time:utcNow(),
                     output: {role: ASSISTANT, content: answer},
                     toolCalls
-                }
-                : answer;
+                };
+            }
+            if td is typedesc<string> {
+                return answer;
+            }
+            if td is typedesc<anydata> {
+                return parseAnswerAsType(answer, td);
+            }
+            return answer;
         } on fail Error err {
             log:printDebug("Agent execution failed",
                     err,
@@ -322,8 +442,8 @@ public isolated distinct class Agent {
             );
             span.close(err);
 
-            return withTrace
-                ? {
+            if td is typedesc<Trace> {
+                return {
                     id: executionId,
                     userMessage,
                     iterations,
@@ -332,10 +452,83 @@ public isolated distinct class Agent {
                     endTime: time:utcNow(),
                     output: err,
                     toolCalls
-                }
-                : err;
+                };
+            }
+            return err;
         }
     }
+
+}
+
+# Builds the dedicated final-answer tool that carries the structured-output schema as its parameters.
+#
+# + parameters - JSON schema describing the expected final-answer structure
+# + return - The final-answer tool definition
+isolated function getStructuredOutputTool(map<json> parameters) returns ChatCompletionFunctions => {
+    name: STRUCTURED_OUTPUT_TOOL,
+    description: "Call this tool to deliver the final answer once the task is complete. " +
+        "The answer must conform to the tool's parameter schema.",
+    parameters
+};
+
+# Extracts the final answer from a structured-output tool call as a JSON string.
+#
+# + toolCall - The structured-output tool call returned by the model
+# + responseSchema - The schema used to build the tool, indicating whether the type was wrapped
+# + return - The final answer serialized as a JSON string
+isolated function getStructuredAnswer(FunctionCall toolCall, ResponseSchema responseSchema) returns string {
+    map<json> arguments = toolCall.arguments ?: {};
+    json value = responseSchema.isOriginallyJsonObject ? arguments : arguments[RESULT];
+    return value.toJsonString();
+}
+
+# Derives the structured-output schema for the expected return type. The schema is attached to the
+# agent's final-answer tool so the model returns its answer as a schema-constrained tool call rather
+# than free-form text.
+#
+# + td - Type descriptor specifying the expected return type
+# + return - The response schema, or an error if a schema cannot be derived for the type
+isolated function getResponseSchemaForType(typedesc<anydata> td) returns ResponseSchema|Error {
+    typedesc<json>|error jsonTd = td.ensureType();
+    if jsonTd is error {
+        return error Error("Structured output is not supported for the expected return type", jsonTd);
+    }
+    return getExpectedResponseSchema(jsonTd);
+}
+
+# Builds the instruction, appended to the system prompt, that directs the agent to deliver its final
+# answer by calling the structured-output tool instead of replying with free text.
+#
+# + return - The instruction text
+isolated function getStructuredOutputInstruction() returns string =>
+    "\n\nWhen you have determined the final answer, you must return it by calling the " +
+    "`" + STRUCTURED_OUTPUT_TOOL + "` tool with the answer provided as its arguments. " +
+    "Do not provide the final answer as plain text.";
+
+# Parses the agent's final answer into a value of the expected type.
+#
+# + answer - The agent's final answer (expected to be a JSON value)
+# + td - Type descriptor specifying the expected return type
+# + return - The bound value, or an error if the answer cannot be parsed into the type
+isolated function parseAnswerAsType(string answer, typedesc<anydata> td) returns anydata|Error {
+    string trimmed = answer.trim();
+    // Strip Markdown code fences (e.g. ```json ... ```) if the model added them.
+    if trimmed.startsWith("```") {
+        int? newlineIndex = trimmed.indexOf("\n");
+        if newlineIndex is int {
+            trimmed = trimmed.substring(newlineIndex + 1);
+        }
+        if trimmed.endsWith("```") {
+            trimmed = trimmed.substring(0, trimmed.length() - 3);
+        }
+        trimmed = trimmed.trim();
+    }
+    anydata|error result = trimmed.fromJsonStringWithType(td);
+    if result is error {
+        return error Error(string `Failed to bind the agent's response to the expected type: ${result.message()}`,
+                result);
+    }
+    return result;
 }
 
 isolated function getAnswer(ExecutionTrace executionTrace) returns string|Error {

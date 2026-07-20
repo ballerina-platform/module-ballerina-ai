@@ -63,9 +63,7 @@ ${BACKTICKS}`;
     if content is string {
         content += toolsPrompt;
     } else {
-        // `content.insertions` is `readonly`, so it can't be mutated in place
-        // (e.g. `content.insertions.push(toolsPrompt)` would fail) — build a new
-        // array with the tools prompt appended instead.
+        // `content.insertions` is `readonly`, so build a new array with the tools prompt appended.
         anydata[] & readonly insertions = [...content.insertions, toolsPrompt].cloneReadOnly();
         content = createPrompt(content.strings, insertions);
     }
