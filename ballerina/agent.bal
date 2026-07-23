@@ -343,9 +343,9 @@ public isolated distinct class Agent {
     private isolated function buildPendingApprovalTrace(PendingApproval pendingApproval, boolean withTrace)
             returns string|Trace|Error {
         ApprovalRequiredError stillPending = error ApprovalRequiredError(
-            string `A tool call is still awaiting approval for session '${pendingApproval.sessionId}'; ` +
-                "call resume() before starting a new run.",
-            request = toApprovalRequest(pendingApproval));
+            string `${pendingApproval.pendingRequests.length()} tool call(s) are still awaiting approval for ` +
+                string `session '${pendingApproval.sessionId}'; call resume() before starting a new run.`,
+            requests = pendingApproval.pendingRequests);
         // Safe: `isPendingApprovalHistoryValid` was already checked by the caller.
         ChatUserMessage userMessage =
             <ChatUserMessage>pendingApproval.history[pendingApproval.historyPrefixLength - 1];
@@ -366,25 +366,32 @@ public isolated distinct class Agent {
 
     # Resumes a run that paused for human approval on `sessionId`.
     #
+    # `feedback` is a map of decisions keyed by each request's `ApprovalRequest.id` - always a
+    # map, even when only one call is pending, since there is no way to know in advance how many
+    # tool calls an LLM turn will propose or how many of them will need approval. A partial map
+    # (fewer entries than there are pending requests) is fine - whatever isn't supplied stays
+    # pending, and this call returns a fresh `ApprovalRequiredError` listing just the
+    # still-undecided requests.
+    #
     # **Note:** like `run`, calls for the same session ID must be sequential.
     #
     # + sessionId - The ID associated with the agent memory
-    # + feedback - The human's decision on the pending tool call
+    # + feedback - The human's decisions, keyed by `ApprovalRequest.id`
     # + context - The additional context that can be used during agent tool execution
     # + td - Type descriptor specifying the expected return type format
     # + return - The agent's response or an error
     public isolated function resume(@display {label: "Session ID"} string sessionId,
-            @display {label: "Human Feedback"} HumanFeedback feedback,
+            @display {label: "Human Feedback"} map<HumanFeedback> feedback,
             Context context = new,
             typedesc<Trace|string> td = <>) returns td|Error = @java:Method {
         'class: "io.ballerina.stdlib.ai.Agent"
     } external;
 
-    # Returns the approval currently pending on `sessionId`, if any.
+    # Returns the approvals currently pending on `sessionId`, if any.
     #
     # + sessionId - The ID associated with the agent memory
-    # + return - The pending approval request, `()` if none is pending, or an `ai:Error`
-    public isolated function getPendingApproval(string sessionId) returns ApprovalRequest?|Error {
+    # + return - Every currently pending approval request, `()` if none is pending, or an `ai:Error`
+    public isolated function getPendingApproval(string sessionId) returns ApprovalRequest[]?|Error {
         PendingApproval?|Error pendingApprovalResult = self.approvalStore.get(sessionId);
         if pendingApprovalResult is Error {
             return pendingApprovalResult;
@@ -393,10 +400,10 @@ public isolated distinct class Agent {
                 || !isPendingApprovalHistoryValid(pendingApprovalResult) {
             return ();
         }
-        return toApprovalRequest(pendingApprovalResult);
+        return pendingApprovalResult.pendingRequests;
     }
 
-    private isolated function resumeInternal(string sessionId, HumanFeedback feedback,
+    private isolated function resumeInternal(string sessionId, map<HumanFeedback> feedback,
             Context context = new, boolean withTrace = false) returns string|Trace|Error {
         log:printDebug("Agent resume started",
                 agentId = self.agentId,
@@ -407,8 +414,8 @@ public isolated distinct class Agent {
         // concurrent duplicate `resume()` call for the same session finds nothing and fails
         // fast with `ApprovalNotFoundError` instead of also executing the approved tool call.
         // `executeAgentLoop`'s pause branch already unconditionally re-persists a fresh
-        // `PendingApproval` if this call pauses again (e.g. a second gate in the same batch),
-        // so claiming here composes correctly with that existing flow.
+        // `PendingApproval` if this call pauses again (e.g. another gate still undecided in the
+        // same batch), so claiming here composes correctly with that existing flow.
         PendingApproval?|Error pendingApprovalResult = self.approvalStore.take(sessionId);
         if pendingApprovalResult is Error {
             return pendingApprovalResult;
@@ -432,6 +439,16 @@ public isolated distinct class Agent {
                     "`InMemoryApprovalStore`; check any custom `ApprovalStore` implementation in use.");
         }
 
+        // Not the claimed record's fault - nothing was actually resolved - so restore it
+        // before returning, rather than leaving it lost after a caller mistake.
+        string[] unknownIds = findUnknownApprovalIds(feedback, pendingApproval.pendingRequests);
+        if unknownIds.length() > 0 {
+            self.restoreClaimedApproval(pendingApproval, sessionId);
+            return error UnknownApprovalIdError(
+                    string `The following ids are not currently pending for session '${sessionId}': ` +
+                        unknownIds.toString());
+        }
+
         // Carry the original run's start time forward, so `Trace.startTime` reflects the
         // whole logical run rather than just this resume call.
         time:Utc startTime = pendingApproval.startTime;
@@ -442,14 +459,28 @@ public isolated distinct class Agent {
 
         Credential? & readonly agentCredential = self.agentCredential;
         string? agentId = agentCredential is Credential ? agentCredential.id : ();
-        ExecutionTrace executionTrace = resumeRun(self, pendingApproval, feedback, self.maxIter, self.verbose,
-            agentId, sessionId, context);
+        ExecutionTrace executionTrace = resumeRun(self, pendingApproval, feedback, self.maxIter,
+            self.verbose, agentId, sessionId, context);
         // Safe: `isPendingApprovalHistoryValid` above already guarantees this index is in range.
         ChatUserMessage userMessage = <ChatUserMessage>pendingApproval.history[pendingApproval.historyPrefixLength - 1];
         return self.buildOutcome(executionId, userMessage, executionTrace, startTime, withTrace, span, sessionId,
             "Agent execution paused again pending human approval",
             "Agent resume completed successfully",
             "Agent resume failed");
+    }
+
+    # Re-persists a `PendingApproval` claimed by `take()` when a `resume()` call names an unknown
+    # id before anything was actually resolved, so the caller can simply retry `resume()` with a
+    # corrected decision instead of losing the pause.
+    #
+    # + pendingApproval - The claimed pending approval to restore, unchanged
+    # + sessionId - The ID associated with the agent memory
+    private isolated function restoreClaimedApproval(PendingApproval pendingApproval, string sessionId) {
+        Error? restoreErr = self.approvalStore.put(pendingApproval);
+        if restoreErr is Error {
+            log:printError("Failed to restore the claimed pending approval after an invalid resume() call",
+                    restoreErr, sessionId = sessionId);
+        }
     }
 
     # Shared by `runInternal`/`resumeInternal`: turns an `ExecutionTrace` into the agent's public
@@ -544,15 +575,19 @@ public isolated distinct class Agent {
     }
 }
 
+// A batch pause is treated as expired as soon as any one of its still-pending requests has
+// expired, even if the others haven't yet: every gated call in the batch was requested within
+// the same turn under the same timeout, so letting only some of them survive would leave the
+// batch in a state where it can never be fully resolved (the expired one can never gather a
+// valid decision) but also never gets cleaned up on its own.
 isolated function isApprovalExpired(PendingApproval pendingApproval) returns boolean {
-    time:Utc? expiresAt = pendingApproval?.expiresAt;
-    return expiresAt is time:Utc && time:utcDiffSeconds(time:utcNow(), expiresAt) > 0d;
-}
-
-isolated function toApprovalRequest(PendingApproval pendingApproval) returns ApprovalRequest {
-    PendingApproval {id, sessionId, toolName, toolDescription, arguments, toolCallId, requestedAt, expiresAt} =
-        pendingApproval;
-    return {id, sessionId, toolName, toolDescription, arguments, toolCallId, requestedAt, expiresAt};
+    foreach ApprovalRequest request in pendingApproval.pendingRequests {
+        time:Utc? expiresAt = request?.expiresAt;
+        if expiresAt is time:Utc && time:utcDiffSeconds(time:utcNow(), expiresAt) > 0d {
+            return true;
+        }
+    }
+    return false;
 }
 
 // `history` must contain, in order, a system message followed by a user message before the

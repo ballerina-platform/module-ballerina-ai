@@ -22,6 +22,7 @@ import io.ballerina.runtime.api.Environment;
 import io.ballerina.runtime.api.types.PredefinedTypes;
 import io.ballerina.runtime.api.utils.TypeUtils;
 import io.ballerina.runtime.api.values.BError;
+import io.ballerina.runtime.api.values.BMap;
 import io.ballerina.runtime.api.values.BObject;
 import io.ballerina.runtime.api.values.BString;
 import io.ballerina.runtime.api.values.BTypedesc;
@@ -48,7 +49,7 @@ public class Agent {
 
     @SuppressWarnings("unused")
     public static Object resume(Environment env, BObject agent,
-                                BString sessionId, Object feedback, BObject context, BTypedesc td) {
+                                BString sessionId, BMap<BString, Object> feedback, BObject context, BTypedesc td) {
         return env.yieldAndRun(() -> {
             try {
                 Object[] paramFeed = getResumeInternalMethodParams(sessionId, feedback, context, td);

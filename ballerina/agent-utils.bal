@@ -78,32 +78,32 @@ public type ToolOutput record {|
     anydata|error value;
 |};
 
-# A previously proposed batch of tool calls, one of which is currently awaiting the human's
-# decision. When set, the next step resolves that decision (and continues gathering decisions
-# for, or executing, the rest of the same batch) instead of reasoning with the LLM.
+# A previously proposed batch of tool calls, one or more of which are still awaiting a human
+# decision. When set, the next step applies the caller's `resume()` decisions to whichever
+# positions they target (and continues gathering decisions for, or executing, the rest of the
+# same batch) instead of reasoning with the LLM.
 type SeededFeedback record {|
-    # Position in `originalBatch` this decision applies to
-    int currentIndex;
-    # The human's decision on the call at `currentIndex`
-    HumanFeedback feedback;
+    # The caller's `resume()` decisions, keyed by `ApprovalRequest.id`. Already validated (in
+    # `Agent.resumeInternal`) to reference only ids present in `pendingRequests`.
+    map<HumanFeedback> suppliedDecisions;
+    # The requests still awaiting a decision immediately before this `resume()` call
+    ApprovalRequest[] pendingRequests;
     # The full batch of tool calls the LLM proposed in this turn
     FunctionCall[] originalBatch;
-    # Decisions already gathered for earlier positions; `decisions[currentIndex]` is still `()` here
+    # Decisions already gathered for positions other than those in `pendingRequests`
     HumanFeedback?[] decisions;
 |};
 
 # Internal plumbing only - never returned to `Agent` callers, not wired into the `Error`
 # hierarchy. A pause during decision-gathering for a batch of proposed tool calls, plus
-# everything needed to ask about the next gated call or (once every gated call in the batch has
-# a decision) execute the whole resolved batch.
+# everything needed to ask about the remaining gated calls or (once every gated call in the
+# batch has a decision) execute the whole resolved batch.
 type BatchApprovalPending record {|
-    # The pause itself, surfaced to the caller exactly like a single-call approval request
+    # The pause itself, carrying a request for every still-undecided gated call in the batch
     ApprovalRequiredError approvalRequired;
-    # Position in `originalBatch` that `approvalRequired` refers to
-    int currentIndex;
     # The full batch of tool calls the LLM proposed in this turn
     FunctionCall[] originalBatch;
-    # Decisions gathered so far for positions other than `currentIndex`
+    # Decisions gathered so far for positions other than the ones still pending
     HumanFeedback?[] decisions;
 |};
 
@@ -179,11 +179,11 @@ class Executor {
     }
 
     # Execute the action decided by the LLM during the reasoning. If any call in the batch is
-    # gated, nothing executes yet - a decision is gathered for it first (see `next`).
+    # gated, nothing executes yet - a decision is gathered for every gated call first (see `next`).
     #
     # + llmResponse - LLM response containing a chat response or the tool calls to be executed
     # + return - Results of every executed tool call, the final chat response, or a pause
-    # awaiting a human decision on the first gated call found
+    # awaiting a human decision on every gated call found in the batch
     public isolated function act(FunctionCall[]|string llmResponse)
             returns (ExecutionResult|ExecutionError)[]|string|BatchApprovalPending {
         if llmResponse is string {
@@ -200,14 +200,17 @@ class Executor {
         foreach int i in 0 ..< llmResponse.length() {
             decisions.push(());
         }
-        int? firstGateIndex = findNextGatedIndex(self.agent, self.progress.context, llmResponse, decisions);
-        if firstGateIndex is () {
+        int[] gatedIndices = findAllGatedIndices(self.agent, self.progress.context, llmResponse, decisions);
+        if gatedIndices.length() == 0 {
             boolean isParallel = self.agent.executeToolCallsInParallel && llmResponse.length() > 1;
             return self.executeToolCalls(llmResponse, isParallel);
         }
+        ApprovalRequest[] requests = from int i in gatedIndices
+            select buildApprovalRequest(self.agent, llmResponse[i], self.sessionId, i);
         return {
-            approvalRequired: buildApprovalRequiredError(self.agent, llmResponse[firstGateIndex], self.sessionId),
-            currentIndex: firstGateIndex,
+            approvalRequired: error ApprovalRequiredError(
+                    string `Human approval is required to execute ${requests.length()} tool call(s).`,
+                    requests = requests),
             originalBatch: llmResponse,
             decisions
         };
@@ -264,21 +267,30 @@ class Executor {
         return executionOutcomes;
     }
 
-    # Resolves the seeded decision, then either asks about the next gated call in the same
-    # original batch or - once every gated call has a decision - executes the whole batch.
+    # Applies the caller's supplied decisions to the positions they target, then either asks
+    # about whichever gated calls in the same original batch are still undecided or - once every
+    # gated call has a decision - executes the whole batch.
     #
-    # + seeded - The call currently awaiting a decision, its feedback, and the batch state
-    # + return - Results of every executed call, or a further pause on the next gated call
-    private isolated function resolveGatedCallAndContinue(SeededFeedback seeded)
+    # + seeded - The decisions just supplied to `resume()`, and the batch state they apply to
+    # + return - Results of every executed call, or a further pause on the calls still undecided
+    private isolated function resolveSuppliedDecisionsAndContinue(SeededFeedback seeded)
             returns (ExecutionResult|ExecutionError)[]|BatchApprovalPending {
-        HumanFeedback?[] decisions = seeded.decisions.clone();
-        decisions[seeded.currentIndex] = seeded.feedback;
-        int? nextGateIndex = findNextGatedIndex(self.agent, self.progress.context, seeded.originalBatch, decisions);
-        if nextGateIndex is int {
+        HumanFeedback?[] decisions = applySuppliedDecisions(seeded.pendingRequests, seeded.decisions,
+                seeded.suppliedDecisions);
+        int[] gatedIndices = findAllGatedIndices(self.agent, self.progress.context, seeded.originalBatch, decisions);
+        if gatedIndices.length() > 0 {
+            // Every position still gated here was already surfaced in `seeded.pendingRequests`
+            // (a partial `resume()` can only ever shrink the gated set, never grow it), so its
+            // `ApprovalRequest` - id included - is reused unchanged rather than re-minted. A
+            // caller that already saw one of these ids (displayed it, logged it) must still be
+            // able to use it after a sibling call in the same batch gets decided.
+            ApprovalRequest[] requests = from int i in gatedIndices
+                select findPendingRequestForIndex(seeded.pendingRequests, i)
+                    ?: buildApprovalRequest(self.agent, seeded.originalBatch[i], self.sessionId, i);
             return {
-                approvalRequired: buildApprovalRequiredError(self.agent, seeded.originalBatch[nextGateIndex],
-                        self.sessionId),
-                currentIndex: nextGateIndex,
+                approvalRequired: error ApprovalRequiredError(
+                        string `Human approval is required to execute ${requests.length()} tool call(s).`,
+                        requests = requests),
                 originalBatch: seeded.originalBatch,
                 decisions
             };
@@ -361,7 +373,7 @@ class Executor {
         SeededFeedback? seeded = self.seededFeedback;
         if seeded is SeededFeedback {
             self.seededFeedback = ();
-            return {value: self.resolveGatedCallAndContinue(seeded)};
+            return {value: self.resolveSuppliedDecisionsAndContinue(seeded)};
         }
         // A reasoning-action cycle starts with an LLM call. Stop before making it if the
         // iteration budget is already spent, so the limit bounds the number of LLM
@@ -506,17 +518,18 @@ isolated function executeToolCall(Agent agent, FunctionCall llmResponse, Context
 }
 
 # A name match that would fail validation never pauses (matches the single-call behavior this
-# module started with): this only returns a position whose call is both named in
+# module started with): this only returns positions whose call is both named in
 # `approvalTools` and would actually pass validation.
 #
 # + agent - Agent being executed
 # + context - Contextual information to be used by the tool during execution
 # + batch - The full batch of tool calls proposed in this LLM turn
 # + decisions - Decisions already gathered for earlier positions in `batch`
-# + return - The next position needing a human decision, or `()` if none remain
-isolated function findNextGatedIndex(Agent agent, Context context, FunctionCall[] batch, HumanFeedback?[] decisions)
-        returns int? {
+# + return - Every position (in order) still needing a human decision
+isolated function findAllGatedIndices(Agent agent, Context context, FunctionCall[] batch, HumanFeedback?[] decisions)
+        returns int[] {
     ToolStore toolStore = agent.toolStore;
+    int[] gated = [];
     foreach int i in 0 ..< batch.length() {
         if decisions[i] is HumanFeedback {
             continue;
@@ -531,19 +544,19 @@ isolated function findNextGatedIndex(Agent agent, Context context, FunctionCall[
                 validateRes = validateTool(parsedOutput, agent.agentCredential, agent.tokenManager, context,
                         toolStore.tools, isMcpTool);
         if validateRes is () {
-            return i;
+            gated.push(i);
         }
         // name matched but would fail validation - not a pause candidate; it'll surface as a
         // normal validation-failure ExecutionError once the resolved batch actually executes,
         // via the ordinary (non-gated) path.
     }
-    return ();
+    return gated;
 }
 
-isolated function buildApprovalRequiredError(Agent agent, FunctionCall call, string sessionId)
-        returns ApprovalRequiredError {
+isolated function buildApprovalRequest(Agent agent, FunctionCall call, string sessionId, int batchIndex)
+        returns ApprovalRequest {
     string? toolDescription = agent.toolStore.getToolDescription(call.name);
-    ApprovalRequest request = {
+    return {
         id: uuid:createRandomUuid(),
         sessionId,
         toolName: call.name,
@@ -553,10 +566,62 @@ isolated function buildApprovalRequiredError(Agent agent, FunctionCall call, str
         requestedAt: time:utcNow(),
         expiresAt: agent.approvalTimeout is decimal
             ? time:utcAddSeconds(time:utcNow(), <decimal>agent.approvalTimeout)
-            : ()
+            : (),
+        batchIndex
     };
-    return error ApprovalRequiredError(string `Human approval is required to execute tool '${call.name}'.`,
-            request = request);
+}
+
+# Merges the caller's `resume()` decisions into `decisions`, applying each supplied decision at
+# the `batchIndex` of the request it targets. Callers must have already validated that every
+# key in `suppliedDecisions` matches a `pendingRequests` id (see `findUnknownApprovalIds`); this
+# function assumes that's already true and simply ignores any decision that doesn't match.
+#
+# + pendingRequests - The requests still awaiting a decision immediately before this call
+# + decisions - Decisions already gathered for positions other than those in `pendingRequests`
+# + suppliedDecisions - The caller's decisions for this `resume()` call, keyed by `ApprovalRequest.id`
+# + return - `decisions`, with `suppliedDecisions` applied at the right positions
+isolated function applySuppliedDecisions(ApprovalRequest[] pendingRequests, HumanFeedback?[] decisions,
+        map<HumanFeedback> suppliedDecisions) returns HumanFeedback?[] {
+    HumanFeedback?[] updated = decisions.clone();
+    foreach ApprovalRequest request in pendingRequests {
+        HumanFeedback? feedback = suppliedDecisions[request.id];
+        if feedback is HumanFeedback {
+            updated[request.batchIndex] = feedback;
+        }
+    }
+    return updated;
+}
+
+# The previously issued `ApprovalRequest` for `batchIndex`, if `pendingRequests` has one. Used
+# to keep a request's `id` (and `requestedAt`/`expiresAt`) stable across a re-pause instead of
+# minting a new one for a call that was already surfaced to the caller.
+#
+# + pendingRequests - The requests surfaced before this `resume()` call
+# + batchIndex - The batch position to look up
+# + return - The matching request, or `()` if `batchIndex` wasn't among `pendingRequests`
+isolated function findPendingRequestForIndex(ApprovalRequest[] pendingRequests, int batchIndex)
+        returns ApprovalRequest? {
+    foreach ApprovalRequest request in pendingRequests {
+        if request.batchIndex == batchIndex {
+            return request;
+        }
+    }
+    return ();
+}
+
+# Every id in `suppliedDecisions` that doesn't match any request still pending, used by
+# `Agent.resumeInternal` to reject a `resume()` call that targets a stale or mistyped id before
+# any state changes.
+#
+# + suppliedDecisions - The caller's decisions for a `resume()` call, keyed by `ApprovalRequest.id`
+# + pendingRequests - The requests currently awaiting a decision
+# + return - The ids in `suppliedDecisions` that don't match any entry in `pendingRequests`
+isolated function findUnknownApprovalIds(map<HumanFeedback> suppliedDecisions, ApprovalRequest[] pendingRequests)
+        returns string[] {
+    string[] pendingIds = from ApprovalRequest request in pendingRequests select request.id;
+    return from string id in suppliedDecisions.keys()
+        where pendingIds.indexOf(id) is ()
+        select id;
 }
 
 # Execute the agent for a given user's query.
@@ -618,19 +683,20 @@ isolated function run(Agent agent, string instruction, string query, int maxIter
         sessionId, 0, [], [], runStartTime, "Agent execution paused for human approval");
 }
 
-# Resume the agent for a given session using the human's decision on a previously paused tool call.
+# Resume the agent for a given session using the human's decisions on one or more previously
+# paused tool calls.
 #
 # + agent - Agent to be executed
 # + pendingApproval - The persisted state of the paused execution
-# + feedback - The human's decision on the paused tool call
+# + suppliedDecisions - The human's decisions for this `resume()` call, keyed by `ApprovalRequest.id`
 # + maxIter - No. of max iterations that agent will run to execute the task
 # + verbose - If true, then print the reasoning steps
 # + agentId - Optional agent identity
 # + sessionId - The ID associated with the memory
 # + context - Context values to be used by the agent to execute the task
 # + return - Returns the execution steps tracing the agent's reasoning and outputs from the tools
-isolated function resumeRun(Agent agent, PendingApproval pendingApproval, HumanFeedback feedback, int maxIter,
-        boolean verbose, string? agentId, string sessionId = DEFAULT_SESSION_ID, Context context = new)
+isolated function resumeRun(Agent agent, PendingApproval pendingApproval, map<HumanFeedback> suppliedDecisions,
+        int maxIter, boolean verbose, string? agentId, string sessionId = DEFAULT_SESSION_ID, Context context = new)
         returns ExecutionTrace {
     string executionId = pendingApproval.executionId;
     log:printDebug("Agent resume loop started",
@@ -645,8 +711,8 @@ isolated function resumeRun(Agent agent, PendingApproval pendingApproval, HumanF
     int historyPrefixLength = pendingApproval.historyPrefixLength;
 
     SeededFeedback seeded = {
-        currentIndex: pendingApproval.currentIndex,
-        feedback,
+        suppliedDecisions,
+        pendingRequests: pendingApproval.pendingRequests,
         originalBatch: pendingApproval.originalBatch,
         decisions: pendingApproval.decisions
     };
@@ -688,7 +754,6 @@ isolated function executeAgentLoop(Agent agent, Executor executor, ChatMessage[]
     ApprovalRequiredError? pendingApproval = ();
     FunctionCall[] pendingOriginalBatch = [];
     HumanFeedback?[] pendingDecisions = [];
-    int pendingCurrentIndex = 0;
     ChatAssistantMessage? finalAssistantMessage = ();
 
     foreach (ExecutionResult|ExecutionError)[]|string|BatchApprovalPending|Error iterationResult in executor {
@@ -706,13 +771,12 @@ isolated function executeAgentLoop(Agent agent, Executor executor, ChatMessage[]
                     executionId = executionId,
                     iteration = cycleNumber,
                     sessionId = sessionId,
-                    toolName = iterationResult.approvalRequired.detail().request.toolName
+                    pendingCount = iterationResult.approvalRequired.detail().requests.length()
             );
             iterationOutputs.push(iterationResult.approvalRequired);
             pendingApproval = iterationResult.approvalRequired;
             pendingOriginalBatch = iterationResult.originalBatch;
             pendingDecisions = iterationResult.decisions;
-            pendingCurrentIndex = iterationResult.currentIndex;
         } else if iterationResult is string {
             content = iterationResult;
             if verbose {
@@ -759,7 +823,7 @@ isolated function executeAgentLoop(Agent agent, Executor executor, ChatMessage[]
             // The interim history is captured entirely within the persisted `PendingApproval` snapshot,
             // so `Memory` is left untouched until the whole logical run completes.
             PendingApproval pendingApprovalRecord = {
-                ...pendingApproval.detail().request,
+                sessionId,
                 executionId,
                 iterationsUsed: iter + executor.getIterationsConsumed(),
                 history: iterationHistory,
@@ -768,8 +832,8 @@ isolated function executeAgentLoop(Agent agent, Executor executor, ChatMessage[]
                 toolCalls: [...priorToolCalls, ...collectToolCalls(executor.progress.executionSteps)],
                 startTime: originalStartTime,
                 originalBatch: pendingOriginalBatch,
-                decisions: pendingDecisions,
-                currentIndex: pendingCurrentIndex
+                pendingRequests: pendingApproval.detail().requests,
+                decisions: pendingDecisions
             };
             Error? putErr = agent.approvalStore.put(pendingApprovalRecord);
             if putErr is Error {

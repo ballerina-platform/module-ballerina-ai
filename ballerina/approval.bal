@@ -34,6 +34,9 @@ public type ApprovalRequest record {|
     time:Utc requestedAt;
     # The time at which the approval expires, if a timeout is configured
     time:Utc expiresAt?;
+    # Position of this call within the batch the LLM proposed in this turn. Used to apply a
+    # `resume()` decision back to the right call, and useful for display ("2 of 3 pending").
+    int batchIndex;
 |};
 
 # Approves the pending tool call, optionally replacing the proposed arguments.
@@ -59,7 +62,8 @@ public type HumanFeedback Approval|Rejection;
 # The pending approval persisted across a pause, sufficient to resume the run
 # without reloading conversation history from `Memory`.
 public type PendingApproval record {|
-    *ApprovalRequest;
+    # The session this pending approval belongs to
+    string sessionId;
     # Identifier of the original execution, carried through to the resumed `Trace`
     string executionId;
     # Number of iterations already consumed in this logical run
@@ -78,12 +82,11 @@ public type PendingApproval record {|
     time:Utc startTime;
     # The full batch of tool calls the LLM proposed in the turn that's currently gated
     FunctionCall[] originalBatch = [];
+    # One request per gated position in `originalBatch` that still has no decision
+    ApprovalRequest[] pendingRequests = [];
     # One slot per entry in `originalBatch`: `()` if not yet decided (or not gated at all),
-    # otherwise the human's decision already gathered for that position. `toolName`/`arguments`/
-    # `toolCallId` (from `*ApprovalRequest`) describe the call at `currentIndex` specifically.
+    # otherwise the human's decision already gathered for that position
     HumanFeedback?[] decisions = [];
-    # Position in `originalBatch` this pending approval's `toolName`/`arguments`/`toolCallId` refers to
-    int currentIndex = 0;
 |};
 
 # Persists pending human approvals across a pause/resume, keyed by session ID.
@@ -202,7 +205,8 @@ isolated function fromStoredIteration(StoredIteration stored) returns Iteration 
 # provably isolated, and `iterations` is `StoredIteration[]` for the same reason (see
 # `StoredIteration`).
 type StoredPendingApproval record {|
-    *ApprovalRequest;
+    # The session this pending approval belongs to
+    string sessionId;
     # Identifier of the original execution, carried through to the resumed `Trace`
     string executionId;
     # Number of iterations already consumed in this logical run
@@ -220,10 +224,10 @@ type StoredPendingApproval record {|
     time:Utc startTime;
     # The full batch of tool calls the LLM proposed in the turn that's currently gated
     FunctionCall[] originalBatch;
+    # One request per gated position in `originalBatch` that still has no decision
+    ApprovalRequest[] pendingRequests;
     # One slot per entry in `originalBatch`: `()` if not yet decided, otherwise the human's decision
     HumanFeedback?[] decisions;
-    # Position in `originalBatch` this pending approval's `toolName`/`arguments`/`toolCallId` refers to
-    int currentIndex;
 |};
 
 # Default in-memory implementation of `ApprovalStore`.
@@ -241,14 +245,7 @@ public isolated class InMemoryApprovalStore {
             return iterations;
         }
         StoredPendingApproval stored = {
-            id: approval.id,
             sessionId: approval.sessionId,
-            toolName: approval.toolName,
-            toolDescription: approval.toolDescription,
-            arguments: approval.arguments,
-            toolCallId: approval.toolCallId,
-            requestedAt: approval.requestedAt,
-            expiresAt: approval.expiresAt,
             executionId: approval.executionId,
             iterationsUsed: approval.iterationsUsed,
             history,
@@ -257,8 +254,8 @@ public isolated class InMemoryApprovalStore {
             toolCalls: approval.toolCalls,
             startTime: approval.startTime,
             originalBatch: approval.originalBatch,
-            decisions: approval.decisions,
-            currentIndex: approval.currentIndex
+            pendingRequests: approval.pendingRequests,
+            decisions: approval.decisions
         };
         lock {
             self.pending[approval.sessionId] = stored.clone();
@@ -297,14 +294,7 @@ public isolated class InMemoryApprovalStore {
 }
 
 isolated function fromStoredPendingApproval(StoredPendingApproval stored) returns PendingApproval => {
-    id: stored.id,
     sessionId: stored.sessionId,
-    toolName: stored.toolName,
-    toolDescription: stored.toolDescription,
-    arguments: stored.arguments,
-    toolCallId: stored.toolCallId,
-    requestedAt: stored.requestedAt,
-    expiresAt: stored.expiresAt,
     executionId: stored.executionId,
     iterationsUsed: stored.iterationsUsed,
     history: stored.history,
@@ -313,8 +303,8 @@ isolated function fromStoredPendingApproval(StoredPendingApproval stored) return
     toolCalls: stored.toolCalls,
     startTime: stored.startTime,
     originalBatch: stored.originalBatch,
-    decisions: stored.decisions,
-    currentIndex: stored.currentIndex
+    pendingRequests: stored.pendingRequests,
+    decisions: stored.decisions
 };
 
 # Human-in-the-loop configuration for an agent.

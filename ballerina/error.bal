@@ -95,11 +95,17 @@ public type MaxIterationExceededError distinct (Error & error<record {|(Executio
 # Represents errors that occur during memory-related operations.  
 public type MemoryError distinct Error;
 
-# Raised when the agent pauses to request human approval for a sensitive tool call.
-public type ApprovalRequiredError distinct (Error & error<record {| ApprovalRequest request; |}>);
+# Raised when the agent pauses to request human approval for one or more sensitive tool calls
+# proposed in the same turn. Usually carries a single entry in `requests`; more than one when
+# the LLM proposed several gated calls together and none of them have a decision yet.
+public type ApprovalRequiredError distinct (Error & error<record {| ApprovalRequest[] requests; |}>);
 
 # Raised on `resume` when the pending approval has expired.
 public type ApprovalExpiredError distinct Error;
 
 # Raised on `resume` when no approval is pending for the session.
 public type ApprovalNotFoundError distinct Error;
+
+# Raised on `resume` when a `map<HumanFeedback>` names an id that is not among the approvals
+# currently pending for the session (a stale id, a typo, or an id from a different session).
+public type UnknownApprovalIdError distinct Error;
