@@ -41,7 +41,9 @@ public type Tool record {|
     # Optional authorization configuration required to invoke this tool.
     AgentIdAuthConfig|Scopes auth?;
     # When `true`, the agent pauses and requests human approval before invoking this tool.
-    boolean requiresApproval = false;
+    # A function value gates only the calls it evaluates to `true` for, based on the proposed
+    # arguments.
+    RequiresApproval requiresApproval = false;
 |};
 
 type ToolInfo record {|

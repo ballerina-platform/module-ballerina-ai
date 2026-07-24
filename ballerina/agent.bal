@@ -131,8 +131,10 @@ public isolated distinct class Agent {
     final readonly & Credential? agentCredential;
     # Store used to persist pending human approvals across pause/resume.
     final ApprovalStore approvalStore;
-    # Names of tools that require human approval before execution.
-    final readonly & string[] approvalTools;
+    # Approval rule for every tool that requires human approval before execution, keyed by
+    # tool name. A tool's own declaration (annotation or `ToolConfig`) takes precedence over an
+    # entry with the same name in `ApprovalConfig.tools`.
+    final readonly & map<RequiresApproval> approvalRules;
     # Optional expiry duration (in seconds) for a pending approval.
     final decimal? approvalTimeout;
     # Indicates whether multiple tool calls from a single LLM response are executed in parallel.
@@ -178,10 +180,27 @@ public isolated distinct class Agent {
                 int:max(self.toolSchemas.length(), DEFAULT_MINIMUM_MAX_ITERATIONS) : maxIter;
             ApprovalConfig? approvalConfig = config.approval;
             self.approvalStore = approvalConfig?.store ?: new InMemoryApprovalStore();
-            string[] annotatedApprovalTools = from Tool tool in self.toolStore.tools
-                where tool.requiresApproval
-                select tool.name;
-            self.approvalTools = [...annotatedApprovalTools, ...(approvalConfig?.tools ?: [])].cloneReadOnly();
+            map<RequiresApproval> approvalRules = {};
+            foreach Tool tool in self.toolStore.tools {
+                if tool.requiresApproval !is false {
+                    approvalRules[tool.name] = tool.requiresApproval;
+                }
+            }
+            string[]|map<RequiresApproval> configApprovalTools = approvalConfig?.tools ?: [];
+            if configApprovalTools is string[] {
+                foreach string name in configApprovalTools {
+                    if !approvalRules.hasKey(name) {
+                        approvalRules[name] = true;
+                    }
+                }
+            } else {
+                foreach [string, RequiresApproval] [name, rule] in configApprovalTools.entries() {
+                    if !approvalRules.hasKey(name) {
+                        approvalRules[name] = rule;
+                    }
+                }
+            }
+            self.approvalRules = approvalRules.cloneReadOnly();
             self.approvalTimeout = approvalConfig?.timeout;
             span.addTools(self.toolStore.getToolsInfo());
             if agentIdentitySpan is observe:CreateAgentIdentitySpan {

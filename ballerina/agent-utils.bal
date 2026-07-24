@@ -200,7 +200,8 @@ class Executor {
         foreach int i in 0 ..< llmResponse.length() {
             decisions.push(());
         }
-        int[] gatedIndices = findAllGatedIndices(self.agent, self.progress.context, llmResponse, decisions);
+        int[] gatedIndices = findAllGatedIndices(self.agent, self.progress.context, self.sessionId,
+                llmResponse, decisions);
         if gatedIndices.length() == 0 {
             boolean isParallel = self.agent.executeToolCallsInParallel && llmResponse.length() > 1;
             return self.executeToolCalls(llmResponse, isParallel);
@@ -277,7 +278,8 @@ class Executor {
             returns (ExecutionResult|ExecutionError)[]|BatchApprovalPending {
         HumanFeedback?[] decisions = applySuppliedDecisions(seeded.pendingRequests, seeded.decisions,
                 seeded.suppliedDecisions);
-        int[] gatedIndices = findAllGatedIndices(self.agent, self.progress.context, seeded.originalBatch, decisions);
+        int[] gatedIndices = findAllGatedIndices(self.agent, self.progress.context, self.sessionId,
+                seeded.originalBatch, decisions);
         if gatedIndices.length() > 0 {
             // Every position still gated here was already surfaced in `seeded.pendingRequests`
             // (a partial `resume()` can only ever shrink the gated set, never grow it), so its
@@ -518,16 +520,17 @@ isolated function executeToolCall(Agent agent, FunctionCall llmResponse, Context
 }
 
 # A name match that would fail validation never pauses (matches the single-call behavior this
-# module started with): this only returns positions whose call is both named in
-# `approvalTools` and would actually pass validation.
+# module started with): this only returns positions whose call both has an approval rule that
+# evaluates to `true` and would actually pass validation.
 #
 # + agent - Agent being executed
 # + context - Contextual information to be used by the tool during execution
+# + sessionId - The session the batch belongs to
 # + batch - The full batch of tool calls proposed in this LLM turn
 # + decisions - Decisions already gathered for earlier positions in `batch`
 # + return - Every position (in order) still needing a human decision
-isolated function findAllGatedIndices(Agent agent, Context context, FunctionCall[] batch, HumanFeedback?[] decisions)
-        returns int[] {
+isolated function findAllGatedIndices(Agent agent, Context context, string sessionId,
+        FunctionCall[] batch, HumanFeedback?[] decisions) returns int[] {
     ToolStore toolStore = agent.toolStore;
     int[] gated = [];
     foreach int i in 0 ..< batch.length() {
@@ -535,7 +538,7 @@ isolated function findAllGatedIndices(Agent agent, Context context, FunctionCall
             continue;
         }
         FunctionCall call = batch[i];
-        if agent.approvalTools.indexOf(call.name) is () {
+        if agent.approvalRules[call.name] is () {
             continue;
         }
         LlmToolResponse parsedOutput = {name: call.name, arguments: call.arguments, id: call.id};
@@ -543,7 +546,7 @@ isolated function findAllGatedIndices(Agent agent, Context context, FunctionCall
         ToolNotFoundError|ToolInvalidInputError|TokenAcquisitionError|TokenValidationError?
                 validateRes = validateTool(parsedOutput, agent.agentCredential, agent.tokenManager, context,
                         toolStore.tools, isMcpTool);
-        if validateRes is () {
+        if validateRes is () && callRequiresApproval(agent, call, sessionId) {
             gated.push(i);
         }
         // name matched but would fail validation - not a pause candidate; it'll surface as a
@@ -551,6 +554,28 @@ isolated function findAllGatedIndices(Agent agent, Context context, FunctionCall
         // via the ordinary (non-gated) path.
     }
     return gated;
+}
+
+# Whether this specific call should pause for approval. A boolean rule gates (or not)
+# unconditionally. A function rule is evaluated against this call's own detail and fails safe to
+# `true` if it panics, so a rule that misbehaves on an unexpected argument shape still pauses
+# the call rather than letting it execute unreviewed.
+#
+# + agent - Agent being executed
+# + call - The specific tool call being evaluated
+# + sessionId - The session the call belongs to
+# + return - `true` if this call should pause for a human decision
+isolated function callRequiresApproval(Agent agent, FunctionCall call, string sessionId) returns boolean {
+    RequiresApproval? rule = agent.approvalRules[call.name];
+    if rule is () {
+        return false;
+    }
+    if rule is boolean {
+        return rule;
+    }
+    ToolCallDetail detail = {toolName: call.name, arguments: (call.arguments ?: {}).cloneReadOnly(), sessionId};
+    boolean|error evaluated = trap rule(detail);
+    return evaluated is error ? true : evaluated;
 }
 
 isolated function buildApprovalRequest(Agent agent, FunctionCall call, string sessionId, int batchIndex)

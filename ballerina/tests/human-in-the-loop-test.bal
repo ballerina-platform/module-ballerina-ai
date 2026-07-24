@@ -869,6 +869,202 @@ function testResumeWithUnknownApprovalIdFailsAndRestoresState() returns error? {
     }
 }
 
+// ---- Conditional (per-call) approval ----
+
+isolated function refundRequiresApprovalAboveThreshold(ToolCallDetail detail) returns boolean {
+    json amount = detail.arguments["amount"];
+    if amount is int {
+        return amount > 100;
+    }
+    if amount is decimal {
+        return amount > 100d;
+    }
+    return false;
+}
+
+final ToolConfig hitlConditionalRefundTool = {
+    name: "issueRefund",
+    description: "Issues a refund for an order",
+    parameters: {
+        properties: {
+            orderId: {'type: STRING},
+            amount: {'type: NUMBER}
+        }
+    },
+    caller: issueRefundMock,
+    requiresApproval: refundRequiresApprovalAboveThreshold
+};
+
+// A plain tool with no local approval rule at all, used to exercise conditional gating
+// supplied purely through `ApprovalConfig.tools` (the mechanism meant for tools that have
+// no local declaration to carry a rule on, e.g. MCP-discovered tools).
+final ToolConfig hitlPlainRefundTool = {
+    name: "plainRefund",
+    description: "Issues a refund for an order",
+    parameters: {
+        properties: {
+            orderId: {'type: STRING},
+            amount: {'type: NUMBER}
+        }
+    },
+    caller: issueRefundMock
+};
+
+// Proposes a single call to whichever tool/arguments it's constructed with, then answers with
+// the resulting observation once one is present in history - mirrors `HitlMockLLM`, just with
+// the proposed call parameterized so one mock can drive every conditional-approval scenario.
+public isolated client class HitlConditionalMockLLM {
+    *ModelProvider;
+    private final readonly & FunctionCall proposedCall;
+
+    isolated function init(FunctionCall proposedCall) {
+        self.proposedCall = proposedCall.cloneReadOnly();
+    }
+
+    isolated remote function chat(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [],
+            string? stop = ()) returns ChatAssistantMessage|Error {
+        ChatMessage[] msgs;
+        if messages is ChatUserMessage {
+            msgs = [messages];
+        } else {
+            msgs = messages;
+        }
+        ChatMessage lastMessage = msgs[msgs.length() - 1];
+        if lastMessage is ChatFunctionMessage {
+            return {role: ASSISTANT, content: "Observed: " + (lastMessage.content ?: "")};
+        }
+        return {role: ASSISTANT, toolCalls: [self.proposedCall]};
+    }
+
+    isolated remote function generate(Prompt prompt, typedesc<anydata> td = <>) returns td|Error = @java:Method {
+        'class: "io.ballerina.lib.ai.MockGenerator"
+    } external;
+}
+
+@test:Config
+function testConditionalApprovalSkipsGateBelowThreshold() returns error? {
+    Agent agent = check new ({
+        systemPrompt: {role: "Test Agent", instructions: "Handle refunds"},
+        model: new HitlConditionalMockLLM({name: "issueRefund", arguments: {"orderId": "ORD-1", "amount": 50}, id: "call-1"}),
+        tools: [hitlConditionalRefundTool]
+    });
+    // $50 is below the tool's own threshold, so the call should run straight through - no pause.
+    string|Error result = agent.run("Refund order ORD-1", "hitl-conditional-below-session");
+    test:assertTrue(result is string, result is Error ? result.message() : result.toString());
+    if result is string {
+        test:assertTrue(result.includes("Refunded 50.0 for ORD-1"), result);
+    }
+}
+
+@test:Config
+function testConditionalApprovalGatesAboveThreshold() returns error? {
+    Agent agent = check new ({
+        systemPrompt: {role: "Test Agent", instructions: "Handle refunds"},
+        model: new HitlConditionalMockLLM({name: "issueRefund", arguments: {"orderId": "ORD-1", "amount": 500}, id: "call-1"}),
+        tools: [hitlConditionalRefundTool]
+    });
+    string sessionId = "hitl-conditional-above-session";
+    // $500 is above the tool's own threshold, so the same tool now pauses for approval.
+    string|Error result = agent.run("Refund order ORD-1", sessionId);
+    test:assertTrue(result is ApprovalRequiredError);
+    if result is ApprovalRequiredError {
+        ApprovalRequest[] requests = result.detail().requests;
+        test:assertEquals(requests.length(), 1);
+        test:assertEquals(requests[0].toolName, "issueRefund");
+        test:assertEquals(requests[0].arguments, {"orderId": "ORD-1", "amount": 500});
+    }
+
+    string|Error resumed = result is ApprovalRequiredError
+        ? agent.resume(sessionId, singleDecision(result, {approver: "tester"}))
+        : result;
+    test:assertTrue(resumed is string);
+    if resumed is string {
+        test:assertTrue(resumed.includes("Refunded 500.0 for ORD-1"), resumed);
+    }
+}
+
+@test:Config
+function testConditionalApprovalViaApprovalConfigMapGatesWhenPredicateTrue() returns error? {
+    Agent agent = check new ({
+        systemPrompt: {role: "Test Agent", instructions: "Handle refunds"},
+        model: new HitlConditionalMockLLM({name: "plainRefund", arguments: {"orderId": "ORD-1", "amount": 500}, id: "call-1"}),
+        tools: [hitlPlainRefundTool],
+        approval: {tools: {"plainRefund": refundRequiresApprovalAboveThreshold}}
+    });
+    // `plainRefund` carries no local rule at all - the predicate supplied through
+    // `ApprovalConfig.tools` is what gates it here.
+    string|Error result = agent.run("Refund order ORD-1", "hitl-conditional-config-gate-session");
+    test:assertTrue(result is ApprovalRequiredError);
+    if result is ApprovalRequiredError {
+        test:assertEquals(result.detail().requests[0].toolName, "plainRefund");
+    }
+}
+
+@test:Config
+function testConditionalApprovalViaApprovalConfigMapSkipsWhenPredicateFalse() returns error? {
+    Agent agent = check new ({
+        systemPrompt: {role: "Test Agent", instructions: "Handle refunds"},
+        model: new HitlConditionalMockLLM({name: "plainRefund", arguments: {"orderId": "ORD-1", "amount": 50}, id: "call-1"}),
+        tools: [hitlPlainRefundTool],
+        approval: {tools: {"plainRefund": refundRequiresApprovalAboveThreshold}}
+    });
+    string|Error result = agent.run("Refund order ORD-1", "hitl-conditional-config-skip-session");
+    test:assertTrue(result is string, result is Error ? result.message() : result.toString());
+    if result is string {
+        test:assertTrue(result.includes("Refunded 50.0 for ORD-1"), result);
+    }
+}
+
+@test:Config
+function testConditionalApprovalLocalRuleTakesPrecedenceOverApprovalConfigMap() returns error? {
+    Agent agent = check new ({
+        systemPrompt: {role: "Test Agent", instructions: "Handle refunds"},
+        model: new HitlConditionalMockLLM({name: "issueRefund", arguments: {"orderId": "ORD-1", "amount": 50}, id: "call-1"}),
+        // `issueRefund` already gates unconditionally via its own `ToolConfig` (`hitlRefundTool`,
+        // `requiresApproval: true`). An `ApprovalConfig.tools` entry for the very same name that
+        // would otherwise never gate must be ignored - the tool's own declaration wins, rather
+        // than the two rules being merged or the config entry overriding it.
+        tools: [hitlRefundTool],
+        approval: {tools: {"issueRefund": false}}
+    });
+    string|Error result = agent.run("Refund order ORD-1", "hitl-conditional-precedence-session");
+    test:assertTrue(result is ApprovalRequiredError);
+}
+
+isolated function panickingRequiresApproval(ToolCallDetail detail) returns boolean {
+    // Deliberately mis-cast to force a panic regardless of the arguments supplied, exercising
+    // the fail-safe path rather than any particular argument shape.
+    json amount = detail.arguments["amount"];
+    map<json> forcedCast = <map<json>>amount;
+    return forcedCast.length() > 0;
+}
+
+final ToolConfig hitlPanickyRefundTool = {
+    name: "issueRefund",
+    description: "Issues a refund for an order",
+    parameters: {
+        properties: {
+            orderId: {'type: STRING},
+            amount: {'type: NUMBER}
+        }
+    },
+    caller: issueRefundMock,
+    requiresApproval: panickingRequiresApproval
+};
+
+@test:Config
+function testConditionalApprovalPanickingRuleFailsSafeToRequiringApproval() returns error? {
+    Agent agent = check new ({
+        systemPrompt: {role: "Test Agent", instructions: "Handle refunds"},
+        model: new HitlConditionalMockLLM({name: "issueRefund", arguments: {"orderId": "ORD-1", "amount": 50}, id: "call-1"}),
+        tools: [hitlPanickyRefundTool]
+    });
+    // A rule that panics while evaluating must not let the call through unreviewed - it should
+    // still pause for approval.
+    string|Error result = agent.run("Refund order ORD-1", "hitl-conditional-panic-session");
+    test:assertTrue(result is ApprovalRequiredError);
+}
+
 @test:Config
 function testGetDestructiveToolNamesFiltersByHint() returns error? {
     // Pure function, no live MCP server needed: only tools explicitly marked

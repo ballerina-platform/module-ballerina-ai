@@ -59,6 +59,36 @@ public type Rejection record {|
 # Represents a human's decision on a pending tool call.
 public type HumanFeedback Approval|Rejection;
 
+# The specific tool call a `RequiresApproval` predicate is deciding about. Passed as a single
+# record (rather than positional arguments) so the input set can grow later without breaking
+# existing predicate signatures.
+#
+# Deliberately excludes the live `Context`: the predicate must be deterministic given a proposed
+# call, since it is re-evaluated on every resume for calls still awaiting a decision. Depending
+# on mutable external state would risk a call being gated at pause but not at resume, or vice
+# versa.
+public type ToolCallDetail record {|
+    # Name of the tool the agent is proposing to call
+    string toolName;
+    # Arguments the LLM proposed for this specific call. A clone, not the same map instance the
+    # agent later executes the call with - mutating it here has no effect on execution.
+    readonly & map<json> arguments;
+    # The session the call belongs to (useful for per-user or per-tenant policy)
+    string sessionId;
+|};
+
+# Determines whether a tool call requires human approval. `true`/`false` gates the tool
+# unconditionally; a function evaluates the specific call the LLM proposed and decides per call.
+#
+# The function runs synchronously, in-line with reasoning, and must be `isolated`. It is
+# re-evaluated on resume for any call still awaiting a decision, so it must be deterministic
+# given its `ToolCallDetail` (same detail produces the same decision). A function that panics
+# fails safe: the call pauses for approval rather than executing unreviewed.
+#
+# + detail - The specific tool call being evaluated
+# + return - `true` if this call should pause for a human decision
+public type RequiresApproval boolean|isolated function (ToolCallDetail detail) returns boolean;
+
 # The pending approval persisted across a pause, sufficient to resume the run
 # without reloading conversation history from `Memory`.
 public type PendingApproval record {|
@@ -312,10 +342,11 @@ public type ApprovalConfig record {|
     # Store used to persist pending approvals across pause/resume.
     # Defaults to an in-memory store.
     ApprovalStore store?;
-    # Extra tools that require approval, addressed by name. Use this for
-    # tools that cannot carry `@ai:AgentTool {requiresApproval: true}`,
-    # such as tools discovered from a remote MCP server.
-    string[] tools = [];
+    # Extra tools that require approval, addressed by name. A `string[]` gates each named tool
+    # unconditionally. A `map<RequiresApproval>` gates each key by its value, which may be a
+    # per-call predicate. Use this for tools that cannot carry
+    # `@ai:AgentTool {requiresApproval: true}`, such as tools discovered from a remote MCP server.
+    string[]|map<RequiresApproval> tools = [];
     # Seconds after which a pending approval expires. `()` means it never expires.
     decimal timeout?;
 |};

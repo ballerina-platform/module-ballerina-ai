@@ -148,8 +148,10 @@ public type ToolConfig record {|
     @display {label: "Authorization Configuration"}
     AgentIdAuthConfig|Scopes auth?;
     # When `true`, the agent pauses and requests human approval before invoking this tool.
+    # A function value gates only the calls it evaluates to `true` for, based on the proposed
+    # arguments.
     @display {label: "Requires Approval"}
-    boolean requiresApproval = false;
+    RequiresApproval requiresApproval = false;
 |};
 
 # Defines the configuration of the Tool annotation.
@@ -166,8 +168,10 @@ public type ToolAnnotationConfig record {|
     @display {label: "Authorization Configuration"}
     AgentIdAuthConfig|Scopes auth?;
     # When `true`, the agent pauses and requests human approval before invoking this tool.
+    # A function value gates only the calls it evaluates to `true` for, based on the proposed
+    # arguments.
     @display {label: "Requires Approval"}
-    boolean requiresApproval = false;
+    RequiresApproval requiresApproval = false;
 |};
 
 # Represents the annotation of a function tool.
