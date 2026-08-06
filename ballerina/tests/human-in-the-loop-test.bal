@@ -62,6 +62,16 @@ public isolated client class HitlMockLLM {
     isolated remote function generate(Prompt prompt, typedesc<anydata> td = <>) returns td|Error = @java:Method {
         'class: "io.ballerina.lib.ai.MockGenerator"
     } external;
+
+    remote function chatStream(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [], string? stop = ())
+        returns stream<ChatCompletionChunk, Error?>|Error {
+        return error Error("chatStream not implemented in HitlMockLLM");
+    }
+
+    remote function generateStream(Prompt prompt, @display {label: "Expected type"} typedesc<anydata> td = <>)
+        returns stream<td, Error?>|Error = @java:Method {
+        'class: "io.ballerina.stdlib.ai.wso2.StreamGenerator"
+    } external;
 }
 
 function newHitlTestAgent() returns Agent|error =>
@@ -146,6 +156,16 @@ public isolated client class HitlStructuredMockLLM {
 
     isolated remote function generate(Prompt prompt, typedesc<anydata> td = <>) returns td|Error = @java:Method {
         'class: "io.ballerina.lib.ai.MockGenerator"
+    } external;
+
+    remote function chatStream(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [], string? stop = ())
+        returns stream<ChatCompletionChunk, Error?>|Error {
+        return error Error("chatStream not implemented in HitlStructuredMockLLM");
+    }
+
+    remote function generateStream(Prompt prompt, @display {label: "Expected type"} typedesc<anydata> td = <>)
+        returns stream<td, Error?>|Error = @java:Method {
+        'class: "io.ballerina.stdlib.ai.wso2.StreamGenerator"
     } external;
 }
 
@@ -288,6 +308,16 @@ public isolated client class MaxIterMockLLM {
     isolated remote function generate(Prompt prompt, typedesc<anydata> td = <>) returns td|Error = @java:Method {
         'class: "io.ballerina.lib.ai.MockGenerator"
     } external;
+
+    remote function chatStream(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [], string? stop = ())
+        returns stream<ChatCompletionChunk, Error?>|Error {
+        return error Error("chatStream not implemented in MaxIterMockLLM");
+    }
+
+    remote function generateStream(Prompt prompt, @display {label: "Expected type"} typedesc<anydata> td = <>)
+        returns stream<td, Error?>|Error = @java:Method {
+        'class: "io.ballerina.stdlib.ai.wso2.StreamGenerator"
+    } external;
 }
 
 @test:Config
@@ -380,6 +410,16 @@ public isolated client class HitlMixedBatchMockLLM {
     isolated remote function generate(Prompt prompt, typedesc<anydata> td = <>) returns td|Error = @java:Method {
         'class: "io.ballerina.lib.ai.MockGenerator"
     } external;
+
+    remote function chatStream(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [], string? stop = ())
+        returns stream<ChatCompletionChunk, Error?>|Error {
+        return error Error("chatStream not implemented in HitlMixedBatchMockLLM");
+    }
+
+    remote function generateStream(Prompt prompt, @display {label: "Expected type"} typedesc<anydata> td = <>)
+        returns stream<td, Error?>|Error = @java:Method {
+        'class: "io.ballerina.stdlib.ai.wso2.StreamGenerator"
+    } external;
 }
 
 @test:Config
@@ -438,6 +478,16 @@ public isolated client class HitlTwoGatesMockLLM {
 
     isolated remote function generate(Prompt prompt, typedesc<anydata> td = <>) returns td|Error = @java:Method {
         'class: "io.ballerina.lib.ai.MockGenerator"
+    } external;
+
+    remote function chatStream(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [], string? stop = ())
+        returns stream<ChatCompletionChunk, Error?>|Error {
+        return error Error("chatStream not implemented in HitlTwoGatesMockLLM");
+    }
+
+    remote function generateStream(Prompt prompt, @display {label: "Expected type"} typedesc<anydata> td = <>)
+        returns stream<td, Error?>|Error = @java:Method {
+        'class: "io.ballerina.stdlib.ai.wso2.StreamGenerator"
     } external;
 }
 
@@ -617,6 +667,16 @@ public isolated client class HitlAuthFailureMockLLM {
 
     isolated remote function generate(Prompt prompt, typedesc<anydata> td = <>) returns td|Error = @java:Method {
         'class: "io.ballerina.lib.ai.MockGenerator"
+    } external;
+
+    remote function chatStream(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [], string? stop = ())
+        returns stream<ChatCompletionChunk, Error?>|Error {
+        return error Error("chatStream not implemented in HitlAuthFailureMockLLM");
+    }
+
+    remote function generateStream(Prompt prompt, @display {label: "Expected type"} typedesc<anydata> td = <>)
+        returns stream<td, Error?>|Error = @java:Method {
+        'class: "io.ballerina.stdlib.ai.wso2.StreamGenerator"
     } external;
 }
 
@@ -894,6 +954,16 @@ public isolated client class HitlConditionalMockLLM {
 
     isolated remote function generate(Prompt prompt, typedesc<anydata> td = <>) returns td|Error = @java:Method {
         'class: "io.ballerina.lib.ai.MockGenerator"
+    } external;
+
+    remote function chatStream(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [], string? stop = ())
+        returns stream<ChatCompletionChunk, Error?>|Error {
+        return error Error("chatStream not implemented in HitlConditionalMockLLM");
+    }
+
+    remote function generateStream(Prompt prompt, @display {label: "Expected type"} typedesc<anydata> td = <>)
+        returns stream<td, Error?>|Error = @java:Method {
+        'class: "io.ballerina.stdlib.ai.wso2.StreamGenerator"
     } external;
 }
 

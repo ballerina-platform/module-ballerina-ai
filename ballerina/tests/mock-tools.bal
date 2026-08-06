@@ -139,6 +139,16 @@ public isolated client class ScriptedMockLLM {
     }
 
     isolated remote function generate(Prompt prompt, typedesc<anydata> td = <>) returns td|Error = external;
+
+    remote function chatStream(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [], string? stop = ())
+        returns stream<ChatCompletionChunk, Error?>|Error {
+        return error Error("chatStream not implemented in ScriptedMockLLM");
+    }
+
+    remote function generateStream(Prompt prompt, @display {label: "Expected type"} typedesc<anydata> td = <>)
+        returns stream<td, Error?>|Error = @java:Method {
+        'class: "io.ballerina.stdlib.ai.wso2.StreamGenerator"
+    } external;
 }
 
 // Returns both the `Search` and `Calculator` tool calls together in a single response, then, once
@@ -187,6 +197,16 @@ public isolated client class MultiToolCallMockLLM {
             return self.chatCallCount;
         }
     }
+
+    remote function chatStream(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [], string? stop = ())
+        returns stream<ChatCompletionChunk, Error?>|Error {
+        return error Error("chatStream not implemented in MultiToolCallMockLLM");
+    }
+
+    remote function generateStream(Prompt prompt, @display {label: "Expected type"} typedesc<anydata> td = <>)
+        returns stream<td, Error?>|Error = @java:Method {
+        'class: "io.ballerina.stdlib.ai.wso2.StreamGenerator"
+    } external;
 }
 
 // Always responds with a `Search` tool call and never produces a final answer, so an
@@ -222,6 +242,16 @@ public isolated client class NeverAnsweringMockLLM {
             return self.chatCallCount;
         }
     }
+
+    remote function chatStream(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [], string? stop = ())
+        returns stream<ChatCompletionChunk, Error?>|Error {
+        return error Error("chatStream not implemented in NeverAnsweringMockLLM");
+    }
+
+    remote function generateStream(Prompt prompt, @display {label: "Expected type"} typedesc<anydata> td = <>)
+        returns stream<td, Error?>|Error = @java:Method {
+        'class: "io.ballerina.stdlib.ai.wso2.StreamGenerator"
+    } external;
 }
 
 isolated function getChatAssistantMessageContent(int queryLevel) returns string|LlmError {
