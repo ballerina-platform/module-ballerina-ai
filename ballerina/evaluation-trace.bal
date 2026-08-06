@@ -46,12 +46,13 @@ public type ToolSchema record {|
     map<json> parametersSchema?;
 |};
 
-# Represents a single execution step of an agent iteration.
+# Represents a single reasoning-action cycle of an agent execution.
 public type Iteration record {|
     # History of chat messages up to this iteration
     ChatMessage[] history;
-    # Output produced by the agent in this iteration
-    ChatAssistantMessage|ChatFunctionMessage|Error output;
+    # Outputs produced by the agent in this iteration. Contains one entry per tool call
+    # executed in the reasoning-action cycle, or a single assistant message or error
+    (ChatAssistantMessage|ChatFunctionMessage|Error)[] output;
     # Start time of the iteration
     time:Utc startTime;
     # End time of the iteration

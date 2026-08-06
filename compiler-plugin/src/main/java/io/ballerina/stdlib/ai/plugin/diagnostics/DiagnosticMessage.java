@@ -38,6 +38,8 @@ public enum DiagnosticMessage {
             "supported; expected `Scopes` type"),
     ERROR_110("Invalid auth configuration: `Scopes` type is not " +
             "supported; expected `AgentIdAuthConfig` type"),
+    ERROR_111("the `requiresApproval` predicate for the tool ''{0}'' must have the same parameter " +
+            "signature as the tool and return `boolean`."),
     WARNING_107("unable to determine a valid port from the expression ''{0}''." +
             " Default port ''{1}'' will be used as the server port in the generated OpenAPI specification."),
     WARNING_108("unable to determine a valid port for the 'ai:ChatService'." +

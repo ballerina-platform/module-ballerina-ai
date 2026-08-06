@@ -40,7 +40,12 @@ public type Tool record {|
     isolated function caller;
     # Optional authorization configuration required to invoke this tool.
     AgentIdAuthConfig|Scopes auth?;
+    # When `true`, the agent pauses and requests human approval before invoking this tool.
+    # A function value gates only the calls it evaluates to `true` for, based on the proposed
+    # arguments.
+    RequiresApproval requiresApproval = false;
 |};
+
 type ToolInfo record {|
     string name;
     string description;
@@ -129,13 +134,12 @@ public isolated class ToolStore {
             arguments = inputValues
         );
         isolated function caller = self.tools.get(name).caller;
-        ToolExecutionResult|error execution;
-        lock {
-            readonly & map<json> toolInput = self.isMcpTool(name)
-                ? {params: {name, arguments: inputValues}}.cloneReadOnly()
-                : inputValues.cloneReadOnly();
-            execution = trap executeTool(caller, toolInput, context);
-        }
+        // The tool is executed outside any `lock` statement so that multiple tool calls can
+        // run concurrently on the same tool store when parallel tool calling is enabled.
+        readonly & map<json> toolInput = self.isMcpTool(name)
+            ? {params: {name, arguments: inputValues}}.cloneReadOnly()
+            : inputValues.cloneReadOnly();
+        ToolExecutionResult|error execution = trap executeTool(caller, toolInput, context);
         if execution is error {
             log:printDebug("Tool execution failed",
                 execution,
@@ -225,7 +229,8 @@ isolated function getToolConfig(FunctionTool tool) returns ToolConfig|Error {
             description: check config?.description.ensureType(),
             parameters: check config?.parameters.ensureType(),
             caller: tool,
-            auth: check config?.auth.ensureType()
+            auth: check config?.auth.ensureType(),
+            requiresApproval: config.requiresApproval
         };
     } on fail error e {
         return error Error("Unable to register the function '" + getFunctionName(tool) + "' as agent tool", e);
@@ -307,7 +312,8 @@ isolated function registerTool(map<Tool & readonly> toolMap, ToolConfig[] tools)
             variables,
             constants,
             caller: tool.caller,
-            auth: tool.auth
+            auth: tool.auth,
+            requiresApproval: tool.requiresApproval
         };
         toolMap[name] = agentTool.cloneReadOnly();
     }
@@ -372,12 +378,21 @@ isolated function mergeInputs(map<json>? inputs, map<json> constants) returns ma
     return inputs;
 }
 
-isolated function validateTool(LlmToolResponse action, Credential? agentCredential, cache:Cache tokenManager, 
-    Context context, map<Tool> & readonly tool, boolean isMcpTool) returns 
-    ToolNotFoundError|ToolInvalidInputError|TokenAcquisitionError|TokenValidationError? {
+# Checks the tool name resolves and its inputs merge against the tool's constants, without any
+# side effects. Pure by design so it can double as a "would this call pass name/input
+# resolution?" probe (e.g. when deciding whether a call should pause for human approval) without
+# acquiring tokens or making network calls. Authorization is intentionally left to `validateTool`.
+# Note this does not perform full parameter-schema validation - that (and the actual constant
+# merge used for execution) happens on the execution path in `ToolStore.execute`.
+#
+# + action - The proposed tool call (name and arguments)
+# + tool - The available tools
+# + agentId - The agent id, used only for diagnostic logging
+# + return - `()` if the name resolves and inputs merge, otherwise the corresponding error
+isolated function validateToolNameAndInput(LlmToolResponse action, map<Tool> & readonly tool, string? agentId)
+        returns ToolNotFoundError|ToolInvalidInputError? {
     string toolName = action.name;
     map<json>? inputs = action.arguments;
-    string? agentId = agentCredential is Credential ? agentCredential.id : ();
     if !tool.hasKey(toolName) {
         log:printDebug("Tool not found",
             agentId = agentId,
@@ -388,7 +403,10 @@ isolated function validateTool(LlmToolResponse action, Credential? agentCredenti
             instruction = string `Tool "${toolName}" does not exists.`
             + string ` Use a tool from the list: ${tool.keys().toString()}}`);
     }
-    map<json>|error inputValues = mergeInputs(inputs, tool.get(toolName).constants);
+    // `mergeInputs` mutates its input map in place; clone first so this probe never alters the
+    // caller's proposed arguments (they feed the approval request shown to the human and are
+    // re-merged independently at execution time).
+    map<json>|error inputValues = mergeInputs(inputs.clone(), tool.get(toolName).constants);
     if inputValues is error {
         log:printDebug("Tool input validation failed",
             inputValues,
@@ -397,16 +415,23 @@ isolated function validateTool(LlmToolResponse action, Credential? agentCredenti
         );
         string instruction = string `Tool "${toolName}"  execution failed due to invalid inputs provided.` +
             string ` Use the schema to provide inputs: ${tool.get(toolName).variables.toString()}`;
-        return error ToolInvalidInputError("Tool is provided with invalid inputs.", inputValues, 
+        return error ToolInvalidInputError("Tool is provided with invalid inputs.", inputValues,
             toolName = toolName, inputs = inputs ?: (), instruction = instruction);
     }
+}
+
+isolated function validateTool(LlmToolResponse action, Credential? agentCredential, cache:Cache tokenManager,
+    Context context, map<Tool> & readonly tool, boolean isMcpTool) returns
+    ToolNotFoundError|ToolInvalidInputError|TokenAcquisitionError|TokenValidationError? {
+    string toolName = action.name;
+    string? agentId = agentCredential is Credential ? agentCredential.id : ();
+    check validateToolNameAndInput(action, tool, agentId);
 
     check authorizeToolInvocation(agentCredential, tokenManager, context, tool, toolName);
-    
+
     log:printDebug("Executing tool",
         agentId = agentId,
-        toolName = toolName,
-        arguments = inputValues.keys()
+        toolName = toolName
     );
 }
 

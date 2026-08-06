@@ -16,17 +16,17 @@
 
 import ai.observe;
 
-import ballerina/cache;
 import ballerina/io;
 import ballerina/log;
 import ballerina/time;
+import ballerina/uuid;
 
 # Execution progress record
 type ExecutionProgress record {|
     # Unique identifier for this execution
     string executionId;
     # Question to the agent
-    string query;
+    string|Prompt query;
     # Instruction used by the agent during the execution
     string instruction;
     # Execution history of actions performed so far in the current interaction
@@ -35,6 +35,9 @@ type ExecutionProgress record {|
     Context context;
     # History of previous interactions with the agent, including the latest user query
     ChatMessage[] history;
+    # Schema for the expected structured final answer. When set, the agent exposes a final-answer tool
+    # carrying this schema so the model returns its answer as a structured tool call.
+    ResponseSchema? responseSchema = ();
 |};
 
 # Execution step information
@@ -62,12 +65,6 @@ public type ExecutionError record {|
     string observation;
 |};
 
-# An chat response by the LLM
-type LlmChatResponse record {|
-    # A text response to the question
-    string content;
-|};
-
 # Tool selected by LLM to be performed by the agent
 public type LlmToolResponse record {|
     # Name of the tool to selected
@@ -84,52 +81,73 @@ public type ToolOutput record {|
     anydata|error value;
 |};
 
-type BaseAgent distinct isolated object {
-    ModelProvider model;
-    ToolStore toolStore;
-    Memory memory;
-    boolean stateless;
-    cache:Cache tokenManager;
-    Credential? agentCredential;
+# A previously proposed batch of tool calls, one or more of which are still awaiting a human
+# decision. When set, the next step applies the caller's resume decisions to whichever
+# positions they target (and continues gathering decisions for, or executing, the rest of the
+# same batch) instead of reasoning with the LLM.
+type SeededFeedback record {|
+    # The caller's resume decisions, keyed by `ApprovalRequest.id`. Already validated (in
+    # `Agent.resumeInternal`) to reference only ids present in `pendingRequests`.
+    map<HumanResponse> suppliedDecisions;
+    # The requests still awaiting a decision immediately before this resume call
+    ApprovalRequest[] pendingRequests;
+    # The full batch of tool calls the LLM proposed in this turn
+    FunctionCall[] originalBatch;
+    # Decisions already gathered for positions other than those in `pendingRequests`
+    HumanResponse?[] decisions;
+|};
 
-    # Parse the llm response and extract the tool to be executed.
-    #
-    # + llmResponse - Raw LLM response
-    # + return - A record containing the tool decided by the LLM, chat response or an error if the response is invalid
-    isolated function parseLlmResponse(json llmResponse) returns LlmToolResponse|LlmChatResponse|LlmInvalidGenerationError;
+# Internal plumbing only - never returned to `Agent` callers, not wired into the `Error`
+# hierarchy. A pause during decision-gathering for a batch of proposed tool calls, plus
+# everything needed to ask about the remaining gated calls or (once every gated call in the
+# batch has a decision) execute the whole resolved batch.
+type BatchApprovalPending record {|
+    # The pause itself, carrying a request for every still-undecided gated call in the batch
+    ApprovalRequiredError approvalRequired;
+    # The full batch of tool calls the LLM proposed in this turn
+    FunctionCall[] originalBatch;
+    # Decisions gathered so far for positions other than the ones still pending
+    HumanResponse?[] decisions;
+|};
 
-    # Use LLM to decide the next tool/step.
-    #
-    # + progress - Execution progress with the current query and execution history
-    # + sessionId - The ID associated with the agent memory
-    # + return - LLM response containing the tool or chat response (or an error if the call fails)
-    isolated function selectNextTool(ExecutionProgress progress, string sessionId = DEFAULT_SESSION_ID) returns json|Error;
-
-    isolated function run(string query, string instruction, int maxIter = 5, boolean verbose = true,
-            string sessionId = DEFAULT_SESSION_ID, Context context = new, string executionId = DEFAULT_EXECUTION_ID)
-            returns ExecutionTrace;
-};
-
-# An executor to perform step-by-step execution of the agent.
+# An executor that runs the agent's reasoning-action cycles one at a time. Each cycle is one LLM
+# call (reason) followed by the execution of every tool call returned in that response (act) -
+# except when the response includes a call gated by `@ai:AgentTool {requiresApproval: true}` (or
+# `ToolConfig.requiresApproval`), in which case nothing in the batch executes until a human has
+# decided every gated call in it (see `act`).
 class Executor {
     *object:Iterable;
     private boolean isCompleted = false;
     private final string sessionId;
-    private final BaseAgent agent;
+    private final Agent agent;
     # Contains the current execution progress for the agent and the query
     public ExecutionProgress progress;
     private string? agentId = ();
+    # A previously proposed batch awaiting a human decision on one of its calls. When set, the
+    # next step is resolved from this decision instead of reasoning with the LLM.
+    private SeededFeedback? seededFeedback;
+    # Number of reasoning-action cycles the executor may still run.
+    private int remainingIterations;
+    # Set when the executor stops because the iteration limit was reached without a final answer.
+    private boolean maxIterationsExceeded = false;
+    # Number of real `reason` calls this executor instance has made.
+    private int iterationsConsumed = 0;
 
     # Initialize the executor with the agent and the query.
     #
     # + agent - Agent instance to be executed
-    # + query - Natural language query to be executed by the agent
-    # + history - Execution history of the agent (This is used to continue an execution paused without completing)
-    # + context - Contextual information to be used by the tools during the execution
-    isolated function init(BaseAgent agent, string sessionId, *ExecutionProgress progress) {
+    # + sessionId - The ID associated with the agent memory
+    # + maxIter - Maximum number of reasoning-action cycles allowed for this execution
+    # + seededFeedback - A pending batch and the human's decision on its current gated call, used
+    # to resume a paused execution
+    # + progress - Execution progress of the agent (This is used to continue an execution paused without completing)
+    isolated function init(Agent agent, string sessionId, int maxIter, SeededFeedback? seededFeedback = (),
+            *ExecutionProgress progress) {
         self.sessionId = sessionId;
         self.agent = agent;
+        self.remainingIterations = maxIter;
         self.progress = progress;
+        self.seededFeedback = seededFeedback;
         Credential? agentCredential = agent.agentCredential;
         if agentCredential is Credential {
             self.agentId = agentCredential.id;
@@ -146,162 +164,183 @@ class Executor {
     # Reason the next step of the agent.
     #
     # + return - generated LLM response during the reasoning or an error if the reasoning fails
-    public isolated function reason() returns json|Error {
+    public isolated function reason() returns FunctionCall[]|string|Error {
         if self.isCompleted {
             log:printError("Task is already completed. No more reasoning is needed.",
-                agentId = self.agentId,
-                executionId = self.progress.executionId
+                    agentId = self.agentId,
+                    executionId = self.progress.executionId
             );
             return error TaskCompletedError("Task is already completed. No more reasoning is needed.");
         }
         log:printDebug("LLM reasoning started",
-            agentId = self.agentId,
-            executionId = self.progress.executionId,
-            sessionId = self.sessionId,
-            history = self.progress.executionSteps.toString()
+                agentId = self.agentId,
+                executionId = self.progress.executionId,
+                sessionId = self.sessionId,
+                history = self.progress.executionSteps.toString()
         );
-        return check self.agent.selectNextTool(self.progress, self.sessionId);
+        return check self.agent.selectNextTools(self.progress, self.sessionId);
     }
 
-    # Execute the next step of the agent.
+    # Execute the action decided by the LLM during the reasoning. If any call in the batch is
+    # gated, nothing executes yet - a decision is gathered for every gated call first (see `next`).
     #
-    # + llmResponse - LLM response containing the tool to be executed and the raw LLM output
-    # + return - Observations from the tool can be any|error|null
-    public isolated function act(json llmResponse) returns ExecutionResult|LlmChatResponse|ExecutionError{
-        LlmToolResponse|LlmChatResponse|LlmInvalidGenerationError parsedOutput = self.agent.parseLlmResponse(llmResponse);
-        if parsedOutput is LlmChatResponse {
+    # + llmResponse - LLM response containing a chat response or the tool calls to be executed
+    # + return - Results of every executed tool call, the final chat response, or a pause
+    # awaiting a human decision on every gated call found in the batch
+    public isolated function act(FunctionCall[]|string llmResponse)
+            returns (ExecutionResult|ExecutionError)[]|string|BatchApprovalPending {
+        if llmResponse is string {
             log:printDebug("Parsed LLM response as chat response",
-                agentId = self.agentId,
-                executionId = self.progress.executionId,
-                sessionId = self.sessionId,
-                response = parsedOutput.content
-            );
-            self.isCompleted = true;
-            return parsedOutput;
-        }
-
-        anydata observation;
-        ExecutionResult|ExecutionError executionResult;
-        if parsedOutput is LlmToolResponse {
-            string toolName = parsedOutput.name;
-            log:printDebug("Parsed LLM response as tool call",
-                agentId = self.agentId,
-                executionId = self.progress.executionId,
-                sessionId = self.sessionId,
-                toolName = toolName,
-                arguments = parsedOutput.arguments
-            );
-            observe:ExecuteToolSpan span = observe:createExecuteToolSpan(toolName);
-            string? toolCallId = parsedOutput.id;
-            if toolCallId is string {
-                span.addId(toolCallId);
-            }
-            ToolStore toolStore = self.agent.toolStore;
-            string? toolDescription = toolStore.getToolDescription(toolName);
-            if toolDescription is string {
-                span.addDescription(toolDescription);
-            }
-            boolean isMcpTool = toolStore.isMcpTool(toolName);
-            span.addType(isMcpTool ? observe:EXTENTION : observe:FUNCTION);
-            span.addArguments(parsedOutput.arguments);
-            ToolNotFoundError|ToolInvalidInputError|TokenAcquisitionError|TokenValidationError? 
-                    validateRes = validateTool(parsedOutput, self.agent.agentCredential, 
-                    self.agent.tokenManager, self.progress.context, toolStore.tools, isMcpTool);
-            if validateRes is Error {
-                log:printError("Tool validation failed",
                     agentId = self.agentId,
                     executionId = self.progress.executionId,
                     sessionId = self.sessionId,
-                    toolName = toolName,
-                    'error = validateRes
-                );
-                if validateRes is ToolNotFoundError|ToolInvalidInputError {
-                    observation = "Tool extraction failed due to tool validation"; 
-                    executionResult = {
-                        llmResponse,
-                        'error: validateRes,
-                        observation: observation.toString()
-                    };
-                    Error toolExecutionError = error Error(observation.toString(), details = {parsedOutput});
-                    span.close(toolExecutionError); 
-                } else {
-                    observation = "Tool execution failed while attempting to execute the selected tool: "
-                        + validateRes.message();
-                    executionResult = {
-                        llmResponse,
-                        'error: error UnauthorizedError (
-                            string `Tool execution failed: ${validateRes.message()}`, 
-                            details = { parsedOutput }, cause = validateRes.cause(), toolName= toolName),
-                        observation: observation.toString()
-                    };
-                    UnauthorizedError toolExecutionError = error UnauthorizedError(observation.toString(), 
-                        details = {parsedOutput});
-                    span.close(toolExecutionError); 
-                }
-            } else {
-                ToolOutput|ToolExecutionError|LlmInvalidGenerationError output = toolStore.execute(parsedOutput,
-                    self.progress.context);
-                if output is Error {
-                    if output is ToolNotFoundError {
-                        observation = "Tool is not found. Please check the tool name and retry.";
-                    } else if output is ToolInvalidInputError {
-                        observation = "Tool execution failed due to invalid inputs. Retry with correct inputs.";
-                    } else {
-                        observation = "Tool execution failed. Retry with correct inputs.";
-                    }
-                    observation = string `${observation.toString()} <detail>${output.toString()}</detail>`;
-                    executionResult = {
-                        llmResponse,
-                        'error: output,
-                        observation: observation.toString()
-                    };
-                    log:printError("Tool execution resulted in error",
-                        agentId = self.agentId,
-                        executionId = self.progress.executionId,
-                        observation = observation.toString(),
-                        sessionId = self.sessionId,
-                        toolName = toolName
-                    );
-
-                    Error toolExecutionError = error Error(observation.toString(), details = {parsedOutput});
-                    span.close(toolExecutionError);
-                } else {
-                    anydata|error value = output.value;
-                    observation = value is error ? value.toString() : value;
-                    log:printDebug("Tool execution successful",
-                        agentId = self.agentId,
-                        executionId = self.progress.executionId,
-                        sessionId = self.sessionId,
-                        toolName = toolName
-                    );
-                    executionResult = {
-                        tool: parsedOutput,
-                        observation: value
-                    };
-
-                    span.addOutput(observation);
-                    span.close();
-                }
-            }
-        } else {
-            log:printDebug("Failed to parse LLM response as valid tool or chat",
-                agentId = self.agentId,
-                executionId = self.progress.executionId,
-                sessionId = self.sessionId,
-                errorMessage = parsedOutput.message()
+                    response = llmResponse
             );
-            observation = "Tool extraction failed due to invalid JSON_BLOB. Retry with correct JSON_BLOB.";
-            executionResult = {
-                llmResponse,
-                'error: parsedOutput,
-                observation: observation.toString()
+            self.isCompleted = true;
+            return llmResponse;
+        }
+        HumanResponse?[] decisions = [];
+        foreach int i in 0 ..< llmResponse.length() {
+            decisions.push(());
+        }
+        int[] gatedIndices = findAllGatedIndices(self.agent, llmResponse, decisions);
+        if gatedIndices.length() == 0 {
+            boolean isParallel = self.agent.executeToolCallsInParallel && llmResponse.length() > 1;
+            return self.executeToolCalls(llmResponse, isParallel);
+        }
+        ApprovalRequest[] requests = from int i in gatedIndices
+            select buildApprovalRequest(self.agent, llmResponse[i], self.sessionId, i);
+        return {
+            approvalRequired: error ApprovalRequiredError(
+                    string `Human approval is required to execute ${requests.length()} tool call(s).`,
+                    requests = requests),
+            originalBatch: llmResponse,
+            decisions
+        };
+    }
+
+    private isolated function executeToolCalls(FunctionCall[] toolCalls, boolean isParallel)
+            returns (ExecutionResult|ExecutionError)[] {
+        [ExecutionResult|ExecutionError, anydata][] executionOutcomes = isParallel
+            ? self.executeToolCallsParallelly(toolCalls)
+            : self.executeToolCallsSequentially(toolCalls);
+        (ExecutionResult|ExecutionError)[] executionResults = [];
+        foreach int i in 0 ..< executionOutcomes.length() {
+            var [executionResult, observation] = executionOutcomes[i];
+            self.update({llmResponse: toolCalls[i], observation});
+            executionResults.push(executionResult);
+        }
+        return executionResults;
+    }
+
+    private isolated function executeToolCallsParallelly(FunctionCall[] toolCalls)
+            returns [ExecutionResult|ExecutionError, anydata][] {
+        final Agent agent = self.agent;
+        final Context context = self.progress.context;
+        final string? agentId = self.agentId;
+        final string executionId = self.progress.executionId;
+        final string sessionId = self.sessionId;
+        future<[ExecutionResult|ExecutionError, anydata]>[] executions = [];
+        foreach FunctionCall toolCall in toolCalls {
+            final readonly & FunctionCall clonedToolCall = toolCall.cloneReadOnly();
+            var execution = start executeToolCall(agent, clonedToolCall, context, agentId, executionId, sessionId);
+            executions.push(execution);
+        }
+        [ExecutionResult|ExecutionError, anydata][] executionOutcomes = [];
+        foreach var execution in executions {
+            [ExecutionResult|ExecutionError, anydata]|error executionOutcome = wait execution;
+            if executionOutcome is error {
+                // `executeToolCall` never returns an error; a waiting error means the strand
+                // terminated abnormally, which mirrors a panic during sequential execution.
+                panic executionOutcome;
+            }
+            executionOutcomes.push(executionOutcome);
+        }
+        return executionOutcomes;
+    }
+
+    private isolated function executeToolCallsSequentially(FunctionCall[] toolCalls)
+            returns [ExecutionResult|ExecutionError, anydata][] {
+        [ExecutionResult|ExecutionError, anydata][] executionOutcomes = [];
+        foreach FunctionCall toolCall in toolCalls {
+            var executionOutcome = executeToolCall(self.agent, toolCall, self.progress.context,
+                    self.agentId, self.progress.executionId, self.sessionId);
+            executionOutcomes.push(executionOutcome);
+        }
+        return executionOutcomes;
+    }
+
+    # Applies the caller's supplied decisions to the positions they target, then either asks
+    # about whichever gated calls in the same original batch are still undecided or - once every
+    # gated call has a decision - executes the whole batch.
+    #
+    # + seeded - The decisions just supplied to resume, and the batch state they apply to
+    # + return - Results of every executed call, or a further pause on the calls still undecided
+    private isolated function resolveSuppliedDecisionsAndContinue(SeededFeedback seeded)
+            returns (ExecutionResult|ExecutionError)[]|BatchApprovalPending {
+        HumanResponse?[] decisions = applySuppliedDecisions(seeded.pendingRequests, seeded.decisions,
+                seeded.suppliedDecisions);
+        int[] gatedIndices = findAllGatedIndices(self.agent, seeded.originalBatch, decisions);
+        if gatedIndices.length() > 0 {
+            // Every position still gated here was already surfaced in `seeded.pendingRequests`
+            // (a partial resume can only ever shrink the gated set, never grow it), so its
+            // `ApprovalRequest` - id included - is reused unchanged rather than re-minted. A
+            // caller that already saw one of these ids (displayed it, logged it) must still be
+            // able to use it after a sibling call in the same batch gets decided.
+            ApprovalRequest[] requests = from int i in gatedIndices
+                select findPendingRequestForIndex(seeded.pendingRequests, i)
+                    ?: buildApprovalRequest(self.agent, seeded.originalBatch[i], self.sessionId, i);
+            return {
+                approvalRequired: error ApprovalRequiredError(
+                        string `Human approval is required to execute ${requests.length()} tool call(s).`,
+                        requests = requests),
+                originalBatch: seeded.originalBatch,
+                decisions
             };
         }
-        self.update({
-            llmResponse,
-            observation
-        });
-        return executionResult;
+        return self.executeResolvedBatch(seeded.originalBatch, decisions);
+    }
+
+    # Every gated call in the batch now has a decision. Executes the whole batch as one unit:
+    # rejected calls are synthesized (never actually invoked - `.toJson()`'d into `self.update`,
+    # matching the pre-existing rejection behavior, so `collectToolCalls` continues to exclude
+    # them from the trace's tool-calls summary); everything else (safe calls, and approved calls)
+    # runs through the ordinary execution path, in original relative order, with full parallelism
+    # if configured.
+    #
+    # + originalBatch - The full batch of tool calls the LLM proposed in this turn
+    # + decisions - A decision for every gated position in `originalBatch`
+    # + return - Results of every call in the batch, in original order
+    private isolated function executeResolvedBatch(FunctionCall[] originalBatch, HumanResponse?[] decisions)
+            returns (ExecutionResult|ExecutionError)[] {
+        FunctionCall[] toExecute = [];
+        int[] originalIndices = [];
+        (ExecutionResult|ExecutionError)?[] resultsByIndex = [];
+        foreach int _ in 0 ..< originalBatch.length() {
+            resultsByIndex.push(());
+        }
+        foreach int i in 0 ..< originalBatch.length() {
+            HumanResponse? decision = decisions[i];
+            FunctionCall call = originalBatch[i];
+            if decision is HumanResponse && decision.decision == REJECT {
+                string observation = string `The human reviewer rejected this tool call.` +
+                    (decision.reason is string ? string ` Reason: ${decision.reason ?: ""}` : "");
+                LlmToolResponse tool = {name: call.name, arguments: call.arguments, id: call.id};
+                self.update({llmResponse: call.toJson(), observation});
+                resultsByIndex[i] = {tool, observation};
+            } else {
+                toExecute.push(call);
+                originalIndices.push(i);
+            }
+        }
+        if toExecute.length() > 0 {
+            boolean isParallel = self.agent.executeToolCallsInParallel && toExecute.length() > 1;
+            (ExecutionResult|ExecutionError)[] executed = self.executeToolCalls(toExecute, isParallel);
+            foreach int k in 0 ..< executed.length() {
+                resultsByIndex[originalIndices[k]] = executed[k];
+            }
+        }
+        return from ExecutionResult|ExecutionError? r in resultsByIndex select <ExecutionResult|ExecutionError>r;
     }
 
     # Update the agent with an execution step.
@@ -311,57 +350,364 @@ class Executor {
         self.progress.executionSteps.push(step);
     }
 
-    # Iterate over the agent's execution steps.
+    # Iterate over the agent's reasoning-action cycles.
     #
-    # + return - a record with the execution step or an error if the agent failed
+    # + return - a record with the results of a reasoning-action cycle or an error if the agent failed
     public function iterator() returns object {
-        public function next() returns record {|ExecutionResult|LlmChatResponse|ExecutionError|Error value;|}?;
+        public function next()
+            returns record {|(ExecutionResult|ExecutionError)[]|string|BatchApprovalPending|Error value;|}?;
     } {
         return self;
     }
 
-    # Reason and execute the next step of the agent.
+    # Run the next reasoning-action cycle of the agent: reason with the LLM once and execute
+    # every tool call returned in that response - or, if resuming, continue gathering decisions
+    # for (or executing) a previously-paused batch.
     #
-    # + return - A record with ExecutionResult, chat response or an error 
-    public isolated function next() returns record {|ExecutionResult|LlmChatResponse|ExecutionError|Error value;|}? {
+    # + return - A record with the results of the executed tool calls, the final chat response,
+    # a pause awaiting a human decision, or an error; nil once the execution has completed
+    public isolated function next()
+            returns record {|(ExecutionResult|ExecutionError)[]|string|BatchApprovalPending|Error value;|}? {
         if self.isCompleted {
             return ();
         }
-        json|Error llmResponse = self.reason();
+        SeededFeedback? seeded = self.seededFeedback;
+        if seeded is SeededFeedback {
+            self.seededFeedback = ();
+            return {value: self.resolveSuppliedDecisionsAndContinue(seeded)};
+        }
+        // A reasoning-action cycle starts with an LLM call. Stop before making it if the
+        // iteration budget is already spent, so the limit bounds the number of LLM
+        // round-trips rather than the number of tool calls executed.
+        if self.remainingIterations <= 0 {
+            self.isCompleted = true;
+            self.maxIterationsExceeded = true;
+            return ();
+        }
+        self.remainingIterations -= 1;
+        self.iterationsConsumed += 1;
+        FunctionCall[]|string|Error llmResponse = self.reason();
         if llmResponse is Error {
             return {value: llmResponse};
         }
         return {value: self.act(llmResponse)};
     }
+
+    # Checks whether the execution stopped due to reaching the maximum number of
+    # reasoning-action cycles without producing a final answer.
+    #
+    # + return - True if the iteration limit was exceeded, false otherwise
+    public isolated function isMaxIterationsExceeded() returns boolean {
+        return self.maxIterationsExceeded;
+    }
+
+    # Number of real `reason`/LLM calls this executor instance has made (never incremented for
+    # a seeded/decision-gathering step). Used by `executeAgentLoop` to compute
+    # `PendingApproval.iterationsUsed` correctly even when one original LLM turn's batch spans
+    # multiple pauses (gathering several decisions) without any new reasoning in between.
+    #
+    # + return - Number of `reason` calls made by this executor instance
+    public isolated function getIterationsConsumed() returns int {
+        return self.iterationsConsumed;
+    }
+}
+
+isolated function executeToolCall(Agent agent, FunctionCall llmResponse, Context context, string? agentId,
+        string executionId, string sessionId) returns [ExecutionResult|ExecutionError, anydata] {
+    anydata observation;
+    ExecutionResult|ExecutionError executionResult;
+    string toolName = llmResponse.name;
+    log:printDebug("Parsed LLM response as tool call",
+            agentId = agentId,
+            executionId = executionId,
+            sessionId = sessionId,
+            toolName = toolName,
+            arguments = llmResponse.arguments
+        );
+    observe:ExecuteToolSpan span = observe:createExecuteToolSpan(toolName);
+    string? toolCallId = llmResponse.id;
+    if toolCallId is string {
+        span.addId(toolCallId);
+    }
+    ToolStore toolStore = agent.toolStore;
+    string? toolDescription = toolStore.getToolDescription(toolName);
+    if toolDescription is string {
+        span.addDescription(toolDescription);
+    }
+    boolean isMcpTool = toolStore.isMcpTool(toolName);
+    span.addType(isMcpTool ? observe:EXTENTION : observe:FUNCTION);
+    span.addArguments(llmResponse.arguments);
+    ToolNotFoundError|ToolInvalidInputError|TokenAcquisitionError|TokenValidationError?
+                validateRes = validateTool(llmResponse, agent.agentCredential,
+            agent.tokenManager, context, toolStore.tools, isMcpTool);
+    if validateRes is Error {
+        log:printError("Tool validation failed",
+                agentId = agentId,
+                executionId = executionId,
+                sessionId = sessionId,
+                toolName = toolName,
+                'error = validateRes
+            );
+        if validateRes is ToolNotFoundError|ToolInvalidInputError {
+            observation = "Tool extraction failed due to tool validation";
+            executionResult = {
+                llmResponse,
+                'error: validateRes,
+                observation: observation.toString()
+            };
+            Error toolExecutionError = error Error(observation.toString(), details = {llmResponse});
+            span.close(toolExecutionError);
+        } else {
+            observation = "Tool execution failed while attempting to execute the selected tool: "
+                    + validateRes.message();
+            executionResult = {
+                llmResponse,
+                'error: error UnauthorizedError(
+                        string `Tool execution failed: ${validateRes.message()}`,
+                        details = {llmResponse}, cause = validateRes.cause(), toolName = toolName),
+                observation: observation.toString()
+            };
+            UnauthorizedError toolExecutionError = error UnauthorizedError(observation.toString(),
+                    details = {llmResponse});
+            span.close(toolExecutionError);
+        }
+    } else {
+        ToolOutput|ToolExecutionError|LlmInvalidGenerationError output = toolStore.execute(llmResponse, context);
+        if output is Error {
+            if output is ToolNotFoundError {
+                observation = "Tool is not found. Please check the tool name and retry.";
+            } else if output is ToolInvalidInputError {
+                observation = "Tool execution failed due to invalid inputs. Retry with correct inputs.";
+            } else {
+                observation = "Tool execution failed. Retry with correct inputs.";
+            }
+            observation = string `${observation.toString()} <detail>${output.toString()}</detail>`;
+            executionResult = {
+                llmResponse,
+                'error: output,
+                observation: observation.toString()
+            };
+            log:printError("Tool execution resulted in error",
+                    agentId = agentId,
+                    executionId = executionId,
+                    observation = observation.toString(),
+                    sessionId = sessionId,
+                    toolName = toolName
+                );
+
+            Error toolExecutionError = error Error(observation.toString(), details = {llmResponse});
+            span.close(toolExecutionError);
+        } else {
+            anydata|error value = output.value;
+            observation = value is error ? value.toString() : value;
+            log:printDebug("Tool execution successful",
+                    agentId = agentId,
+                    executionId = executionId,
+                    sessionId = sessionId,
+                    toolName = toolName
+                );
+            executionResult = {
+                tool: llmResponse,
+                observation: value
+            };
+
+            span.addOutput(observation);
+            span.close();
+        }
+    }
+    return [executionResult, observation];
+}
+
+# A name match that would fail validation never pauses (matches the single-call behavior this
+# module started with): this only returns positions whose call both has an approval rule that
+# evaluates to `true` and would actually pass validation.
+#
+# + agent - Agent being executed
+# + batch - The full batch of tool calls proposed in this LLM turn
+# + decisions - Decisions already gathered for earlier positions in `batch`
+# + return - Every position (in order) still needing a human decision
+isolated function findAllGatedIndices(Agent agent, FunctionCall[] batch, HumanResponse?[] decisions)
+        returns int[] {
+    ToolStore toolStore = agent.toolStore;
+    int[] gated = [];
+    foreach int i in 0 ..< batch.length() {
+        if decisions[i] is HumanResponse {
+            continue;
+        }
+        FunctionCall call = batch[i];
+        if agent.approvalRules[call.name] is () {
+            continue;
+        }
+        LlmToolResponse parsedOutput = {name: call.name, arguments: call.arguments, id: call.id};
+        // Use the pure name/input probe here, not `validateTool`: authorization acquires OAuth
+        // tokens and mutates `context`, which must not happen while merely deciding whether to
+        // pause for approval. Authorization stays on the execution path, where it belongs.
+        Credential? agentCredential = agent.agentCredential;
+        string? agentId = agentCredential is Credential ? agentCredential.id : ();
+        ToolNotFoundError|ToolInvalidInputError? validateRes =
+                validateToolNameAndInput(parsedOutput, toolStore.tools, agentId);
+        if validateRes is () && callRequiresApproval(agent, call) {
+            gated.push(i);
+        }
+        // name matched but would fail validation - not a pause candidate; it'll surface as a
+        // normal validation-failure ExecutionError once the resolved batch actually executes,
+        // via the ordinary (non-gated) path.
+    }
+    return gated;
+}
+
+# Whether this specific call should pause for approval. A boolean rule gates (or not)
+# unconditionally. A function rule is invoked with the proposed call's arguments bound to its
+# parameters (the same way the tool itself is invoked) and gates on its `boolean` result.
+#
+# + agent - Agent being executed
+# + call - The specific tool call being evaluated
+# + return - `true` if this call should pause for a human decision
+isolated function callRequiresApproval(Agent agent, FunctionCall call) returns boolean {
+    RequiresApproval? rule = agent.approvalRules[call.name];
+    if rule is () {
+        return false;
+    }
+    if rule is boolean {
+        return rule;
+    }
+    return evaluateApprovalPredicate(rule, call.arguments ?: {});
+}
+
+# Invokes a function-valued approval predicate the way a tool is invoked: the proposed call's
+# arguments are bound to the predicate's parameters by name (with defaults filled), then it is
+# called and its `boolean` result decides gating.
+#
+# Fails safe to `true` (pause) if the predicate panics, returns a non-`boolean`, or cannot be
+# bound - so a misbehaving rule pauses the call rather than letting it execute unreviewed. Only the
+# tool's own `anydata` parameters are bound; a predicate that declares an `ai:Context` parameter
+# cannot be bound and therefore fails safe here (and is rejected at compile time on the annotation
+# path, where its signature does not match the tool).
+#
+# + rule - The function predicate to evaluate
+# + arguments - The arguments the LLM proposed for this call
+# + return - `true` if the call should pause for a human decision
+isolated function evaluateApprovalPredicate(isolated function rule, map<json> arguments) returns boolean {
+    anydata[]|error boundArgs = bindApprovalPredicateArguments(rule, arguments);
+    if boundArgs is error {
+        return true;
+    }
+    any|error evaluated = trap function:call(rule, ...boundArgs);
+    return evaluated is boolean ? evaluated : true;
+}
+
+isolated function bindApprovalPredicateArguments(isolated function rule, map<json> arguments)
+        returns anydata[]|error {
+    map<anydata> inputArgs = {};
+    map<typedesc<anydata|Context>> typedescs = getToolParameterTypes(rule);
+    foreach [string, typedesc<anydata|Context>] [parameterName, typedescriptor] in typedescs.entries() {
+        if arguments.hasKey(parameterName) && typedescriptor is typedesc<anydata> && !isContextType(typedescriptor) {
+            inputArgs[parameterName] = check arguments.get(parameterName).cloneWithType(typedescriptor);
+        }
+    }
+    // Excludes any `Context` parameter from the ordered arguments; a predicate that declares one
+    // therefore gets too few arguments and fails the call (fail-safe to pause).
+    map<anydata> argsWithDefaults = check trap getArgsWithDefaultsExcludingContext(rule, inputArgs);
+    return argsWithDefaults.toArray().cloneReadOnly();
+}
+
+isolated function buildApprovalRequest(Agent agent, FunctionCall call, string sessionId, int batchIndex)
+        returns ApprovalRequest {
+    string? toolDescription = agent.toolStore.getToolDescription(call.name);
+    return {
+        id: uuid:createRandomUuid(),
+        sessionId,
+        toolName: call.name,
+        toolDescription: toolDescription ?: "",
+        arguments: call.arguments ?: {},
+        toolCallId: call.id,
+        batchIndex
+    };
+}
+
+# Merges the caller's resume decisions into `decisions`, applying each supplied decision at
+# the `batchIndex` of the request it targets. Callers must have already validated that every
+# key in `suppliedDecisions` matches a `pendingRequests` id (see `findUnknownApprovalIds`); this
+# function assumes that's already true and simply ignores any decision that doesn't match.
+#
+# + pendingRequests - The requests still awaiting a decision immediately before this call
+# + decisions - Decisions already gathered for positions other than those in `pendingRequests`
+# + suppliedDecisions - The caller's decisions for this resume call, keyed by `ApprovalRequest.id`
+# + return - `decisions`, with `suppliedDecisions` applied at the right positions
+isolated function applySuppliedDecisions(ApprovalRequest[] pendingRequests, HumanResponse?[] decisions,
+        map<HumanResponse> suppliedDecisions) returns HumanResponse?[] {
+    HumanResponse?[] updated = decisions.clone();
+    foreach ApprovalRequest request in pendingRequests {
+        HumanResponse? feedback = suppliedDecisions[request.id];
+        if feedback is HumanResponse {
+            updated[request.batchIndex] = feedback;
+        }
+    }
+    return updated;
+}
+
+# The previously issued `ApprovalRequest` for `batchIndex`, if `pendingRequests` has one. Used
+# to keep a request's `id` stable across a re-pause instead of minting a new
+# one for a call that was already surfaced to the caller.
+#
+# + pendingRequests - The requests surfaced before this resume call
+# + batchIndex - The batch position to look up
+# + return - The matching request, or `()` if `batchIndex` wasn't among `pendingRequests`
+isolated function findPendingRequestForIndex(ApprovalRequest[] pendingRequests, int batchIndex)
+        returns ApprovalRequest? {
+    foreach ApprovalRequest request in pendingRequests {
+        if request.batchIndex == batchIndex {
+            return request;
+        }
+    }
+    return ();
+}
+
+# Every id in `suppliedDecisions` that doesn't match any request still pending, used by
+# `Agent.resumeInternal` to reject a resume call that targets a stale or mistyped id before
+# any state changes.
+#
+# + suppliedDecisions - The caller's decisions for a resume call, keyed by `ApprovalRequest.id`
+# + pendingRequests - The requests currently awaiting a decision
+# + return - The ids in `suppliedDecisions` that don't match any entry in `pendingRequests`
+isolated function findUnknownApprovalIds(map<HumanResponse> suppliedDecisions, ApprovalRequest[] pendingRequests)
+        returns string[] {
+    string[] pendingIds = from ApprovalRequest request in pendingRequests select request.id;
+    return from string id in suppliedDecisions.keys()
+        where pendingIds.indexOf(id) is ()
+        select id;
 }
 
 # Execute the agent for a given user's query.
 #
 # + agent - Agent to be executed
 # + instruction - Instruction that the agent uses to execute the task
-# + query - Natural langauge commands to the agent  
-# + maxIter - No. of max iterations that agent will run to execute the task (default: 5)
+# + query - Natural langauge commands to the agent
+# + maxIter - Maximum number of reasoning-action cycles the agent will run to execute the task.
+# A single cycle is one LLM call plus the execution of every tool call it returns.
 # + context - Context values to be used by the agent to execute the task
 # + verbose - If true, then print the reasoning steps (default: true)
 # + sessionId - The ID associated with the memory
 # + executionId - Unique identifier for this execution
+# + runStartTime - The true start time of this logical run, persisted across any pause so a
+# `Trace` produced after resuming still reports the original start
+# + responseSchema - Schema for the expected structured final answer; when set, a final-answer tool
+#                    carrying this schema is exposed so the model returns its answer as a tool call
 # + return - Returns the execution steps tracing the agent's reasoning and outputs from the tools
-isolated function run(BaseAgent agent, string instruction, string query, int maxIter, boolean verbose, string? agentId, 
-        string sessionId = DEFAULT_SESSION_ID, Context context = new, string executionId = DEFAULT_EXECUTION_ID)
+isolated function run(Agent agent, string instruction, string|Prompt query, int maxIter, boolean verbose,
+        string? agentId, string sessionId = DEFAULT_SESSION_ID, Context context = new,
+        string executionId = DEFAULT_EXECUTION_ID, time:Utc runStartTime = time:utcNow(),
+        ResponseSchema? responseSchema = ())
         returns ExecutionTrace {
-    time:Utc startTime = time:utcNow();
-    Iteration[] iterations = [];
     log:printDebug("Agent execution loop started",
-        agentId = agentId,
-        executionId = executionId,
-        sessionId = sessionId,
-        maxIterations = maxIter,
-        tools = agent.toolStore.tools.toString(),
-        isStateless = agent.stateless
+            agentId = agentId,
+            executionId = executionId,
+            sessionId = sessionId,
+            maxIterations = maxIter,
+            tools = agent.toolStore.tools.toString(),
+            isStateless = agent.stateless
     );
 
-    (ExecutionResult|ExecutionError|Error)[] steps = [];
-    string? content = ();
     // Retrieve the conversation history from memory, update the system message at the start,
     // and append the user message for the current interaction.
     // After iterating and collecting execution steps in temporary memory,
@@ -387,113 +733,303 @@ isolated function run(BaseAgent agent, string instruction, string query, int max
     }
     ChatUserMessage userMessage = {role: USER, content: query};
     history.push(userMessage);
+    int historyPrefixLength = history.length();
 
-    Executor executor = new (agent, sessionId, progress = {instruction, query, context, executionId, history});
-    ChatMessage[] temporaryMemory = [systemMessage, userMessage];
+    Executor executor = new (agent, sessionId, maxIter,
+        progress = {instruction, query, context, executionId, history, responseSchema});
+    return executeAgentLoop(agent, executor, history, historyPrefixLength, verbose, agentId, executionId,
+        sessionId, 0, [], [], runStartTime, "Agent execution paused for human approval");
+}
+
+# Resume the agent for a given session using the human's decisions on one or more previously
+# paused tool calls.
+#
+# + agent - Agent to be executed
+# + pendingApproval - The persisted state of the paused execution
+# + suppliedDecisions - The human's decisions for this resume call, keyed by `ApprovalRequest.id`
+# + maxIter - No. of max iterations that agent will run to execute the task
+# + verbose - If true, then print the reasoning steps
+# + agentId - Optional agent identity
+# + sessionId - The ID associated with the memory
+# + context - Context values to be used by the agent to execute the task
+# + responseSchema - Structured-output schema for this resume, derived from the caller's `td`
+# + return - Returns the execution steps tracing the agent's reasoning and outputs from the tools
+isolated function resumeRun(Agent agent, PendingApproval pendingApproval, map<HumanResponse> suppliedDecisions,
+        int maxIter, boolean verbose, string? agentId, string sessionId = DEFAULT_SESSION_ID, Context context = new,
+        ResponseSchema? responseSchema = ())
+        returns ExecutionTrace {
+    string executionId = pendingApproval.executionId;
+    log:printDebug("Agent resume loop started",
+        agentId = agentId,
+        executionId = executionId,
+        sessionId = sessionId,
+        maxIterations = maxIter,
+        isStateless = agent.stateless
+    );
+
+    ChatMessage[] history = pendingApproval.history;
+    int historyPrefixLength = pendingApproval.historyPrefixLength;
+
+    SeededFeedback seeded = {
+        suppliedDecisions,
+        pendingRequests: pendingApproval.pendingRequests,
+        originalBatch: pendingApproval.originalBatch,
+        decisions: pendingApproval.decisions
+    };
+    // The whole logical run's budget minus what earlier calls already consumed - see
+    // `Executor.getIterationsConsumed()`.
+    int remainingBudget = int:max(0, maxIter - pendingApproval.iterationsUsed);
+    // The structured-output schema is re-derived from the caller's `td` on resume (not persisted),
+    // so the resumed run exposes the same final-answer tool and binds its answer to that type. The
+    // system message that instructs the model to use it is already in the persisted `history`.
+    Executor executor = new (agent, sessionId, remainingBudget, seededFeedback = seeded,
+        progress = {instruction: "", query: "", context, executionId, history, responseSchema});
+    return executeAgentLoop(agent, executor, history, historyPrefixLength, verbose, agentId, executionId,
+        sessionId, pendingApproval.iterationsUsed, pendingApproval.iterations, pendingApproval.toolCalls,
+        pendingApproval.startTime, "Agent execution paused again for human approval");
+}
+
+# Drives the agent's step-by-step reasoning loop shared by `run` and `resumeRun`, then persists a
+# `PendingApproval` if it pauses again or batches the turn's messages into `Memory` if it completes.
+#
+# + agent - Agent being executed
+# + executor - Executor already constructed for this call (seeded with the human's decision, for a resume)
+# + history - Conversation history up to and including this turn's user message
+# + historyPrefixLength - Number of entries in `history` that belong to memory loaded prior to this turn
+# + verbose - If true, then print the reasoning steps
+# + agentId - Optional agent identity
+# + executionId - Unique identifier for this logical execution, carried across any pauses
+# + sessionId - The ID associated with the memory
+# + iter - Iteration count already consumed in this logical run prior to this call
+# + priorIterations - Iterations accumulated in this logical run prior to this call
+# + priorToolCalls - Tool calls accumulated in this logical run prior to this call
+# + originalStartTime - The logical run's true start time, persisted into any newly-paused `PendingApproval`
+# + pauseLogMessage - Message logged when execution pauses for human approval mid-loop
+# + return - Returns the execution steps tracing the agent's reasoning and outputs from the tools
+isolated function executeAgentLoop(Agent agent, Executor executor, ChatMessage[] history, int historyPrefixLength,
+        boolean verbose, string? agentId, string executionId, string sessionId, int iter,
+        Iteration[] priorIterations, FunctionCall[] priorToolCalls, time:Utc originalStartTime,
+        string pauseLogMessage) returns ExecutionTrace {
+    time:Utc startTime = time:utcNow();
+    Iteration[] iterations = [];
+    (ExecutionResult|ExecutionError|Error)[] steps = [];
+    string? content = ();
+    ApprovalRequiredError? pendingApproval = ();
+    FunctionCall[] pendingOriginalBatch = [];
+    HumanResponse?[] pendingDecisions = [];
     ChatAssistantMessage? finalAssistantMessage = ();
-    int iter = 0;
-    foreach ExecutionResult|LlmChatResponse|ExecutionError|Error step in executor {
-        ChatAssistantMessage|ChatFunctionMessage|Error iterationOutput = getOutputOfIteration(step);
-        ChatMessage[] iterationHistory = buildCurrentIterationHistory(executor.progress, history);
+
+    foreach (ExecutionResult|ExecutionError)[]|string|BatchApprovalPending|Error iterationResult in executor {
+        int cycleNumber = iter + iterations.length() + 1;
         if verbose {
-            verbosePrint(step, iter);
+            io:println(string `${"\n\n"}Agent Iteration ${cycleNumber.toString()}`);
         }
-        if iter == maxIter {
-            log:printDebug("Maximum iterations reached without final answer",
-                agentId = agentId,
-                executionId = executionId,
-                iterations = iter,
-                stepsCompleted = steps.length(),
-                sessionId = sessionId
-            );
-            break;
-        }
-        if step is ExecutionError && step.'error is UnauthorizedError {
-            error err = step.'error;
-            content = "I could not complete your request due to an authorization issue, " +
-              "possibly related to the access token or its permissions. Please check that your " 
-              + "credentials are valid and have the required access, then try again";
-            Error newError =  error Error(content.toString(), 'error = err); 
-            iterationOutput = newError;
-            if verbose {
-                verbosePrint(newError, iter); 
-            }
-            log:printDebug("Tool execution failed: ",
-                err,
-                executionId = executionId,
-                iteration = iter,
-                sessionId = sessionId
-            );
-            steps.push(step);
-            finalAssistantMessage = {role: ASSISTANT, content: content};
-            iterations.push({startTime, endTime: time:utcNow(), history: iterationHistory, output: iterationOutput});
-            break;
-        }
-        if step is Error {
-            error? cause = step.cause();
-            log:printDebug("Error occurred during agent iteration",
-                    step,
+        ChatMessage[] iterationHistory = buildCurrentIterationHistory(executor.progress, history);
+        (ChatAssistantMessage|ChatFunctionMessage|Error)[] iterationOutputs = [];
+        boolean hasExecutionEnded = false;
+
+        if iterationResult is BatchApprovalPending {
+            log:printDebug(pauseLogMessage,
+                    agentId = agentId,
                     executionId = executionId,
-                    iteration = iter,
+                    iteration = cycleNumber,
+                    sessionId = sessionId,
+                    pendingCount = iterationResult.approvalRequired.detail().requests.length()
+            );
+            iterationOutputs.push(iterationResult.approvalRequired);
+            pendingApproval = iterationResult.approvalRequired;
+            pendingOriginalBatch = iterationResult.originalBatch;
+            pendingDecisions = iterationResult.decisions;
+        } else if iterationResult is string {
+            content = iterationResult;
+            if verbose {
+                verbosePrint(iterationResult);
+            }
+            log:printDebug("Final answer generated by agent",
+                    agentId = agentId,
+                    executionId = executionId,
+                    iteration = cycleNumber,
+                    answer = content,
+                    sessionId = sessionId
+            );
+            ChatAssistantMessage answerMessage = {role: ASSISTANT, content: iterationResult};
+            finalAssistantMessage = answerMessage;
+            iterationOutputs.push(answerMessage);
+            hasExecutionEnded = true;
+        } else if iterationResult is Error {
+            error? cause = iterationResult.cause();
+            log:printDebug("Error occurred during agent iteration",
+                    iterationResult,
+                    executionId = executionId,
+                    iteration = cycleNumber,
                     sessionId = sessionId,
                     cause = cause !is () ? cause.toString() : "none"
                 );
-            steps.push(step);
-            iterations.push({startTime, endTime: time:utcNow(), history: iterationHistory, output: iterationOutput});
+            steps.push(iterationResult);
+            iterationOutputs.push(iterationResult);
+            hasExecutionEnded = true;
+        } else {
+            ChatAssistantMessage? authFailure = foldCompletedSteps(iterationResult, verbose, agentId, executionId,
+                    cycleNumber, sessionId, steps, iterationOutputs);
+            if authFailure is ChatAssistantMessage {
+                finalAssistantMessage = authFailure;
+                content = authFailure.content;
+                hasExecutionEnded = true;
+            }
+        }
+
+        time:Utc endTime = time:utcNow();
+        iterations.push({startTime, endTime, history: iterationHistory, output: iterationOutputs});
+        startTime = endTime;
+
+        if pendingApproval is ApprovalRequiredError {
+            // The interim history is captured entirely within the persisted `PendingApproval` snapshot,
+            // so `Memory` is left untouched until the whole logical run completes.
+            PendingApproval pendingApprovalRecord = {
+                sessionId,
+                executionId,
+                iterationsUsed: iter + executor.getIterationsConsumed(),
+                history: iterationHistory,
+                historyPrefixLength,
+                iterations: [...priorIterations, ...iterations],
+                toolCalls: [...priorToolCalls, ...collectToolCalls(executor.progress.executionSteps)],
+                startTime: originalStartTime,
+                originalBatch: pendingOriginalBatch,
+                pendingRequests: pendingApproval.detail().requests,
+                decisions: pendingDecisions
+            };
+            Error? putErr = agent.checkpointer.putCheckpoint(pendingApprovalRecord);
+            if putErr is Error {
+                // The pause was not persisted, so there is nothing to claim or resume. Reporting
+                // an `ApprovalRequiredError` here would hand the caller request IDs backed by no
+                // state; surface the persistence failure as a terminal error instead.
+                log:printError("Failed to persist the pending approval", putErr,
+                    executionId = executionId, sessionId = sessionId);
+                return {
+                    steps,
+                    iterations: [...priorIterations, ...iterations],
+                    toolCalls: [...priorToolCalls, ...collectToolCalls(executor.progress.executionSteps)],
+                    fatalError: error Error(
+                        "Failed to persist the pending approval; the run cannot be paused for human approval.",
+                        putErr)
+                };
+            }
             break;
         }
-        if step is LlmChatResponse {
-            content = step.content;
-            log:printDebug("Final answer generated by agent",
-                agentId = agentId,
-                executionId = executionId,
-                iteration = iter,
-                answer = content,
-                sessionId = sessionId
-            );
-            finalAssistantMessage = {role: ASSISTANT, content: content};
-            iterations.push({startTime, endTime: time:utcNow(), history: iterationHistory, output: iterationOutput});
+        if hasExecutionEnded {
             break;
         }
-        iter += 1;
-        log:printDebug("Agent iteration started",
-            agentId = agentId,
-            executionId = executionId,
-            iteration = iter,
-            maxIterations = maxIter,
-            stepsCompleted = steps.length(),
-            sessionId = sessionId
-        );
-        steps.push(step);
-        iterations.push({startTime, endTime: time:utcNow(), history: iterationHistory, output: iterationOutput});
-        startTime = time:utcNow();
     }
 
-    ChatMessage[] intermediateFunctionCallMessages = createFunctionCallMessages(executor.progress);
-    temporaryMemory.push(...intermediateFunctionCallMessages);
+    boolean maxIterationsExceeded = executor.isMaxIterationsExceeded();
+    if maxIterationsExceeded {
+        log:printDebug("Maximum iterations reached without final answer",
+                agentId = agentId,
+                executionId = executionId,
+                iterations = iterations.length(),
+                stepsCompleted = steps.length(),
+                sessionId = sessionId
+        );
+    }
+
+    if pendingApproval is ApprovalRequiredError {
+        return {
+            steps,
+            iterations: [...priorIterations, ...iterations],
+            toolCalls: [...priorToolCalls, ...collectToolCalls(executor.progress.executionSteps)],
+            pendingApproval
+        };
+    }
+
+    // Reconstruct the messages belonging to this logical turn: the original system and user
+    // messages, the tool-call pairs completed before this call (empty unless resuming a pause),
+    // and the ones completed during this call. `Memory` is only touched once the whole logical
+    // run completes, so this whole set is appended in one batch.
+    ChatSystemMessage systemMessage = <ChatSystemMessage>history[0];
+    ChatUserMessage userMessage = <ChatUserMessage>history[historyPrefixLength - 1];
+    ChatMessage[] temporaryMemory = [systemMessage, userMessage];
+    temporaryMemory.push(...history.slice(historyPrefixLength));
+
+    ChatMessage[]|Error newToolPairs = createFunctionCallMessages(executor.progress);
+    if newToolPairs is Error {
+        log:printError("Failed to build function call messages from execution history",
+                newToolPairs, agentId = agentId, executionId = executionId, sessionId = sessionId);
+    } else {
+        temporaryMemory.push(...newToolPairs);
+    }
     if finalAssistantMessage is ChatAssistantMessage {
         temporaryMemory.push(finalAssistantMessage);
     }
 
-    // Batch update the memory with the user message, system message, and all intermediate steps from tool execution
     updateMemory(agent.memory, sessionId, temporaryMemory, agentId);
     if agent.stateless {
         MemoryError? err = agent.memory.delete(sessionId);
-        // Ignore this error since the stateless agent always relies on DefaultMessageWindowChatMemoryManager,  
+        // Ignore this error since the stateless agent always relies on DefaultMessageWindowChatMemoryManager,
         // which never return an error.
     }
-    // Collect all the tool call actions
-    FunctionCall[] toolCalls = from ExecutionStep step in executor.progress.executionSteps
-        let var llmResponse = step.llmResponse
-        where llmResponse is FunctionCall
-        select llmResponse;
-    return {steps, iterations, answer: content, toolCalls};
+    return {
+        steps,
+        iterations: [...priorIterations, ...iterations],
+        answer: content,
+        toolCalls: [...priorToolCalls, ...collectToolCalls(executor.progress.executionSteps)],
+        maxIterationsExceeded
+    };
 }
 
-isolated function verbosePrint(ExecutionResult|LlmChatResponse|ExecutionError|Error step, int iter) {
-    io:println(string `${"\n\n"}Agent Iteration ${iter.toString()}`);
-    if step is LlmChatResponse {
-        io:println(string `${"\n\n"}Final Answer: ${step.content}${"\n\n"}`);
+# Appends each result's step/output entry into `steps`/`iterationOutputs` (both mutated in
+# place). On an `UnauthorizedError`, builds and returns the generic auth-failure message instead
+# of continuing to fold the remaining results - the caller must treat that as run-ending.
+#
+# + results - Execution results from a fully-safe or fully-resolved batch
+# + verbose - If true, then print the reasoning steps
+# + agentId - Optional agent identity
+# + executionId - Unique identifier for this execution
+# + cycleNumber - The reasoning-action cycle these results belong to, for logging
+# + sessionId - The ID associated with the memory
+# + steps - Accumulator mutated in place with each result
+# + iterationOutputs - Accumulator mutated in place with each result's chat-message form
+# + return - The generic auth-failure message if an `UnauthorizedError` was found, else `()`
+isolated function foldCompletedSteps((ExecutionResult|ExecutionError)[] results, boolean verbose, string? agentId,
+        string executionId, int cycleNumber, string sessionId, (ExecutionResult|ExecutionError|Error)[] steps,
+        (ChatAssistantMessage|ChatFunctionMessage|Error)[] iterationOutputs) returns ChatAssistantMessage? {
+    foreach ExecutionResult|ExecutionError step in results {
+        if verbose {
+            verbosePrint(step);
+        }
+        steps.push(step);
+        if step is ExecutionError && step.'error is UnauthorizedError {
+            error err = step.'error;
+            string content = "I could not complete your request due to an authorization issue, " +
+                "possibly related to the access token or its permissions. Please check that your "
+                + "credentials are valid and have the required access, then try again";
+            Error newError = error Error(content, 'error = err);
+            if verbose {
+                verbosePrint(newError);
+            }
+            log:printDebug("Tool execution failed: ",
+                    err,
+                    executionId = executionId,
+                    iteration = cycleNumber,
+                    sessionId = sessionId
+            );
+            iterationOutputs.push(newError);
+            return {role: ASSISTANT, content};
+        }
+        iterationOutputs.push(getOutputOfStep(step));
+        log:printDebug("Agent iteration step completed",
+                agentId = agentId,
+                executionId = executionId,
+                iteration = cycleNumber,
+                stepsCompleted = steps.length(),
+                sessionId = sessionId
+        );
+    }
+    return ();
+}
+
+isolated function verbosePrint(ExecutionResult|string|ExecutionError|Error step) {
+    if step is string {
+        io:println(string `${"\n\n"}Final Answer: ${step}${"\n\n"}`);
         return;
     }
     if step is ExecutionResult {
@@ -516,7 +1052,7 @@ isolated function verbosePrint(ExecutionResult|LlmChatResponse|ExecutionError|Er
     }
     if step is ExecutionError {
         error? cause = step.'error.cause();
-        io:println(string `LLM Generation Error: 
+        io:println(string `LLM Generation Error:
     ${BACKTICKS}
     {
         message: ${step.'error.message()},
@@ -527,14 +1063,7 @@ isolated function verbosePrint(ExecutionResult|LlmChatResponse|ExecutionError|Er
     }
 }
 
-isolated function getOutputOfIteration(ExecutionResult|LlmChatResponse|ExecutionError|Error step)
-    returns ChatAssistantMessage|ChatFunctionMessage|Error {
-    if step is Error {
-        return step;
-    }
-    if step is LlmChatResponse {
-        return {role: ASSISTANT, content: step.content};
-    }
+isolated function getOutputOfStep(ExecutionResult|ExecutionError step) returns ChatFunctionMessage|Error {
     if step is ExecutionError {
         return step.'error;
     }
@@ -548,10 +1077,21 @@ isolated function getOutputOfIteration(ExecutionResult|LlmChatResponse|Execution
 
 isolated function buildCurrentIterationHistory(ExecutionProgress progress,
         ChatMessage[] conversationHistoryUpToCurrentUserQuery) returns ChatMessage[] {
-    ChatMessage[] messages = createFunctionCallMessages(progress);
+    ChatMessage[]|Error messages = createFunctionCallMessages(progress);
+    if messages is Error {
+        log:printError("Failed to build function call messages from execution history",
+                messages, executionId = progress.executionId);
+        return conversationHistoryUpToCurrentUserQuery;
+    }
     messages.unshift(...conversationHistoryUpToCurrentUserQuery);
     return messages;
 }
+
+isolated function collectToolCalls(ExecutionStep[] steps) returns FunctionCall[] =>
+    from ExecutionStep step in steps
+    let var llmResponse = step.llmResponse
+    where llmResponse is FunctionCall
+    select llmResponse;
 
 isolated function getObservationString(anydata|error observation) returns string {
     if observation is () {
@@ -574,7 +1114,7 @@ isolated function getObservationString(anydata|error observation) returns string
 #
 # + agent - Agent instance
 # + return - Array of tools registered with the agent
-public isolated function getTools(Agent agent) returns Tool[] => agent.functionCallAgent.toolStore.tools.toArray();
+public isolated function getTools(Agent agent) returns Tool[] => agent.toolStore.tools.toArray();
 
 isolated function updateMemory(Memory memory, string sessionId, ChatMessage[] messages, string? agentId) {
     error? updationStation = memory.update(sessionId, messages);

@@ -31,5 +31,6 @@ public enum DiagnosticCode {
     AI_107,
     AI_108,
     AI_109,
-    AI_110
+    AI_110,
+    AI_111
 }

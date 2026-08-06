@@ -40,7 +40,8 @@ public enum CompilationDiagnostic {
     UNABLE_TO_OBTAIN_VALID_SERVER_PORT_FROM_EXPRESSION(DiagnosticMessage.WARNING_107, DiagnosticCode.AI_107, WARNING),
     UNABLE_TO_OBTAIN_VALID_SERVER_PORT(DiagnosticMessage.WARNING_108, DiagnosticCode.AI_108, WARNING),
     INVALID_AUTH_CONFIG(DiagnosticMessage.ERROR_109, DiagnosticCode.AI_109, ERROR),
-    INVALID_AGENT_ID_AUTH_CONFIG(DiagnosticMessage.ERROR_110, DiagnosticCode.AI_110, ERROR);
+    INVALID_AGENT_ID_AUTH_CONFIG(DiagnosticMessage.ERROR_110, DiagnosticCode.AI_110, ERROR),
+    INVALID_APPROVAL_PREDICATE_SIGNATURE(DiagnosticMessage.ERROR_111, DiagnosticCode.AI_111, ERROR);
 
     private final String diagnostic;
     private final String diagnosticCode;

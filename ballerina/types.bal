@@ -48,6 +48,12 @@ type ExecutionTrace record {|
     string answer?;
     Iteration[] iterations;
     FunctionCall[] toolCalls;
+    ApprovalRequiredError? pendingApproval = ();
+    # A terminal error that must be surfaced to the caller instead of any pause/answer - e.g. the
+    # pending-approval checkpoint failed to persist, so the run cannot be reported as a resumable
+    # pause. Takes precedence over `pendingApproval` when building the outcome.
+    Error? fatalError = ();
+    boolean maxIterationsExceeded = false;
 |};
 
 # Configurations for controlling the behaviours when communicating with a remote HTTP endpoint.

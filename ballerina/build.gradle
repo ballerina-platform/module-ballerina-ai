@@ -41,6 +41,9 @@ ballerina {
 configurations {
     externalJars {
         exclude group: 'org.ballerinalang', module: 'maven-resolver'
+        // Unused at runtime: the langchain4j document-splitting APIs used by ai-native never
+        // reach Jackson, and the bala does not pack it (CVE-2026-54512/54513/54514/54515)
+        exclude group: 'com.fasterxml.jackson.core', module: 'jackson-databind'
     }
 }
 

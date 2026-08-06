@@ -14,7 +14,15 @@
 // specific language governing permissions and limitations
 // under the License.
 
-# Represents a short-term memory store that retains a fixed number of recent messages by a key.
+# Represents a short-term memory store that retains a fixed number of recent messages by a key,
+# and persists human-in-the-loop pause checkpoints keyed by session ID.
+#
+# A store serves both concerns so one backend (e.g. a database or cache) durably holds the
+# conversation history and the pause state together. `ShortTermMemory` delegates both its message
+# operations and its checkpoint operations to the configured store, so a custom store that keeps
+# messages durable also keeps human-in-the-loop pauses durable without any extra wiring. The
+# built-in `InMemoryShortTermMemoryStore` keeps both in memory (not durable across a restart or a
+# run on another replica).
 public type ShortTermMemoryStore isolated object {
 
     # Retrieves the system message, if it was provided, for a given key.
@@ -77,6 +85,34 @@ public type ShortTermMemoryStore isolated object {
     #
     # + return - returns the capacity
     public isolated function getCapacity() returns int;
+
+    # Stores (or replaces) the pending human-in-the-loop approval for its session. Named
+    # distinctly from the message operations so a single object (e.g. `ShortTermMemory`) can
+    # expose both concerns without collision.
+    #
+    # + approval - The pending approval to persist
+    # + return - `()` on success, or an `ai:Error` if the operation fails
+    public isolated function putCheckpoint(PendingApproval approval) returns Error?;
+
+    # Returns the pending human-in-the-loop approval for a session, if any.
+    #
+    # + sessionId - The session to look up
+    # + return - The pending approval, `()` if none is pending, or an `ai:Error` if the operation fails
+    public isolated function getCheckpoint(string sessionId) returns PendingApproval?|Error;
+
+    # Removes the pending human-in-the-loop approval for a session, if any.
+    #
+    # + sessionId - The session to clear
+    # + return - `()` on success, or an `ai:Error` if the operation fails
+    public isolated function removeCheckpoint(string sessionId) returns Error?;
+
+    # Atomically fetches and removes the pending human-in-the-loop approval for a session, if
+    # any. Used to "claim" an approval before resolving it, so a concurrent duplicate resume
+    # call for the same session cannot also claim and execute the same approved tool call.
+    #
+    # + sessionId - The session to claim
+    # + return - The claimed pending approval, `()` if none was pending, or an `ai:Error` if the operation fails
+    public isolated function takeCheckpoint(string sessionId) returns PendingApproval?|Error;
 };
 
 # Provides an in-memory chat message store.
@@ -86,6 +122,9 @@ public isolated class InMemoryShortTermMemoryStore {
     private final int size;
     private final map<MemoryChatSystemMessage> systemMessages = {};
     private final map<MemoryChatInteractiveMessage[]> messages = {};
+    // Human-in-the-loop pause checkpoints, keyed by session ID. Held in the isolated-safe stored
+    // form (see `StoredPendingApproval`) so it can cross the `lock` boundary.
+    private final map<StoredPendingApproval> pending = {};
 
     # Initializes a new in-memory store.
     # 
@@ -222,6 +261,12 @@ public isolated class InMemoryShortTermMemoryStore {
             if self.messages.hasKey(key) {
                 self.messages.get(key).removeAll();
             }
+
+            // Drop any pending approval checkpoint too, so clearing a session is atomic and an
+            // abandoned pause does not retain its whole history snapshot indefinitely.
+            if self.pending.hasKey(key) {
+                _ = self.pending.remove(key);
+            }
         }
     }
 
@@ -243,4 +288,57 @@ public isolated class InMemoryShortTermMemoryStore {
     #
     # + return - returns the capacity
     public isolated function getCapacity() returns int => self.size;
+
+    # Stores (or replaces) the pending human-in-the-loop approval for its session.
+    #
+    # + approval - The pending approval to persist
+    # + return - `()` on success, or an `ai:Error` if the operation fails
+    public isolated function putCheckpoint(PendingApproval approval) returns Error? {
+        StoredPendingApproval stored = check toStoredPendingApproval(approval);
+        lock {
+            self.pending[approval.sessionId] = stored.clone();
+        }
+    }
+
+    # Returns the pending human-in-the-loop approval for a session, if any.
+    #
+    # + sessionId - The session to look up
+    # + return - The pending approval, `()` if none is pending, or an `ai:Error` if the operation fails
+    public isolated function getCheckpoint(string sessionId) returns PendingApproval?|Error {
+        StoredPendingApproval? stored;
+        lock {
+            StoredPendingApproval? s = self.pending[sessionId];
+            stored = s is () ? () : s.clone();
+        }
+        if stored is () {
+            return ();
+        }
+        return fromStoredPendingApproval(stored);
+    }
+
+    # Removes the pending human-in-the-loop approval for a session, if any.
+    #
+    # + sessionId - The session to clear
+    # + return - `()` on success, or an `ai:Error` if the operation fails
+    public isolated function removeCheckpoint(string sessionId) returns Error? {
+        lock {
+            _ = self.pending.removeIfHasKey(sessionId);
+        }
+    }
+
+    # Atomically fetches and removes the pending human-in-the-loop approval for a session, if any.
+    #
+    # + sessionId - The session to claim
+    # + return - The claimed pending approval, `()` if none was pending, or an `ai:Error` if the operation fails
+    public isolated function takeCheckpoint(string sessionId) returns PendingApproval?|Error {
+        StoredPendingApproval? stored;
+        lock {
+            StoredPendingApproval? removed = self.pending.removeIfHasKey(sessionId);
+            stored = removed is () ? () : removed.clone();
+        }
+        if stored is () {
+            return ();
+        }
+        return fromStoredPendingApproval(stored);
+    }
 }

@@ -58,21 +58,28 @@ type OverflowHandlerFunction isolated function (
 
 type OverflowHandler TrimOverflowHandlerConfiguration|OverflowHandlerFunction;
 
-# Represents short-term memory for agents.
+# Represents short-term memory for agents. Persists both the conversation history and
+# human-in-the-loop pause checkpoints in its configured `ShortTermMemoryStore`, so a single
+# store durably serves both concerns.
 public isolated class ShortTermMemory {
     *Memory;
 
     private final OverflowHandler overflowHandler;
-    // This should be final, but is not final intentionally, to enforce using locks.
-    private ShortTermMemoryStore store;
+    // Where both conversation messages and human-in-the-loop pause checkpoints live. `final`
+    // because it is assigned once at init and never rebound; the message operations still take a
+    // `lock` on `self` to keep their read-modify-write sequences atomic, while the checkpoint
+    // operations delegate straight to the store, which does its own internal synchronization.
+    private final ShortTermMemoryStore store;
 
     # Initializes short-term memory with an optional store and overflow configuration.
-    # 
-    # + store - The memory store to use; if not provided, an in-memory store is used
+    #
+    # + store - The memory store to use; if not provided, an in-memory store is used. The same
+    # store persists both the conversation history and human-in-the-loop pause checkpoints, so a
+    # store with a durable backend makes both durable.
     # + overflowConfiguration - The strategy to handle overflow; if not provided, trimming is used
     # + return - nil on success, or an `ai:MemoryError` error if the initialization fails
-    public isolated function init(ShortTermMemoryStore? store = (), 
-                                  OverflowHandlerConfiguration overflowConfiguration = <TrimOverflowHandlerConfiguration> {}) 
+    public isolated function init(ShortTermMemoryStore? store = (),
+                                  OverflowHandlerConfiguration overflowConfiguration = <TrimOverflowHandlerConfiguration> {})
                             returns MemoryError? {
         do {
             self.store = store ?: check new InMemoryShortTermMemoryStore();
@@ -226,6 +233,34 @@ public isolated class ShortTermMemory {
             return self.store.removeAll(key);
         }
     }
+
+    # Stores (or replaces) the pending approval for its session.
+    #
+    # + approval - The pending approval to persist
+    # + return - `()` on success, or an `ai:Error` if the operation fails
+    public isolated function putCheckpoint(PendingApproval approval) returns Error? =>
+        self.store.putCheckpoint(approval);
+
+    # Returns the pending approval for a session, if any.
+    #
+    # + sessionId - The session to look up
+    # + return - The pending approval, `()` if none is pending, or an `ai:Error` if the operation fails
+    public isolated function getCheckpoint(string sessionId) returns PendingApproval?|Error =>
+        self.store.getCheckpoint(sessionId);
+
+    # Removes the pending approval for a session, if any.
+    #
+    # + sessionId - The session to clear
+    # + return - `()` on success, or an `ai:Error` if the operation fails
+    public isolated function removeCheckpoint(string sessionId) returns Error? =>
+        self.store.removeCheckpoint(sessionId);
+
+    # Atomically fetches and removes the pending approval for a session, if any.
+    #
+    # + sessionId - The session to claim
+    # + return - The claimed pending approval, `()` if none was pending, or an `ai:Error` if the operation fails
+    public isolated function takeCheckpoint(string sessionId) returns PendingApproval?|Error =>
+        self.store.takeCheckpoint(sessionId);
 }
 
 isolated function handleOverflow(
