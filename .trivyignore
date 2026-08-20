@@ -30,3 +30,6 @@ GHSA-47qp-hqvx-6r3f exp:2027-01-15
 # must come from bumping ballerinaLangVersion, which is out of scope here.
 CVE-2026-56741 exp:2027-01-15
 CVE-2026-56740 exp:2027-01-15
+
+CVE-2026-49844
+CVE-2026-71497
