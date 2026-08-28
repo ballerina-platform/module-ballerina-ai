@@ -256,3 +256,80 @@ public type Scopes record {|
     # The required OAuth scope or list of scopes.
     string|string[] scopes?;
 |};
+
+# A streamed chunk of a chat completion response, normalized to the OpenAI
+# `chat.completion.chunk` shape. Each provider's native stream is mapped onto this type.
+public type ChatCompletionChunk record {|
+    # Unique identifier for the completion; stable across all chunks of one response
+    string id?;
+    # The model that produced the completion
+    string model?;
+    # The streamed choices for this chunk (usually one)
+    ChatCompletionChunkChoice[] choices;
+    # Token usage statistics; present only on the final chunk
+    CompletionTokenUsage usage?;
+|};
+
+# A single choice within a streamed chat completion chunk.
+public type ChatCompletionChunkChoice record {|
+    # Index of the choice in the list of choices
+    int index;
+    # The incremental message content for this chunk
+    ChatCompletionChunkDelta delta;
+    # Reason the model stopped generating tokens; `()` until the final chunk
+    FinishReason? finishReason = ();
+|};
+
+# The incremental message delta for a streamed choice.
+public type ChatCompletionChunkDelta record {|
+    # Role of the author of this message; only sent on the first delta
+    ROLE role?;
+    # The answer text fragment for this chunk; `()` for non-content deltas
+    string? content = ();
+    # Reasoning/chain-of-thought fragment (e.g. DeepSeek `reasoning_content`,
+    # Anthropic `thinking`, Ollama `thinking`); `()` when absent or unsupported
+    string? reasoning = ();
+    # Incremental tool calls produced by the model; correlate fragments by `index`
+    ToolCallChunk[]? toolCalls = ();
+|};
+
+# An incremental tool call delivered within a streamed delta. With parallel tool
+# calling, several tool calls stream concurrently, distinguished by `index`.
+public type ToolCallChunk record {|
+    # Index used to accumulate fragments of the same tool call across chunks
+    int index;
+    # Identifier of the tool call; only sent on the first fragment of the call
+    string id?;
+    # The function name/arguments fragment
+    FunctionCallChunk 'function?;
+|};
+
+# The function fragment of a streamed tool call.
+public type FunctionCallChunk record {|
+    # Name of the function to call; only sent on the first fragment of the call
+    string name?;
+    # Incremental JSON-string fragment of the function arguments; accumulate across chunks
+    string arguments?;
+|};
+
+# Token usage statistics for a chat completion, normalized across providers.
+public type CompletionTokenUsage record {|
+    # Number of tokens in the prompt
+    int promptTokens?;
+    # Number of tokens in the generated completion
+    int completionTokens?;
+    # Total tokens used (prompt + completion)
+    int totalTokens?;
+|};
+
+# The reason the model stopped generating tokens, normalized to the OpenAI set.
+public enum FinishReason {
+    # Hit a natural stop point or a provided stop sequence
+    STOP = "stop",
+    # Reached the maximum number of tokens specified in the request
+    LENGTH = "length",
+    # The model called one or more tools
+    TOOL_CALLS = "tool_calls",
+    # Content was omitted due to a content-filter flag
+    CONTENT_FILTER = "content_filter"
+}

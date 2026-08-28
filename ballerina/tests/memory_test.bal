@@ -14,6 +14,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
+import ballerina/jballerina.java;
 import ballerina/test;
 
 const string K1 = "key1";
@@ -256,11 +257,21 @@ function testShortTermMemoryWithSummarizationOnOverflow1() returns error? {
     InMemoryShortTermMemoryStore store = check new (4);
     ModelProvider model = isolated client object {
         isolated remote function chat(
-                ChatMessage[]|ChatUserMessage messages, 
+                ChatMessage[]|ChatUserMessage messages,
                 ChatCompletionFunctions[] tools, string? stop) returns ChatAssistantMessage|Error {
             assertSummarizationRequestChatMessages(messages, [km1, km2, km3, km4], defaultSummarizationPrompt);
-            return memorySummaryMessage;                    
+            return memorySummaryMessage;
         }
+
+        remote function chatStream(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [], string? stop = ())
+            returns stream<ChatCompletionChunk, Error?>|Error {
+            return error Error("chatStream not implemented");
+        }
+
+        remote function generateStream(Prompt prompt, @display {label: "Expected type"} typedesc<anydata> td = <>)
+                returns stream<td, Error?>|Error = @java:Method {
+            'class: "io.ballerina.stdlib.ai.wso2.StreamGenerator"
+        } external;
 
         isolated remote function generate(Prompt prompt, typedesc<anydata> td) returns td|Error = external;
     };
@@ -271,7 +282,7 @@ function testShortTermMemoryWithSummarizationOnOverflow1() returns error? {
             model
         }
     );
-    
+
     final string k = "key";
 
     check memory.update(k, ksm1);
@@ -366,6 +377,16 @@ function testShortTermMemoryWithSummarizationOnOverflow1WithBatchUpdate() return
             assertSummarizationRequestChatMessages(messages, [km1, km2, km3, km4], defaultSummarizationPrompt);
             return memorySummaryMessage;
         }
+
+        remote function chatStream(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [], string? stop = ())
+            returns stream<ChatCompletionChunk, Error?>|Error {
+            return error Error("chatStream not implemented");
+        }
+
+        remote function generateStream(Prompt prompt, @display {label: "Expected type"} typedesc<anydata> td = <>)
+                returns stream<td, Error?>|Error = @java:Method {
+            'class: "io.ballerina.stdlib.ai.wso2.StreamGenerator"
+        } external;
 
         isolated remote function generate(Prompt prompt, typedesc<anydata> td) returns td|Error = external;
     };
@@ -672,11 +693,21 @@ function testOverridingSummarizationPrompt() returns error? {
 
     ModelProvider model = isolated client object {
         isolated remote function chat(
-                ChatMessage[]|ChatUserMessage messages, 
+                ChatMessage[]|ChatUserMessage messages,
                 ChatCompletionFunctions[] tools, string? stop) returns ChatAssistantMessage|Error {
             assertSummarizationRequestChatMessages(messages, [km1, km2, km3], customSummarizationPrompt);
-            return mockSummaryMessage;                    
+            return mockSummaryMessage;
         }
+
+        remote function chatStream(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [], string? stop = ())
+            returns stream<ChatCompletionChunk, Error?>|Error {
+            return error Error("chatStream not implemented");
+        }
+
+        remote function generateStream(Prompt prompt, @display {label: "Expected type"} typedesc<anydata> td = <>)
+                returns stream<td, Error?>|Error = @java:Method {
+            'class: "io.ballerina.stdlib.ai.wso2.StreamGenerator"
+        } external;
 
         isolated remote function generate(Prompt prompt, typedesc<anydata> td) returns td|Error = external;
     };
@@ -752,11 +783,21 @@ function testSummarizationFailure() returns error? {
 
     ModelProvider model = isolated client object {
         isolated remote function chat(
-                ChatMessage[]|ChatUserMessage messages, 
+                ChatMessage[]|ChatUserMessage messages,
                 ChatCompletionFunctions[] tools, string? stop) returns ChatAssistantMessage|Error {
             assertSummarizationRequestChatMessages(messages, [km1, km2, km3], defaultSummarizationPrompt);
-            return error("Simulated summarization failure");                    
+            return error("Simulated summarization failure");
         }
+
+        remote function chatStream(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [], string? stop = ())
+            returns stream<ChatCompletionChunk, Error?>|Error {
+            return error Error("chatStream not implemented");
+        }
+
+        remote function generateStream(Prompt prompt, @display {label: "Expected type"} typedesc<anydata> td = <>)
+                returns stream<td, Error?>|Error = @java:Method {
+            'class: "io.ballerina.stdlib.ai.wso2.StreamGenerator"
+        } external;
 
         isolated remote function generate(Prompt prompt, typedesc<anydata> td) returns td|Error = external;
     };
@@ -822,9 +863,19 @@ isolated client class MockSummarizerModel {
     }
 
     isolated remote function chat(
-            ChatMessage[]|ChatUserMessage messages, 
-            ChatCompletionFunctions[] tools, string? stop) returns ChatAssistantMessage|Error => 
+            ChatMessage[]|ChatUserMessage messages,
+            ChatCompletionFunctions[] tools, string? stop) returns ChatAssistantMessage|Error =>
                 self.memorySummaryMessage;
+
+    remote function chatStream(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [], string? stop = ())
+        returns stream<ChatCompletionChunk, Error?>|Error {
+        return error Error("chatStream not implemented");
+    }
+
+    remote function generateStream(Prompt prompt, @display {label: "Expected type"} typedesc<anydata> td = <>)
+            returns stream<td, Error?>|Error = @java:Method {
+        'class: "io.ballerina.stdlib.ai.wso2.StreamGenerator"
+    } external;
 
     isolated remote function generate(Prompt prompt, typedesc<anydata> td) returns td|Error = external;
 }

@@ -17,6 +17,8 @@
 import ai.intelligence;
 import ai.observe;
 
+import ballerina/data.jsondata;
+import ballerina/http;
 import ballerina/jballerina.java;
 
 # Roles for the chat messages.
@@ -112,6 +114,64 @@ public type Prompt object {
     public (anydata|Document|Document[]|Chunk|Chunk[])[] insertions;
 };
 
+# Builds the stream returned by `ModelProvider.generateStream`.
+#
+# Acts as the (non-dependently-typed) body behind the dependently-typed `generateStream`
+# method: a native shim trampolines here so the gating and streaming logic can stay in
+# Ballerina. Only `string` is supported as the expected type; any other type yields an
+# error, because a partial generation is a valid value only for `string`. When the type
+# is valid, the underlying `chatStream` events are projected onto their text fragments.
+#
+# + model - The model provider whose `chatStream` supplies the raw events
+# + prompt - The prompt to send to the model
+# + td - The caller's expected type; must be `string`
+# + return - A stream of text fragments, or an error if the type is unsupported or the stream cannot be opened
+function generateLlmResponseStream(ModelProvider model, Prompt prompt, typedesc<anydata> td)
+        returns stream<string, Error?>|Error {
+    if td !is typedesc<string> {
+        return error Error("This data type is not supported for streaming. " +
+            "'generateStream' supports only 'string'; use 'generate' for structured types.");
+    }
+    stream<ChatCompletionChunk, Error?> chunks = check model->chatStream({role: USER, content: prompt});
+    return new stream<string, Error?>(new GenerateStreamTextIterator(chunks));
+}
+
+# Projects a raw `ChatCompletionChunk` stream onto its text content, yielding each
+# non-empty `delta.content` fragment and skipping tool-call, reasoning, and usage-only
+# chunks. Backs `generateLlmResponseStream`.
+class GenerateStreamTextIterator {
+    private stream<ChatCompletionChunk, Error?> chunks;
+
+    isolated function init(stream<ChatCompletionChunk, Error?> chunks) {
+        self.chunks = chunks;
+    }
+
+    public isolated function next() returns record {|string value;|}|Error? {
+        while true {
+            record {|ChatCompletionChunk value;|}|Error? next = self.chunks.next();
+            if next is () {
+                return ();
+            }
+            if next is Error {
+                return next;
+            }
+            ChatCompletionChunkChoice[] choices = next.value.choices;
+            if choices.length() == 0 {
+                continue;
+            }
+            string? content = choices[0].delta.content;
+            if content is string && content.length() > 0 {
+                return {value: content};
+            }
+            // Non-content chunks (tool calls, reasoning, usage-only) carry no answer text; skip them.
+        }
+    }
+
+    public isolated function close() returns Error? {
+        return self.chunks.close();
+    }
+}
+
 # Represents an extendable client for interacting with an AI model.
 public type ModelProvider distinct isolated client object {
     # Sends a chat request to the model with the given messages and tools.
@@ -122,6 +182,14 @@ public type ModelProvider distinct isolated client object {
     isolated remote function chat(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [], string? stop = ())
         returns ChatAssistantMessage|Error;
 
+    # Sends a streaming chat request to the model with the given messages and tools.
+    # + messages - List of chat messages or a user message
+    # + tools - Tool definitions to be used for the tool call
+    # + stop - Stop sequence to stop the completion
+    # + return - A stream of chat completion chunks or an error in-case of failures
+    remote function chatStream(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [], string? stop = ())
+        returns stream<ChatCompletionChunk, Error?>|Error;
+
     # Sends a chat request to the model and generates a value that belongs to the type
     # corresponding to the type descriptor argument.
     #
@@ -129,6 +197,20 @@ public type ModelProvider distinct isolated client object {
     # + td - Type descriptor specifying the expected return type format
     # + return - Generates a value that belongs to the type, or an error if generation fails
     isolated remote function generate(Prompt prompt, @display {label: "Expected type"} typedesc<anydata> td = <>) returns td|Error;
+
+    # Sends a streaming chat request to the model using the given prompt and streams
+    # back the generated answer.
+    #
+    # Only `string` is supported as the expected type. A partial generation is a valid
+    # value only for `string`; structured types (records, ints, etc.) have no valid
+    # intermediate state and so cannot be streamed incrementally. Passing any other type
+    # returns an error - use `generate` for structured output.
+    #
+    # + prompt - The prompt to use in the chat request
+    # + td - The expected type of the streamed value; must be `string`
+    # + return - A stream of the generated value, or an error if the type is unsupported or generation fails
+    remote function generateStream(Prompt prompt, @display {label: "Expected type"} typedesc<anydata> td = <>)
+        returns stream<td, Error?>|Error;
 };
 
 # Represents configuratations of WSO2 provider.
@@ -147,6 +229,7 @@ const DEFAULT_GENERATOR_CONFIG = {};
 public isolated distinct client class Wso2ModelProvider {
     *ModelProvider;
     private final intelligence:Client llmClient;
+    private final http:Client streamHttpClient;
     private final decimal temperature;
     private final readonly & GeneratorConfig generatorConfig;
 
@@ -187,7 +270,30 @@ public isolated distinct client class Wso2ModelProvider {
             return error Error("Failed to initialize Wso2ModelProvider", llmClient);
         }
 
+        http:ClientConfiguration streamClientConfig = {
+            auth: {token: accessToken},
+            httpVersion: connectionConfig.httpVersion,
+            http1Settings: connectionConfig.http1Settings,
+            http2Settings: connectionConfig.http2Settings,
+            timeout: connectionConfig.timeout,
+            forwarded: connectionConfig.forwarded,
+            poolConfig: connectionConfig.poolConfig,
+            cache: connectionConfig.cache,
+            compression: connectionConfig.compression,
+            circuitBreaker: connectionConfig.circuitBreaker,
+            retryConfig: connectionConfig.retryConfig,
+            responseLimits: connectionConfig.responseLimits,
+            secureSocket: connectionConfig.secureSocket,
+            proxy: connectionConfig.proxy,
+            validation: connectionConfig.validation
+        };
+        http:Client|error streamHttpClient = new (serviceUrl, streamClientConfig);
+        if streamHttpClient is error {
+            return error Error("Failed to initialize Wso2ModelProvider", streamHttpClient);
+        }
+
         self.llmClient = llmClient;
+        self.streamHttpClient = streamHttpClient;
         self.temperature = temperature;
         self.generatorConfig = generatorConfig;
     }
@@ -279,6 +385,49 @@ public isolated distinct client class Wso2ModelProvider {
         'class: "io.ballerina.stdlib.ai.wso2.Generator"
     } external;
 
+    # Sends a streaming chat request to the model with the given messages and tools.
+    #
+    # + messages - List of chat messages or a user message
+    # + tools - Tool definitions to be used for the tool call
+    # + stop - Stop sequence to stop the completion
+    # + return - A stream of chat completion chunks or an error in-case of failures
+    remote function chatStream(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [], string? stop = ())
+            returns stream<ChatCompletionChunk, Error?>|Error {
+        observe:ChatSpan span = observe:createChatSpan("gpt-4o-mini");
+        span.addProvider("WSO2");
+        if stop is string {
+            span.addStopSequence(stop);
+        }
+        span.addTemperature(self.temperature);
+        span.addInputMessages(convertMessageToJson(messages));
+
+        intelligence:CreateChatCompletionRequest request = {
+            stop,
+            messages: self.mapToChatCompletionRequestMessage(messages),
+            temperature: self.temperature,
+            'stream: true
+        };
+        if tools.length() > 0 {
+            request.functions = tools;
+            span.addTools(tools);
+        }
+
+        Wso2SseEventStream|error sseEvents = self.streamHttpClient->post("/chat/completions", request,
+                headers = {"x-product": "bi", "x-usage-context": "model_provider_chat"},
+                targetType = Wso2SseEventStream);
+        if sseEvents is error {
+            Error err = error LlmConnectionError("Error while connecting to the model", sseEvents);
+            span.close(err);
+            return err;
+        }
+        return new stream<ChatCompletionChunk, Error?>(new Wso2ChatStreamIterator(sseEvents, span));
+    }
+
+    remote function generateStream(Prompt prompt, @display {label: "Expected type"} typedesc<anydata> td = <>)
+            returns stream<td, Error?>|Error = @java:Method {
+        'class: "io.ballerina.stdlib.ai.wso2.StreamGenerator"
+    } external;
+
     private isolated function mapToChatCompletionRequestMessage(ChatMessage[]|ChatUserMessage messages)
     returns intelligence:ChatCompletionRequestMessage[] {
         if messages is ChatUserMessage {
@@ -330,6 +479,221 @@ public isolated distinct client class Wso2ModelProvider {
         role: message.role,
         "content": getChatMessageStringContent(message.content)
     };
+}
+
+# Named alias for the SSE event stream targetType, since `stream<http:SseEvent, error?>` used
+# inline as an expression (e.g. `targetType = stream<http:SseEvent, error?>`) is ambiguous for
+# the parser around the trailing `?>`.
+type Wso2SseEventStream stream<http:SseEvent, error?>;
+
+# Raw shape of a single SSE `data` payload emitted by the WSO2 intelligence
+# `/chat/completions` endpoint when `stream: true` is set, mirroring the OpenAI
+# chat-completion-chunk wire format. Kept separate from the public `ChatCompletionChunk`
+# type since the wire format uses provider-specific/legacy field names (for example,
+# `function_call` rather than `tool_calls`).
+#
+# + id - Unique identifier for the completion; stable across all chunks of one response
+# + model - The model that produced the completion
+# + choices - The streamed choices for this chunk
+# + usage - Token usage statistics; present only on the final chunk, if sent at all
+type Wso2StreamChunk record {
+    string id?;
+    string model?;
+    Wso2StreamChoice[] choices?;
+    intelligence:CompletionUsage usage?;
+};
+
+# + index - Index of the choice in the list of choices
+# + delta - The incremental message content for this chunk
+# + finishReason - Reason the model stopped generating tokens; absent until the final chunk
+type Wso2StreamChoice record {
+    int index?;
+    Wso2StreamDelta delta?;
+    @jsondata:Name {value: "finish_reason"}
+    string? finishReason?;
+};
+
+# + role - Role of the author of this message; only sent on the first delta
+# + content - The answer text fragment for this chunk
+# + functionCall - The function name/arguments fragment, when the model is calling a function
+type Wso2StreamDelta record {
+    string role?;
+    string? content?;
+    @jsondata:Name {value: "function_call"}
+    Wso2StreamFunctionCall functionCall?;
+};
+
+# + name - Name of the function to call; only sent on the first fragment of the call
+# + arguments - Incremental JSON-string fragment of the function arguments
+type Wso2StreamFunctionCall record {
+    string name?;
+    string arguments?;
+};
+
+# Maps a raw WSO2 stream chunk onto the public `ChatCompletionChunk` shape.
+#
+# + rawChunk - The raw, provider-specific chunk parsed from an SSE `data` payload
+# + return - The normalized chunk, or `()` for chunks that carry no choices
+isolated function mapWso2StreamChunk(Wso2StreamChunk rawChunk) returns ChatCompletionChunk? {
+    Wso2StreamChoice[]? choices = rawChunk.choices;
+    if choices is () || choices.length() == 0 {
+        return ();
+    }
+    Wso2StreamChoice choice = choices[0];
+    Wso2StreamDelta delta = choice.delta ?: {};
+
+    ROLE? role = delta.role == "assistant" ? ASSISTANT : ();
+
+    ToolCallChunk[]? toolCalls = ();
+    Wso2StreamFunctionCall? functionCall = delta.functionCall;
+    if functionCall is Wso2StreamFunctionCall {
+        toolCalls = [
+            {
+                index: 0,
+                'function: {name: functionCall.name, arguments: functionCall.arguments}
+            }
+        ];
+    }
+
+    CompletionTokenUsage? mappedUsage = ();
+    intelligence:CompletionUsage? usage = rawChunk.usage;
+    if usage is intelligence:CompletionUsage {
+        mappedUsage = {
+            promptTokens: usage.promptTokens,
+            completionTokens: usage.completionTokens,
+            totalTokens: usage.totalTokens
+        };
+    }
+    return {
+        id: rawChunk.id,
+        model: rawChunk.model,
+        choices: [
+            {
+                index: choice.index ?: 0,
+                delta: {role, content: delta?.content, toolCalls},
+                finishReason: mapWso2FinishReason(choice?.finishReason)
+            }
+        ],
+        usage: mappedUsage
+    };
+}
+
+# Normalizes a raw WSO2 `finish_reason` value onto the shared `FinishReason` enum.
+# `function_call` (the legacy equivalent of `tool_calls`) is folded into `TOOL_CALLS`;
+# unrecognized reasons map to `()` rather than failing the stream.
+#
+# + reason - The raw `finish_reason` string from the wire, if present
+# + return - The normalized `FinishReason`, or `()` if absent/unrecognized
+isolated function mapWso2FinishReason(string? reason) returns FinishReason? {
+    if reason is () {
+        return ();
+    }
+    match reason {
+        "stop" => {
+            return STOP;
+        }
+        "length" => {
+            return LENGTH;
+        }
+        "tool_calls"|"function_call" => {
+            return TOOL_CALLS;
+        }
+        "content_filter" => {
+            return CONTENT_FILTER;
+        }
+        _ => {
+            return ();
+        }
+    }
+}
+
+# Iterates the raw SSE event stream backing `Wso2ModelProvider.chatStream`, converting each
+# event's `data` payload into a `ChatCompletionChunk` and closing the chat span once the
+# stream ends - on the `[DONE]` sentinel, on exhaustion, or on the first error.
+class Wso2ChatStreamIterator {
+    private Wso2SseEventStream events;
+    private observe:ChatSpan span;
+    private boolean done = false;
+
+    function init(Wso2SseEventStream events, observe:ChatSpan span) {
+        self.events = events;
+        self.span = span;
+    }
+
+    public isolated function next() returns record {|ChatCompletionChunk value;|}|Error? {
+        if self.isDone() {
+            return ();
+        }
+        while true {
+            record {|http:SseEvent value;|}|error? nextEvent = self.events.next();
+            if nextEvent is () {
+                boolean _ = self.markDone();
+                self.span.close();
+                return ();
+            }
+            if nextEvent is error {
+                boolean _ = self.markDone();
+                Error err = error LlmConnectionError("Error while reading streaming response from the model",
+                        nextEvent);
+                self.span.close(err);
+                return err;
+            }
+            string? data = nextEvent.value.data;
+            if data is () {
+                continue;
+            }
+            if data == "[DONE]" {
+                boolean _ = self.markDone();
+                self.span.close();
+                return ();
+            }
+
+            Wso2StreamChunk|error rawChunk = jsondata:parseString(data);
+            if rawChunk is error {
+                boolean _ = self.markDone();
+                Error err = error LlmInvalidResponseError("Invalid or malformed chunk received from the model",
+                        rawChunk);
+                self.span.close(err);
+                return err;
+            }
+
+            ChatCompletionChunk? chunk = mapWso2StreamChunk(rawChunk);
+            if chunk is () {
+                continue;
+            }
+            FinishReason? finishReason = chunk.choices[0].finishReason;
+            if finishReason is FinishReason {
+                self.span.addFinishReason(finishReason);
+                self.span.addOutputType(observe:TEXT);
+            }
+            return {value: chunk};
+        }
+    }
+
+    public isolated function close() returns Error? {
+        if !self.markDone() {
+            self.span.close();
+        }
+        error? err = self.events.close();
+        if err is error {
+            return error LlmConnectionError("Error while closing the streaming response", err);
+        }
+    }
+
+    private isolated function isDone() returns boolean {
+        lock {
+            return self.done;
+        }
+    }
+
+    // Marks the stream as done, returning whether it was already marked before this call.
+    private isolated function markDone() returns boolean {
+        lock {
+            boolean wasDone = self.done;
+            self.done = true;
+            return wasDone;
+        }
+    }
 }
 
 isolated function convertMessageToJson(ChatMessage[]|ChatMessage messages) returns json {
