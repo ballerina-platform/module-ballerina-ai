@@ -228,7 +228,7 @@ isolated function generateLlmResponse(intelligence:Client llmClient, decimal tem
             tools,
             toolChoice: getGetResultsToolChoice(),
             temperature,
-            maxTokens: generatorConfig?.maxTokens ?: 4096
+            maxTokens: DEFAULT_MAX_TOKENS
         };
         span.addInputMessages(request.messages.toJson());
 
