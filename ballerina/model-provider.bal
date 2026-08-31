@@ -211,7 +211,8 @@ public isolated distinct client class Wso2ModelProvider {
         intelligence:CreateChatCompletionRequest request = {
             stop,
             messages: self.mapToChatCompletionRequestMessage(messages),
-            temperature: self.temperature
+            temperature: self.temperature,
+            maxTokens: DEFAULT_MAX_TOKENS
         };
         if tools.length() > 0 {
             request.functions = tools;
