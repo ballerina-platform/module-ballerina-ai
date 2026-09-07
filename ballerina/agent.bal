@@ -525,11 +525,11 @@ public isolated distinct class Agent {
     # Reached from `run` when its input is a `Resume`; not a public entry point of its own.
     #
     # + sessionId - The ID associated with the agent memory
-    # + feedback - The human's decisions, keyed by `ApprovalRequest.id`
+    # + decisions - The human's decisions, keyed by `ApprovalRequest.id`
     # + context - The additional context that can be used during agent tool execution
     # + td - Type descriptor specifying the expected return type format
     # + return - The agent's response bound to `td`, or an error
-    private isolated function resumeInternal(string sessionId, map<HumanResponse> feedback,
+    private isolated function resumeInternal(string sessionId, map<HumanDecision> decisions,
             Context context = new, typedesc<Trace|anydata> td = string) returns Trace|anydata|Error {
         log:printDebug("Agent resume started",
                 agentId = self.agentId,
@@ -544,7 +544,7 @@ public isolated distinct class Agent {
         span.addSessionId(sessionId);
         // A resume has no query; its input is the human's decisions. Recorded before the guards
         // so even a rejected resume's span shows which decisions were attempted.
-        span.addInput(string `resume decisions: ${feedback.toJsonString()}`);
+        span.addInput(string `resume decisions: ${decisions.toJsonString()}`);
 
         // Claimed eagerly (removed from the store immediately, not just on resolution), so a
         // concurrent duplicate resume for the same session finds nothing and fails
@@ -580,7 +580,7 @@ public isolated distinct class Agent {
 
         // Not the claimed record's fault - nothing was actually resolved - so restore it
         // before returning, rather than leaving it lost after a caller mistake.
-        string[] unknownIds = findUnknownApprovalIds(feedback, pendingApproval.pendingRequests);
+        string[] unknownIds = findUnknownApprovalIds(decisions, pendingApproval.pendingRequests);
         if unknownIds.length() > 0 {
             self.restoreClaimedApproval(pendingApproval, sessionId);
             UnknownApprovalIdError unknown = error UnknownApprovalIdError(
@@ -594,8 +594,8 @@ public isolated distinct class Agent {
         // the trace, making it clear at a glance where and how a human intervened on resume.
         observe:ResolveHumanApprovalSpan resolveSpan = observe:createResolveHumanApprovalSpan(sessionId);
         resolveSpan.addDecisions(from ApprovalRequest req in pendingApproval.pendingRequests
-            where feedback.hasKey(req.id)
-            select {id: req.id, toolName: req.toolName, decision: feedback.get(req.id).decision});
+            where decisions.hasKey(req.id)
+            select {id: req.id, toolName: req.toolName, outcome: decisions.get(req.id).outcome});
         resolveSpan.close();
 
         // Carry the original run's start time forward, so `Trace.startTime` reflects the
@@ -618,7 +618,7 @@ public isolated distinct class Agent {
             }
             responseSchema = schema;
         }
-        ExecutionTrace executionTrace = resumeRun(self, pendingApproval, feedback, self.maxIter,
+        ExecutionTrace executionTrace = resumeRun(self, pendingApproval, decisions, self.maxIter,
             self.verbose, agentId, sessionId, context, responseSchema);
         // Safe: `isPendingApprovalHistoryValid` above already guarantees this index is in range.
         ChatUserMessage userMessage = <ChatUserMessage>pendingApproval.history[pendingApproval.historyPrefixLength - 1];

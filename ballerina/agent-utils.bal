@@ -88,13 +88,13 @@ public type ToolOutput record {|
 type SeededFeedback record {|
     # The caller's resume decisions, keyed by `ApprovalRequest.id`. Already validated (in
     # `Agent.resumeInternal`) to reference only ids present in `pendingRequests`.
-    map<HumanResponse> suppliedDecisions;
+    map<HumanDecision> suppliedDecisions;
     # The requests still awaiting a decision immediately before this resume call
     ApprovalRequest[] pendingRequests;
     # The full batch of tool calls the LLM proposed in this turn
     FunctionCall[] originalBatch;
     # Decisions already gathered for positions other than those in `pendingRequests`
-    HumanResponse?[] decisions;
+    HumanDecision?[] decisions;
 |};
 
 # Internal plumbing only - never returned to `Agent` callers, not wired into the `Error`
@@ -107,7 +107,7 @@ type BatchApprovalPending record {|
     # The full batch of tool calls the LLM proposed in this turn
     FunctionCall[] originalBatch;
     # Decisions gathered so far for positions other than the ones still pending
-    HumanResponse?[] decisions;
+    HumanDecision?[] decisions;
 |};
 
 # An executor that runs the agent's reasoning-action cycles one at a time. Each cycle is one LLM
@@ -199,7 +199,7 @@ class Executor {
             self.isCompleted = true;
             return llmResponse;
         }
-        HumanResponse?[] decisions = [];
+        HumanDecision?[] decisions = [];
         foreach int i in 0 ..< llmResponse.length() {
             decisions.push(());
         }
@@ -278,7 +278,7 @@ class Executor {
     # + return - Results of every executed call, or a further pause on the calls still undecided
     private isolated function resolveSuppliedDecisionsAndContinue(SeededFeedback seeded)
             returns (ExecutionResult|ExecutionError)[]|BatchApprovalPending {
-        HumanResponse?[] decisions = applySuppliedDecisions(seeded.pendingRequests, seeded.decisions,
+        HumanDecision?[] decisions = applySuppliedDecisions(seeded.pendingRequests, seeded.decisions,
                 seeded.suppliedDecisions);
         int[] gatedIndices = findAllGatedIndices(self.agent, seeded.originalBatch, decisions);
         if gatedIndices.length() > 0 {
@@ -311,7 +311,7 @@ class Executor {
     # + originalBatch - The full batch of tool calls the LLM proposed in this turn
     # + decisions - A decision for every gated position in `originalBatch`
     # + return - Results of every call in the batch, in original order
-    private isolated function executeResolvedBatch(FunctionCall[] originalBatch, HumanResponse?[] decisions)
+    private isolated function executeResolvedBatch(FunctionCall[] originalBatch, HumanDecision?[] decisions)
             returns (ExecutionResult|ExecutionError)[] {
         FunctionCall[] toExecute = [];
         int[] originalIndices = [];
@@ -320,11 +320,11 @@ class Executor {
             resultsByIndex.push(());
         }
         foreach int i in 0 ..< originalBatch.length() {
-            HumanResponse? decision = decisions[i];
+            HumanDecision? humanDecision = decisions[i];
             FunctionCall call = originalBatch[i];
-            if decision is HumanResponse && decision.decision == REJECT {
+            if humanDecision is HumanDecision && humanDecision.outcome == REJECT {
                 string observation = string `The human reviewer rejected this tool call.` +
-                    (decision.reason is string ? string ` Reason: ${decision.reason ?: ""}` : "");
+                    (humanDecision.reason is string ? string ` Reason: ${humanDecision.reason ?: ""}` : "");
                 LlmToolResponse tool = {name: call.name, arguments: call.arguments, id: call.id};
                 self.update({llmResponse: call.toJson(), observation});
                 resultsByIndex[i] = {tool, observation};
@@ -531,12 +531,12 @@ isolated function executeToolCall(Agent agent, FunctionCall llmResponse, Context
 # + batch - The full batch of tool calls proposed in this LLM turn
 # + decisions - Decisions already gathered for earlier positions in `batch`
 # + return - Every position (in order) still needing a human decision
-isolated function findAllGatedIndices(Agent agent, FunctionCall[] batch, HumanResponse?[] decisions)
+isolated function findAllGatedIndices(Agent agent, FunctionCall[] batch, HumanDecision?[] decisions)
         returns int[] {
     ToolStore toolStore = agent.toolStore;
     int[] gated = [];
     foreach int i in 0 ..< batch.length() {
-        if decisions[i] is HumanResponse {
+        if decisions[i] is HumanDecision {
             continue;
         }
         FunctionCall call = batch[i];
@@ -639,13 +639,13 @@ isolated function buildApprovalRequest(Agent agent, FunctionCall call, string se
 # + decisions - Decisions already gathered for positions other than those in `pendingRequests`
 # + suppliedDecisions - The caller's decisions for this resume call, keyed by `ApprovalRequest.id`
 # + return - `decisions`, with `suppliedDecisions` applied at the right positions
-isolated function applySuppliedDecisions(ApprovalRequest[] pendingRequests, HumanResponse?[] decisions,
-        map<HumanResponse> suppliedDecisions) returns HumanResponse?[] {
-    HumanResponse?[] updated = decisions.clone();
+isolated function applySuppliedDecisions(ApprovalRequest[] pendingRequests, HumanDecision?[] decisions,
+        map<HumanDecision> suppliedDecisions) returns HumanDecision?[] {
+    HumanDecision?[] updated = decisions.clone();
     foreach ApprovalRequest request in pendingRequests {
-        HumanResponse? feedback = suppliedDecisions[request.id];
-        if feedback is HumanResponse {
-            updated[request.batchIndex] = feedback;
+        HumanDecision? supplied = suppliedDecisions[request.id];
+        if supplied is HumanDecision {
+            updated[request.batchIndex] = supplied;
         }
     }
     return updated;
@@ -675,7 +675,7 @@ isolated function findPendingRequestForIndex(ApprovalRequest[] pendingRequests, 
 # + suppliedDecisions - The caller's decisions for a resume call, keyed by `ApprovalRequest.id`
 # + pendingRequests - The requests currently awaiting a decision
 # + return - The ids in `suppliedDecisions` that don't match any entry in `pendingRequests`
-isolated function findUnknownApprovalIds(map<HumanResponse> suppliedDecisions, ApprovalRequest[] pendingRequests)
+isolated function findUnknownApprovalIds(map<HumanDecision> suppliedDecisions, ApprovalRequest[] pendingRequests)
         returns string[] {
     string[] pendingIds = from ApprovalRequest request in pendingRequests select request.id;
     return from string id in suppliedDecisions.keys()
@@ -759,7 +759,7 @@ isolated function run(Agent agent, string instruction, string|Prompt query, int 
 # + context - Context values to be used by the agent to execute the task
 # + responseSchema - Structured-output schema for this resume, derived from the caller's `td`
 # + return - Returns the execution steps tracing the agent's reasoning and outputs from the tools
-isolated function resumeRun(Agent agent, PendingApproval pendingApproval, map<HumanResponse> suppliedDecisions,
+isolated function resumeRun(Agent agent, PendingApproval pendingApproval, map<HumanDecision> suppliedDecisions,
         int maxIter, boolean verbose, string? agentId, string sessionId = DEFAULT_SESSION_ID, Context context = new,
         ResponseSchema? responseSchema = ())
         returns ExecutionTrace {
@@ -821,7 +821,7 @@ isolated function executeAgentLoop(Agent agent, Executor executor, ChatMessage[]
     string? content = ();
     ApprovalRequiredError? pendingApproval = ();
     FunctionCall[] pendingOriginalBatch = [];
-    HumanResponse?[] pendingDecisions = [];
+    HumanDecision?[] pendingDecisions = [];
     ChatAssistantMessage? finalAssistantMessage = ();
 
     foreach (ExecutionResult|ExecutionError)[]|string|BatchApprovalPending|Error iterationResult in executor {

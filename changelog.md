@@ -9,8 +9,9 @@ This file documents all significant changes made to the Ballerina AI package acr
 - [Add `Tag` Marker Type](https://github.com/wso2/product-integrator/issues/2300)
 
 ### Changed
-- **Breaking:** `Resume` (a closed record) now has an additional `tag` field to distinguish it from an `anydata` query, and is now a `readonly` record, so `decisions` must be passed as a `readonly` `map<HumanResponse>`. ([wso2/product-integrator#2300](https://github.com/wso2/product-integrator/issues/2300))
-- **Breaking:** `DecisionMessage` is now a `readonly` record, so `decisions` must be passed as a `readonly` `map<HumanResponse>`. ([wso2/product-integrator#2300](https://github.com/wso2/product-integrator/issues/2300))
+- **Breaking:** `Resume` (a closed record) now has an additional `tag` field to distinguish it from an `anydata` query, and is now a `readonly` record, so `decisions` must be passed as a `readonly` `map<HumanDecision>`. ([wso2/product-integrator#2300](https://github.com/wso2/product-integrator/issues/2300))
+- **Breaking:** `DecisionMessage` is now a `readonly` record, so `decisions` must be passed as a `readonly` `map<HumanDecision>`. ([wso2/product-integrator#2300](https://github.com/wso2/product-integrator/issues/2300))
+- **Breaking:** The human-in-the-loop decision types are renamed so that the word "decision" no longer appears twice in every read (`decisions[id].decision`). `HumanResponse` is now `HumanDecision`, the `ApprovalDecision` enum is now `ApprovalOutcome`, and the record's `decision` field is now `outcome`. The `APPROVE` and `REJECT` members are unchanged, and every `decisions` field name (`Resume`, `DecisionMessage`, `PendingApproval`) keeps its current name, so a resume now reads `{decisions: {[req.id]: {outcome: ai:APPROVE}}}`. Note that the JSON key inside each entry changes from `decision` to `outcome`: a checkpoint persisted by an external `ShortTermMemoryStore` before this release will not deserialize, so any run left paused across the upgrade must be restarted.
 
 ## [1.14.1] - 2026-08-25
 

@@ -27,12 +27,12 @@ service /chatService on chatListener {
         };
     }
 
-    // Echoes the received decisions verbatim (keys, decision, and reason), rather than just a
+    // Echoes the received decisions verbatim (keys, outcome, and reason), rather than just a
     // count, so tests can verify the `ApprovalRequest.id`-keyed contract survives the round trip.
     resource function post decision(@http:Payload ai:DecisionMessage request) returns ai:ChatRespMessage|error {
         string[] parts = [];
-        foreach [string, ai:HumanResponse] [id, response] in request.decisions.entries() {
-            parts.push(id + "=" + response.decision.toString() + (response?.reason ?: ""));
+        foreach [string, ai:HumanDecision] [id, decision] in request.decisions.entries() {
+            parts.push(id + "=" + decision.outcome.toString() + (decision?.reason ?: ""));
         }
         return {
             message: request.sessionId + ": " + string:'join(",", ...parts)

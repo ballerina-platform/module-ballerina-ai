@@ -35,17 +35,17 @@ public type ApprovalRequest record {|
     int batchIndex;
 |};
 
-# A human reviewer's decision on a pending tool call. A call is either approved or rejected;
+# The outcome of a human review of a pending tool call. A call is either approved or rejected;
 # editing the proposed arguments before approval is not supported.
-public enum ApprovalDecision {
+public enum ApprovalOutcome {
     APPROVE,
     REJECT
 }
 
 # Represents a human's decision on a pending tool call.
-public type HumanResponse record {|
+public type HumanDecision record {|
     # Whether the call is approved or rejected
-    ApprovalDecision decision;
+    ApprovalOutcome outcome;
     # When rejecting, optional guidance shown to the agent: why it was blocked, or what to do instead
     string reason?;
 |};
@@ -59,7 +59,7 @@ public type HumanResponse record {|
 # just the still-undecided requests.
 public type Resume readonly & record {|
     # The human's decisions on the pending tool calls, keyed by `ApprovalRequest.id`
-    map<HumanResponse> decisions;
+    map<HumanDecision> decisions;
     # Marks this record as a resume input rather than a new query
     ResumeTag tag = new;
 |};
@@ -119,7 +119,7 @@ public type PendingApproval record {|
     ApprovalRequest[] pendingRequests = [];
     # One slot per entry in `originalBatch`: `()` if not yet decided (or not gated at all),
     # otherwise the human's decision already gathered for that position
-    HumanResponse?[] decisions = [];
+    HumanDecision?[] decisions = [];
 |};
 
 # The isolated-safe form of an `Iteration` used only by `InMemoryShortTermMemoryStore`'s
@@ -232,7 +232,7 @@ type StoredPendingApproval record {|
     # One request per gated position in `originalBatch` that still has no decision
     ApprovalRequest[] pendingRequests;
     # One slot per entry in `originalBatch`: `()` if not yet decided, otherwise the human's decision
-    HumanResponse?[] decisions;
+    HumanDecision?[] decisions;
 |};
 
 # Converts a `PendingApproval` into its isolated-safe stored form for persistence inside a
