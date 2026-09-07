@@ -35,8 +35,8 @@ function testAgentChatDecision() returns error? {
     ai:DecisionMessage req = {
         sessionId: "1",
         decisions: {
-            "req-1": {decision: ai:APPROVE},
-            "req-2": {decision: ai:REJECT, reason: "not needed"}
+            "req-1": {outcome: ai:APPROVE},
+            "req-2": {outcome: ai:REJECT, reason: "not needed"}
         }
     };
     ai:ChatRespMessage resp = check chatClient->/decision.post(req);
@@ -86,7 +86,7 @@ function testAgentChatDecisionNoPending() returns error? {
 @test:Config {}
 function testAgentChatDecisionUnknownId() returns error? {
     http:Client httpClient = check new ("http://localhost:9090");
-    http:Response resp = check httpClient->/pausingService/decision.post({sessionId: "1", decisions: {"bad-id": {decision: ai:APPROVE}}});
+    http:Response resp = check httpClient->/pausingService/decision.post({sessionId: "1", decisions: {"bad-id": {outcome: ai:APPROVE}}});
     test:assertEquals(resp.statusCode, 400, "Expected UnknownApprovalIdError to map to HTTP 400");
     json body = check resp.getJsonPayload();
     test:assertEquals(check body.errorType, "UnknownApprovalIdError", "Wrong errorType in response body");

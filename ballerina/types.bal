@@ -39,7 +39,7 @@ public type ChatRespMessage record {|
 # + decisions - The human's decisions, keyed by `ApprovalRequest.id`
 public type DecisionMessage readonly & record {|
     string sessionId;
-    map<HumanResponse> decisions;
+    map<HumanDecision> decisions;
 |};
 
 # Represents the configuration for a chat client.
