@@ -228,6 +228,11 @@ public isolated distinct class Agent {
     final readonly & map<RequiresApproval> approvalRules;
     # Indicates whether multiple tool calls from a single LLM response are executed in parallel.
     final boolean executeToolCallsInParallel;
+    // Whether any tool can gate a call on human approval, and so whether this agent can ever pause.
+    // Fixed at init from the readonly tool store, so it is a lifetime-stable property of the agent.
+    // A tool declaring `requiresApproval: false` does not count; a function-valued rule does, since
+    // only the proposed arguments decide whether it gates.
+    private final boolean hitlEnabled;
     private final int maxIter;
     private final readonly & SystemPrompt systemPrompt;
     private final boolean verbose;
@@ -269,11 +274,15 @@ public isolated distinct class Agent {
                 int:max(self.toolSchemas.length(), DEFAULT_MINIMUM_MAX_ITERATIONS) : maxIter;
             map<RequiresApproval> approvalRules = {};
             foreach Tool tool in self.toolStore.tools {
+                // `true` gates every call, and a function gates the calls it evaluates to `true`
+                // for, so both can pause. `false` cannot, and is the only value left out - the map
+                // therefore holds real gates only.
                 if tool.requiresApproval !is false {
                     approvalRules[tool.name] = tool.requiresApproval;
                 }
             }
             self.approvalRules = approvalRules.cloneReadOnly();
+            self.hitlEnabled = approvalRules.length() > 0;
             // The HITL pause checkpoint is persisted through `memory` when it is a
             // `ShortTermMemory` (which persists checkpoints in its configured store), so a single
             // configured store serves both the conversation history and the pause state.
@@ -284,7 +293,7 @@ public isolated distinct class Agent {
                 self.checkpointer = agentMemory;
             } else {
                 self.checkpointer = check new ShortTermMemory();
-                if approvalRules.length() > 0 {
+                if self.hitlEnabled {
                     log:printWarn("The configured memory does not support durable checkpointing; " +
                         "human-in-the-loop pauses will not survive a restart or run on another " +
                         "replica. Use `ShortTermMemory` for durable human-in-the-loop.");
@@ -420,30 +429,37 @@ public isolated distinct class Agent {
             return self.resumeInternal(sessionId, query.decisions, context, td);
         }
 
-        // A prior call on this session may still be awaiting a human decision. Starting a
-        // fresh run regardless would silently orphan that pending approval (and, if this new
-        // run also happens to pause, `checkpointer.put` would overwrite it outright) - so
-        // check first, rather than let a new, unrelated turn interleave with an unresolved one.
-        PendingApproval?|Error existingApprovalResult = self.checkpointer.getCheckpoint(sessionId);
-        if existingApprovalResult is Error {
-            // Trace this earliest guard failure too, matching how `resumeInternal` opens its span
-            // before its own guards - otherwise a checkpoint-store failure here goes unobserved.
-            observe:InvokeAgentSpan errorSpan = observe:createInvokeAgentSpan(self.systemPrompt.role);
-            errorSpan.addId(self.uniqueId);
-            errorSpan.addSessionId(sessionId);
-            errorSpan.close(existingApprovalResult);
-            return existingApprovalResult;
-        }
-        if existingApprovalResult is PendingApproval {
-            if !isPendingApprovalHistoryValid(existingApprovalResult) {
-                log:printWarn("Clearing a corrupted pending approval to allow a new run", sessionId = sessionId);
-                Error? removeErr = self.checkpointer.removeCheckpoint(sessionId);
-                if removeErr is Error {
-                    log:printError("Failed to remove the corrupted pending approval", removeErr, sessionId = sessionId);
+        // Only an agent with at least one approval-gated tool can ever have paused, so only such an
+        // agent needs this guard. Skipping it otherwise keeps every non-HITL run off the checkpoint
+        // store entirely - no round trip, and no backing storage provisioned for a feature the
+        // application never uses.
+        if self.hitlEnabled {
+            // A prior call on this session may still be awaiting a human decision. Starting a
+            // fresh run regardless would silently orphan that pending approval (and, if this new
+            // run also happens to pause, `checkpointer.put` would overwrite it outright) - so
+            // check first, rather than let a new, unrelated turn interleave with an unresolved one.
+            PendingApproval?|Error existingApprovalResult = self.checkpointer.getCheckpoint(sessionId);
+            if existingApprovalResult is Error {
+                // Trace this earliest guard failure too, matching how `resumeInternal` opens its span
+                // before its own guards - otherwise a checkpoint-store failure here goes unobserved.
+                observe:InvokeAgentSpan errorSpan = observe:createInvokeAgentSpan(self.systemPrompt.role);
+                errorSpan.addId(self.uniqueId);
+                errorSpan.addSessionId(sessionId);
+                errorSpan.close(existingApprovalResult);
+                return existingApprovalResult;
+            }
+            if existingApprovalResult is PendingApproval {
+                if !isPendingApprovalHistoryValid(existingApprovalResult) {
+                    log:printWarn("Clearing a corrupted pending approval to allow a new run", sessionId = sessionId);
+                    Error? removeErr = self.checkpointer.removeCheckpoint(sessionId);
+                    if removeErr is Error {
+                        log:printError("Failed to remove the corrupted pending approval", removeErr,
+                                sessionId = sessionId);
+                    }
+                    // Fall through - proceed with a fresh run below.
+                } else {
+                    return self.buildPendingApprovalTrace(existingApprovalResult, td, toString(query));
                 }
-                // Fall through - proceed with a fresh run below.
-            } else {
-                return self.buildPendingApprovalTrace(existingApprovalResult, td, toString(query));
             }
         }
 
