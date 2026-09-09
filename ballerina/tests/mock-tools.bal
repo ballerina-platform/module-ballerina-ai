@@ -109,6 +109,8 @@ public isolated client class MockLLM {
 // - "first turn query" and "third turn query" get a normal final answer.
 // - "second turn query" gets a response with neither a tool call nor chat content, which the
 //   agent cannot parse into either a `FunctionCall` or a final answer.
+// - a query containing "Colombo" (used to verify a record query is stringified before being sent
+//   to the model) gets a normal final answer echoing the received prompt.
 public isolated client class ScriptedMockLLM {
     *ModelProvider;
 
@@ -124,6 +126,9 @@ public isolated client class ScriptedMockLLM {
         }
         if prompt.includes("third turn query") {
             return {role: ASSISTANT, content: "third turn answer"};
+        }
+        if prompt.includes("Colombo") {
+            return {role: ASSISTANT, content: "The weather in Colombo is sunny"};
         }
         return error Error("Unexpected prompt to ScriptedMockLLM: " + prompt);
     }
@@ -272,4 +277,14 @@ isolated function testTool(string a, string b = "default-one", string c = "defau
 isolated function testToolPanic(string data) returns string {
     error e = error(data);
     panic (e);
+}
+
+@AgentTool {name: "duplicateTool", description: "first tool registered under a duplicate name"}
+isolated function duplicateToolOne(string a) returns string {
+    return a;
+}
+
+@AgentTool {name: "duplicateTool", description: "second tool registered under a duplicate name"}
+isolated function duplicateToolTwo(string a) returns string {
+    return a;
 }

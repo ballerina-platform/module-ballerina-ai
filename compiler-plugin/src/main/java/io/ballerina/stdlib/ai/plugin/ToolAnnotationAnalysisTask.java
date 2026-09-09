@@ -26,6 +26,7 @@ import io.ballerina.compiler.api.symbols.ModuleSymbol;
 import io.ballerina.compiler.api.symbols.ParameterSymbol;
 import io.ballerina.compiler.api.symbols.Symbol;
 import io.ballerina.compiler.api.symbols.SymbolKind;
+import io.ballerina.compiler.api.symbols.TypeDescKind;
 import io.ballerina.compiler.api.symbols.TypeReferenceTypeSymbol;
 import io.ballerina.compiler.api.symbols.TypeSymbol;
 import io.ballerina.compiler.api.symbols.UnionTypeSymbol;
@@ -58,8 +59,10 @@ import static io.ballerina.stdlib.ai.plugin.ToolAnnotationConfig.AUTH;
 import static io.ballerina.stdlib.ai.plugin.ToolAnnotationConfig.DESCRIPTION_FIELD_NAME;
 import static io.ballerina.stdlib.ai.plugin.ToolAnnotationConfig.NAME_FIELD_NAME;
 import static io.ballerina.stdlib.ai.plugin.ToolAnnotationConfig.PARAMETERS_FIELD_NAME;
+import static io.ballerina.stdlib.ai.plugin.ToolAnnotationConfig.REQUIRES_APPROVAL_FIELD_NAME;
 import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.CONTEXT_PARAM_MUST_BE_FIRST;
 import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.INVALID_AGENT_ID_AUTH_CONFIG;
+import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.INVALID_APPROVAL_PREDICATE_SIGNATURE;
 import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.INVALID_AUTH_CONFIG;
 import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.INVALID_RETURN_TYPE_IN_TOOL;
 import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.PARAMETER_IS_NOT_A_SUBTYPE_OF_ANYDATA;
@@ -108,6 +111,7 @@ class ToolAnnotationAnalysisTask implements AnalysisTask<SyntaxNodeAnalysisConte
                 || !hasValidateReturnType(functionSymbol.get(), functionLocation)) {
             return;
         }
+        validateRequiresApproval(toolAnnotationNode, function);
         if (hasSpreadAnnotationFieldValue(toolAnnotationNode)) {
             return;
         }
@@ -223,6 +227,80 @@ class ToolAnnotationAnalysisTask implements AnalysisTask<SyntaxNodeAnalysisConte
         }
         // Tool functions can take anydata type parameter except xml
         return allAnydata && !hasXml;
+    }
+
+    // Validates a function-valued `requiresApproval` predicate: it must have the same parameter
+    // signature as the tool it gates (same names and types, since arguments bind by name) and
+    // return `boolean`. A predicate that declares an `ai:Context` parameter has an extra parameter
+    // the tool does not, so it too fails this signature check. A `boolean` value needs no validation.
+    private void validateRequiresApproval(AnnotationNode annotationNode, FunctionSymbol toolFunction) {
+        if (annotationNode.annotValue().isEmpty()) {
+            return;
+        }
+        Map<String, ExpressionNode> fieldValues = extractFieldValues(annotationNode.annotValue().get().fields());
+        ExpressionNode approvalExpr = fieldValues.get(REQUIRES_APPROVAL_FIELD_NAME);
+        if (approvalExpr == null) {
+            return;
+        }
+        FunctionTypeSymbol predicateType = resolvePredicateType(approvalExpr);
+        if (predicateType == null) {
+            // Not a function value (e.g. a `boolean`), or the type could not be resolved.
+            return;
+        }
+        List<ParameterSymbol> predicateParams = new ArrayList<>(predicateType.params().orElse(List.of()));
+        if (!predicateReturnsBoolean(predicateType) || !predicateParamsMatchTool(predicateParams, toolFunction)) {
+            reportDiagnostic(CompilationDiagnostic.getDiagnostic(INVALID_APPROVAL_PREDICATE_SIGNATURE,
+                    approvalExpr.location(), toolFunction.getName().orElse("unknownFunction")));
+        }
+    }
+
+    // Resolves the `FunctionTypeSymbol` of a `requiresApproval` value, or `null` if it is not a
+    // function (a `boolean`) or cannot be resolved. A named function reference resolves through its
+    // symbol; an inline function expression falls back to the expression's type.
+    private FunctionTypeSymbol resolvePredicateType(ExpressionNode approvalExpr) {
+        Optional<Symbol> symbol = context.semanticModel().symbol(approvalExpr);
+        if (symbol.isPresent() && symbol.get() instanceof FunctionSymbol functionSymbol) {
+            return functionSymbol.typeDescriptor();
+        }
+        Optional<TypeSymbol> approvalType = context.semanticModel().type(approvalExpr);
+        if (approvalType.isEmpty()) {
+            return null;
+        }
+        TypeSymbol type = approvalType.get();
+        if (type instanceof TypeReferenceTypeSymbol ref) {
+            type = ref.typeDescriptor();
+        }
+        return type instanceof FunctionTypeSymbol predicateType ? predicateType : null;
+    }
+
+    private boolean predicateReturnsBoolean(FunctionTypeSymbol predicateType) {
+        Optional<TypeSymbol> returnType = predicateType.returnTypeDescriptor();
+        return returnType.isPresent() && returnType.get().typeKind() == TypeDescKind.BOOLEAN;
+    }
+
+    private boolean predicateParamsMatchTool(List<ParameterSymbol> predicateParams, FunctionSymbol toolFunction) {
+        List<ParameterSymbol> toolParams = new ArrayList<>(toolFunction.typeDescriptor().params().orElse(List.of()));
+        // The tool may take a leading ai:Context; the predicate mirrors only its business parameters.
+        if (!toolParams.isEmpty() && Utils.isAiContextType(toolParams.getFirst().typeDescriptor(), this.context)) {
+            toolParams.removeFirst();
+        }
+        if (predicateParams.size() != toolParams.size()) {
+            return false;
+        }
+        for (int i = 0; i < predicateParams.size(); i++) {
+            ParameterSymbol predicateParam = predicateParams.get(i);
+            ParameterSymbol toolParam = toolParams.get(i);
+            // Arguments bind by name at runtime, so parameter names must match, not just types.
+            if (!predicateParam.getName().equals(toolParam.getName())) {
+                return false;
+            }
+            TypeSymbol predicateParamType = predicateParam.typeDescriptor();
+            TypeSymbol toolParamType = toolParam.typeDescriptor();
+            if (!predicateParamType.subtypeOf(toolParamType) || !toolParamType.subtypeOf(predicateParamType)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private void reportDiagnostic(Diagnostic diagnostic) {

@@ -40,7 +40,12 @@ public type Tool record {|
     isolated function caller;
     # Optional authorization configuration required to invoke this tool.
     AgentIdAuthConfig|Scopes auth?;
+    # When `true`, the agent pauses and requests human approval before invoking this tool.
+    # A function value gates only the calls it evaluates to `true` for, based on the proposed
+    # arguments.
+    RequiresApproval requiresApproval = false;
 |};
+
 type ToolInfo record {|
     string name;
     string description;
@@ -49,7 +54,8 @@ type ToolInfo record {|
 
 public isolated class ToolStore {
     public final map<Tool> & readonly tools;
-    private map<()> mcpTools = {};
+    private final map<()> mcpTools = {};
+    private final map<string> toolToToolKitMap = {};
 
     # Register tools to the agent. 
     # These tools will be by the LLM to perform tasks.
@@ -66,21 +72,32 @@ public isolated class ToolStore {
             return;
         }
         ToolConfig[] toolList = [];
+        map<string> toolNames = {};
         foreach BaseToolKit|ToolConfig|FunctionTool tool in tools {
             if tool is FunctionTool {
                 ToolConfig toolConfig = check getToolConfig(tool);
+                check validateToolName(toolNames, toolConfig.name);
                 toolList.push(toolConfig);
             } else if tool is BaseToolKit {
                 ToolConfig[] toolsFromToolKit = tool.getTools(); // TODO remove this after Ballerina fixes nullpointer exception
+                foreach ToolConfig toolFromToolKit in toolsFromToolKit {
+                    string sanitizedName = sanitizeToolName(toolFromToolKit.name);
+                    lock {
+                        self.toolToToolKitMap[sanitizedName] = (typeof tool).toString();
+                    }
+                }
                 if tool is McpBaseToolKit {
                     foreach ToolConfig element in toolsFromToolKit {
+                        string sanitizedName = sanitizeToolName(element.name);
                         lock {
-                            self.mcpTools[element.name] = ();
+                            self.mcpTools[sanitizedName] = ();
                         }
                     }
                 }
+                check validateToolName(toolNames, ...toolsFromToolKit.map(toolKitTool => toolKitTool.name));
                 toolList.push(...toolsFromToolKit);
             } else {
+                check validateToolName(toolNames, tool.name);
                 toolList.push(tool);
             }
         }
@@ -195,6 +212,12 @@ public isolated class ToolStore {
         }
     }
 
+    isolated function getToolKitName(string toolName) returns string? {
+        lock {
+            return self.toolToToolKitMap[toolName];
+        }
+    }
+
     isolated function getToolsInfo() returns ToolInfo[] {
         ToolInfo[] toolList = [];
         foreach [string, Tool] [name, tool] in self.tools.entries() {
@@ -212,6 +235,16 @@ public isolated class ToolStore {
     }
 }
 
+isolated function validateToolName(map<string> registeredToolNames, string... toolNames) returns Error? {
+    foreach string toolName in toolNames {
+        if registeredToolNames.hasKey(toolName) {
+            return error(string `duplicate tool name found: '${toolName}'. ` +
+                "Tool names must be unique across all tools and toolkits registered with the agent");
+        }
+        registeredToolNames[toolName] = toolName;
+    }
+}
+
 isolated function getToolConfig(FunctionTool tool) returns ToolConfig|Error {
     typedesc<FunctionTool> typedescriptor = typeof tool;
     ToolAnnotationConfig? config = typedescriptor.@AgentTool;
@@ -224,7 +257,8 @@ isolated function getToolConfig(FunctionTool tool) returns ToolConfig|Error {
             description: check config?.description.ensureType(),
             parameters: check config?.parameters.ensureType(),
             caller: tool,
-            auth: check config?.auth.ensureType()
+            auth: check config?.auth.ensureType(),
+            requiresApproval: config.requiresApproval
         };
     } on fail error e {
         return error Error("Unable to register the function '" + getFunctionName(tool) + "' as agent tool", e);
@@ -270,6 +304,17 @@ isolated function getInputArgumentsOfTool(FunctionTool tool, map<json> inputValu
     return [context, ...orderedArgs.cloneReadOnly()];
 }
 
+isolated function sanitizeToolName(string name) returns string {
+    if name.matches(re `^[a-zA-Z0-9_-]{1,64}$`) {
+        return name;
+    }
+    string sanitizedName = name;
+    if sanitizedName.length() > 64 {
+        sanitizedName = sanitizedName.substring(0, 64);
+    }
+    return regexp:replaceAll(re `[^a-zA-Z0-9_-]`, sanitizedName, "_");
+}
+
 isolated function registerTool(map<Tool & readonly> toolMap, ToolConfig[] tools) returns Error? {
     foreach ToolConfig tool in tools {
         string name = tool.name;
@@ -278,10 +323,7 @@ isolated function registerTool(map<Tool & readonly> toolMap, ToolConfig[] tools)
         }
         if !name.matches(re `^[a-zA-Z0-9_-]{1,64}$`) {
             log:printWarn(string `Tool name '${name}' contains invalid characters. Only alphanumeric, underscore and hyphen are allowed.`);
-            if name.length() > 64 {
-                name = name.substring(0, 64);
-            }
-            name = regexp:replaceAll(re `[^a-zA-Z0-9_-]`, name, "_");
+            name = sanitizeToolName(name);
         }
         if toolMap.hasKey(name) {
             log:printDebug("Duplicate tool name detected",
@@ -306,7 +348,8 @@ isolated function registerTool(map<Tool & readonly> toolMap, ToolConfig[] tools)
             variables,
             constants,
             caller: tool.caller,
-            auth: tool.auth
+            auth: tool.auth,
+            requiresApproval: tool.requiresApproval
         };
         toolMap[name] = agentTool.cloneReadOnly();
     }
@@ -371,12 +414,21 @@ isolated function mergeInputs(map<json>? inputs, map<json> constants) returns ma
     return inputs;
 }
 
-isolated function validateTool(LlmToolResponse action, Credential? agentCredential, cache:Cache tokenManager, 
-    Context context, map<Tool> & readonly tool, boolean isMcpTool) returns 
-    ToolNotFoundError|ToolInvalidInputError|TokenAcquisitionError|TokenValidationError? {
+# Checks the tool name resolves and its inputs merge against the tool's constants, without any
+# side effects. Pure by design so it can double as a "would this call pass name/input
+# resolution?" probe (e.g. when deciding whether a call should pause for human approval) without
+# acquiring tokens or making network calls. Authorization is intentionally left to `validateTool`.
+# Note this does not perform full parameter-schema validation - that (and the actual constant
+# merge used for execution) happens on the execution path in `ToolStore.execute`.
+#
+# + action - The proposed tool call (name and arguments)
+# + tool - The available tools
+# + agentId - The agent id, used only for diagnostic logging
+# + return - `()` if the name resolves and inputs merge, otherwise the corresponding error
+isolated function validateToolNameAndInput(LlmToolResponse action, map<Tool> & readonly tool, string? agentId)
+        returns ToolNotFoundError|ToolInvalidInputError? {
     string toolName = action.name;
     map<json>? inputs = action.arguments;
-    string? agentId = agentCredential is Credential ? agentCredential.id : ();
     if !tool.hasKey(toolName) {
         log:printDebug("Tool not found",
             agentId = agentId,
@@ -387,7 +439,10 @@ isolated function validateTool(LlmToolResponse action, Credential? agentCredenti
             instruction = string `Tool "${toolName}" does not exists.`
             + string ` Use a tool from the list: ${tool.keys().toString()}}`);
     }
-    map<json>|error inputValues = mergeInputs(inputs, tool.get(toolName).constants);
+    // `mergeInputs` mutates its input map in place; clone first so this probe never alters the
+    // caller's proposed arguments (they feed the approval request shown to the human and are
+    // re-merged independently at execution time).
+    map<json>|error inputValues = mergeInputs(inputs.clone(), tool.get(toolName).constants);
     if inputValues is error {
         log:printDebug("Tool input validation failed",
             inputValues,
@@ -396,16 +451,23 @@ isolated function validateTool(LlmToolResponse action, Credential? agentCredenti
         );
         string instruction = string `Tool "${toolName}"  execution failed due to invalid inputs provided.` +
             string ` Use the schema to provide inputs: ${tool.get(toolName).variables.toString()}`;
-        return error ToolInvalidInputError("Tool is provided with invalid inputs.", inputValues, 
+        return error ToolInvalidInputError("Tool is provided with invalid inputs.", inputValues,
             toolName = toolName, inputs = inputs ?: (), instruction = instruction);
     }
+}
+
+isolated function validateTool(LlmToolResponse action, Credential? agentCredential, cache:Cache tokenManager,
+    Context context, map<Tool> & readonly tool, boolean isMcpTool) returns
+    ToolNotFoundError|ToolInvalidInputError|TokenAcquisitionError|TokenValidationError? {
+    string toolName = action.name;
+    string? agentId = agentCredential is Credential ? agentCredential.id : ();
+    check validateToolNameAndInput(action, tool, agentId);
 
     check authorizeToolInvocation(agentCredential, tokenManager, context, tool, toolName);
-    
+
     log:printDebug("Executing tool",
         agentId = agentId,
-        toolName = toolName,
-        arguments = inputValues.keys()
+        toolName = toolName
     );
 }
 

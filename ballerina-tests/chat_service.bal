@@ -26,4 +26,41 @@ service /chatService on chatListener {
             message: request.sessionId + ": " + request.message
         };
     }
+
+    // Echoes the received decisions verbatim (keys, outcome, and reason), rather than just a
+    // count, so tests can verify the `ApprovalRequest.id`-keyed contract survives the round trip.
+    resource function post decision(@http:Payload ai:DecisionMessage request) returns ai:ChatRespMessage|error {
+        string[] parts = [];
+        foreach [string, ai:HumanDecision] [id, decision] in request.decisions.entries() {
+            parts.push(id + "=" + decision.outcome.toString() + (decision?.reason ?: ""));
+        }
+        return {
+            message: request.sessionId + ": " + string:'join(",", ...parts)
+        };
+    }
+}
+
+// A service whose `chat` resource returns an `ai:ApprovalRequiredError` (as a real agent would when
+// it pauses for approval). The dispatcher inside `ai:Listener` should convert that error into a
+// structured HTTP response carrying the pending requests - the service itself does no mapping.
+// Two pending requests are returned, so tests can verify the dispatcher preserves a full batch
+// rather than only the first entry.
+service /pausingService on chatListener {
+    resource function post chat(@http:Payload ai:ChatReqMessage request) returns ai:ChatRespMessage|error {
+        return error ai:ApprovalRequiredError("Approval required", requests = [
+            {id: "req-1", sessionId: request.sessionId, toolName: "issueRefund",
+                toolDescription: "Refund an order", arguments: {"amount": 10}, batchIndex: 0},
+            {id: "req-2", sessionId: request.sessionId, toolName: "cancelOrder",
+                toolDescription: "Cancel an order", arguments: {"orderId": "ORD-1"}, batchIndex: 1}
+        ]);
+    }
+
+    // Simulates the two resume-mismatch errors `ai:Agent.run()` raises for a `Resume`, keyed by
+    // sessionId so a single resource can exercise both, without needing a real paused agent.
+    resource function post decision(@http:Payload ai:DecisionMessage request) returns ai:ChatRespMessage|error {
+        if request.sessionId == "no-pending" {
+            return error ai:ApprovalNotFoundError("No pending approval found for session '" + request.sessionId + "'.");
+        }
+        return error ai:UnknownApprovalIdError("Unknown approval id for session '" + request.sessionId + "'.");
+    }
 }

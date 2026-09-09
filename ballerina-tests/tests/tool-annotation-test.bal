@@ -23,8 +23,13 @@ import ballerina/ai;
 }
 function validateGeneratedSchema(string functionName, ai:FunctionTool tool) returns error? {
     ai:ToolAnnotationConfig generatedConfig = check getToolConfig(tool);
-    ai:ToolAnnotationConfig expectedConfig = check getExpectedToolConfig(functionName);
-    test:assertEquals(generatedConfig, expectedConfig);
+    ExpectedToolConfig expectedConfig = check getExpectedToolConfig(functionName);
+    // `ai:ToolAnnotationConfig` is no longer `anydata` (its `requiresApproval` field may hold a
+    // function value), so the records cannot be compared directly. Compare the schema-defining
+    // fields individually instead.
+    test:assertEquals(generatedConfig?.name, expectedConfig?.name);
+    test:assertEquals(generatedConfig?.description, expectedConfig?.description);
+    test:assertEquals(generatedConfig?.parameters, expectedConfig?.parameters);
 }
 
 function getToolConfig(ai:FunctionTool tool) returns ai:ToolAnnotationConfig|error {
@@ -32,7 +37,15 @@ function getToolConfig(ai:FunctionTool tool) returns ai:ToolAnnotationConfig|err
     return functionTypedesc.@ai:AgentTool.ensureType();
 }
 
-function getExpectedToolConfig(string functionName) returns ai:ToolAnnotationConfig|error {
+// Mirrors the `anydata` (schema-defining) fields of `ai:ToolAnnotationConfig`, allowing the
+// expected schema JSON to be read into a value that can be compared against the generated config.
+type ExpectedToolConfig record {|
+    string name?;
+    string description?;
+    ai:ObjectInputSchema? parameters?;
+|};
+
+function getExpectedToolConfig(string functionName) returns ExpectedToolConfig|error {
     json schema = check io:fileReadJson(string `./resources/expected-schemas/${functionName}.json`);
     return schema.cloneWithType();
 }

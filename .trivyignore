@@ -19,3 +19,14 @@ CVE-2026-45292 exp:2027-01-15
 # upgrade to jline 4.x. Expiry forces re-evaluation against the then-current distribution.
 GHSA-2r2c-cx56-8933 exp:2027-01-15
 GHSA-47qp-hqvx-6r3f exp:2027-01-15
+
+# Trivy's DB now also reports the above two jline-remote-telnet advisories under
+# their newly-assigned CVE IDs: CVE-2026-56741 is GHSA-2r2c-cx56-8933, and
+# CVE-2026-56740 is GHSA-47qp-hqvx-6r3f (confirmed via `gh api /advisories/<id>`,
+# which lists the cve_id on each GHSA record). Same vulnerabilities, same
+# reasoning as above: unauthenticated DoS bugs in JLine's embedded Telnet server
+# (unbounded terminal-geometry / NEW-ENVIRON variable handling) that this package
+# and the Ballerina runtime never start, only fixed by a jline 4.x upgrade that
+# must come from bumping ballerinaLangVersion, which is out of scope here.
+CVE-2026-56741 exp:2027-01-15
+CVE-2026-56740 exp:2027-01-15

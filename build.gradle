@@ -92,9 +92,11 @@ subprojects {
     }
 
     // Fix GHSA-72hv-8253-57qq vulnerability from multiple Jackson packages
+    // Fix CVE-2026-71497 (XSS via malformed input) from the jsoup transitive dependency of Tika
     configurations.all {
         resolutionStrategy.force(
-            "com.fasterxml.jackson.core:jackson-core:$jacksonCoreVersion"
+            "com.fasterxml.jackson.core:jackson-core:$jacksonCoreVersion",
+            "org.jsoup:jsoup:$jsoupVersion"
         )
     }
 

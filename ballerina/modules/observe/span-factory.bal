@@ -169,3 +169,23 @@ public isolated function createValidateToolAuthorizationSpan(string toolName)
     recordAiSpan(span);
     return span;
 }
+
+# Creates a span representing a run pausing to request human approval.
+#
+# + sessionId - The session/conversation the pause belongs to
+# + return - A `RequestHumanApprovalSpan` instance
+public isolated function createRequestHumanApprovalSpan(string sessionId) returns RequestHumanApprovalSpan {
+    RequestHumanApprovalSpan span = new (sessionId);
+    recordAiSpan(span);
+    return span;
+}
+
+# Creates a span representing a paused run being resumed with the human's decisions.
+#
+# + sessionId - The session/conversation the resume belongs to
+# + return - A `ResolveHumanApprovalSpan` instance
+public isolated function createResolveHumanApprovalSpan(string sessionId) returns ResolveHumanApprovalSpan {
+    ResolveHumanApprovalSpan span = new (sessionId);
+    recordAiSpan(span);
+    return span;
+}
