@@ -49,7 +49,26 @@ returns map<anydata> = @java:Method {
     'class: "io.ballerina.stdlib.ai.Utils"
 } external;
 
-isolated function invokeOnChatMessageFunction(any event, string eventFunction, service object {} serviceObj)
+// Associates the internal dispatcher with the user's `ChatService` (both directions), so the
+// dispatcher can invoke the user's resources and `Listener.detach` can recover the dispatcher.
+isolated function setChatService(ChatDispatcherService dispatcher, ChatService chatService) = @java:Method {
+    'class: "io.ballerina.stdlib.ai.NativeHttpToChatServiceAdaptor"
+} external;
+
+// Recovers the dispatcher previously associated with `chatService`, or `()` if none.
+isolated function getDispatcher(ChatService chatService) returns ChatDispatcherService? = @java:Method {
+    'class: "io.ballerina.stdlib.ai.NativeHttpToChatServiceAdaptor"
+} external;
+
+// Reflectively invokes the user service's `post chat` resource, returning its result (a
+// `ChatRespMessage`, or an `error` such as `ApprovalRequiredError`) intact.
+isolated function invokeChat(ChatDispatcherService dispatcher, ChatReqMessage request)
+    returns ChatRespMessage|error = @java:Method {
+    'class: "io.ballerina.stdlib.ai.NativeHttpToChatServiceAdaptor"
+} external;
+
+// Reflectively invokes the user service's `post decision` resource, returning its result intact.
+isolated function invokeDecision(ChatDispatcherService dispatcher, DecisionMessage request)
     returns ChatRespMessage|error = @java:Method {
     'class: "io.ballerina.stdlib.ai.NativeHttpToChatServiceAdaptor"
 } external;

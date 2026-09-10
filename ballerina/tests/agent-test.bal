@@ -100,13 +100,14 @@ function testAgentExecutorRun() returns error? {
 // Runs the next reasoning-action cycle of the executor and returns the observation
 // of its single tool call.
 function runNextIteration(Executor agentExecutor) returns anydata {
-    record {|(ExecutionResult|ExecutionError)[]|string|Error value;|}? result = agentExecutor.next();
+    record {|(ExecutionResult|ExecutionError)[]|string|BatchApprovalPending|Error value;|}? result =
+        agentExecutor.next();
     if result is () {
         test:assertFail("AgentExecutor.next returned null before the execution completed");
     }
-    (ExecutionResult|ExecutionError)[]|string|Error output = result.value;
+    (ExecutionResult|ExecutionError)[]|string|BatchApprovalPending|Error output = result.value;
     if output !is (ExecutionResult|ExecutionError)[] {
-        test:assertFail(string `Expected tool execution results, but got ${output is Error ? output.message() : output}`);
+        test:assertFail(string `Expected tool execution results, but got ${output is Error ? output.message() : output.toString()}`);
     }
     test:assertEquals(output.length(), 1);
     ExecutionResult|ExecutionError step = output[0];
@@ -160,6 +161,45 @@ function testAgentRecoversFromBadlyFormattedHistoryWithoutCorruptingMemory() ret
     // the badly-formatted step into conversation memory, this turn would panic/fail too.
     string thirdResult = check agent.run("third turn query");
     test:assertEquals(thirdResult, "third turn answer");
+}
+
+type WeatherQuery record {|
+    string city;
+|};
+
+@test:Config
+function testAgentRunAcceptsRecordAsAnydataInput() returns error? {
+    ModelProvider scriptedModel = new ScriptedMockLLM();
+    Agent agent = check new ({
+        systemPrompt: {role: "Test Agent", instructions: "Answer the questions"},
+        model: scriptedModel,
+        tools: [searchTool, calculatorTool]
+    });
+
+    // A record (anydata, not just `string`/`Prompt`) is accepted directly as the query - the
+    // agent stringifies it before sending it to the model.
+    WeatherQuery query = {city: "Colombo"};
+    string result = check agent.run(query);
+    test:assertEquals(result, "The weather in Colombo is sunny");
+}
+
+@test:Config
+function testAgentRunRejectsNilQuery() returns error? {
+    ModelProvider scriptedModel = new ScriptedMockLLM();
+    Agent agent = check new ({
+        systemPrompt: {role: "Test Agent", instructions: "Answer the questions"},
+        model: scriptedModel,
+        tools: [searchTool, calculatorTool]
+    });
+
+    // `anydata` includes `()`, so a nil query compiles but must still fail fast rather than
+    // silently running an empty-prompt turn.
+    anydata query = ();
+    string|Error result = agent.run(query);
+    test:assertTrue(result is Error);
+    if result is Error {
+        test:assertEquals(result.message(), "Query must not be nil.");
+    }
 }
 
 @test:Config

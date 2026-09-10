@@ -181,6 +181,14 @@ public isolated distinct class ExecuteToolSpan {
         self.addTag(TOOL_OUTPUT, output);
     }
 
+    // Not mandated by the spec
+    # Records the toolkit name.
+    #
+    # + mcpToolkit - The name of the `ai:ToolKit` the tool belongs to.
+    public isolated function addToolKitName(string mcpToolkit) {
+        self.addTag(TOOLKIT_NAME, mcpToolkit);
+    }
+
     isolated function addTag(GenAiTagNames key, anydata value) {
         self.baseSpan.addTag(key, value);
     }

@@ -34,9 +34,12 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.text.MessageFormat;
 import java.util.Iterator;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.AGENT_MUST_BE_FINAL;
 import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.CONTEXT_PARAM_MUST_BE_FIRST;
+import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.INVALID_APPROVAL_PREDICATE_SIGNATURE;
 import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.INVALID_AGENT_ID_AUTH_CONFIG;
 import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.INVALID_AUTH_CONFIG;
 import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.INVALID_RETURN_TYPE_IN_TOOL;
@@ -192,6 +195,25 @@ public class AiToolValidationTest {
         diagnostic = diagnosticIterator.next();
         message = getErrorMessage(INVALID_AUTH_CONFIG);
         assertErrorMessage(diagnostic, message, 30, 11);
+    }
+
+    @Test(description = "Test invalid requiresApproval predicate signature validation")
+    public void testInvalidApprovalPredicateValidation() {
+        String packagePath = "09_tool_with_invalid_approval_predicate";
+        DiagnosticResult diagnosticResult = getDiagnosticResult(packagePath);
+        Assert.assertEquals(diagnosticResult.errorCount(), 3);
+
+        Set<String> messages = diagnosticResult.errors().stream()
+                .map(Diagnostic::message).collect(Collectors.toSet());
+        // All three fail the signature check: `refundA` (param type mismatch), `refundB` (non-boolean
+        // return), and `refundC` (an extra ai:Context parameter the tool does not have). `refundD`
+        // (matching signature) raises nothing.
+        Assert.assertTrue(messages.contains(getErrorMessage(INVALID_APPROVAL_PREDICATE_SIGNATURE, "refundA")),
+                messages.toString());
+        Assert.assertTrue(messages.contains(getErrorMessage(INVALID_APPROVAL_PREDICATE_SIGNATURE, "refundB")),
+                messages.toString());
+        Assert.assertTrue(messages.contains(getErrorMessage(INVALID_APPROVAL_PREDICATE_SIGNATURE, "refundC")),
+                messages.toString());
     }
 
     private DiagnosticResult getDiagnosticResult(String path) {

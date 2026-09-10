@@ -44,13 +44,15 @@ public class AiCodeModifier extends CodeModifier {
                 SyntaxKind.ANNOTATION);
         codeModifierContext.addSyntaxNodeAnalysisTask(new ModuleLevelAgentAnalysisTask(modifierContextMap),
                 SyntaxKind.MODULE_VAR_DECL);
+        codeModifierContext.addSyntaxNodeAnalysisTask(new CustomAgentAnalysisTask(modifierContextMap),
+                SyntaxKind.CLASS_DEFINITION);
         codeModifierContext.addSyntaxNodeAnalysisTask(new InitFunctionAnalysisTask(modulesWithPredefinedInitMethods),
                 SyntaxKind.FUNCTION_DEFINITION);
         codeModifierContext.addSourceModifierTask(new AiSourceModifier(modifierContextMap,
                 modulesWithPredefinedInitMethods));
         codeModifierContext.addSyntaxNodeAnalysisTask(
                 new TypeMapperImplInitializer(analysisData), SyntaxKind.MODULE_PART);
-        codeModifierContext.addSourceModifierTask(new GenerateMethodModificationTask(analysisData));
+        codeModifierContext.addSourceModifierTask(new JsonSchemaModificationTask(analysisData));
     }
 
     public static final class AnalysisData {

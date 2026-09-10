@@ -51,6 +51,7 @@ enum GenAiTagNames {
     // Not mandated by spec
     TOOL_ARGUMENTS = "gen_ai.tool.arguments",
     TOOL_OUTPUT = "gen_ai.tool.output",
+    TOOLKIT_NAME = "gen_ai.tool.toolkit.name",
     INPUT_CONTENT = "gen_ai.input.content",
     INPUT_TOOLS = "gen_ai.input.tools",
     KNOWLEDGE_BASE_NAME = "gen_ai.knowledge_base.name",
@@ -77,7 +78,12 @@ enum GenAiTagNames {
     PKCE_VERIFIER = "gen_ai.auth.code_verifier",
     OP_VALIDATE_SCOPE = "gen_ai.auth.validate_scope",
     IDENTITY_PROVIDER_URL = "gen_ai.identity.provider",
-    TOKEN_VALIDATION_METHOD = "gen_ai.token.validation.method"
+    TOKEN_VALIDATION_METHOD = "gen_ai.token.validation.method",
+
+    // Human-in-the-loop (not mandated by spec)
+    HITL_PENDING_COUNT = "gen_ai.hitl.pending_count",
+    HITL_REQUESTS = "gen_ai.hitl.requests",
+    HITL_DECISIONS = "gen_ai.hitl.decisions"
 }
 
 enum Operations {
@@ -98,7 +104,11 @@ enum Operations {
     AGENT_AUTHENTICATION = "agent_authentication",
     EXCHANGE_TOKEN = "exchange_token",
     VALIDATE_TOKEN = "validate_token",
-    VALIDATE_TOOL_AUTHORIZATION = "validate_tool_authorization"
+    VALIDATE_TOOL_AUTHORIZATION = "validate_tool_authorization",
+
+    // Human-in-the-loop (not mandated by spec)
+    REQUEST_HUMAN_APPROVAL = "request_human_approval",
+    RESOLVE_HUMAN_APPROVAL = "resolve_human_approval"
 }
 
 # Represents the type of output produced by an LLM.
