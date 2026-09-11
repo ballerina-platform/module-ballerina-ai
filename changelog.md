@@ -4,6 +4,8 @@ This file documents all significant changes made to the Ballerina AI package acr
 
 ## [Unreleased]
 
+## [1.15.0] - 2026-09-09
+
 ### Added
 - [Add Support for `anydata` Input in Agent](https://github.com/wso2/product-integrator/issues/2300)
 - [Add `Tag` Marker Type](https://github.com/wso2/product-integrator/issues/2300)
