@@ -214,7 +214,7 @@ public class TextDataLoader {
             parser.parse(inputStream, handler, metadata, context);
             return handler.toString();
         } catch (IOException | TikaException | SAXException e) {
-            throw new RuntimeException(e);
+            throw new IllegalStateException(e);
         }
     }
 
