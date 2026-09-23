@@ -227,7 +227,8 @@ isolated function generateLlmResponse(intelligence:Client llmClient, decimal tem
             messages: [{role: USER, "content": content}],
             tools,
             toolChoice: getGetResultsToolChoice(),
-            temperature
+            temperature,
+            maxTokens: DEFAULT_MAX_TOKENS
         };
         span.addInputMessages(request.messages.toJson());
 

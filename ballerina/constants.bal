@@ -58,3 +58,7 @@ const SPACE = " ";
 const DASH = "-";
 const UNDERSCORE = "_";
 const SCOPES = "scopes";
+
+// model provider
+// Kept within the output limit of the models used by the default model provider.
+const int DEFAULT_MAX_TOKENS = 4096;
