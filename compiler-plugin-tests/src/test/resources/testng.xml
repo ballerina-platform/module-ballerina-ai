@@ -23,6 +23,7 @@
         <classes>
             <class name="io.ballerina.stdlib.ai.compiler.AiToolValidationTest"/>
             <class name="io.ballerina.stdlib.ai.compiler.OpenAPIGeneratorTest"/>
+            <class name="io.ballerina.stdlib.ai.compiler.EndpointExportTest"/>
         </classes>
     </test>
 </suite>
