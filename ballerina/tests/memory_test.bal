@@ -262,12 +262,12 @@ function testShortTermMemoryWithSummarizationOnOverflow1() returns error? {
             return memorySummaryMessage;
         }
 
-        remote function chatAsStream(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [], string? stop = ())
+        isolated remote function chatAsStream(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [], string? stop = ())
             returns stream<ChatMessageChunk, Error?>|Error {
             return error Error("chatAsStream not implemented");
         }
 
-        remote function generateAsStream(Prompt prompt) returns stream<string, Error?>|Error {
+        isolated remote function generateAsStream(Prompt prompt) returns stream<string, Error?>|Error {
             return error Error("generateAsStream not implemented");
         }
 
@@ -376,12 +376,12 @@ function testShortTermMemoryWithSummarizationOnOverflow1WithBatchUpdate() return
             return memorySummaryMessage;
         }
 
-        remote function chatAsStream(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [], string? stop = ())
+        isolated remote function chatAsStream(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [], string? stop = ())
             returns stream<ChatMessageChunk, Error?>|Error {
             return error Error("chatAsStream not implemented");
         }
 
-        remote function generateAsStream(Prompt prompt) returns stream<string, Error?>|Error {
+        isolated remote function generateAsStream(Prompt prompt) returns stream<string, Error?>|Error {
             return error Error("generateAsStream not implemented");
         }
 
@@ -696,12 +696,12 @@ function testOverridingSummarizationPrompt() returns error? {
             return mockSummaryMessage;
         }
 
-        remote function chatAsStream(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [], string? stop = ())
+        isolated remote function chatAsStream(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [], string? stop = ())
             returns stream<ChatMessageChunk, Error?>|Error {
             return error Error("chatAsStream not implemented");
         }
 
-        remote function generateAsStream(Prompt prompt) returns stream<string, Error?>|Error {
+        isolated remote function generateAsStream(Prompt prompt) returns stream<string, Error?>|Error {
             return error Error("generateAsStream not implemented");
         }
 
@@ -785,12 +785,12 @@ function testSummarizationFailure() returns error? {
             return error("Simulated summarization failure");
         }
 
-        remote function chatAsStream(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [], string? stop = ())
+        isolated remote function chatAsStream(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [], string? stop = ())
             returns stream<ChatMessageChunk, Error?>|Error {
             return error Error("chatAsStream not implemented");
         }
 
-        remote function generateAsStream(Prompt prompt) returns stream<string, Error?>|Error {
+        isolated remote function generateAsStream(Prompt prompt) returns stream<string, Error?>|Error {
             return error Error("generateAsStream not implemented");
         }
 
@@ -862,12 +862,12 @@ isolated client class MockSummarizerModel {
             ChatCompletionFunctions[] tools, string? stop) returns ChatAssistantMessage|Error =>
                 self.memorySummaryMessage;
 
-    remote function chatAsStream(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [], string? stop = ())
+    isolated remote function chatAsStream(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [], string? stop = ())
         returns stream<ChatMessageChunk, Error?>|Error {
         return error Error("chatAsStream not implemented");
     }
 
-    remote function generateAsStream(Prompt prompt) returns stream<string, Error?>|Error {
+    isolated remote function generateAsStream(Prompt prompt) returns stream<string, Error?>|Error {
         return error Error("generateAsStream not implemented");
     }
 

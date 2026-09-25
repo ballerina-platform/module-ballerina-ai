@@ -157,7 +157,7 @@ public type ModelProvider distinct isolated client object {
     # + tools - Tool definitions to be used for the tool call
     # + stop - Stop sequence to stop the completion
     # + return - A stream of assistant message chunks or an error in-case of failures
-    remote function chatAsStream(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [], string? stop = ())
+    isolated remote function chatAsStream(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [], string? stop = ())
         returns stream<ChatMessageChunk, Error?>|Error;
 
     # Sends a chat request to the model and generates a value that belongs to the type
@@ -176,7 +176,7 @@ public type ModelProvider distinct isolated client object {
     #
     # + prompt - The prompt to use in the chat request
     # + return - A stream of text fragments, or an error if generation fails
-    remote function generateAsStream(Prompt prompt) returns stream<string, Error?>|Error;
+    isolated remote function generateAsStream(Prompt prompt) returns stream<string, Error?>|Error;
 };
 
 # Represents configuratations of WSO2 provider.
@@ -357,7 +357,7 @@ public isolated distinct client class Wso2ModelProvider {
     # + tools - Tool definitions to be used for the tool call
     # + stop - Stop sequence to stop the completion
     # + return - A stream of assistant message chunks or an error in-case of failures
-    remote function chatAsStream(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [], string? stop = ())
+    isolated remote function chatAsStream(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [], string? stop = ())
             returns stream<ChatMessageChunk, Error?>|Error {
         observe:ChatSpan span = observe:createChatSpan("gpt-4o-mini");
         span.addProvider("WSO2");
@@ -387,7 +387,7 @@ public isolated distinct client class Wso2ModelProvider {
     #
     # + prompt - The prompt to use in the chat request
     # + return - A stream of text fragments, or an error if generation fails
-    remote function generateAsStream(Prompt prompt) returns stream<string, Error?>|Error {
+    isolated remote function generateAsStream(Prompt prompt) returns stream<string, Error?>|Error {
         observe:GenerateContentSpan span = observe:createGenerateContentSpan("gpt-4o-mini");
         span.addTemperature(self.temperature);
         span.addProvider("WSO2");
@@ -410,7 +410,7 @@ public isolated distinct client class Wso2ModelProvider {
 
     // Opens the SSE stream for `request`. The span is closed here if the connection fails,
     // and by the returned stream's iterator otherwise.
-    private function openChunkStream(intelligence:CreateChatCompletionRequest request, observe:LlmSpan span)
+    private isolated function openChunkStream(intelligence:CreateChatCompletionRequest request, observe:LlmSpan span)
             returns stream<ChatMessageChunk, Error?>|Error {
         Wso2SseEventStream|error sseEvents = self.streamHttpClient->post("/chat/completions", request,
                 headers = {"x-product": "bi", "x-usage-context": "model_provider_chat"},
@@ -611,7 +611,7 @@ class Wso2ChatStreamIterator {
     private final observe:LlmSpan span;
     private boolean done = false;
 
-    function init(Wso2SseEventStream events, observe:LlmSpan span) {
+    isolated function init(Wso2SseEventStream events, observe:LlmSpan span) {
         self.events = events;
         self.span = span;
     }

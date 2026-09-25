@@ -164,15 +164,20 @@ public type DependentlyTypedAgent distinct isolated object {
     # previously paused run) to continue a run that paused for human approval. The input type is
     # what distinguishes the two - there is no separate resume operation.
     #
+    # Set `enableStreaming` to `true` and bind the result to `stream<string, Error?>` (the answer text) or
+    # `stream<AgentEvent, Error?>` (every step of the run) to receive the response as it is generated.
+    #
     # + query - A query to start a new turn (`string`/`Prompt`), or a `Resume` to continue a paused run
     # + sessionId - The ID associated with the agent memory
     # + context - The additional context that can be used during agent tool execution
     # + td - Type descriptor specifying the expected return type format
+    # + enableStreaming - Whether to stream the response; requires `td` to be one of the supported stream types
     # + return - The agent's response bound to `td`, or an `Error`
     public isolated function run(@display {label: "Query"} string|Prompt|Resume query,
             @display {label: "Session ID"} string sessionId = DEFAULT_SESSION_ID,
             Context context = new,
-            typedesc<Trace|anydata> td = <>) returns td|Error;
+            typedesc<Trace|anydata|stream<string, Error?>|stream<AgentEvent, Error?>> td = <>,
+            @display {label: "Enable Streaming"} boolean enableStreaming = false) returns td|Error;
 };
 
 # Represents a reusable agent definition with a fixed `anydata` return type. Implementations typically
@@ -311,6 +316,31 @@ public isolated distinct class Agent {
     # + return - LLM response containing the tool calls or chat response (or an error if the call fails)
     isolated function selectNextTools(ExecutionProgress progress, string sessionId = DEFAULT_SESSION_ID)
             returns FunctionCall[]|string|Error {
+        var [messages, tools] = check self.prepareToolSelection(progress, sessionId);
+        ChatAssistantMessage response = check self.model->chat(messages, tools);
+        return self.interpretToolSelection(response, progress, sessionId);
+    }
+
+    # Streaming counterpart of `selectNextTools`: starts the LLM call that decides the next
+    # tool/step(s) and returns its chunk stream. Structured output is not supported when streaming,
+    # so the structured-output tool is never offered here.
+    #
+    # + progress - Execution progress with the current query and execution history
+    # + sessionId - The ID associated with the agent memory
+    # + return - The model's chunk stream, or an error if the request could not be started
+    isolated function selectNextToolsAsStream(ExecutionProgress progress, string sessionId = DEFAULT_SESSION_ID)
+            returns stream<ChatMessageChunk, Error?>|Error {
+        var [messages, tools] = check self.prepareToolSelection(progress, sessionId);
+        return self.model->chatAsStream(messages, tools);
+    }
+
+    # Builds the messages and the tool definitions for the LLM call that decides the next step(s).
+    #
+    # + progress - Execution progress with the current query and execution history
+    # + sessionId - The ID associated with the agent memory
+    # + return - The messages and the tools to send to the LLM, or an error
+    isolated function prepareToolSelection(ExecutionProgress progress, string sessionId)
+            returns [ChatMessage[], ChatCompletionFunctions[]]|Error {
         ChatMessage[] messages = check createFunctionCallMessages(progress);
         messages.unshift(...progress.history);
         ToolLoadingStrategy toolLoadingStrategy = self.toolLoadingStrategy;
@@ -340,8 +370,18 @@ public isolated distinct class Agent {
                 messages = messages.toString(),
                 availableTools = filteredTools.toString()
         );
+        return [messages, filteredTools];
+    }
 
-        ChatAssistantMessage response = check self.model->chat(messages, filteredTools);
+    # Interprets the LLM's response to a tool selection request as the next step.
+    #
+    # + response - The LLM's response, whether received whole or assembled from a stream
+    # + progress - Execution progress with the current query and execution history
+    # + sessionId - The ID associated with the agent memory
+    # + return - The tool calls to execute, the final chat response, or an error if neither can be parsed
+    isolated function interpretToolSelection(ChatAssistantMessage response, ExecutionProgress progress,
+            string sessionId) returns FunctionCall[]|string|Error {
+        ResponseSchema? responseSchema = progress.responseSchema;
         FunctionCall[]? toolCalls = getToolCalls(response);
         if toolCalls is FunctionCall[] {
             if responseSchema is ResponseSchema {
@@ -390,6 +430,19 @@ public isolated distinct class Agent {
     # input type is what distinguishes a fresh turn from a resume - there is no separate resume
     # operation. A `Resume` for a session with no pending approval fails with `ApprovalNotFoundError`.
     #
+    # Set `enableStreaming` to `true` to receive the response as it is generated, binding the result to one of:
+    # - `stream<string, Error?>` - the answer text, fragment by fragment. Tool calls run silently; if the
+    #   run pauses for human approval, the stream ends with an `ApprovalRequiredError`.
+    # - `stream<AgentEvent, Error?>` - every step of the run: `ContentDeltaEvent`/`ReasoningDeltaEvent`s
+    #   as the model generates them, a `ToolCallEvent` for each proposed tool call and a `ToolResultEvent`
+    #   once it has run (or been rejected), ending with an `AgentCompletedEvent` carrying the final answer
+    #   or an `ApprovalRequiredEvent` if the run paused for human approval.
+    #
+    # Streaming produces text only - structured types have no valid intermediate state - so bind to a
+    # structured type without `enableStreaming` instead. Text the model generates alongside tool calls
+    # (e.g. "Let me look that up") is streamed too. A streamed run makes progress only as the stream is
+    # consumed; closing the stream before it ends abandons the run and the turn is not written to memory.
+    #
     # **Note:** Calls to this function using the same session ID must be invoked sequentially by the caller,
     # as this operation is not thread-safe.
     #
@@ -397,21 +450,92 @@ public isolated distinct class Agent {
     # + sessionId - The ID associated with the agent memory
     # + context - The additional context that can be used during agent tool execution
     # + td - Type descriptor specifying the expected return type format
+    # + enableStreaming - Whether to stream the response; requires `td` to be one of the supported stream types
     # + return - The agent's response or an error
     public isolated function run(@display {label: "Query"} string|Prompt|Resume query,
             @display {label: "Session ID"} string sessionId = DEFAULT_SESSION_ID,
             Context context = new,
-            typedesc<Trace|anydata> td = <>) returns td|Error = @java:Method {
+            typedesc<Trace|anydata|stream<string, Error?>|stream<AgentEvent, Error?>> td = <>,
+            @display {label: "Enable Streaming"} boolean enableStreaming = false) returns td|Error = @java:Method {
         'class: "io.ballerina.stdlib.ai.Agent"
     } external;
 
     private isolated function runInternal(@display {label: "Query"} string|Prompt|Resume query,
             @display {label: "Session ID"} string sessionId = DEFAULT_SESSION_ID,
-            Context context = new, typedesc<Trace|anydata> td = string) returns Trace|anydata|Error {
+            Context context = new,
+            typedesc<Trace|anydata|stream<string, Error?>|stream<AgentEvent, Error?>> td = string,
+            boolean enableStreaming = false)
+            returns Trace|anydata|stream<string, Error?>|stream<AgentEvent, Error?>|Error {
+        if enableStreaming {
+            return self.runAsStream(query, sessionId, context, td);
+        }
+        if td !is typedesc<Trace|anydata> {
+            return error Error("Set `enableStreaming = true` to receive the agent's response as a stream.");
+        }
+        PreparedExecution|Trace|anydata|Error prepared = self.prepareExecution(query, sessionId, context, td);
+        if prepared is PreparedExecution {
+            return self.buildPreparedOutcome(prepared, executeAgentLoop(prepared.agentLoop), td);
+        }
+        return <Trace|anydata|Error>prepared;
+    }
+
+    # Starts a streamed run, returning a stream of the kind `td` asks for.
+    #
+    # + query - A query to start a new turn (`string`/`Prompt`), or a `Resume` to continue a paused run
+    # + sessionId - The ID associated with the agent memory
+    # + context - The additional context that can be used during agent tool execution
+    # + td - Type descriptor specifying the expected stream type
+    # + return - A stream of agent events or of answer text, or an error if the run could not be started
+    private isolated function runAsStream(string|Prompt|Resume query, string sessionId, Context context,
+            typedesc<Trace|anydata|stream<string, Error?>|stream<AgentEvent, Error?>> td)
+            returns stream<string, Error?>|stream<AgentEvent, Error?>|Error {
+        // Probe with empty streams of each supported kind, so the check is exactly "does a stream
+        // of this kind belong to `td`" - before the run is started and anything has side effects.
+        stream<AgentEvent, Error?> eventProbe = new;
+        stream<string, Error?> textProbe = new;
+        boolean textOnly;
+        if eventProbe.ensureType(td) !is error {
+            textOnly = false;
+        } else if textProbe.ensureType(td) !is error {
+            textOnly = true;
+        } else {
+            return error Error(string `Streaming is only supported for 'stream<string, ai:Error?>' or ` +
+                string `'stream<ai:AgentEvent, ai:Error?>'; found '${td.toString()}'.`);
+        }
+
+        PreparedExecution|Trace|anydata|Error prepared = self.prepareExecution(query, sessionId, context, string);
+        if prepared is Error && prepared !is ApprovalRequiredError {
+            return prepared;
+        }
+        if prepared !is PreparedExecution && prepared !is ApprovalRequiredError {
+            return error Error("Unexpected outcome while starting the agent execution.");
+        }
+        stream<AgentEvent, Error?> events;
+        if prepared is PreparedExecution {
+            events = new (new AgentEventIterator(self, prepared));
+        } else {
+            // A previous run on this session is still awaiting a human decision; surface that
+            // pause as the stream's only event, just as the non-streaming path returns it.
+            AgentEvent[] pausedEvents = [toApprovalRequiredEvent(<ApprovalRequiredError>prepared)];
+            events = pausedEvents.toStream();
+        }
+        return textOnly ? new stream<string, Error?>(new AgentTextIterator(events)) : events;
+    }
+
+    # Performs everything that precedes the reasoning-action loop, for both a fresh turn and a
+    # `Resume`: the pending-approval guards, the observability span and the loop's initial state.
+    #
+    # + query - A query to start a new turn (`string`/`Prompt`), or a `Resume` to continue a paused run
+    # + sessionId - The ID associated with the agent memory
+    # + context - The additional context that can be used during agent tool execution
+    # + td - Type descriptor specifying the expected return type format
+    # + return - The prepared execution, or the call's outcome if it ends before any reasoning
+    isolated function prepareExecution(string|Prompt|Resume query, string sessionId, Context context,
+            typedesc<Trace|anydata> td) returns PreparedExecution|Trace|anydata|Error {
         // A `Resume` input continues a run that paused for human approval instead of starting a
         // new turn; the input type is the sole discriminator between the two.
         if query is Resume {
-            return self.resumeInternal(sessionId, query.decisions, context, td);
+            return self.prepareResume(sessionId, query.decisions, context, td);
         }
         // A prior call on this session may still be awaiting a human decision. Starting a
         // fresh run regardless would silently orphan that pending approval (and, if this new
@@ -470,14 +594,32 @@ public isolated distinct class Agent {
 
         Credential? & readonly agentCredential = self.agentCredential;
         string? agentId = agentCredential is Credential ? agentCredential.id : ();
-        ExecutionTrace executionTrace = run(self, systemPrompt, query, self.maxIter, self.verbose, agentId,
+        AgentLoop agentLoop = newRunLoop(self, systemPrompt, query, self.maxIter, self.verbose, agentId,
             sessionId, context, executionId, startTime, responseSchema);
-        ChatUserMessage userMessage = {role: USER, content: query};
-        return self.buildOutcome(executionId, userMessage, executionTrace, startTime, td, span, sessionId,
-            "Agent execution paused pending human approval",
-            "Agent execution completed successfully",
-            "Agent execution failed");
+        return {
+            agentLoop,
+            span,
+            executionId,
+            sessionId,
+            userMessage: {role: USER, content: query},
+            startTime,
+            pauseLogMessage: "Agent execution paused pending human approval",
+            successLogMessage: "Agent execution completed successfully",
+            failedLogMessage: "Agent execution failed"
+        };
     }
+
+    # Turns the `ExecutionTrace` of a prepared execution into the agent's public result.
+    #
+    # + prepared - The execution the trace belongs to
+    # + executionTrace - The trace produced by driving the prepared execution's loop
+    # + td - Type descriptor specifying the expected return type format
+    # + return - The agent's response bound to `td`, or an error
+    isolated function buildPreparedOutcome(PreparedExecution prepared, ExecutionTrace executionTrace,
+            typedesc<Trace|anydata> td) returns Trace|anydata|Error =>
+        self.buildOutcome(prepared.executionId, prepared.userMessage, executionTrace, prepared.startTime, td,
+            prepared.span, prepared.sessionId, prepared.pauseLogMessage, prepared.successLogMessage,
+            prepared.failedLogMessage);
 
     # Builds the `ApprovalRequiredError`/`Trace` for a still-live pending approval, without
     # starting a new run - used when `run()` is called again before the pending decision on
@@ -514,16 +656,16 @@ public isolated distinct class Agent {
             "", "");
     }
 
-    # Continues a run that paused for human approval on `sessionId`, applying the supplied decisions.
-    # Reached from `run` when its input is a `Resume`; not a public entry point of its own.
+    # Prepares the continuation of a run that paused for human approval on `sessionId`, applying the
+    # supplied decisions. Reached from `run` when its input is a `Resume`; not a public entry point of its own.
     #
     # + sessionId - The ID associated with the agent memory
     # + feedback - The human's decisions, keyed by `ApprovalRequest.id`
     # + context - The additional context that can be used during agent tool execution
     # + td - Type descriptor specifying the expected return type format
-    # + return - The agent's response bound to `td`, or an error
-    private isolated function resumeInternal(string sessionId, map<HumanResponse> feedback,
-            Context context = new, typedesc<Trace|anydata> td = string) returns Trace|anydata|Error {
+    # + return - The prepared execution, or an error if the resume is rejected
+    private isolated function prepareResume(string sessionId, map<HumanResponse> feedback,
+            Context context, typedesc<Trace|anydata> td) returns PreparedExecution|Error {
         log:printDebug("Agent resume started",
                 agentId = self.agentId,
                 sessionId = sessionId
@@ -611,14 +753,21 @@ public isolated distinct class Agent {
             }
             responseSchema = schema;
         }
-        ExecutionTrace executionTrace = resumeRun(self, pendingApproval, feedback, self.maxIter,
+        AgentLoop agentLoop = newResumeLoop(self, pendingApproval, feedback, self.maxIter,
             self.verbose, agentId, sessionId, context, responseSchema);
-        // Safe: `isPendingApprovalHistoryValid` above already guarantees this index is in range.
-        ChatUserMessage userMessage = <ChatUserMessage>pendingApproval.history[pendingApproval.historyPrefixLength - 1];
-        return self.buildOutcome(executionId, userMessage, executionTrace, startTime, td, span, sessionId,
-            "Agent execution paused again pending human approval",
-            "Agent resume completed successfully",
-            "Agent resume failed");
+        return {
+            agentLoop,
+            span,
+            executionId,
+            sessionId,
+            // Safe: `isPendingApprovalHistoryValid` above already guarantees this index is in range.
+            userMessage: <ChatUserMessage>pendingApproval.history[pendingApproval.historyPrefixLength - 1],
+            startTime,
+            claimedApproval: pendingApproval,
+            pauseLogMessage: "Agent execution paused again pending human approval",
+            successLogMessage: "Agent resume completed successfully",
+            failedLogMessage: "Agent resume failed"
+        };
     }
 
     # Re-persists a `PendingApproval` claimed by `take()` when a resume call names an unknown
@@ -627,7 +776,7 @@ public isolated distinct class Agent {
     #
     # + pendingApproval - The claimed pending approval to restore, unchanged
     # + sessionId - The ID associated with the agent memory
-    private isolated function restoreClaimedApproval(PendingApproval pendingApproval, string sessionId) {
+    isolated function restoreClaimedApproval(PendingApproval pendingApproval, string sessionId) {
         Error? restoreErr = self.checkpointer.putCheckpoint(pendingApproval);
         if restoreErr is Error {
             log:printError("Failed to restore the claimed pending approval after an invalid resume call",
