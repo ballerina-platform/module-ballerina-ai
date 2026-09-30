@@ -256,3 +256,46 @@ public type Scopes record {|
     # The required OAuth scope or list of scopes.
     string|string[] scopes?;
 |};
+
+# A streamed chunk of an assistant message. Each provider's native stream is mapped onto
+# this type, with one chunk per event that carries something for the caller.
+public type ChatMessageChunk record {|
+    # Identifier of the response; stable across all chunks of one response
+    string id?;
+    # Role of the author of the message; set on every chunk
+    ASSISTANT role;
+    # The answer text fragment for this chunk; `()` for non-content chunks
+    string? content = ();
+    # Reasoning/thinking fragment (e.g. Anthropic `thinking_delta`, DeepSeek
+    # `reasoning_content`, Ollama `thinking`); `()` when absent or unsupported
+    string? reasoning = ();
+    # Incremental tool calls produced by the model; correlate fragments by `index`
+    ToolCallChunk[]? toolCalls = ();
+    # Reason the model stopped generating tokens; `()` until the final chunk
+    FinishReason? finishReason = ();
+|};
+
+# An incremental tool call delivered within a streamed chunk. With parallel tool
+# calling, several tool calls stream concurrently, distinguished by `index`.
+public type ToolCallChunk record {|
+    # Index used to accumulate fragments of the same tool call across chunks
+    int index;
+    # Identifier of the tool call; only sent on the first fragment of the call
+    string id?;
+    # Name of the function to call; only sent on the first fragment of the call
+    string name?;
+    # Incremental JSON-string fragment of the function arguments; accumulate across chunks
+    string arguments?;
+|};
+
+# The reason the model stopped generating tokens, normalized to the OpenAI set.
+public enum FinishReason {
+    # Hit a natural stop point or a provided stop sequence
+    STOP = "stop",
+    # Reached the maximum number of tokens specified in the request
+    LENGTH = "length",
+    # The model called one or more tools
+    TOOL_CALLS = "tool_calls",
+    # Content was omitted due to a content-filter flag
+    CONTENT_FILTER = "content_filter"
+}

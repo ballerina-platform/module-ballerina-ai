@@ -214,7 +214,7 @@ isolated function handleParseResponseError(error chatResponseError) returns erro
 isolated function generateLlmResponse(intelligence:Client llmClient, decimal temperature,
         GeneratorConfig generatorConfig, Prompt prompt,
         typedesc<json> expectedResponseTypedesc) returns anydata|Error {
-    observe:GenerateContentSpan span = observe:createGenerateContentSpan("gpt-4o-mini");
+    observe:GenerateContentSpan span = observe:createGenerateContentSpan(WSO2_DEFAULT_MODEL);
     span.addTemperature(temperature);
     span.addProvider("WSO2");
 
@@ -346,7 +346,7 @@ isolated function getLlMResponse(intelligence:Client llmClient,
         runtime:sleep(retryInterval);
 
         // Create a new span for the retry operation.
-        observe:GenerateContentSpan _ = observe:createGenerateContentSpan("gpt-4o-mini");
+        observe:GenerateContentSpan _ = observe:createGenerateContentSpan(WSO2_DEFAULT_MODEL);
         return getLlMResponse(llmClient, request, expectedResponseTypedesc, isOriginallyJsonObject,
                 retryCount - 1, retryInterval);
     }
