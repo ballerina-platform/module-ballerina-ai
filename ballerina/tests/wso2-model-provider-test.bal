@@ -28,6 +28,8 @@ const MOCK_STREAM_TOOL_ID = "chatcmpl-tool";
 
 const string TRIGGER_STREAM_ERROR = "trigger-stream-error";
 const string TRIGGER_MALFORMED_CHUNK = "trigger-malformed-chunk";
+const string TRIGGER_PROVIDER_ERROR = "trigger-provider-error";
+const MOCK_PROVIDER_ERROR_MESSAGE = "provider failed";
 
 // Streams the SSE events collected in `events` one at a time.
 class MockSseEventIterator {
@@ -90,11 +92,19 @@ function mockMalformedStreamEvents() returns http:SseEvent[] => [
     {data: "[DONE]"}
 ];
 
+// A well-formed content chunk followed by a provider error payload that carries no choices.
+function mockProviderErrorStreamEvents() returns http:SseEvent[] => [
+    {data: string `{"id":"chatcmpl-err","choices":[{"index":0,"delta":{"content":"partial"}}]}`},
+    {data: string `{"error":{"message":"${MOCK_PROVIDER_ERROR_MESSAGE}"}}`},
+    {data: "[DONE]"}
+];
+
 // Mock intelligence service for Wso2ModelProvider tests.
 // Returns a function-call response when the request contains `functions`, otherwise a plain text response.
 // When the request has `stream: true`, responds with SSE chunks instead of a single JSON body; a message
 // containing `TRIGGER_STREAM_ERROR` makes the streaming path fail with a 500, and one containing
-// `TRIGGER_MALFORMED_CHUNK` streams an invalid chunk.
+// `TRIGGER_MALFORMED_CHUNK` streams an invalid chunk, and one containing `TRIGGER_PROVIDER_ERROR`
+// streams a provider error payload.
 service on new http:Listener(MOCK_CHAT_PORT) {
 
     resource function post chat/completions(@http:Payload json payload, @http:Header string Authorization)
@@ -115,6 +125,7 @@ service on new http:Listener(MOCK_CHAT_PORT) {
                 return <http:InternalServerError>{body: {message: "simulated streaming failure"}};
             }
             http:SseEvent[] events = messagesText.includes(TRIGGER_MALFORMED_CHUNK) ? mockMalformedStreamEvents()
+                : messagesText.includes(TRIGGER_PROVIDER_ERROR) ? mockProviderErrorStreamEvents()
                 : isFunctionCall ? mockFunctionCallStreamEvents() : mockTextStreamEvents();
             return new stream<http:SseEvent, error?>(new MockSseEventIterator(events));
         }
@@ -408,6 +419,40 @@ function testWso2ModelProviderChatAsStreamMalformedChunk() returns error? {
     record {|ChatMessageChunk value;|}|Error? second = chunkStream.next();
     test:assertTrue(second is LlmInvalidResponseError, "Expected an `LlmInvalidResponseError` for a malformed chunk");
     test:assertTrue(chunkStream.next() is (), "Expected the stream to end after an error");
+}
+
+@test:Config {
+    groups: ["wso2-model-provider"]
+}
+function testWso2ModelProviderChatAsStreamProviderError() returns error? {
+    Wso2ModelProvider provider = check new (MOCK_CHAT_URL, "test-token");
+    stream<ChatMessageChunk, Error?> chunkStream =
+        check provider->chatAsStream({role: USER, content: TRIGGER_PROVIDER_ERROR}, []);
+
+    record {|ChatMessageChunk value;|}|Error? first = chunkStream.next();
+    if first !is record {|ChatMessageChunk value;|} {
+        test:assertFail("Expected the well-formed chunk before the provider error");
+    }
+    test:assertEquals(first.value.content, "partial");
+
+    record {|ChatMessageChunk value;|}|Error? second = chunkStream.next();
+    if second !is LlmInvalidResponseError {
+        test:assertFail("Expected an `LlmInvalidResponseError` for a provider error payload");
+    }
+    test:assertEquals(second.message(), MOCK_PROVIDER_ERROR_MESSAGE);
+    test:assertTrue(chunkStream.next() is (), "Expected the stream to end after an error");
+}
+
+@test:Config {
+    groups: ["wso2-model-provider"]
+}
+function testWso2ModelProviderChatAsStreamCloseAfterDone() returns error? {
+    Wso2ModelProvider provider = check new (MOCK_CHAT_URL, "test-token");
+    stream<ChatMessageChunk, Error?> chunkStream = check provider->chatAsStream({role: USER, content: "Hello"}, []);
+    _ = check collectChunks(chunkStream);
+    // The SSE stream is already closed on `[DONE]`; closing again must be a no-op.
+    check chunkStream.close();
+    check chunkStream.close();
 }
 
 @test:Config {

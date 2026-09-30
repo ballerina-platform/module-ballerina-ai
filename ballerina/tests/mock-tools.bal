@@ -100,12 +100,12 @@ public isolated client class MockLLM {
         return error LlmError("Unexpected prompt to MockLLM");
     }
 
-    remote function chatAsStream(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [], string? stop = ())
+    isolated remote function chatAsStream(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [], string? stop = ())
         returns stream<ChatMessageChunk, Error?>|Error {
         return error Error("chatAsStream not implemented in MockLLM");
     }
 
-    remote function generateAsStream(Prompt prompt) returns stream<string, Error?>|Error {
+    isolated remote function generateAsStream(Prompt prompt) returns stream<string, Error?>|Error {
         return error Error("generateAsStream not implemented");
     }
 
@@ -139,12 +139,12 @@ public isolated client class ScriptedMockLLM {
 
     isolated remote function generate(Prompt prompt, typedesc<anydata> td = <>) returns td|Error = external;
 
-    remote function chatAsStream(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [], string? stop = ())
+    isolated remote function chatAsStream(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [], string? stop = ())
         returns stream<ChatMessageChunk, Error?>|Error {
         return error Error("chatAsStream not implemented in ScriptedMockLLM");
     }
 
-    remote function generateAsStream(Prompt prompt) returns stream<string, Error?>|Error {
+    isolated remote function generateAsStream(Prompt prompt) returns stream<string, Error?>|Error {
         return error Error("generateAsStream not implemented");
     }
 }
@@ -196,12 +196,12 @@ public isolated client class MultiToolCallMockLLM {
         }
     }
 
-    remote function chatAsStream(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [], string? stop = ())
+    isolated remote function chatAsStream(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [], string? stop = ())
         returns stream<ChatMessageChunk, Error?>|Error {
         return error Error("chatAsStream not implemented in MultiToolCallMockLLM");
     }
 
-    remote function generateAsStream(Prompt prompt) returns stream<string, Error?>|Error {
+    isolated remote function generateAsStream(Prompt prompt) returns stream<string, Error?>|Error {
         return error Error("generateAsStream not implemented");
     }
 }
@@ -240,12 +240,12 @@ public isolated client class NeverAnsweringMockLLM {
         }
     }
 
-    remote function chatAsStream(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [], string? stop = ())
+    isolated remote function chatAsStream(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [], string? stop = ())
         returns stream<ChatMessageChunk, Error?>|Error {
         return error Error("chatAsStream not implemented in NeverAnsweringMockLLM");
     }
 
-    remote function generateAsStream(Prompt prompt) returns stream<string, Error?>|Error {
+    isolated remote function generateAsStream(Prompt prompt) returns stream<string, Error?>|Error {
         return error Error("generateAsStream not implemented");
     }
 }

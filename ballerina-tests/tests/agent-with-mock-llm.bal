@@ -180,12 +180,12 @@ ${"```"}`
         'class: "io.ballerina.lib.ai.MockGenerator"
     } external;
 
-    remote function chatAsStream(ai:ChatMessage[]|ai:ChatUserMessage messages, ai:ChatCompletionFunctions[] tools = [],
+    isolated remote function chatAsStream(ai:ChatMessage[]|ai:ChatUserMessage messages, ai:ChatCompletionFunctions[] tools = [],
             string? stop = ()) returns stream<ai:ChatMessageChunk, ai:Error?>|ai:Error {
         return error ai:Error("chatAsStream not implemented in MockLlm");
     }
 
-    remote function generateAsStream(ai:Prompt prompt) returns stream<string, ai:Error?>|ai:Error {
+    isolated remote function generateAsStream(ai:Prompt prompt) returns stream<string, ai:Error?>|ai:Error {
         return error ai:Error("generateAsStream not implemented in MockLlm");
     }
 }
