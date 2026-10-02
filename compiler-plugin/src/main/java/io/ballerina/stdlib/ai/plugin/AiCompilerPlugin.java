@@ -21,6 +21,10 @@ package io.ballerina.stdlib.ai.plugin;
 import io.ballerina.projects.plugins.CompilerPlugin;
 import io.ballerina.projects.plugins.CompilerPluginContext;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
 /**
  * Compiler plugin for the Ballerina AI package.
  */
@@ -28,7 +32,9 @@ import io.ballerina.projects.plugins.CompilerPluginContext;
 public class AiCompilerPlugin extends CompilerPlugin {
     @Override
     public void init(CompilerPluginContext context) {
-        context.addCodeAnalyzer(new AiCodeAnalyzer());
+        List<Endpoint> endpoints = Collections.synchronizedList(new ArrayList<>());
+        context.addCodeAnalyzer(new AiCodeAnalyzer(endpoints));
+        context.addCompilerLifecycleListener(new AiCompilerLifecycleListener(endpoints));
         context.addCodeModifier(new AiCodeModifier());
     }
 }
