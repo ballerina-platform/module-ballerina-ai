@@ -14,10 +14,10 @@
 // specific language governing permissions and limitations
 // under the License.
 
+import ballerina/data.yaml;
 import ballerina/io;
 import ballerina/lang.regexp;
 import ballerina/log;
-import ballerina/yaml;
 
 # Provides extracted tools and service URL from the OpenAPI specification.
 public type HttpApiSpecification record {|
@@ -52,7 +52,7 @@ returns HttpApiSpecification & readonly|Error {
 isolated function readOpenApiSpec(string filePath) returns map<json>|Error {
     map<json>|error openApiSpec;
     if filePath.endsWith(".yaml") || filePath.endsWith(".yml") {
-        openApiSpec = yaml:readFile(filePath).ensureType();
+        openApiSpec = readYamlFile(filePath);
     } else {
         openApiSpec = io:fileReadJson(filePath).ensureType();
     }
@@ -60,6 +60,11 @@ isolated function readOpenApiSpec(string filePath) returns map<json>|Error {
         return error Error(openApiSpec.message(), openApiSpec);
     }
     return openApiSpec;
+}
+
+isolated function readYamlFile(string filePath) returns map<json>|error {
+    string content = check io:fileReadString(filePath);
+    return check yaml:parseString(content);
 }
 
 # Extracts the Http tools from the given OpenAPI specification as a JSON 
