@@ -18,6 +18,14 @@
 
 package io.ballerina.stdlib.ai.compiler;
 
+import io.ballerina.projects.BuildOptions;
+import io.ballerina.projects.JBallerinaBackend;
+import io.ballerina.projects.JvmTarget;
+import io.ballerina.projects.PackageCompilation;
+import io.ballerina.projects.ProjectEnvironmentBuilder;
+import io.ballerina.projects.directory.BuildProject;
+import io.ballerina.projects.environment.Environment;
+import io.ballerina.projects.environment.EnvironmentBuilder;
 import org.testng.Assert;
 import org.testng.annotations.Test;
 
@@ -29,12 +37,12 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
 /**
- * End-to-end tests for the {@code --export-endpoints} build option: each fixture is built with {@code bal build} and
- * the resulting {@code target/artifact/endpoints.yaml} and chat service OpenAPI specifications are asserted.
+ * End-to-end tests for the {@code --export-endpoints} build option: each fixture is built the way {@code bal build}
+ * builds it and the resulting {@code target/artifact/endpoints.yaml} and chat service OpenAPI specifications are
+ * asserted. The build runs in-process, so the compiler plugin is exercised within the test JVM.
  */
 public class EndpointExportTest {
     private static final Path RESOURCE_DIRECTORY = Paths.get("src", "test", "resources",
@@ -43,11 +51,16 @@ public class EndpointExportTest {
     private static final String ARTIFACT_DIR = "artifact";
     private static final String ENDPOINTS_FILE = "endpoints.yaml";
 
+    static {
+        // Code generation resolves the Ballerina runtime from the Ballerina home, which `bal` sets for a CLI build
+        System.setProperty("ballerina.home", DISTRIBUTION_PATH.toString());
+    }
+
     @Test
-    public void testListenerVariants() throws IOException, InterruptedException {
+    public void testListenerVariants() throws IOException {
         Path projectDirPath = RESOURCE_DIRECTORY.resolve("listener_variants");
         try {
-            Assert.assertEquals(executeBallerinaCommand(projectDirPath, true), 0);
+            Assert.assertTrue(build(projectDirPath, true), "Expected the package to build");
             String endpoints = Files.readString(artifactDir(projectDirPath).resolve(ENDPOINTS_FILE));
 
             // The HTTP service in the same package is exported by the HTTP module alongside the AI agent services
@@ -62,10 +75,10 @@ public class EndpointExportTest {
     }
 
     @Test
-    public void testBuildWithoutExportFlagProducesNoArtifact() throws IOException, InterruptedException {
+    public void testBuildWithoutExportFlagProducesNoArtifact() throws IOException {
         Path projectDirPath = RESOURCE_DIRECTORY.resolve("listener_variants");
         try {
-            Assert.assertEquals(executeBallerinaCommand(projectDirPath, false), 0);
+            Assert.assertTrue(build(projectDirPath, false), "Expected the package to build");
             Assert.assertTrue(Files.notExists(artifactDir(projectDirPath)),
                     "No artifact should be generated without --export-endpoints");
         } finally {
@@ -74,11 +87,10 @@ public class EndpointExportTest {
     }
 
     @Test
-    public void testCompilationErrorProducesNoArtifact() throws IOException, InterruptedException {
+    public void testCompilationErrorProducesNoArtifact() throws IOException {
         Path projectDirPath = RESOURCE_DIRECTORY.resolve("compilation_error");
         try {
-            Assert.assertNotEquals(executeBallerinaCommand(projectDirPath, true), 0,
-                    "The fixture is expected to have compilation errors");
+            Assert.assertFalse(build(projectDirPath, true), "The fixture is expected to have compilation errors");
             Assert.assertTrue(Files.notExists(artifactDir(projectDirPath)),
                     "No artifact should be generated for a package with compilation errors");
         } finally {
@@ -87,10 +99,10 @@ public class EndpointExportTest {
     }
 
     @Test
-    public void testServiceInTestSourceIsSkipped() throws IOException, InterruptedException {
+    public void testServiceInTestSourceIsSkipped() throws IOException {
         Path projectDirPath = RESOURCE_DIRECTORY.resolve("service_in_test_source");
         try {
-            Assert.assertEquals(executeBallerinaCommand(projectDirPath, true), 0);
+            Assert.assertTrue(build(projectDirPath, true), "Expected the package to build");
             String endpoints = Files.readString(artifactDir(projectDirPath).resolve(ENDPOINTS_FILE));
             Assert.assertEquals(getEntries(endpoints).size(), 1, endpoints);
             assertAiEndpoint(projectDirPath, endpoints, "/main", 9095, "main_main_openapi.yaml");
@@ -101,10 +113,39 @@ public class EndpointExportTest {
     }
 
     @Test
-    public void testPackageWithoutAiServicesProducesNoArtifact() throws IOException, InterruptedException {
+    public void testServicesOnRootBasePath() throws IOException {
+        Path projectDirPath = RESOURCE_DIRECTORY.resolve("root_base_paths");
+        try {
+            Assert.assertTrue(build(projectDirPath, true), "Expected the package to build");
+            String endpoints = Files.readString(artifactDir(projectDirPath).resolve(ENDPOINTS_FILE));
+            List<String> entries = getEntries(endpoints);
+            Assert.assertEquals(entries.size(), 2, endpoints);
+
+            // The first root service is named after the file alone; the next one in the same file gets a
+            // symbol-based suffix so the specifications do not overwrite each other
+            List<String> schemaFileNames = entries.stream()
+                    .map(entry -> entry.replaceAll("(?s).*schemaPath: \"([^\"]+)\".*", "$1"))
+                    .sorted()
+                    .toList();
+            Assert.assertTrue(schemaFileNames.contains("main_openapi.yaml"), endpoints);
+            Assert.assertTrue(schemaFileNames.stream().anyMatch(name -> name.matches("main_-?\\d+_openapi\\.yaml")),
+                    endpoints);
+            for (String schemaFileName : schemaFileNames) {
+                Assert.assertTrue(Files.exists(artifactDir(projectDirPath).resolve(schemaFileName)),
+                        "OpenAPI specification not generated: " + schemaFileName);
+            }
+            Assert.assertTrue(endpoints.contains("port: 9095"), endpoints);
+            Assert.assertTrue(endpoints.contains("port: 9096"), endpoints);
+        } finally {
+            deleteDirectories(projectDirPath);
+        }
+    }
+
+    @Test
+    public void testPackageWithoutAiServicesProducesNoArtifact() throws IOException {
         Path projectDirPath = RESOURCE_DIRECTORY.resolve("no_ai_services");
         try {
-            Assert.assertEquals(executeBallerinaCommand(projectDirPath, true), 0);
+            Assert.assertTrue(build(projectDirPath, true), "Expected the package to build");
             Assert.assertTrue(Files.notExists(artifactDir(projectDirPath)),
                     "No artifact should be generated for a package without services");
         } finally {
@@ -145,27 +186,32 @@ public class EndpointExportTest {
         return projectDirPath.resolve("target").resolve(ARTIFACT_DIR);
     }
 
-    private static int executeBallerinaCommand(Path projectDirPath, boolean exportEndpoints)
-            throws IOException, InterruptedException {
+    /**
+     * Builds the package as {@code bal build} does: runs the code generators and modifiers, compiles the package and,
+     * if it compiles without errors, emits the executable, which also writes the exported endpoints.
+     *
+     * @param projectDirPath  the package directory
+     * @param exportEndpoints whether the {@code --export-endpoints} build option is enabled
+     * @return {@code true} if the executable was emitted
+     */
+    private static boolean build(Path projectDirPath, boolean exportEndpoints) throws IOException {
         deleteDirectories(projectDirPath);
-        List<String> buildArgs = new ArrayList<>();
-        String balFile = System.getProperty("os.name").startsWith("Windows") ? "bal.bat" : "bal";
-        buildArgs.add(DISTRIBUTION_PATH.resolve("bin").resolve(balFile).toString());
-        buildArgs.add("build");
-        if (exportEndpoints) {
-            buildArgs.add("--export-endpoints");
+        BuildOptions buildOptions = BuildOptions.builder().setExportEndpoints(exportEndpoints).build();
+        BuildProject project = BuildProject.load(getEnvironmentBuilder(), projectDirPath, buildOptions);
+        project.currentPackage().runCodeGenAndModifyPlugins();
+        PackageCompilation compilation = project.currentPackage().getCompilation();
+        if (compilation.diagnosticResult().hasErrors()) {
+            return false;
         }
+        Path binDir = Files.createDirectories(project.targetDir().resolve("bin"));
+        Path executable = binDir.resolve(project.currentPackage().packageName().value() + ".jar");
+        JBallerinaBackend backend = JBallerinaBackend.from(compilation, JvmTarget.JAVA_25);
+        return backend.emit(JBallerinaBackend.OutputType.EXEC, executable).successful();
+    }
 
-        ProcessBuilder pb = new ProcessBuilder(buildArgs)
-                .redirectErrorStream(true)
-                .redirectOutput(ProcessBuilder.Redirect.INHERIT);
-        pb.directory(projectDirPath.toFile());
-        Process process = pb.start();
-        if (!process.waitFor(2, TimeUnit.MINUTES)) {
-            process.destroyForcibly().waitFor();
-            Assert.fail("bal build timed out after 2 minutes");
-        }
-        return process.exitValue();
+    private static ProjectEnvironmentBuilder getEnvironmentBuilder() {
+        Environment environment = EnvironmentBuilder.getBuilder().setBallerinaHome(DISTRIBUTION_PATH).build();
+        return ProjectEnvironmentBuilder.getBuilder(environment);
     }
 
     private static void deleteDirectories(Path projectDirPath) throws IOException {
