@@ -26,8 +26,7 @@ isolated function testContext() returns error? {
     string[] keys = ctx.keys();
     test:assertEquals(keys, ["key1", "key2", "key3"]);
 
-    ContextEntry value1 = ctx.get("key1");
-    test:assertEquals(value1, "value1");
+    test:assertEquals(ctx.get("key1"), "value1");
 
     ctx.set("key1", "overwrittenValue");
     test:assertEquals(ctx.get("key1"), "overwrittenValue");
