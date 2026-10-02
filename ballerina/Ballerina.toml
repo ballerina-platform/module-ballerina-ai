@@ -1,5 +1,5 @@
 [package]
-distribution = "2201.14.0-20260925-194000-43f57956"
+distribution = "2201.14.0-20261001-132000-2a454e91"
 org = "ballerina"
 name = "ai"
 version = "1.16.0"
