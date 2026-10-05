@@ -142,6 +142,24 @@ public class EndpointExportTest {
     }
 
     @Test
+    public void testServicesInSubmodule() throws IOException {
+        Path projectDirPath = RESOURCE_DIRECTORY.resolve("submodule_services");
+        try {
+            Assert.assertTrue(build(projectDirPath, true), "Expected the package to build");
+            String endpoints = Files.readString(artifactDir(projectDirPath).resolve(ENDPOINTS_FILE));
+            Assert.assertEquals(getEntries(endpoints).size(), 3, endpoints);
+            assertAiEndpoint(projectDirPath, endpoints, "/main", 9095, "main_main_openapi.yaml");
+
+            // Listeners are resolved from the module of the service, even when the default module declares a
+            // listener with the same name
+            assertAiEndpoint(projectDirPath, endpoints, "/agent", 9098, "agents_agent_openapi.yaml");
+            assertAiEndpoint(projectDirPath, endpoints, "/support", 9099, "agents_support_openapi.yaml");
+        } finally {
+            deleteDirectories(projectDirPath);
+        }
+    }
+
+    @Test
     public void testPackageWithoutAiServicesProducesNoArtifact() throws IOException {
         Path projectDirPath = RESOURCE_DIRECTORY.resolve("no_ai_services");
         try {

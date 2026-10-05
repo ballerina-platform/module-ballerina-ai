@@ -120,7 +120,8 @@ public class OpenAPIGenerator implements AnalysisTask<SyntaxNodeAnalysisContext>
         if (containErrors(semanticModel.diagnostics())) {
             diagnostics.addAll(semanticModel.diagnostics());
         } else if (isAiAgentService(serviceNode, semanticModel)) {
-            generateOpenAPISpec(semanticModel, serviceNode, syntaxTree, services, project, outPath, diagnostics);
+            Module module = currentPackage.module(context.moduleId());
+            generateOpenAPISpec(semanticModel, serviceNode, syntaxTree, services, module, outPath, diagnostics);
         }
         if (!diagnostics.isEmpty()) {
             for (Diagnostic diagnostic : diagnostics) {
@@ -131,13 +132,13 @@ public class OpenAPIGenerator implements AnalysisTask<SyntaxNodeAnalysisContext>
 
     private void generateOpenAPISpec(SemanticModel semanticModel, ServiceDeclarationNode serviceNode,
                                      SyntaxTree syntaxTree, Map<Integer, String> services,
-                                     Project project, Path outPath, List<Diagnostic> diagnostics) {
+                                     Module module, Path outPath, List<Diagnostic> diagnostics) {
         Optional<Symbol> serviceSymbol = semanticModel.symbol(serviceNode);
         if (serviceSymbol.isEmpty() || !(serviceSymbol.get() instanceof ServiceDeclarationSymbol)) {
             return;
         }
         extractServiceNodes(syntaxTree.rootNode(), services, semanticModel);
-        OpenAPI chatServiceSchema = generateChatServiceSchema(serviceNode, semanticModel, project, diagnostics);
+        OpenAPI chatServiceSchema = generateChatServiceSchema(serviceNode, semanticModel, module, diagnostics);
         String fileName = constructFileName(syntaxTree, services, serviceSymbol.get());
         writeOpenAPIYaml(outPath.resolve(OPENAPI), chatServiceSchema, fileName, diagnostics);
     }
@@ -148,13 +149,13 @@ public class OpenAPIGenerator implements AnalysisTask<SyntaxNodeAnalysisContext>
      *
      * @param serviceNode   the AI agent service declaration
      * @param semanticModel the semantic model
-     * @param project       the project containing the service
+     * @param module        the module containing the service, from which its listeners are resolved
      * @param diagnostics   the list to which server resolution diagnostics are added
      * @return the generated OpenAPI specification
      */
     static OpenAPI generateChatServiceSchema(ServiceDeclarationNode serviceNode, SemanticModel semanticModel,
-                                             Project project, List<Diagnostic> diagnostics) {
-        ListenerVisitor listenerVisitor = extractListenersFromDefaultModule(project);
+                                             Module module, List<Diagnostic> diagnostics) {
+        ListenerVisitor listenerVisitor = extractListeners(module);
         Set<ListenerDeclarationNode> listeners = listenerVisitor.getListenerDeclarationNodes();
 
         OpenAPI chatServiceSchema = ChatServiceOpenAPISchema.generate();
@@ -164,9 +165,8 @@ public class OpenAPIGenerator implements AnalysisTask<SyntaxNodeAnalysisContext>
         return chatServiceSchema;
     }
 
-    public static ListenerVisitor extractListenersFromDefaultModule(Project project) {
+    public static ListenerVisitor extractListeners(Module module) {
         ListenerVisitor listenerVisitor = new ListenerVisitor();
-        Module module = project.currentPackage().module(project.currentPackage().getDefaultModule().moduleId());
         module.documentIds().forEach((documentId) -> {
             SyntaxTree syntaxTreeDoc = module.document(documentId).syntaxTree();
             syntaxTreeDoc.rootNode().accept(listenerVisitor);

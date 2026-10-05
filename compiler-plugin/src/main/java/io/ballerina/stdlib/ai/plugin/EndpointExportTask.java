@@ -88,7 +88,8 @@ public class EndpointExportTask implements AnalysisTask<SyntaxNodeAnalysisContex
         }
 
         List<Diagnostic> diagnostics = new ArrayList<>();
-        OpenAPI chatServiceSchema = generateChatServiceSchema(serviceNode, semanticModel, project, diagnostics);
+        Module module = context.currentPackage().module(context.moduleId());
+        OpenAPI chatServiceSchema = generateChatServiceSchema(serviceNode, semanticModel, module, diagnostics);
 
         SyntaxTree syntaxTree = context.syntaxTree();
         Map<Integer, String> services = new HashMap<>();
