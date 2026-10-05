@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, WSO2 LLC. (http://www.wso2.com).
+ * Copyright (c) 2026, WSO2 LLC. (http://www.wso2.com).
  *
  * WSO2 LLC. licenses this file to you under the Apache License,
  * Version 2.0 (the "License"); you may not use this file except
@@ -18,24 +18,24 @@
 
 package io.ballerina.stdlib.ai.plugin;
 
-import io.ballerina.projects.plugins.CodeAnalysisContext;
-import io.ballerina.projects.plugins.CodeAnalyzer;
+import io.ballerina.projects.plugins.CompilerLifecycleContext;
+import io.ballerina.projects.plugins.CompilerLifecycleListener;
 
 import java.util.List;
 
-import static io.ballerina.compiler.syntax.tree.SyntaxKind.SERVICE_DECLARATION;
-
-public class AiCodeAnalyzer extends CodeAnalyzer {
+/**
+ * Registers the endpoint metadata task to run after code generation has completed.
+ */
+public class AiCompilerLifecycleListener extends CompilerLifecycleListener {
 
     private final List<Endpoint> endpoints;
 
-    AiCodeAnalyzer(List<Endpoint> endpoints) {
+    AiCompilerLifecycleListener(List<Endpoint> endpoints) {
         this.endpoints = endpoints;
     }
 
     @Override
-    public void init(CodeAnalysisContext codeAnalysisContext) {
-        codeAnalysisContext.addSyntaxNodeAnalysisTask(new OpenAPIGenerator(), SERVICE_DECLARATION);
-        codeAnalysisContext.addSyntaxNodeAnalysisTask(new EndpointExportTask(endpoints), SERVICE_DECLARATION);
+    public void init(CompilerLifecycleContext context) {
+        context.addCodeGenerationCompletedTask(new EndpointMetadataTask(endpoints));
     }
 }

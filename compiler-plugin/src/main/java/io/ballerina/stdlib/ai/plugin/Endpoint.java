@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, WSO2 LLC. (http://www.wso2.com).
+ * Copyright (c) 2026, WSO2 LLC. (http://www.wso2.com).
  *
  * WSO2 LLC. licenses this file to you under the Apache License,
  * Version 2.0 (the "License"); you may not use this file except
@@ -16,22 +16,16 @@
  * under the License.
  */
 
-package io.ballerina.stdlib.ai.plugin.diagnostics;
+package io.ballerina.stdlib.ai.plugin;
 
 /**
- * Compilation error codes used in Ballerina AI package compiler plugin.
+ * Holds the extracted metadata of an AI agent chat service endpoint.
+ *
+ * @param name       the endpoint name
+ * @param port       the port the service listens on
+ * @param basePath   the base path of the service
+ * @param type       the endpoint type
+ * @param schemaPath the name of the OpenAPI specification file generated for the service
  */
-public enum DiagnosticCode {
-    AI_101,
-    AI_102,
-    AI_103,
-    AI_104,
-    AI_105,
-    AI_106,
-    AI_107,
-    AI_108,
-    AI_109,
-    AI_110,
-    AI_111,
-    AI_112
+public record Endpoint(String name, int port, String basePath, String type, String schemaPath) {
 }
