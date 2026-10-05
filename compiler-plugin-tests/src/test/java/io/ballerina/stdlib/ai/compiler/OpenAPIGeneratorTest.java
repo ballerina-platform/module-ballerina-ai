@@ -39,6 +39,7 @@ import java.text.MessageFormat;
 import java.util.Iterator;
 import java.util.regex.Pattern;
 
+import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.UNABLE_TO_OBTAIN_VALID_SERVER_PORT;
 import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.UNABLE_TO_OBTAIN_VALID_SERVER_PORT_FROM_EXPRESSION;
 
 public class OpenAPIGeneratorTest {
@@ -85,6 +86,22 @@ public class OpenAPIGeneratorTest {
             Path openApiFile = RESOURCE_DIRECTORY.resolve(packagePath + "/target/openapi/chatService_openapi.yaml");
             Assert.assertTrue(Files.exists(openApiFile), "OpenAPI file not generated for package: " + packagePath);
         }
+    }
+
+    @Test
+    public void testOpenAPIGenerationEmitsWarningForUnresolvableListener() {
+        String packagePath = "14_sample";
+        DiagnosticResult diagnosticResult = getDiagnosticResult(packagePath);
+        Assert.assertEquals(diagnosticResult.errorCount(), 0);
+        Assert.assertEquals(diagnosticResult.warningCount(), 1);
+
+        Diagnostic diagnostic = diagnosticResult.warnings().iterator().next();
+        Assert.assertEquals(diagnostic.diagnosticInfo().severity(), DiagnosticSeverity.WARNING);
+        Assert.assertEquals(diagnostic.message(), getWarningMessage(UNABLE_TO_OBTAIN_VALID_SERVER_PORT, "9090"));
+        Assert.assertTrue(diagnostic.message().contains("Default port '9090'"), diagnostic.message());
+
+        Path openApiFile = RESOURCE_DIRECTORY.resolve(packagePath + "/target/openapi/chatService_openapi.yaml");
+        Assert.assertTrue(Files.exists(openApiFile), "OpenAPI file not generated for package: " + packagePath);
     }
 
     @Test
