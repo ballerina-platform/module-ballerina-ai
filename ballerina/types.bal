@@ -14,6 +14,9 @@
 // specific language governing permissions and limitations
 // under the License.
 
+import ai.intelligence;
+
+import ballerina/data.jsondata;
 import ballerina/http;
 
 # Represents a request message for the chat service.
@@ -289,3 +292,59 @@ public enum FinishReason {
     # Content was omitted due to a content-filter flag
     CONTENT_FILTER = "content_filter"
 }
+
+# Named alias for the SSE event stream targetType, since `stream<http:SseEvent, error?>` used
+# inline as an expression (e.g. `targetType = stream<http:SseEvent, error?>`) is ambiguous for
+# the parser around the trailing `?>`.
+type Wso2SseEventStream stream<http:SseEvent, error?>;
+
+# Raw shape of a single SSE `data` payload emitted by the WSO2 intelligence
+# `/chat/completions` endpoint when `stream: true` is set, mirroring the OpenAI
+# chat-completion-chunk wire format. Kept separate from the public `ChatMessageChunk`
+# type since the wire format uses provider-specific/legacy field names (for example,
+# `function_call` rather than `tool_calls`).
+#
+# + id - Unique identifier for the completion; stable across all chunks of one response
+# + model - The model that produced the completion
+# + choices - The streamed choices for this chunk
+# + usage - Token usage statistics; sent as `null` or omitted on all but the final chunk
+# + error - Error details, sent in place of choices when the provider fails mid-stream
+type Wso2StreamChunk record {
+    string id?;
+    string model?;
+    Wso2StreamChoice[] choices?;
+    intelligence:CompletionUsage? usage?;
+    Wso2StreamError? 'error?;
+};
+
+# Error details carried by a mid-stream error event.
+#
+# + message - Human-readable description of the error
+type Wso2StreamError record {
+    string message?;
+};
+
+# + index - Index of the choice in the list of choices
+# + delta - The incremental message content for this chunk
+# + finishReason - Reason the model stopped generating tokens; absent until the final chunk
+type Wso2StreamChoice record {
+    int index?;
+    Wso2StreamDelta delta?;
+    @jsondata:Name {value: "finish_reason"}
+    string? finishReason?;
+};
+
+# + content - The answer text fragment for this chunk
+# + functionCall - The function name/arguments fragment, when the model is calling a function
+type Wso2StreamDelta record {
+    string? content?;
+    @jsondata:Name {value: "function_call"}
+    Wso2StreamFunctionCall? functionCall?;
+};
+
+# + name - Name of the function to call; only sent on the first fragment of the call
+# + arguments - Incremental JSON-string fragment of the function arguments
+type Wso2StreamFunctionCall record {
+    string name?;
+    string arguments?;
+};

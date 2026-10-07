@@ -14,6 +14,8 @@
 // specific language governing permissions and limitations
 // under the License.
 
+import ai.observe;
+
 import ballerina/http;
 import ballerina/test;
 
@@ -29,21 +31,27 @@ const MOCK_STREAM_TOOL_ID = "chatcmpl-tool";
 const string TRIGGER_STREAM_ERROR = "trigger-stream-error";
 const string TRIGGER_MALFORMED_CHUNK = "trigger-malformed-chunk";
 const string TRIGGER_PROVIDER_ERROR = "trigger-provider-error";
+const string TRIGGER_IMAGE_PROMPT = "trigger-image-prompt";
 const MOCK_PROVIDER_ERROR_MESSAGE = "provider failed";
+const MOCK_IMAGE_URL = "https://example.com/cat.png";
 
-// Streams the SSE events collected in `events` one at a time.
+// Streams the SSE events collected in `events` one at a time and records whether it was closed.
+// With `dropConnection`, returns an error once the events run out, as a dropped connection would.
 class MockSseEventIterator {
     private final http:SseEvent[] events;
+    private final boolean dropConnection;
     private int index = 0;
+    private boolean closed = false;
 
-    function init(http:SseEvent[] events) {
+    function init(http:SseEvent[] events, boolean dropConnection = false) {
         self.events = events;
+        self.dropConnection = dropConnection;
     }
 
     public isolated function next() returns record {|http:SseEvent value;|}|error? {
         lock {
             if self.index >= self.events.length() {
-                return ();
+                return self.dropConnection ? error("connection reset by peer") : ();
             }
             http:SseEvent event = self.events[self.index];
             self.index += 1;
@@ -52,7 +60,15 @@ class MockSseEventIterator {
     }
 
     public isolated function close() returns error? {
-        return ();
+        lock {
+            self.closed = true;
+        }
+    }
+
+    isolated function isClosed() returns boolean {
+        lock {
+            return self.closed;
+        }
     }
 }
 
@@ -104,7 +120,8 @@ function mockProviderErrorStreamEvents() returns http:SseEvent[] => [
 // When the request has `stream: true`, responds with SSE chunks instead of a single JSON body; a message
 // containing `TRIGGER_STREAM_ERROR` makes the streaming path fail with a 500, and one containing
 // `TRIGGER_MALFORMED_CHUNK` streams an invalid chunk, and one containing `TRIGGER_PROVIDER_ERROR`
-// streams a provider error payload.
+// streams a provider error payload. A message containing `TRIGGER_IMAGE_PROMPT` fails with a 500
+// unless it also carries an image content part.
 service on new http:Listener(MOCK_CHAT_PORT) {
 
     resource function post chat/completions(@http:Payload json payload, @http:Header string Authorization)
@@ -123,6 +140,9 @@ service on new http:Listener(MOCK_CHAT_PORT) {
             string messagesText = messages is json[] ? messages.toString() : "";
             if messagesText.includes(TRIGGER_STREAM_ERROR) {
                 return <http:InternalServerError>{body: {message: "simulated streaming failure"}};
+            }
+            if messagesText.includes(TRIGGER_IMAGE_PROMPT) && !messagesText.includes("\"image_url\"") {
+                return <http:InternalServerError>{body: {message: "expected an image content part"}};
             }
             http:SseEvent[] events = messagesText.includes(TRIGGER_MALFORMED_CHUNK) ? mockMalformedStreamEvents()
                 : messagesText.includes(TRIGGER_PROVIDER_ERROR) ? mockProviderErrorStreamEvents()
@@ -205,6 +225,13 @@ class TrackingChunkIterator {
             return self.closed;
         }
     }
+}
+
+// Opens a chunk stream over `sseSource` the same way `chatAsStream` does after the SSE connection opens.
+function newChunkStream(MockSseEventIterator sseSource) returns [stream<ChatMessageChunk, Error?>, Wso2ChatStreamIterator] {
+    Wso2ChatStreamIterator iterator = new (new stream<http:SseEvent, error?>(sseSource),
+        observe:createChatSpan(WSO2_DEFAULT_MODEL));
+    return [new stream<ChatMessageChunk, Error?>(iterator), iterator];
 }
 
 function collectChunks(stream<ChatMessageChunk, Error?> chunkStream) returns ChatMessageChunk[]|Error {
@@ -505,4 +532,137 @@ function testGenerateAsStreamYieldsOnlyContent() returns error? {
     test:assertEquals(first.value, "Hello");
     check earlyTextStream.close();
     test:assertTrue(earlySource.isClosed(), "Expected closing the text stream to close the chunk stream");
+}
+
+@test:Config {
+    groups: ["wso2-model-provider"]
+}
+function testWso2ChatStreamEarlyClose() returns error? {
+    MockSseEventIterator sseSource = new (mockTextStreamEvents());
+    [stream<ChatMessageChunk, Error?>, Wso2ChatStreamIterator] [chunkStream, iterator] = newChunkStream(sseSource);
+
+    record {|ChatMessageChunk value;|}|Error? first = chunkStream.next();
+    if first !is record {|ChatMessageChunk value;|} {
+        test:assertFail("Expected a chunk before closing the stream");
+    }
+    test:assertEquals(first.value.content, "Hello! ");
+
+    check chunkStream.close();
+    test:assertTrue(sseSource.isClosed(), "Expected closing the stream to close the SSE stream");
+    test:assertTrue(chunkStream.next() is (), "Expected no more chunks after the stream is closed");
+    // Only the output received before the early close is recorded.
+    test:assertEquals(iterator.outputMessage(), {role: ASSISTANT, content: "Hello! ", toolCalls: ()});
+}
+
+@test:Config {
+    groups: ["wso2-model-provider"]
+}
+function testWso2ChatStreamWithoutDone() returns error? {
+    // A stream that ends after a finish reason but without `[DONE]` completes normally.
+    http:SseEvent[] finishedEvents = mockTextStreamEvents();
+    _ = finishedEvents.pop();
+    MockSseEventIterator finishedSource = new (finishedEvents);
+    [stream<ChatMessageChunk, Error?>, Wso2ChatStreamIterator] [finishedStream, _] = newChunkStream(finishedSource);
+    ChatMessageChunk[] chunks = check collectChunks(finishedStream);
+    test:assertEquals(chunks.length(), 3);
+    test:assertTrue(finishedSource.isClosed(), "Expected the SSE stream to be closed when it runs out");
+
+    // A stream that ends with neither `[DONE]` nor a finish reason was cut off.
+    MockSseEventIterator cutOffSource = new ([
+        {data: string `{"id":"chatcmpl-cut","choices":[{"index":0,"delta":{"content":"partial"}}]}`}
+    ]);
+    [stream<ChatMessageChunk, Error?>, Wso2ChatStreamIterator] [cutOffStream, _] = newChunkStream(cutOffSource);
+    record {|ChatMessageChunk value;|}|Error? first = cutOffStream.next();
+    if first !is record {|ChatMessageChunk value;|} {
+        test:assertFail("Expected the chunk received before the stream was cut off");
+    }
+    test:assertEquals(first.value.content, "partial");
+    test:assertTrue(cutOffStream.next() is LlmConnectionError,
+            "Expected an `LlmConnectionError` for a stream that ends before it completes");
+    test:assertTrue(cutOffStream.next() is (), "Expected the stream to end after an error");
+    test:assertTrue(cutOffSource.isClosed(), "Expected the SSE stream to be closed after an error");
+}
+
+@test:Config {
+    groups: ["wso2-model-provider"]
+}
+function testWso2ChatStreamDroppedConnection() returns error? {
+    MockSseEventIterator sseSource = new ([
+        {data: string `{"id":"chatcmpl-drop","choices":[{"index":0,"delta":{"content":"partial"}}]}`}
+    ], dropConnection = true);
+    [stream<ChatMessageChunk, Error?>, Wso2ChatStreamIterator] [chunkStream, _] = newChunkStream(sseSource);
+
+    record {|ChatMessageChunk value;|}|Error? first = chunkStream.next();
+    if first !is record {|ChatMessageChunk value;|} {
+        test:assertFail("Expected the chunk received before the connection dropped");
+    }
+    test:assertEquals(first.value.content, "partial");
+    test:assertTrue(chunkStream.next() is LlmConnectionError,
+            "Expected an `LlmConnectionError` when the connection drops");
+    test:assertTrue(chunkStream.next() is (), "Expected the stream to end after an error");
+    test:assertTrue(sseSource.isClosed(), "Expected the SSE stream to be closed after an error");
+}
+
+@test:Config {
+    groups: ["wso2-model-provider"]
+}
+function testWso2ChatStreamOutputMessage() returns error? {
+    [stream<ChatMessageChunk, Error?>, Wso2ChatStreamIterator] [textStream, textIterator] =
+        newChunkStream(new (mockTextStreamEvents()));
+    _ = check collectChunks(textStream);
+    test:assertEquals(textIterator.outputMessage(), {role: ASSISTANT, content: MOCK_CHAT_TEXT_RESPONSE, toolCalls: ()});
+
+    // Tool-call fragments are joined into a single function call with parsed arguments.
+    [stream<ChatMessageChunk, Error?>, Wso2ChatStreamIterator] [toolStream, toolIterator] =
+        newChunkStream(new (mockFunctionCallStreamEvents()));
+    _ = check collectChunks(toolStream);
+    ChatAssistantMessage expected = {
+        role: ASSISTANT,
+        content: (),
+        toolCalls: [{name: "searchFunction", arguments: {"query": "test"}}]
+    };
+    test:assertEquals(toolIterator.outputMessage(), expected);
+
+    // Nothing is recorded when no content or tool call was received.
+    [stream<ChatMessageChunk, Error?>, Wso2ChatStreamIterator] [emptyStream, emptyIterator] =
+        newChunkStream(new ([{data: "[DONE]"}]));
+    _ = check collectChunks(emptyStream);
+    test:assertEquals(emptyIterator.outputMessage(), ());
+}
+
+@test:Config {
+    groups: ["wso2-model-provider"]
+}
+function testWso2ModelProviderGenerateAsStreamWithImage() returns error? {
+    Wso2ModelProvider provider = check new (MOCK_CHAT_URL, "test-token");
+
+    ImageDocument urlImage = {content: MOCK_IMAGE_URL};
+    stream<string, Error?> urlStream = check provider->generateAsStream(`${TRIGGER_IMAGE_PROMPT} ${urlImage}`);
+    string[] urlFragments = check from string fragment in urlStream
+        select fragment;
+    test:assertEquals(urlFragments, ["Hello! ", "How can I help you today?"]);
+
+    ImageDocument binaryImage = {content: [137, 80, 78, 71], metadata: {mimeType: "image/png"}};
+    stream<string, Error?> binaryStream = check provider->generateAsStream(`${TRIGGER_IMAGE_PROMPT} ${binaryImage}`);
+    string[] binaryFragments = check from string fragment in binaryStream
+        select fragment;
+    test:assertEquals(binaryFragments, ["Hello! ", "How can I help you today?"]);
+}
+
+@test:Config {
+    groups: ["wso2-model-provider"]
+}
+function testWso2ModelProviderGenerateAsStreamWithDocuments() returns error? {
+    Wso2ModelProvider provider = check new (MOCK_CHAT_URL, "test-token");
+
+    TextDocument textDocument = {content: "Streaming sends partial responses."};
+    stream<string, Error?> textStream = check provider->generateAsStream(`Summarize ${textDocument}`);
+    string[] fragments = check from string fragment in textStream
+        select fragment;
+    test:assertEquals(fragments, ["Hello! ", "How can I help you today?"]);
+
+    // Only text and image documents are supported; others fail before the request is sent.
+    AudioDocument audioDocument = {content: "https://example.com/talk.mp3"};
+    stream<string, Error?>|Error result = provider->generateAsStream(`Transcribe ${audioDocument}`);
+    test:assertTrue(result is Error, "Expected an error for an unsupported document type");
 }

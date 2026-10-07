@@ -268,8 +268,8 @@ isolated function getLlMResponse(intelligence:Client llmClient,
     }
 
     intelligence:CreateChatCompletionResponse|error response = llmClient->/chat/completions.post(request, headers = {
-        "x-product": "bi",
-        "x-usage-context": "model_provider_chat"
+        "x-product": WSO2_PRODUCT,
+        "x-usage-context": WSO2_CHAT_USAGE_CONTEXT
     });
     if response is error {
         return error("LLM call failed: " + response.message(), detail = response.detail(), cause = response.cause());

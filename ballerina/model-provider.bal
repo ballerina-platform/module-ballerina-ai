@@ -191,7 +191,21 @@ public type Wso2ProviderConfig record {|
 const DEFAULT_TEMPERATURE = 0.7d;
 # Model served by the WSO2 intelligence service, reported on observability spans.
 const WSO2_DEFAULT_MODEL = "gpt-4o-mini";
+# Resource path of the WSO2 intelligence chat completions endpoint.
+const WSO2_CHAT_COMPLETIONS_PATH = "/chat/completions";
+# Value of the `x-product` header sent to the WSO2 intelligence service.
+const WSO2_PRODUCT = "bi";
+# Value of the `x-usage-context` header sent with chat requests.
+const WSO2_CHAT_USAGE_CONTEXT = "model_provider_chat";
+# Value of the `x-usage-context` header sent with embedding requests.
+const WSO2_EMBEDDINGS_USAGE_CONTEXT = "model_provider_embeddings";
 const DEFAULT_GENERATOR_CONFIG = {};
+
+# Headers sent with streaming chat requests to the WSO2 intelligence service.
+isolated function wso2ChatHeaders() returns map<string> => {
+    "x-product": WSO2_PRODUCT,
+    "x-usage-context": WSO2_CHAT_USAGE_CONTEXT
+};
 
 # WSO2 model provider implementation that provides chat completion capabilities using WSO2's AI services.
 public isolated distinct client class Wso2ModelProvider {
@@ -214,47 +228,13 @@ public isolated distinct client class Wso2ModelProvider {
             @display {label: "Temperature"} decimal temperature = DEFAULT_TEMPERATURE,
             @display {label: "Generator Configuration"} readonly & GeneratorConfig generatorConfig = DEFAULT_GENERATOR_CONFIG,
             @display {label: "Connection Configuration"} *ConnectionConfig connectionConfig) returns Error? {
-        intelligence:ConnectionConfig intelligenceConfig = {
-            auth: {
-                token: accessToken
-            },
-            httpVersion: connectionConfig.httpVersion,
-            http1Settings: connectionConfig.http1Settings,
-            http2Settings: connectionConfig.http2Settings,
-            timeout: connectionConfig.timeout,
-            forwarded: connectionConfig.forwarded,
-            poolConfig: connectionConfig.poolConfig,
-            cache: connectionConfig.cache,
-            compression: connectionConfig.compression,
-            circuitBreaker: connectionConfig.circuitBreaker,
-            retryConfig: connectionConfig.retryConfig,
-            responseLimits: connectionConfig.responseLimits,
-            secureSocket: connectionConfig.secureSocket,
-            proxy: connectionConfig.proxy,
-            validation: connectionConfig.validation
-        };
+        intelligence:ConnectionConfig intelligenceConfig = {...connectionConfig, auth: {token: accessToken}};
         intelligence:Client|error llmClient = new (config = intelligenceConfig, serviceUrl = serviceUrl);
         if llmClient is error {
             return error Error("Failed to initialize Wso2ModelProvider", llmClient);
         }
 
-        http:ClientConfiguration streamClientConfig = {
-            auth: {token: accessToken},
-            httpVersion: connectionConfig.httpVersion,
-            http1Settings: connectionConfig.http1Settings,
-            http2Settings: connectionConfig.http2Settings,
-            timeout: connectionConfig.timeout,
-            forwarded: connectionConfig.forwarded,
-            poolConfig: connectionConfig.poolConfig,
-            cache: connectionConfig.cache,
-            compression: connectionConfig.compression,
-            circuitBreaker: connectionConfig.circuitBreaker,
-            retryConfig: connectionConfig.retryConfig,
-            responseLimits: connectionConfig.responseLimits,
-            secureSocket: connectionConfig.secureSocket,
-            proxy: connectionConfig.proxy,
-            validation: connectionConfig.validation
-        };
+        http:ClientConfiguration streamClientConfig = {...connectionConfig, auth: {token: accessToken}};
         http:Client|error streamHttpClient = new (serviceUrl, streamClientConfig);
         if streamHttpClient is error {
             return error Error("Failed to initialize Wso2ModelProvider", streamHttpClient);
@@ -292,8 +272,8 @@ public isolated distinct client class Wso2ModelProvider {
             span.addTools(tools);
         }
         intelligence:CreateChatCompletionResponse|error response = self.llmClient->/chat/completions.post(request, headers = {
-            "x-product": "bi",
-            "x-usage-context": "model_provider_chat"
+            "x-product": WSO2_PRODUCT,
+            "x-usage-context": WSO2_CHAT_USAGE_CONTEXT
         });
         if response is error {
             Error err = error LlmConnectionError("Error while connecting to the model", response);
@@ -379,13 +359,11 @@ public isolated distinct client class Wso2ModelProvider {
             request.functions = tools;
             span.addTools(tools);
         }
-        return self.openChunkStream(request, span);
+        return self.openChunkStream(WSO2_CHAT_COMPLETIONS_PATH, wso2ChatHeaders(), request, span);
     }
 
     # Sends a streaming chat request to the model using the given prompt and streams
-    # back the generated answer as text fragments. The request is built from the prompt
-    # the same way as for `generate` (text and image content parts), without the
-    # structured-output tool.
+    # back the generated answer as text fragments.
     #
     # + prompt - The prompt to use in the chat request
     # + return - A stream of text fragments, or an error if generation fails
@@ -406,16 +384,17 @@ public isolated distinct client class Wso2ModelProvider {
         };
         span.addInputMessages(request.messages.toJson());
 
-        stream<ChatMessageChunk, Error?> chunks = check self.openChunkStream(request, span);
+        stream<ChatMessageChunk, Error?> chunks =
+            check self.openChunkStream(WSO2_CHAT_COMPLETIONS_PATH, wso2ChatHeaders(), request, span);
         return new stream<string, Error?>(new TextContentIterator(chunks));
     }
 
-    // Opens the SSE stream for `request`. The span is closed here if the connection fails,
+    // Opens the SSE stream for `request` at `path`. The span is closed here if the connection fails,
     // and by the returned stream's iterator otherwise.
-    private isolated function openChunkStream(intelligence:CreateChatCompletionRequest request, observe:LlmSpan span)
+    private isolated function openChunkStream(string path, map<string> headers,
+            intelligence:CreateChatCompletionRequest request, observe:LlmSpan span)
             returns stream<ChatMessageChunk, Error?>|Error {
-        Wso2SseEventStream|error sseEvents = self.streamHttpClient->post("/chat/completions", request,
-                headers = {"x-product": "bi", "x-usage-context": "model_provider_chat"},
+        Wso2SseEventStream|error sseEvents = self.streamHttpClient->post(path, request, headers,
                 targetType = Wso2SseEventStream);
         if sseEvents is error {
             Error err = error LlmConnectionError("Error while connecting to the model", sseEvents);
@@ -477,62 +456,6 @@ public isolated distinct client class Wso2ModelProvider {
         "content": getChatMessageStringContent(message.content)
     };
 }
-
-# Named alias for the SSE event stream targetType, since `stream<http:SseEvent, error?>` used
-# inline as an expression (e.g. `targetType = stream<http:SseEvent, error?>`) is ambiguous for
-# the parser around the trailing `?>`.
-type Wso2SseEventStream stream<http:SseEvent, error?>;
-
-# Raw shape of a single SSE `data` payload emitted by the WSO2 intelligence
-# `/chat/completions` endpoint when `stream: true` is set, mirroring the OpenAI
-# chat-completion-chunk wire format. Kept separate from the public `ChatMessageChunk`
-# type since the wire format uses provider-specific/legacy field names (for example,
-# `function_call` rather than `tool_calls`).
-#
-# + id - Unique identifier for the completion; stable across all chunks of one response
-# + model - The model that produced the completion
-# + choices - The streamed choices for this chunk
-# + usage - Token usage statistics; sent as `null` or omitted on all but the final chunk
-# + error - Error details, sent in place of choices when the provider fails mid-stream
-type Wso2StreamChunk record {
-    string id?;
-    string model?;
-    Wso2StreamChoice[] choices?;
-    intelligence:CompletionUsage? usage?;
-    Wso2StreamError? 'error?;
-};
-
-# Error details carried by a mid-stream error event.
-#
-# + message - Human-readable description of the error
-type Wso2StreamError record {
-    string message?;
-};
-
-# + index - Index of the choice in the list of choices
-# + delta - The incremental message content for this chunk
-# + finishReason - Reason the model stopped generating tokens; absent until the final chunk
-type Wso2StreamChoice record {
-    int index?;
-    Wso2StreamDelta delta?;
-    @jsondata:Name {value: "finish_reason"}
-    string? finishReason?;
-};
-
-# + content - The answer text fragment for this chunk
-# + functionCall - The function name/arguments fragment, when the model is calling a function
-type Wso2StreamDelta record {
-    string? content?;
-    @jsondata:Name {value: "function_call"}
-    Wso2StreamFunctionCall? functionCall?;
-};
-
-# + name - Name of the function to call; only sent on the first fragment of the call
-# + arguments - Incremental JSON-string fragment of the function arguments
-type Wso2StreamFunctionCall record {
-    string name?;
-    string arguments?;
-};
 
 # Maps a raw WSO2 stream chunk onto a `ChatMessageChunk`.
 #
@@ -614,13 +537,22 @@ isolated function mapWso2FinishReason(string? reason) returns FinishReason? {
 # Iterates the raw SSE event stream backing `Wso2ModelProvider.chatAsStream` and
 # `Wso2ModelProvider.generateAsStream`, mapping each event's `data` payload onto a
 # `ChatMessageChunk` and skipping events that carry nothing for the caller. The response
-# id, token usage and finish reason are reported to the span. The span and the underlying
-# SSE stream are closed exactly once: on the `[DONE]` sentinel, on exhaustion, on the first
-# error (including a provider error payload), or when the caller closes the stream early.
+# id, token usage and finish reason are reported to the span, and the assistant message
+# assembled from the streamed chunks is recorded as the span output when the stream ends.
+# The span and the underlying SSE stream are closed exactly once: on the `[DONE]` sentinel,
+# on exhaustion, on the first error (including a provider error payload), or when the caller
+# closes the stream early. A stream that runs out before `[DONE]` or a finish reason is
+# received was cut off, so it ends with an `LlmConnectionError`.
 class Wso2ChatStreamIterator {
     private final Wso2SseEventStream events;
     private final observe:LlmSpan span;
     private boolean done = false;
+    // Whether the model signalled the end of its response with `[DONE]` or a finish reason.
+    private boolean completed = false;
+    private string content = "";
+    private boolean hasToolCall = false;
+    private string? toolName = ();
+    private string toolArguments = "";
 
     isolated function init(Wso2SseEventStream events, observe:LlmSpan span) {
         self.events = events;
@@ -631,7 +563,11 @@ class Wso2ChatStreamIterator {
         while !self.isDone() {
             record {|http:SseEvent value;|}|error? nextEvent = self.events.next();
             if nextEvent is () {
-                return self.finish();
+                if self.completed {
+                    return self.finish();
+                }
+                Error err = error LlmConnectionError("Streaming response from the model ended before it completed");
+                return self.endWithError(err);
             }
             if nextEvent is error {
                 Error err = error LlmConnectionError("Error while reading streaming response from the model",
@@ -662,6 +598,7 @@ class Wso2ChatStreamIterator {
             self.recordObservations(rawChunk);
             ChatMessageChunk? chunk = mapWso2StreamChunk(rawChunk);
             if chunk is ChatMessageChunk {
+                self.collectOutput(chunk);
                 return {value: chunk};
             }
         }
@@ -687,10 +624,45 @@ class Wso2ChatStreamIterator {
         if choices is Wso2StreamChoice[] && choices.length() > 0 {
             string? finishReason = choices[0]?.finishReason;
             if finishReason is string {
+                self.completed = true;
                 self.span.addFinishReason(finishReason);
-                self.span.addOutputType(observe:TEXT);
             }
         }
+    }
+
+    // Accumulates the content and tool-call fragments of `chunk` into the output message.
+    private isolated function collectOutput(ChatMessageChunk chunk) {
+        string? content = chunk.content;
+        if content is string {
+            self.content += content;
+        }
+        ToolCallChunk[]? toolCalls = chunk.toolCalls;
+        if toolCalls is () {
+            return;
+        }
+        foreach ToolCallChunk toolCall in toolCalls {
+            self.hasToolCall = true;
+            string? name = toolCall?.name;
+            if name is string {
+                self.toolName = name;
+            }
+            self.toolArguments += toolCall?.arguments ?: "";
+        }
+    }
+
+    // Returns the assistant message assembled from the chunks received so far, or `()` if no
+    // content or tool call was received. Arguments that are not valid JSON (for example, when
+    // the stream was cut off mid-call) are left out.
+    isolated function outputMessage() returns ChatAssistantMessage? {
+        if self.content.length() == 0 && !self.hasToolCall {
+            return ();
+        }
+        ChatAssistantMessage message = {role: ASSISTANT, content: self.content.length() > 0 ? self.content : ()};
+        if self.hasToolCall {
+            map<json>|error arguments = self.toolArguments.fromJsonStringWithType();
+            message.toolCalls = [{name: self.toolName ?: "", arguments: arguments is map<json> ? arguments : ()}];
+        }
+        return message;
     }
 
     private isolated function isDone() returns boolean {
@@ -717,6 +689,11 @@ class Wso2ChatStreamIterator {
             self.done = true;
         }
         error? closeErr = self.events.close();
+        ChatAssistantMessage? output = self.outputMessage();
+        if output is ChatAssistantMessage {
+            self.span.addOutputType(observe:TEXT);
+            self.span.addOutputMessages(output);
+        }
         self.span.close(err);
         if closeErr is error {
             return error LlmConnectionError("Error while closing the streaming response", closeErr);
