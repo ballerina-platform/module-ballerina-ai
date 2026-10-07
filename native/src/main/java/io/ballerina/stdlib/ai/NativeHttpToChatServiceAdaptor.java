@@ -27,6 +27,7 @@ import io.ballerina.runtime.api.values.BMap;
 import io.ballerina.runtime.api.values.BObject;
 import io.ballerina.runtime.api.values.BString;
 
+import java.util.Arrays;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -59,12 +60,14 @@ public final class NativeHttpToChatServiceAdaptor {
         return chatService.getNativeData(DISPATCHER);
     }
 
-    public static Object invokeChat(Environment env, BObject dispatcher, BMap<BString, Object> request) {
-        return invokeResource(env, dispatcher, "chat", request);
+    public static Object invokeChat(Environment env, BObject dispatcher, BMap<BString, Object> request,
+                                    BObject headers) {
+        return invokeResource(env, dispatcher, "chat", request, headers);
     }
 
-    public static Object invokeDecision(Environment env, BObject dispatcher, BMap<BString, Object> request) {
-        return invokeResource(env, dispatcher, "decision", request);
+    public static Object invokeDecision(Environment env, BObject dispatcher, BMap<BString, Object> request,
+                                        BObject headers) {
+        return invokeResource(env, dispatcher, "decision", request, headers);
     }
 
     private static ResourceMethodType findResource(BObject userService, String pathSegment) {
@@ -79,17 +82,30 @@ public final class NativeHttpToChatServiceAdaptor {
         return null;
     }
 
-    private static Object invokeResource(Environment env, BObject dispatcher, String pathSegment, Object request) {
+    private static Object invokeResource(Environment env, BObject dispatcher, String pathSegment,
+                                         Object... available) {
         BObject userService = (BObject) dispatcher.getNativeData(USER_CHAT_SERVICE);
         ResourceMethodType resource = findResource(userService, pathSegment);
         if (resource == null) {
             return ModuleUtils.createError("no 'post " + pathSegment + "' resource found in the attached chat service");
         }
         String methodName = resource.getName();
+        // The user's resource decides how much of what the dispatcher holds it actually wants. A
+        // `decision` resource that takes only the payload is called with one argument, exactly as
+        // before; one that also declares `http:Headers` is called with both. Without this, the
+        // extra parameter stays null and the resource fails with a NullPointerException the moment
+        // it touches it, since the resource signature is not constrained by `ChatService`.
+        int declared = resource.getParameters().length;
+        if (declared > available.length) {
+            return ModuleUtils.createError("the 'post " + pathSegment + "' resource declares " + declared
+                    + " parameter(s), but the chat listener can supply only " + available.length
+                    + ". Expected the payload, optionally followed by an 'http:Headers' parameter.");
+        }
+        Object[] args = declared == available.length ? available : Arrays.copyOf(available, declared);
         return env.yieldAndRun(() -> {
             CompletableFuture<Object> future = new CompletableFuture<>();
             try {
-                Object result = env.getRuntime().callMethod(userService, methodName, null, request);
+                Object result = env.getRuntime().callMethod(userService, methodName, null, args);
                 // A returned error (e.g. ApprovalRequiredError) comes back here as `result`, with its
                 // type and detail intact, and flows through unchanged for the dispatcher to map.
                 Utils.notifySuccess(future, result);

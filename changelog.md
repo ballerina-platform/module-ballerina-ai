@@ -4,6 +4,9 @@ This file documents all significant changes made to the Ballerina AI package acr
 
 ## [Unreleased]
 
+### Added
+- [Allow `http:Headers` in the `ai:ChatService` Contract](https://github.com/ballerina-platform/ballerina-library/issues/9272)
+
 ### Fixed
 - [Fix AI Agent Chat Services Not Being Exported with the `--export-endpoints` Build Option](https://github.com/wso2/product-integrator/issues/2572)
 

@@ -42,7 +42,8 @@ public enum CompilationDiagnostic {
     INVALID_AUTH_CONFIG(DiagnosticMessage.ERROR_109, DiagnosticCode.AI_109, ERROR),
     INVALID_AGENT_ID_AUTH_CONFIG(DiagnosticMessage.ERROR_110, DiagnosticCode.AI_110, ERROR),
     INVALID_APPROVAL_PREDICATE_SIGNATURE(DiagnosticMessage.ERROR_111, DiagnosticCode.AI_111, ERROR),
-    UNSUPPORTED_ENDPOINT_METADATA(DiagnosticMessage.WARNING_112, DiagnosticCode.AI_112, WARNING);
+    UNSUPPORTED_ENDPOINT_METADATA(DiagnosticMessage.WARNING_112, DiagnosticCode.AI_112, WARNING),
+    MISSING_CHAT_RESOURCE(DiagnosticMessage.ERROR_113, DiagnosticCode.AI_113, ERROR);
 
     private final String diagnostic;
     private final String diagnosticCode;

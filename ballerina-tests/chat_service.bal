@@ -16,12 +16,14 @@
 
 import ballerina/ai;
 import ballerina/http;
+import ballerina/http.httpscerr;
 
 listener http:Listener httpListener = http:getDefaultListener();
 listener ai:Listener chatListener = new (httpListener);
 
 service /chatService on chatListener {
-    resource function post chat(@http:Payload ai:ChatReqMessage request) returns ai:ChatRespMessage|error {
+    resource function post chat(@http:Payload ai:ChatReqMessage request, http:Headers headers)
+            returns ai:ChatRespMessage|error {
         return {
             message: request.sessionId + ": " + request.message
         };
@@ -40,13 +42,38 @@ service /chatService on chatListener {
     }
 }
 
+// A service whose `chat` and `decision` resources both use the headers to authenticate the
+// caller - the only way to protect the endpoint that starts a run, or the one that releases a
+// gated tool call. `chat`'s `http:Headers` parameter is required by `ChatService` itself, so
+// `/chatService` above also declares it, just without reading it.
+service /headerAwareService on chatListener {
+    resource function post chat(@http:Payload ai:ChatReqMessage request, http:Headers headers)
+            returns ai:ChatRespMessage|error {
+        string|error authorization = headers.getHeader("Authorization");
+        if authorization !is string {
+            return error httpscerr:UnauthorizedError("A valid bearer token is required.");
+        }
+        return {message: request.sessionId + ": " + authorization};
+    }
+
+    resource function post decision(@http:Payload ai:DecisionMessage request, http:Headers headers)
+            returns ai:ChatRespMessage|error {
+        string|error authorization = headers.getHeader("Authorization");
+        if authorization !is string {
+            return error httpscerr:UnauthorizedError("A valid bearer token is required.");
+        }
+        return {message: request.sessionId + ": " + authorization};
+    }
+}
+
 // A service whose `chat` resource returns an `ai:ApprovalRequiredError` (as a real agent would when
 // it pauses for approval). The dispatcher inside `ai:Listener` should convert that error into a
 // structured HTTP response carrying the pending requests - the service itself does no mapping.
 // Two pending requests are returned, so tests can verify the dispatcher preserves a full batch
 // rather than only the first entry.
 service /pausingService on chatListener {
-    resource function post chat(@http:Payload ai:ChatReqMessage request) returns ai:ChatRespMessage|error {
+    resource function post chat(@http:Payload ai:ChatReqMessage request, http:Headers headers)
+            returns ai:ChatRespMessage|error {
         return error ai:ApprovalRequiredError("Approval required", requests = [
             {id: "req-1", sessionId: request.sessionId, toolName: "issueRefund",
                 toolDescription: "Refund an order", arguments: {"amount": 10}, batchIndex: 0},

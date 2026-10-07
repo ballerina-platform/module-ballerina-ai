@@ -45,7 +45,8 @@ public enum DiagnosticMessage {
     WARNING_108("unable to determine a valid port for the 'ai:ChatService'." +
             " Default port ''{0}'' will be used as the server port in the generated OpenAPI specification."),
     WARNING_112("the current Ballerina version does not support exporting endpoints of AI agent services." +
-            " Use Ballerina 2201.13.6 or above.");
+            " Use Ballerina 2201.13.6 or above."),
+    ERROR_113("a service attached to an `ai:Listener` must declare a `post chat` resource.");
 
     private final String message;
 
