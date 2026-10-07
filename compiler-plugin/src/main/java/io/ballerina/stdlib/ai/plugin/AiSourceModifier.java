@@ -134,21 +134,27 @@ class AiSourceModifier implements ModifierTask<SourceModifierContext> {
         ModuleId moduleId = documentId.moduleId();
         if (!modulesWithPredefinedInitMethods.contains(moduleId)
                 && !modulesWithDesugaredAgentsWithInitMethod.contains(moduleId)) {
-            ModuleMemberDeclarationNode initFunctionDeclaration = desugarAgentsWithinInitFunction(moduleId);
-            modulesWithDesugaredAgentsWithInitMethod.add(moduleId);
-            modifiedMembers.add(initFunctionDeclaration);
+            List<ModuleVariableDeclarationNode> moduleLevelAgents = getModuleLevelAgentDeclarations(moduleId);
+            if (!moduleLevelAgents.isEmpty()) {
+                modulesWithDesugaredAgentsWithInitMethod.add(moduleId);
+                modifiedMembers.add(desugarAgentsWithinInitFunction(moduleLevelAgents));
+            }
         }
         return modifiedMembers;
     }
 
-    private ModuleMemberDeclarationNode desugarAgentsWithinInitFunction(ModuleId moduleId) {
+    private List<ModuleVariableDeclarationNode> getModuleLevelAgentDeclarations(ModuleId moduleId) {
         Set<DocumentId> documentIds = this.modifierContextMap
                 .keySet().stream()
                 .filter(doc -> doc.moduleId().equals(moduleId)).collect(Collectors.toSet());
         Stream<ModifierContext> modifierContextStream = this.modifierContextMap.entrySet().stream()
                 .filter(entry -> documentIds.contains(entry.getKey())).map(Map.Entry::getValue);
-        List<ModuleVariableDeclarationNode> agentDeclarations = modifierContextStream
+        return modifierContextStream
                 .map(ModifierContext::getModuleLevelAgentDeclarations).flatMap(Collection::stream).toList();
+    }
+
+    private ModuleMemberDeclarationNode desugarAgentsWithinInitFunction(
+            List<ModuleVariableDeclarationNode> agentDeclarations) {
         String agentInitializationSourceCode = agentDeclarations.stream().map(Node::toSourceCode)
                 .map(code -> code.replaceFirst(".*:Agent", EMPTY_STRING))
                 .collect(Collectors.joining(EMPTY_STRING));

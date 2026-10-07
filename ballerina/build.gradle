@@ -15,6 +15,13 @@
  *
  */
 import org.apache.tools.ant.taskdefs.condition.Os
+import org.gradle.process.ExecOperations
+
+import javax.inject.Inject
+
+abstract class BallerinaExecHelper {
+    @Inject abstract ExecOperations getExecOperations()
+}
 
 plugins {
     id 'io.ballerina.plugin'
@@ -35,7 +42,7 @@ ballerina {
     module = packageName
     testCoverageParam = "--code-coverage --coverage-format=xml --includes=io.ballerina.stdlib.ai*:ballerina.ai*"
     langVersion = ballerinaLangVersion
-    platform = "java21"
+    platform = "java25"
 }
 
 configurations {
@@ -136,6 +143,7 @@ task updateTomlFiles {
     doLast {
         def newConfig = ballerinaTomlFilePlaceHolder.text.replace("@project.version@", project.version)
         newConfig = newConfig.replace("@toml.version@", tomlVersion)
+        newConfig = newConfig.replace("@ballerina.lang.version@", ballerinaLangVersion)
         newConfig = newConfig.replace("@langchain4j.version", project.langchain4jVersion)
         newConfig = newConfig.replace("@openNlpTools.version", project.openNlpToolsVersion)
         newConfig = newConfig.replace("@tikaVersion@", project.tikaVersion)
@@ -159,8 +167,9 @@ task updateTomlFiles {
 }
 
 task commitTomlFiles {
+    def execHelper = project.objects.newInstance(BallerinaExecHelper)
     doLast {
-        project.exec {
+        execHelper.execOperations.exec {
             ignoreExitValue true
             if (Os.isFamily(Os.FAMILY_WINDOWS)) {
                 commandLine 'cmd', '/c', "git commit -m \"[Automated] Update the native jar versions\" Ballerina.toml Dependencies.toml CompilerPlugin.toml"

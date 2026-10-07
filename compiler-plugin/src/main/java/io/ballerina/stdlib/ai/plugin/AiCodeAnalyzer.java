@@ -21,12 +21,21 @@ package io.ballerina.stdlib.ai.plugin;
 import io.ballerina.projects.plugins.CodeAnalysisContext;
 import io.ballerina.projects.plugins.CodeAnalyzer;
 
+import java.util.List;
+
 import static io.ballerina.compiler.syntax.tree.SyntaxKind.SERVICE_DECLARATION;
 
 public class AiCodeAnalyzer extends CodeAnalyzer {
 
+    private final List<Endpoint> endpoints;
+
+    AiCodeAnalyzer(List<Endpoint> endpoints) {
+        this.endpoints = endpoints;
+    }
+
     @Override
     public void init(CodeAnalysisContext codeAnalysisContext) {
         codeAnalysisContext.addSyntaxNodeAnalysisTask(new OpenAPIGenerator(), SERVICE_DECLARATION);
+        codeAnalysisContext.addSyntaxNodeAnalysisTask(new EndpointExportTask(endpoints), SERVICE_DECLARATION);
     }
 }

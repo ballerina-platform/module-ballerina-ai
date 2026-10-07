@@ -29,11 +29,19 @@ public class Listener {
     }
 
     public isolated function attach(ChatService chatService, string[]|string? name = ()) returns error? {
-        check self.httpListener.attach(chatService, name);
+        // Attach an internal dispatcher (not the user's service) so pauses can be mapped to HTTP
+        // responses without the user writing any conversion logic. The dispatcher forwards each
+        // request to the user's service; the two are associated as native data.
+        ChatDispatcherService dispatcher = new;
+        check self.httpListener.attach(dispatcher, name);
+        setChatService(dispatcher, chatService);
     }
 
     public isolated function detach(ChatService chatService) returns error? {
-        check self.httpListener.detach(chatService);
+        ChatDispatcherService? dispatcher = getDispatcher(chatService);
+        if dispatcher is ChatDispatcherService {
+            check self.httpListener.detach(dispatcher);
+        }
     }
 
     public isolated function 'start() returns error? {

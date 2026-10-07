@@ -54,7 +54,8 @@ type ToolInfo record {|
 
 public isolated class ToolStore {
     public final map<Tool> & readonly tools;
-    private map<()> mcpTools = {};
+    private final map<()> mcpTools = {};
+    private final map<string> toolToToolKitMap = {};
 
     # Register tools to the agent. 
     # These tools will be by the LLM to perform tasks.
@@ -71,21 +72,32 @@ public isolated class ToolStore {
             return;
         }
         ToolConfig[] toolList = [];
+        map<string> toolNames = {};
         foreach BaseToolKit|ToolConfig|FunctionTool tool in tools {
             if tool is FunctionTool {
                 ToolConfig toolConfig = check getToolConfig(tool);
+                check validateToolName(toolNames, toolConfig.name);
                 toolList.push(toolConfig);
             } else if tool is BaseToolKit {
                 ToolConfig[] toolsFromToolKit = tool.getTools(); // TODO remove this after Ballerina fixes nullpointer exception
+                foreach ToolConfig toolFromToolKit in toolsFromToolKit {
+                    string sanitizedName = sanitizeToolName(toolFromToolKit.name);
+                    lock {
+                        self.toolToToolKitMap[sanitizedName] = (typeof tool).toString();
+                    }
+                }
                 if tool is McpBaseToolKit {
                     foreach ToolConfig element in toolsFromToolKit {
+                        string sanitizedName = sanitizeToolName(element.name);
                         lock {
-                            self.mcpTools[element.name] = ();
+                            self.mcpTools[sanitizedName] = ();
                         }
                     }
                 }
+                check validateToolName(toolNames, ...toolsFromToolKit.map(toolKitTool => toolKitTool.name));
                 toolList.push(...toolsFromToolKit);
             } else {
+                check validateToolName(toolNames, tool.name);
                 toolList.push(tool);
             }
         }
@@ -200,6 +212,12 @@ public isolated class ToolStore {
         }
     }
 
+    isolated function getToolKitName(string toolName) returns string? {
+        lock {
+            return self.toolToToolKitMap[toolName];
+        }
+    }
+
     isolated function getToolsInfo() returns ToolInfo[] {
         ToolInfo[] toolList = [];
         foreach [string, Tool] [name, tool] in self.tools.entries() {
@@ -214,6 +232,16 @@ public isolated class ToolStore {
             toolSchemas.push({name, description: tool.description, parametersSchema: tool.variables});
         }
         return toolSchemas;
+    }
+}
+
+isolated function validateToolName(map<string> registeredToolNames, string... toolNames) returns Error? {
+    foreach string toolName in toolNames {
+        if registeredToolNames.hasKey(toolName) {
+            return error(string `duplicate tool name found: '${toolName}'. ` +
+                "Tool names must be unique across all tools and toolkits registered with the agent");
+        }
+        registeredToolNames[toolName] = toolName;
     }
 }
 
@@ -276,6 +304,17 @@ isolated function getInputArgumentsOfTool(FunctionTool tool, map<json> inputValu
     return [context, ...orderedArgs.cloneReadOnly()];
 }
 
+isolated function sanitizeToolName(string name) returns string {
+    if name.matches(re `^[a-zA-Z0-9_-]{1,64}$`) {
+        return name;
+    }
+    string sanitizedName = name;
+    if sanitizedName.length() > 64 {
+        sanitizedName = sanitizedName.substring(0, 64);
+    }
+    return regexp:replaceAll(re `[^a-zA-Z0-9_-]`, sanitizedName, "_");
+}
+
 isolated function registerTool(map<Tool & readonly> toolMap, ToolConfig[] tools) returns Error? {
     foreach ToolConfig tool in tools {
         string name = tool.name;
@@ -284,10 +323,7 @@ isolated function registerTool(map<Tool & readonly> toolMap, ToolConfig[] tools)
         }
         if !name.matches(re `^[a-zA-Z0-9_-]{1,64}$`) {
             log:printWarn(string `Tool name '${name}' contains invalid characters. Only alphanumeric, underscore and hyphen are allowed.`);
-            if name.length() > 64 {
-                name = name.substring(0, 64);
-            }
-            name = regexp:replaceAll(re `[^a-zA-Z0-9_-]`, name, "_");
+            name = sanitizeToolName(name);
         }
         if toolMap.hasKey(name) {
             log:printDebug("Duplicate tool name detected",

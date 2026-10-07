@@ -163,6 +163,45 @@ function testAgentRecoversFromBadlyFormattedHistoryWithoutCorruptingMemory() ret
     test:assertEquals(thirdResult, "third turn answer");
 }
 
+type WeatherQuery record {|
+    string city;
+|};
+
+@test:Config
+function testAgentRunAcceptsRecordAsAnydataInput() returns error? {
+    ModelProvider scriptedModel = new ScriptedMockLLM();
+    Agent agent = check new ({
+        systemPrompt: {role: "Test Agent", instructions: "Answer the questions"},
+        model: scriptedModel,
+        tools: [searchTool, calculatorTool]
+    });
+
+    // A record (anydata, not just `string`/`Prompt`) is accepted directly as the query - the
+    // agent stringifies it before sending it to the model.
+    WeatherQuery query = {city: "Colombo"};
+    string result = check agent.run(query);
+    test:assertEquals(result, "The weather in Colombo is sunny");
+}
+
+@test:Config
+function testAgentRunRejectsNilQuery() returns error? {
+    ModelProvider scriptedModel = new ScriptedMockLLM();
+    Agent agent = check new ({
+        systemPrompt: {role: "Test Agent", instructions: "Answer the questions"},
+        model: scriptedModel,
+        tools: [searchTool, calculatorTool]
+    });
+
+    // `anydata` includes `()`, so a nil query compiles but must still fail fast rather than
+    // silently running an empty-prompt turn.
+    anydata query = ();
+    string|Error result = agent.run(query);
+    test:assertTrue(result is Error);
+    if result is Error {
+        test:assertEquals(result.message(), "Query must not be nil.");
+    }
+}
+
 @test:Config
 function testAgentRunExecutesMultipleToolCallsFromSingleLlmResponseTogether() returns error? {
     MultiToolCallMockLLM scriptedModel = new;

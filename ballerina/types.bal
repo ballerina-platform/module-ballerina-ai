@@ -35,6 +35,16 @@ public type ChatRespMessage record {|
     string message;
 |};
 
+# Represents a structured decision on the tool call(s) a paused run is awaiting approval for.
+# Sent to a chat service's `decision` resource to resume the run for `sessionId`.
+#
+# + sessionId - The session whose paused run these decisions apply to
+# + decisions - The human's decisions, keyed by `ApprovalRequest.id`
+public type DecisionMessage readonly & record {|
+    string sessionId;
+    map<HumanDecision> decisions;
+|};
+
 # Represents the configuration for a chat client.
 public type ChatClientConfiguration record {|
     *http:ClientConfiguration;

@@ -37,4 +37,14 @@ public isolated client class ChatClient {
     isolated resource function post chat(ChatReqMessage request) returns ChatRespMessage|error {
         return self.httpClient->/chat.post(request);
     }
+
+    # Sends a structured decision to the chat service, resuming a run that paused for human
+    # approval. Only meaningful against a service that has a `decision` resource; a plain
+    # `ChatService` without one returns a 404.
+    #
+    # + request - The decisions to be sent.
+    # + return - A `ChatRespMessage` containing the response from the chat service, or an `error` if the request fails.
+    isolated resource function post decision(DecisionMessage request) returns ChatRespMessage|error {
+        return self.httpClient->/decision.post(request);
+    }
 }

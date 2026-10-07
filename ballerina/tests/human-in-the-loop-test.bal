@@ -35,6 +35,35 @@ final ToolConfig hitlRefundTool = {
     requiresApproval: true
 };
 
+// The same tool with no approval gate (`requiresApproval` left at its `false` default), so an agent
+// built over it can never pause - used to prove such an agent never touches the checkpoint store.
+final ToolConfig ungatedRefundTool = {
+    name: "issueRefund",
+    description: "Issues a refund for an order",
+    parameters: {
+        properties: {
+            orderId: {'type: STRING},
+            amount: {'type: NUMBER}
+        }
+    },
+    caller: issueRefundMock
+};
+
+// The same tool again, but with `requiresApproval` spelled out as `false` rather than defaulted, to
+// pin that an explicit `false` is read as "never gates" and not merely as "a rule is present".
+final ToolConfig explicitlyUngatedRefundTool = {
+    name: "issueRefund",
+    description: "Issues a refund for an order",
+    parameters: {
+        properties: {
+            orderId: {'type: STRING},
+            amount: {'type: NUMBER}
+        }
+    },
+    caller: issueRefundMock,
+    requiresApproval: false
+};
+
 // Proposes the same `issueRefund` tool call on the first turn, then answers with the
 // resulting observation once one is present in history (i.e., after the human's decision
 // on the pending approval has been applied).
@@ -84,8 +113,8 @@ function newHitlTestAgent() returns Agent|error =>
 // call is pending - there's no way to know upfront how many calls an LLM turn will propose or how
 // many of them will need approval. This builds that single-entry `Resume` for tests that only
 // ever have exactly one gated call pending.
-function singleResume(ApprovalRequiredError pending, HumanResponse response) returns Resume =>
-    {decisions: {[pending.detail().requests[0].id]: response}};
+function singleResume(ApprovalRequiredError pending, HumanDecision decision) returns Resume =>
+    {decisions: {[pending.detail().requests[0].id]: decision.cloneReadOnly()}, tag: new ()};
 
 @test:Config
 function testHumanInTheLoopPauseCarriesTheProposedCall() returns error? {
@@ -111,7 +140,7 @@ function testHumanInTheLoopApprove() returns error? {
     test:assertTrue(result is ApprovalRequiredError);
 
     string|Error resumed = result is ApprovalRequiredError
-        ? agent.run(singleResume(result, {decision: APPROVE}), sessionId)
+        ? agent.run(singleResume(result, {outcome: APPROVE}), sessionId)
         : result;
     test:assertTrue(resumed is string);
     if resumed is string {
@@ -120,7 +149,7 @@ function testHumanInTheLoopApprove() returns error? {
 
     // The approval should have been cleared on successful completion: resuming it again finds nothing.
     if result is ApprovalRequiredError {
-        string|Error repeat = agent.run(singleResume(result, {decision: APPROVE}), sessionId);
+        string|Error repeat = agent.run(singleResume(result, {outcome: APPROVE}), sessionId);
         test:assertTrue(repeat is ApprovalNotFoundError);
     }
 }
@@ -184,7 +213,7 @@ function testHumanInTheLoopStructuredOutputBindsAcrossResume() returns error? {
     // persisted in the checkpoint), so the resumed run must still expose the structured-output tool
     // and bind the final answer to the expected type.
     if result is ApprovalRequiredError {
-        int|Error resumed = agent.run(singleResume(result, {decision: APPROVE}), sessionId);
+        int|Error resumed = agent.run(singleResume(result, {outcome: APPROVE}), sessionId);
         test:assertTrue(resumed is int, resumed is Error ? resumed.message() : "");
         if resumed is int {
             test:assertEquals(resumed, 50);
@@ -200,7 +229,7 @@ function testHumanInTheLoopRejectDoesNotExecuteTheTool() returns error? {
     test:assertTrue(result is ApprovalRequiredError);
 
     string|Error resumed = result is ApprovalRequiredError
-        ? agent.run(singleResume(result, {decision: REJECT, reason: "Not authorized for this order."}), sessionId)
+        ? agent.run(singleResume(result, {outcome: REJECT, reason: "Not authorized for this order."}), sessionId)
         : result;
     test:assertTrue(resumed is string);
     if resumed is string {
@@ -214,7 +243,8 @@ function testHumanInTheLoopRejectDoesNotExecuteTheTool() returns error? {
 @test:Config
 function testResumeWithoutPendingApprovalFails() returns error? {
     Agent agent = check newHitlTestAgent();
-    string|Error resumed = agent.run({decisions: {"any-id": {decision: APPROVE}}}, "no-such-hitl-session");
+    Resume resume = {decisions: {"any-id": {outcome: APPROVE}}};
+    string|Error resumed = agent.run(resume, "no-such-hitl-session");
     test:assertTrue(resumed is ApprovalNotFoundError);
 }
 
@@ -231,10 +261,10 @@ function testHumanInTheLoopMergesTraceAcrossPause() returns error? {
         test:assertEquals(pausedTrace.iterations.length(), 1);
 
         ChatAssistantMessage|Error pausedOutput = pausedTrace.output;
-        Resume decision = pausedOutput is ApprovalRequiredError
-            ? singleResume(pausedOutput, {decision: APPROVE})
+        Resume resume = pausedOutput is ApprovalRequiredError
+            ? singleResume(pausedOutput, {outcome: APPROVE})
             : {decisions: {}};
-        Trace|Error resumedTrace = agent.run(decision, sessionId, td = Trace);
+        Trace|Error resumedTrace = agent.run(resume, sessionId, td = Trace);
         test:assertTrue(resumedTrace is Trace);
         if resumedTrace is Trace {
             // The merged trace covers the pre-pause iteration plus the two iterations that
@@ -331,7 +361,7 @@ function testMaxIterExceededAfterResumeIsClassifiedCorrectly() returns error? {
     test:assertTrue(result is ApprovalRequiredError);
 
     string|Error resumed = result is ApprovalRequiredError
-        ? agent.run(singleResume(result, {decision: APPROVE}), sessionId)
+        ? agent.run(singleResume(result, {outcome: APPROVE}), sessionId)
         : result;
     test:assertTrue(resumed is MaxIterationExceededError);
 }
@@ -440,7 +470,7 @@ function testHumanInTheLoopMixedBatchGathersDecisionBeforeExecutingAnyCall() ret
     test:assertEquals(getHitlLookupOrderCallCount(), 0);
 
     string|Error resumed = result is ApprovalRequiredError
-        ? agent.run(singleResume(result, {decision: APPROVE}), sessionId)
+        ? agent.run(singleResume(result, {outcome: APPROVE}), sessionId)
         : result;
     test:assertTrue(resumed is string);
     if resumed is string {
@@ -508,11 +538,12 @@ function testHumanInTheLoopTwoGatesInOneBatchSurfacedTogether() returns error? {
 
         // A single bulk resume, keyed by each request's own id, resolves both at once -
         // no second round trip needed.
-        map<HumanResponse> decisions = {
-            [requests[0].id]: {decision: APPROVE},
-            [requests[1].id]: {decision: APPROVE}
+        map<HumanDecision> & readonly decisions = {
+            [requests[0].id]: {outcome: APPROVE},
+            [requests[1].id]: {outcome: APPROVE}
         };
-        string|Error resumed = agent.run({decisions}, sessionId);
+        Resume resume = {decisions};
+        string|Error resumed = agent.run(resume, sessionId);
         test:assertTrue(resumed is string);
         if resumed is string {
             test:assertEquals(resumed, "Done: 2 refunds");
@@ -540,8 +571,8 @@ function testHumanInTheLoopPartialBulkResumeLeavesRestPending() returns error? {
 
         // Deciding only the first of the two pending requests leaves the second one pending,
         // rather than requiring every decision to arrive in the same resume.
-        map<HumanResponse> firstDecision = {[requests[0].id]: {decision: APPROVE}};
-        string|Error resumedOnce = agent.run({decisions: firstDecision}, sessionId);
+        map<HumanDecision> & readonly firstDecision = {[requests[0].id]: {outcome: APPROVE}};
+        string|Error resumedOnce = agent.run({decisions: firstDecision, tag: new ResumeTag()}, sessionId);
         test:assertTrue(resumedOnce is ApprovalRequiredError);
         if resumedOnce is ApprovalRequiredError {
             ApprovalRequest[] stillPending = resumedOnce.detail().requests;
@@ -557,8 +588,8 @@ function testHumanInTheLoopPartialBulkResumeLeavesRestPending() returns error? {
             test:assertEquals(secondPending.iterationsUsed, iterationsUsedAtFirstPause);
         }
 
-        map<HumanResponse> secondDecision = {[requests[1].id]: {decision: APPROVE}};
-        string|Error resumedTwice = agent.run({decisions: secondDecision}, sessionId);
+        map<HumanDecision> & readonly secondDecision = {[requests[1].id]: {outcome: APPROVE}};
+        string|Error resumedTwice = agent.run({decisions: secondDecision, tag: new ResumeTag()}, sessionId);
         test:assertTrue(resumedTwice is string);
         if resumedTwice is string {
             test:assertEquals(resumedTwice, "Done: 2 refunds");
@@ -603,11 +634,12 @@ function testHumanInTheLoopPreservesParallelismForSafeCallsInGatedBatch() return
         // Both gated calls are surfaced together; resolve them both in one bulk resume.
         ApprovalRequest[] requests = result.detail().requests;
         test:assertEquals(requests.length(), 2);
-        map<HumanResponse> decisions = {};
+        map<HumanDecision> decisions = {};
         foreach ApprovalRequest req in requests {
-            decisions[req.id] = {decision: APPROVE};
+            decisions[req.id] = {outcome: APPROVE};
         }
-        answer = agent.run({decisions}, sessionId);
+        Resume resume = {decisions: decisions.cloneReadOnly()};
+        answer = agent.run(resume, sessionId);
     }
     test:assertTrue(answer is string);
     if answer is string {
@@ -691,7 +723,7 @@ function testHumanInTheLoopUnauthorizedErrorInResolvedBatchEndsRunWithoutPersist
     // exactly like it would in a non-HITL batch, with no interaction with the already-resolved
     // approval.
     string|Error resumed = result is ApprovalRequiredError
-        ? agent.run(singleResume(result, {decision: APPROVE}), sessionId)
+        ? agent.run(singleResume(result, {outcome: APPROVE}), sessionId)
         : result;
     test:assertTrue(resumed is string);
     if resumed is string {
@@ -699,7 +731,7 @@ function testHumanInTheLoopUnauthorizedErrorInResolvedBatchEndsRunWithoutPersist
     }
     // The run ended due to the auth failure - no pending approval should remain: a repeat resume finds nothing.
     if result is ApprovalRequiredError {
-        string|Error repeat = agent.run(singleResume(result, {decision: APPROVE}), sessionId);
+        string|Error repeat = agent.run(singleResume(result, {outcome: APPROVE}), sessionId);
         test:assertTrue(repeat is ApprovalNotFoundError);
     }
 }
@@ -724,7 +756,7 @@ function testRunWhilePendingApprovalReturnsSamePause() returns error? {
 
     // The original pending approval survived the second run() untouched, so it is still resumable.
     if firstResult is ApprovalRequiredError {
-        string|Error resumed = agent.run(singleResume(firstResult, {decision: APPROVE}), sessionId);
+        string|Error resumed = agent.run(singleResume(firstResult, {outcome: APPROVE}), sessionId);
         test:assertTrue(resumed is string, resumed is Error ? resumed.message() : "");
     }
 }
@@ -843,7 +875,8 @@ function testResumeFailsFastOnCorruptedHistory() returns error? {
 
     // The corrupted-history check happens before id validation, so the id supplied here
     // doesn't matter.
-    string|Error resumed = agent.run({decisions: {"any-id": {decision: APPROVE}}}, sessionId);
+    Resume resume = {decisions: {"any-id": {outcome: APPROVE}}};
+    string|Error resumed = agent.run(resume, sessionId);
     test:assertTrue(resumed is Error);
     test:assertFalse(resumed is ApprovalNotFoundError);
     if resumed is Error {
@@ -859,7 +892,7 @@ function testResumeClaimsApprovalPreventingDoubleExecution() returns error? {
     test:assertTrue(result is ApprovalRequiredError);
 
     string|Error firstResume = result is ApprovalRequiredError
-        ? agent.run(singleResume(result, {decision: APPROVE}), sessionId)
+        ? agent.run(singleResume(result, {outcome: APPROVE}), sessionId)
         : result;
     test:assertTrue(firstResume is string);
     if firstResume is string {
@@ -871,7 +904,7 @@ function testResumeClaimsApprovalPreventingDoubleExecution() returns error? {
     // by the first resume call, before the tool ever ran. Reusing the same (now-stale) id
     // is fine for this assertion: nothing is pending anymore regardless of which id is named.
     string|Error secondResume = result is ApprovalRequiredError
-        ? agent.run(singleResume(result, {decision: APPROVE}), sessionId)
+        ? agent.run(singleResume(result, {outcome: APPROVE}), sessionId)
         : result;
     test:assertTrue(secondResume is ApprovalNotFoundError);
 }
@@ -884,15 +917,15 @@ function testResumeWithUnknownApprovalIdFailsAndRestoresState() returns error? {
     string|Error result = agent.run("Refund order ORD-1", sessionId);
     test:assertTrue(result is ApprovalRequiredError);
 
-    map<HumanResponse> decisions = {"not-a-real-id": {decision: APPROVE}};
-    string|Error resumed = agent.run({decisions}, sessionId);
+    Resume resume = {decisions: {"not-a-real-id": {outcome: APPROVE}}};
+    string|Error resumed = agent.run(resume, sessionId);
     test:assertTrue(resumed is UnknownApprovalIdError);
 
     // Nothing was resolved - the claimed approval must have been restored so a corrected
     // resume, using the real id, can still succeed afterward.
     if result is ApprovalRequiredError {
-        map<HumanResponse> correctedDecisions = {[result.detail().requests[0].id]: {decision: APPROVE}};
-        string|Error resolved = agent.run({decisions: correctedDecisions}, sessionId);
+        map<HumanDecision> & readonly correctedDecisions = {[result.detail().requests[0].id]: {outcome: APPROVE}};
+        string|Error resolved = agent.run({decisions: correctedDecisions, tag: new ResumeTag()}, sessionId);
         test:assertTrue(resolved is string);
         if resolved is string {
             test:assertTrue(resolved.includes("Refunded 50.0 for ORD-1"), resolved);
@@ -994,7 +1027,7 @@ function testConditionalApprovalGatesAboveThreshold() returns error? {
     }
 
     string|Error resumed = result is ApprovalRequiredError
-        ? agent.run(singleResume(result, {decision: APPROVE}), sessionId)
+        ? agent.run(singleResume(result, {outcome: APPROVE}), sessionId)
         : result;
     test:assertTrue(resumed is string);
     if resumed is string {
@@ -1044,6 +1077,7 @@ isolated class CheckpointCapableStore {
     *ShortTermMemoryStore;
     private final InMemoryShortTermMemoryStore messages;
     private boolean putCheckpointCalled = false;
+    private boolean getCheckpointCalled = false;
 
     isolated function init() returns MemoryError? {
         self.messages = check new InMemoryShortTermMemoryStore();
@@ -1072,8 +1106,12 @@ isolated class CheckpointCapableStore {
         }
         return self.messages.putCheckpoint(approval);
     }
-    public isolated function getCheckpoint(string sessionId) returns PendingApproval?|Error =>
-        self.messages.getCheckpoint(sessionId);
+    public isolated function getCheckpoint(string sessionId) returns PendingApproval?|Error {
+        lock {
+            self.getCheckpointCalled = true;
+        }
+        return self.messages.getCheckpoint(sessionId);
+    }
     public isolated function removeCheckpoint(string sessionId) returns Error? =>
         self.messages.removeCheckpoint(sessionId);
     public isolated function takeCheckpoint(string sessionId) returns PendingApproval?|Error =>
@@ -1082,6 +1120,12 @@ isolated class CheckpointCapableStore {
     public isolated function wasPutCheckpointCalled() returns boolean {
         lock {
             return self.putCheckpointCalled;
+        }
+    }
+
+    public isolated function wasGetCheckpointCalled() returns boolean {
+        lock {
+            return self.getCheckpointCalled;
         }
     }
 }
@@ -1107,7 +1151,7 @@ function testCheckpointDelegatesToCheckpointerCapableStore() returns error? {
     test:assertTrue(persisted is PendingApproval);
 
     string|Error resumed = result is ApprovalRequiredError
-        ? agent.run(singleResume(result, {decision: APPROVE}), sessionId)
+        ? agent.run(singleResume(result, {outcome: APPROVE}), sessionId)
         : result;
     test:assertTrue(resumed is string);
     if resumed is string {
@@ -1116,6 +1160,68 @@ function testCheckpointDelegatesToCheckpointerCapableStore() returns error? {
     // On completion the checkpoint was claimed (removed) from the store.
     PendingApproval? afterResume = check store.getCheckpoint(sessionId);
     test:assertEquals(afterResume, ());
+}
+
+@test:Config
+function testAgentWithoutApprovalGatedToolNeverReadsCheckpoint() returns error? {
+    CheckpointCapableStore store = check new;
+    ShortTermMemory memory = check new (store = store);
+    Agent agent = check new ({
+        systemPrompt: {role: "Test Agent", instructions: "Handle refunds"},
+        model: new HitlMockLLM(),
+        tools: [ungatedRefundTool],
+        memory
+    });
+
+    // No tool here declares an approval gate, so the run cannot pause and no checkpoint could ever
+    // exist for this session. The agent must not consult the checkpoint store at all - a database
+    // backed store would otherwise be asked for (and, before this guard, would provision) a
+    // checkpoint table that this application never uses.
+    string result = check agent.run("Refund order ORD-1", "hitl-no-gate-session");
+    test:assertTrue(result.includes("Refunded 50.0 for ORD-1"), result);
+    test:assertFalse(store.wasGetCheckpointCalled(),
+            "An agent with no approval-gated tool must not read the checkpoint store");
+    test:assertFalse(store.wasPutCheckpointCalled());
+}
+
+@test:Config
+function testAgentWithExplicitlyUngatedToolNeverReadsCheckpoint() returns error? {
+    CheckpointCapableStore store = check new;
+    ShortTermMemory memory = check new (store = store);
+    Agent agent = check new ({
+        systemPrompt: {role: "Test Agent", instructions: "Handle refunds"},
+        model: new HitlMockLLM(),
+        tools: [explicitlyUngatedRefundTool],
+        memory
+    });
+
+    // Spelling `requiresApproval: false` out must count exactly as leaving it at its default: the
+    // rule says this tool never gates, so the agent still cannot pause.
+    string result = check agent.run("Refund order ORD-1", "hitl-explicit-false-session");
+    test:assertTrue(result.includes("Refunded 50.0 for ORD-1"), result);
+    test:assertFalse(store.wasGetCheckpointCalled(),
+            "A tool declaring `requiresApproval: false` must not count as an approval gate");
+}
+
+@test:Config
+function testAgentWithFunctionRuleReadsCheckpointEvenWhenItDoesNotGate() returns error? {
+    CheckpointCapableStore store = check new;
+    ShortTermMemory memory = check new (store = store);
+    Agent agent = check new ({
+        systemPrompt: {role: "Test Agent", instructions: "Handle refunds"},
+        model: new HitlConditionalMockLLM({name: "issueRefund", arguments: {"orderId": "ORD-1", "amount": 50}, id: "call-1"}),
+        tools: [hitlConditionalRefundTool],
+        memory
+    });
+
+    // $50 is below the predicate's threshold, so this particular call does not pause - but the tool
+    // is still approval-gated, and only the proposed arguments decide that. Whether a run can pause
+    // is not knowable at init for a function rule, so the guard must keep reading the checkpoint.
+    string result = check agent.run("Refund order ORD-1", "hitl-fn-rule-session");
+    test:assertTrue(result.includes("Refunded 50.0 for ORD-1"), result);
+    test:assertTrue(store.wasGetCheckpointCalled(),
+            "A function-valued approval rule must count as an approval gate");
+    test:assertFalse(store.wasPutCheckpointCalled());
 }
 
 // A custom `Memory` that is not a `ShortTermMemory`, to exercise the agent's in-memory checkpoint
@@ -1150,7 +1256,7 @@ function testMemoryWithoutCheckpointerFallsBackAndStillWorks() returns error? {
     string|Error result = agent.run("Refund order ORD-1", sessionId);
     test:assertTrue(result is ApprovalRequiredError);
     string|Error resumed = result is ApprovalRequiredError
-        ? agent.run(singleResume(result, {decision: APPROVE}), sessionId)
+        ? agent.run(singleResume(result, {outcome: APPROVE}), sessionId)
         : result;
     test:assertTrue(resumed is string);
     if resumed is string {

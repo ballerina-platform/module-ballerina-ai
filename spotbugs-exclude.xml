@@ -24,4 +24,24 @@
         <Class name="io.ballerina.stdlib.ai.plugin.ServersMapper"/>
         <Bug pattern="EI_EXPOSE_REP2"/>
     </Match>
+    <Match>
+        <Class name="io.ballerina.stdlib.ai.plugin.AiCodeAnalyzer"/>
+        <Field name="endpoints"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+    <Match>
+        <Class name="io.ballerina.stdlib.ai.plugin.EndpointExportTask"/>
+        <Field name="endpoints"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+    <Match>
+        <Class name="io.ballerina.stdlib.ai.plugin.AiCompilerLifecycleListener"/>
+        <Field name="endpoints"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+    <Match>
+        <Class name="io.ballerina.stdlib.ai.plugin.EndpointMetadataTask"/>
+        <Field name="endpoints"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
 </FindBugsFilter>

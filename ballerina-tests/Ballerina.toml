@@ -1,20 +1,20 @@
 [package]
 org = "ballerina"
 name = "ai_tests"
-version = "1.13.0"
+version = "1.16.0"
 
 [build-options]
 observabilityIncluded = true
 
-[[platform.java21.dependency]]
+[[platform.java25.dependency]]
 groupId = "io.ballerina.stdlib"
 artifactId = "ai-native"
-version = "1.13.0"
-path = "../native/build/libs/ai-native-1.13.0-SNAPSHOT.jar"
+version = "1.16.0"
+path = "../native/build/libs/ai-native-1.16.0-SNAPSHOT.jar"
 
-[[platform.java21.dependency]]
+[[platform.java25.dependency]]
 groupId = "io.ballerina.stdlib"
 artifactId = "ai-native"
-version = "1.13.0"
-path = "../native/build/libs/ai-native-1.13.0-SNAPSHOT-tests.jar"
+version = "1.16.0"
+path = "../native/build/libs/ai-native-1.16.0-SNAPSHOT-tests.jar"
 testOnly = true

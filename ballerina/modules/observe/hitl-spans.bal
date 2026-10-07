@@ -74,7 +74,7 @@ public isolated distinct class ResolveHumanApprovalSpan {
         self.addTag(CONVERSATION_ID, sessionId);
     }
 
-    # Records the human's decisions being applied on resume (tool name and decision per request).
+    # Records the human's decisions being applied on resume (tool name and outcome per request).
     #
     # + decisions - The decisions applied in this resume
     public isolated function addDecisions(json decisions) {

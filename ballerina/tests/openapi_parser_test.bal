@@ -1,7 +1,7 @@
+import ballerina/data.yaml;
 import ballerina/file;
 import ballerina/io;
 import ballerina/test;
-import ballerina/yaml;
 
 @test:Config {}
 function testOpenApiSchemaTypes() {
@@ -91,7 +91,7 @@ function testOpenApiParser() returns error? {
         map<json> openApiSpec;
         string filePath = specInfo.absPath;
         if filePath.endsWith(".yaml") || filePath.endsWith(".yml") {
-            openApiSpec = check yaml:readFile(filePath).ensureType();
+            openApiSpec = check yaml:parseString(check io:fileReadString(filePath));
         }
         else if filePath.endsWith(".json") {
             openApiSpec = check io:fileReadJson(filePath).ensureType();

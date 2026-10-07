@@ -54,7 +54,6 @@ import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -74,7 +73,6 @@ import static io.ballerina.openapi.service.mapper.utils.MapperCommonUtils.getNor
 
 public class OpenAPIGenerator implements AnalysisTask<SyntaxNodeAnalysisContext> {
     public static final String OPENAPI = "openapi";
-    public static final String OAS_PATH_SEPARATOR = "/";
     public static final String UNDERSCORE = "_";
     public static final String BALLERINA = "ballerina";
     public static final String AI_AGENT = "ai";
@@ -122,7 +120,8 @@ public class OpenAPIGenerator implements AnalysisTask<SyntaxNodeAnalysisContext>
         if (containErrors(semanticModel.diagnostics())) {
             diagnostics.addAll(semanticModel.diagnostics());
         } else if (isAiAgentService(serviceNode, semanticModel)) {
-            generateOpenAPISpec(semanticModel, serviceNode, syntaxTree, services, project, outPath, diagnostics);
+            Module module = currentPackage.module(context.moduleId());
+            generateOpenAPISpec(semanticModel, serviceNode, syntaxTree, services, module, outPath, diagnostics);
         }
         if (!diagnostics.isEmpty()) {
             for (Diagnostic diagnostic : diagnostics) {
@@ -133,27 +132,41 @@ public class OpenAPIGenerator implements AnalysisTask<SyntaxNodeAnalysisContext>
 
     private void generateOpenAPISpec(SemanticModel semanticModel, ServiceDeclarationNode serviceNode,
                                      SyntaxTree syntaxTree, Map<Integer, String> services,
-                                     Project project, Path outPath, List<Diagnostic> diagnostics) {
+                                     Module module, Path outPath, List<Diagnostic> diagnostics) {
         Optional<Symbol> serviceSymbol = semanticModel.symbol(serviceNode);
         if (serviceSymbol.isEmpty() || !(serviceSymbol.get() instanceof ServiceDeclarationSymbol)) {
             return;
         }
         extractServiceNodes(syntaxTree.rootNode(), services, semanticModel);
-        ListenerVisitor listenerVisitor = extractListenersFromDefaultModule(project);
+        OpenAPI chatServiceSchema = generateChatServiceSchema(serviceNode, semanticModel, module, diagnostics);
+        String fileName = constructFileName(syntaxTree, services, serviceSymbol.get());
+        writeOpenAPIYaml(outPath.resolve(OPENAPI), chatServiceSchema, fileName, diagnostics);
+    }
+
+    /**
+     * Generates the chat service OpenAPI specification for the given service, with the servers resolved from the
+     * listeners the service is attached to.
+     *
+     * @param serviceNode   the AI agent service declaration
+     * @param semanticModel the semantic model
+     * @param module        the module containing the service, from which its listeners are resolved
+     * @param diagnostics   the list to which server resolution diagnostics are added
+     * @return the generated OpenAPI specification
+     */
+    static OpenAPI generateChatServiceSchema(ServiceDeclarationNode serviceNode, SemanticModel semanticModel,
+                                             Module module, List<Diagnostic> diagnostics) {
+        ListenerVisitor listenerVisitor = extractListeners(module);
         Set<ListenerDeclarationNode> listeners = listenerVisitor.getListenerDeclarationNodes();
 
         OpenAPI chatServiceSchema = ChatServiceOpenAPISchema.generate();
         ServersMapper serversMapper = new ServersMapper(chatServiceSchema, listeners, serviceNode, semanticModel);
         serversMapper.setServers();
         diagnostics.addAll(serversMapper.getDiagnostics());
-
-        String fileName = constructFileName(syntaxTree, services, serviceSymbol.get());
-        writeOpenAPIYaml(outPath, chatServiceSchema, fileName, diagnostics);
+        return chatServiceSchema;
     }
 
-    public static ListenerVisitor extractListenersFromDefaultModule(Project project) {
+    public static ListenerVisitor extractListeners(Module module) {
         ListenerVisitor listenerVisitor = new ListenerVisitor();
-        Module module = project.currentPackage().module(project.currentPackage().getDefaultModule().moduleId());
         module.documentIds().forEach((documentId) -> {
             SyntaxTree syntaxTreeDoc = module.document(documentId).syntaxTree();
             syntaxTreeDoc.rootNode().accept(listenerVisitor);
@@ -204,26 +217,39 @@ public class OpenAPIGenerator implements AnalysisTask<SyntaxNodeAnalysisContext>
         return fileName + OPENAPI_SUFFIX + YAML_EXTENSION;
     }
 
-    private void writeOpenAPIYaml(Path outPath, OpenAPI openAPI, String serviceName, List<Diagnostic> diagnostics) {
+    /**
+     * Writes the OpenAPI specification as YAML into the given directory, creating the directory if needed.
+     *
+     * @param outDir      the directory to write the specification into
+     * @param openAPI     the OpenAPI specification
+     * @param serviceName the preferred file name, adjusted if it clashes with an existing file
+     * @param diagnostics the list to which write failures are added
+     * @return the name of the written file, or empty if it could not be written
+     */
+    static Optional<String> writeOpenAPIYaml(Path outDir, OpenAPI openAPI, String serviceName,
+                                             List<Diagnostic> diagnostics) {
         String yamlOpenApiSpec = Yaml.pretty(openAPI);
-        if (yamlOpenApiSpec != null) {
-            try {
-                // Create openapi directory if not exists in the path. If exists do not throw an error
-                Files.createDirectories(Paths.get(outPath + OAS_PATH_SEPARATOR + OPENAPI));
-                String fileName = resolveContractFileName(outPath.resolve(OPENAPI), serviceName, false);
-                writeFile(outPath.resolve(OPENAPI + OAS_PATH_SEPARATOR + fileName), yamlOpenApiSpec);
-            } catch (IOException e) {
-                ExceptionDiagnostic diagnostic = new ExceptionDiagnostic(OAS_CONVERTOR_108, e.toString());
-                diagnostics.add(getDiagnostics(diagnostic));
-            }
+        if (yamlOpenApiSpec == null) {
+            return Optional.empty();
+        }
+        try {
+            // Create the output directory if it does not exist. If it exists, do not throw an error
+            Files.createDirectories(outDir);
+            String fileName = resolveContractFileName(outDir, serviceName, false);
+            writeFile(outDir.resolve(fileName), yamlOpenApiSpec);
+            return Optional.of(fileName);
+        } catch (IOException e) {
+            ExceptionDiagnostic diagnostic = new ExceptionDiagnostic(OAS_CONVERTOR_108, e.toString());
+            diagnostics.add(getDiagnostics(diagnostic));
+            return Optional.empty();
         }
     }
 
     /**
      * Filter all the end points and service nodes for avoiding the generated file name conflicts.
      */
-    private static void extractServiceNodes(ModulePartNode modulePartNode, Map<Integer, String> services,
-                                            SemanticModel semanticModel) {
+    static void extractServiceNodes(ModulePartNode modulePartNode, Map<Integer, String> services,
+                                    SemanticModel semanticModel) {
         List<String> allServices = new ArrayList<>();
         for (Node node : modulePartNode.members()) {
             SyntaxKind syntaxKind = node.kind();

@@ -277,6 +277,104 @@ isolated function testInitializingToolStoreWithoutNoTools() returns error? {
     test:assertEquals(toolStore.tools.toArray().length(), 0);
 }
 
+@test:Config {}
+function testDuplicateFunctionToolNameError() returns error? {
+    ToolStore|error toolStore = new (duplicateToolOne, duplicateToolTwo);
+    test:assertTrue(toolStore is error);
+    if toolStore is error {
+        test:assertEquals(toolStore.message(),
+            "duplicate tool name found: 'duplicateTool'. " +
+            "Tool names must be unique across all tools and toolkits registered with the agent");
+    }
+}
+
+@test:Config {}
+function testDuplicateToolConfigNameError() returns error? {
+    ToolConfig tool1 = {name: "duplicateConfigTool", description: "d1", caller: testTool};
+    ToolConfig tool2 = {name: "duplicateConfigTool", description: "d2", caller: testTool};
+    ToolStore|error toolStore = new (tool1, tool2);
+    test:assertTrue(toolStore is error);
+    if toolStore is error {
+        test:assertEquals(toolStore.message(),
+            "duplicate tool name found: 'duplicateConfigTool'. " +
+            "Tool names must be unique across all tools and toolkits registered with the agent");
+    }
+}
+
+@test:Config {}
+function testUniqueToolNamesAcrossMixedSourcesSucceeds() returns error? {
+    ToolConfig configTool = {name: "configTool", description: "a tool config", caller: testTool};
+    ToolStore toolStore = check new (configTool, duplicateToolOne);
+    test:assertEquals(toolStore.tools.length(), 2);
+}
+
+@test:Config {
+    groups: ["mcp"]
+}
+function testDuplicateNameBetweenMcpToolkitAndStandaloneTool() returns error? {
+    McpToolKit mcpToolKit = check new (serverUrl = "http://localhost:3000/mcp", info = {name: "Greeting", version: ""});
+    ToolConfig duplicateTool = {
+        name: "single-greeting",
+        description: "collides with the mcp toolkit's tool name",
+        caller: testTool
+    };
+    ToolStore|error toolStore = new (mcpToolKit, duplicateTool);
+    test:assertTrue(toolStore is error);
+    if toolStore is error {
+        test:assertEquals(toolStore.message(),
+            "duplicate tool name found: 'single-greeting'. " +
+            "Tool names must be unique across all tools and toolkits registered with the agent");
+    }
+}
+
+@test:Config {
+    groups: ["mcp"]
+}
+function testMcpToolMetadataTracking() returns error? {
+    McpToolKit mcpToolKit = check new (serverUrl = "http://localhost:3000/mcp", info = {name: "Greeting", version: ""});
+    ToolConfig regularTool = {
+        name: "regularTool",
+        description: "a non-mcp tool",
+        caller: testTool
+    };
+    ToolStore toolStore = check new (mcpToolKit, regularTool);
+
+    test:assertTrue(toolStore.isMcpTool("single-greeting"));
+    test:assertTrue(toolStore.getToolKitName("single-greeting").toString().includes("McpToolKit"));
+
+    test:assertFalse(toolStore.isMcpTool("regularTool"));
+}
+
+isolated class DottedNameMcpToolKit {
+    *McpBaseToolKit;
+
+    public isolated function getTools() returns ToolConfig[] {
+        return [
+            {
+                name: "admin.tools.list",
+                description: "an mcp tool whose name contains dots, which are valid per the MCP spec",
+                caller: testTool
+            }
+        ];
+    }
+}
+
+@test:Config
+isolated function testMcpToolMetadataTrackingUsesSanitizedName() returns error? {
+    DottedNameMcpToolKit dottedNameMcpToolKit = new;
+    ToolStore toolStore = check new (dottedNameMcpToolKit);
+
+    // Tool names are sanitized (dots replaced with underscores) during registration, so the
+    // toolkit/mcp metadata maps must be keyed by the sanitized name to stay consistent with
+    // the tool name the LLM is actually given.
+    test:assertTrue(toolStore.tools.hasKey("admin_tools_list"));
+    test:assertTrue(toolStore.isMcpTool("admin_tools_list"));
+    test:assertTrue(toolStore.getToolKitName("admin_tools_list").toString().includes("DottedNameMcpToolKit"));
+
+    test:assertFalse(toolStore.isMcpTool("admin.tools.list"));
+    test:assertEquals(toolStore.getToolKitName("admin.tools.list"), ());
+}
+
 @test:Config
 isolated function testToolExecutionWithEmptyQueryRecordParam() returns error? {
     HttpTool httpGet =

@@ -160,16 +160,16 @@ public type AgentMetadataConfig record {|
 public type DependentlyTypedAgent distinct isolated object {
     # Executes the agent for the given query and binds the result to the inferred return type.
     #
-    # Pass a `string`/`Prompt` to start a new turn, or a `Resume` (the human's decisions on a
+    # Pass a `anydata`/`Prompt` to start a new turn, or a `Resume` (the human's decisions on a
     # previously paused run) to continue a run that paused for human approval. The input type is
     # what distinguishes the two - there is no separate resume operation.
     #
-    # + query - A query to start a new turn (`string`/`Prompt`), or a `Resume` to continue a paused run
+    # + query - A query to start a new turn (`anydata`/`Prompt`), or a `Resume` to continue a paused run
     # + sessionId - The ID associated with the agent memory
     # + context - The additional context that can be used during agent tool execution
     # + td - Type descriptor specifying the expected return type format
     # + return - The agent's response bound to `td`, or an `Error`
-    public isolated function run(@display {label: "Query"} string|Prompt|Resume query,
+    public isolated function run(@display {label: "Query"} anydata|Prompt|Resume query,
             @display {label: "Session ID"} string sessionId = DEFAULT_SESSION_ID,
             Context context = new,
             typedesc<Trace|anydata> td = <>) returns td|Error;
@@ -228,6 +228,11 @@ public isolated distinct class Agent {
     final readonly & map<RequiresApproval> approvalRules;
     # Indicates whether multiple tool calls from a single LLM response are executed in parallel.
     final boolean executeToolCallsInParallel;
+    // Whether any tool can gate a call on human approval, and so whether this agent can ever pause.
+    // Fixed at init from the readonly tool store, so it is a lifetime-stable property of the agent.
+    // A tool declaring `requiresApproval: false` does not count; a function-valued rule does, since
+    // only the proposed arguments decide whether it gates.
+    private final boolean hitlEnabled;
     private final int maxIter;
     private final readonly & SystemPrompt systemPrompt;
     private final boolean verbose;
@@ -269,11 +274,15 @@ public isolated distinct class Agent {
                 int:max(self.toolSchemas.length(), DEFAULT_MINIMUM_MAX_ITERATIONS) : maxIter;
             map<RequiresApproval> approvalRules = {};
             foreach Tool tool in self.toolStore.tools {
+                // `true` gates every call, and a function gates the calls it evaluates to `true`
+                // for, so both can pause. `false` cannot, and is the only value left out - the map
+                // therefore holds real gates only.
                 if tool.requiresApproval !is false {
                     approvalRules[tool.name] = tool.requiresApproval;
                 }
             }
             self.approvalRules = approvalRules.cloneReadOnly();
+            self.hitlEnabled = approvalRules.length() > 0;
             // The HITL pause checkpoint is persisted through `memory` when it is a
             // `ShortTermMemory` (which persists checkpoints in its configured store), so a single
             // configured store serves both the conversation history and the pause state.
@@ -284,7 +293,7 @@ public isolated distinct class Agent {
                 self.checkpointer = agentMemory;
             } else {
                 self.checkpointer = check new ShortTermMemory();
-                if approvalRules.length() > 0 {
+                if self.hitlEnabled {
                     log:printWarn("The configured memory does not support durable checkpointing; " +
                         "human-in-the-loop pauses will not survive a restart or run on another " +
                         "replica. Use `ShortTermMemory` for durable human-in-the-loop.");
@@ -385,7 +394,7 @@ public isolated distinct class Agent {
 
     # Executes the agent for a given query.
     #
-    # Pass a `string`/`Prompt` to start a new turn, or a `Resume` (the human's decisions on a
+    # Pass a `anydata`/`Prompt` to start a new turn, or a `Resume` (the human's decisions on a
     # previously paused run) to continue a run that paused for human approval on this session. The
     # input type is what distinguishes a fresh turn from a resume - there is no separate resume
     # operation. A `Resume` for a session with no pending approval fails with `ApprovalNotFoundError`.
@@ -398,45 +407,59 @@ public isolated distinct class Agent {
     # + context - The additional context that can be used during agent tool execution
     # + td - Type descriptor specifying the expected return type format
     # + return - The agent's response or an error
-    public isolated function run(@display {label: "Query"} string|Prompt|Resume query,
+    public isolated function run(@display {label: "Query"} anydata|Prompt|Resume query,
             @display {label: "Session ID"} string sessionId = DEFAULT_SESSION_ID,
             Context context = new,
             typedesc<Trace|anydata> td = <>) returns td|Error = @java:Method {
         'class: "io.ballerina.stdlib.ai.Agent"
     } external;
 
-    private isolated function runInternal(@display {label: "Query"} string|Prompt|Resume query,
+    private isolated function runInternal(@display {label: "Query"} anydata|Prompt|Resume query,
             @display {label: "Session ID"} string sessionId = DEFAULT_SESSION_ID,
             Context context = new, typedesc<Trace|anydata> td = string) returns Trace|anydata|Error {
+        // `anydata` includes `()`, so this is not caught at compile time - a nil query would
+        // otherwise silently run an empty-prompt turn instead of failing fast.
+        if query is () {
+            return error("Query must not be nil.");
+        }
+
         // A `Resume` input continues a run that paused for human approval instead of starting a
         // new turn; the input type is the sole discriminator between the two.
         if query is Resume {
             return self.resumeInternal(sessionId, query.decisions, context, td);
         }
-        // A prior call on this session may still be awaiting a human decision. Starting a
-        // fresh run regardless would silently orphan that pending approval (and, if this new
-        // run also happens to pause, `checkpointer.put` would overwrite it outright) - so
-        // check first, rather than let a new, unrelated turn interleave with an unresolved one.
-        PendingApproval?|Error existingApprovalResult = self.checkpointer.getCheckpoint(sessionId);
-        if existingApprovalResult is Error {
-            // Trace this earliest guard failure too, matching how `resumeInternal` opens its span
-            // before its own guards - otherwise a checkpoint-store failure here goes unobserved.
-            observe:InvokeAgentSpan errorSpan = observe:createInvokeAgentSpan(self.systemPrompt.role);
-            errorSpan.addId(self.uniqueId);
-            errorSpan.addSessionId(sessionId);
-            errorSpan.close(existingApprovalResult);
-            return existingApprovalResult;
-        }
-        if existingApprovalResult is PendingApproval {
-            if !isPendingApprovalHistoryValid(existingApprovalResult) {
-                log:printWarn("Clearing a corrupted pending approval to allow a new run", sessionId = sessionId);
-                Error? removeErr = self.checkpointer.removeCheckpoint(sessionId);
-                if removeErr is Error {
-                    log:printError("Failed to remove the corrupted pending approval", removeErr, sessionId = sessionId);
+
+        // Only an agent with at least one approval-gated tool can ever have paused, so only such an
+        // agent needs this guard. Skipping it otherwise keeps every non-HITL run off the checkpoint
+        // store entirely - no round trip, and no backing storage provisioned for a feature the
+        // application never uses.
+        if self.hitlEnabled {
+            // A prior call on this session may still be awaiting a human decision. Starting a
+            // fresh run regardless would silently orphan that pending approval (and, if this new
+            // run also happens to pause, `checkpointer.put` would overwrite it outright) - so
+            // check first, rather than let a new, unrelated turn interleave with an unresolved one.
+            PendingApproval?|Error existingApprovalResult = self.checkpointer.getCheckpoint(sessionId);
+            if existingApprovalResult is Error {
+                // Trace this earliest guard failure too, matching how `resumeInternal` opens its span
+                // before its own guards - otherwise a checkpoint-store failure here goes unobserved.
+                observe:InvokeAgentSpan errorSpan = observe:createInvokeAgentSpan(self.systemPrompt.role);
+                errorSpan.addId(self.uniqueId);
+                errorSpan.addSessionId(sessionId);
+                errorSpan.close(existingApprovalResult);
+                return existingApprovalResult;
+            }
+            if existingApprovalResult is PendingApproval {
+                if !isPendingApprovalHistoryValid(existingApprovalResult) {
+                    log:printWarn("Clearing a corrupted pending approval to allow a new run", sessionId = sessionId);
+                    Error? removeErr = self.checkpointer.removeCheckpoint(sessionId);
+                    if removeErr is Error {
+                        log:printError("Failed to remove the corrupted pending approval", removeErr,
+                                sessionId = sessionId);
+                    }
+                    // Fall through - proceed with a fresh run below.
+                } else {
+                    return self.buildPendingApprovalTrace(existingApprovalResult, td, toString(query));
                 }
-                // Fall through - proceed with a fresh run below.
-            } else {
-                return self.buildPendingApprovalTrace(existingApprovalResult, td, toString(query));
             }
         }
 
@@ -467,12 +490,12 @@ public isolated distinct class Agent {
             systemPrompt += getStructuredOutputInstruction();
         }
         span.addSystemInstruction(systemPrompt);
-
+        string|Prompt queryValue = query is Prompt ? query : query.toString();
         Credential? & readonly agentCredential = self.agentCredential;
         string? agentId = agentCredential is Credential ? agentCredential.id : ();
-        ExecutionTrace executionTrace = run(self, systemPrompt, query, self.maxIter, self.verbose, agentId,
+        ExecutionTrace executionTrace = run(self, systemPrompt, queryValue, self.maxIter, self.verbose, agentId,
             sessionId, context, executionId, startTime, responseSchema);
-        ChatUserMessage userMessage = {role: USER, content: query};
+        ChatUserMessage userMessage = {role: USER, content: queryValue};
         return self.buildOutcome(executionId, userMessage, executionTrace, startTime, td, span, sessionId,
             "Agent execution paused pending human approval",
             "Agent execution completed successfully",
@@ -518,11 +541,11 @@ public isolated distinct class Agent {
     # Reached from `run` when its input is a `Resume`; not a public entry point of its own.
     #
     # + sessionId - The ID associated with the agent memory
-    # + feedback - The human's decisions, keyed by `ApprovalRequest.id`
+    # + decisions - The human's decisions, keyed by `ApprovalRequest.id`
     # + context - The additional context that can be used during agent tool execution
     # + td - Type descriptor specifying the expected return type format
     # + return - The agent's response bound to `td`, or an error
-    private isolated function resumeInternal(string sessionId, map<HumanResponse> feedback,
+    private isolated function resumeInternal(string sessionId, map<HumanDecision> decisions,
             Context context = new, typedesc<Trace|anydata> td = string) returns Trace|anydata|Error {
         log:printDebug("Agent resume started",
                 agentId = self.agentId,
@@ -537,7 +560,7 @@ public isolated distinct class Agent {
         span.addSessionId(sessionId);
         // A resume has no query; its input is the human's decisions. Recorded before the guards
         // so even a rejected resume's span shows which decisions were attempted.
-        span.addInput(string `resume decisions: ${feedback.toJsonString()}`);
+        span.addInput(string `resume decisions: ${decisions.toJsonString()}`);
 
         // Claimed eagerly (removed from the store immediately, not just on resolution), so a
         // concurrent duplicate resume for the same session finds nothing and fails
@@ -573,7 +596,7 @@ public isolated distinct class Agent {
 
         // Not the claimed record's fault - nothing was actually resolved - so restore it
         // before returning, rather than leaving it lost after a caller mistake.
-        string[] unknownIds = findUnknownApprovalIds(feedback, pendingApproval.pendingRequests);
+        string[] unknownIds = findUnknownApprovalIds(decisions, pendingApproval.pendingRequests);
         if unknownIds.length() > 0 {
             self.restoreClaimedApproval(pendingApproval, sessionId);
             UnknownApprovalIdError unknown = error UnknownApprovalIdError(
@@ -587,8 +610,8 @@ public isolated distinct class Agent {
         // the trace, making it clear at a glance where and how a human intervened on resume.
         observe:ResolveHumanApprovalSpan resolveSpan = observe:createResolveHumanApprovalSpan(sessionId);
         resolveSpan.addDecisions(from ApprovalRequest req in pendingApproval.pendingRequests
-            where feedback.hasKey(req.id)
-            select {id: req.id, toolName: req.toolName, decision: feedback.get(req.id).decision});
+            where decisions.hasKey(req.id)
+            select {id: req.id, toolName: req.toolName, outcome: decisions.get(req.id).outcome});
         resolveSpan.close();
 
         // Carry the original run's start time forward, so `Trace.startTime` reflects the
@@ -611,7 +634,7 @@ public isolated distinct class Agent {
             }
             responseSchema = schema;
         }
-        ExecutionTrace executionTrace = resumeRun(self, pendingApproval, feedback, self.maxIter,
+        ExecutionTrace executionTrace = resumeRun(self, pendingApproval, decisions, self.maxIter,
             self.verbose, agentId, sessionId, context, responseSchema);
         // Safe: `isPendingApprovalHistoryValid` above already guarantees this index is in range.
         ChatUserMessage userMessage = <ChatUserMessage>pendingApproval.history[pendingApproval.historyPrefixLength - 1];

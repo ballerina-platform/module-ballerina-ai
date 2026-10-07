@@ -51,6 +51,7 @@ enum GenAiTagNames {
     // Not mandated by spec
     TOOL_ARGUMENTS = "gen_ai.tool.arguments",
     TOOL_OUTPUT = "gen_ai.tool.output",
+    TOOLKIT_NAME = "gen_ai.tool.toolkit.name",
     INPUT_CONTENT = "gen_ai.input.content",
     INPUT_TOOLS = "gen_ai.input.tools",
     KNOWLEDGE_BASE_NAME = "gen_ai.knowledge_base.name",
