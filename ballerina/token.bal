@@ -227,6 +227,11 @@ isolated function getFlowId(string clientId, string redirectUri, string agentId,
 
 isolated function getCode(AuthResponse authResponse, Credential agentCredential, http:Client httpclient) returns error|Code {
     log:printDebug("Requesting authorization code for token acquisition", agentId = agentCredential.id);
+    string secret = agentCredential.secret;
+    if secret == "" {
+        return error TokenAcquisitionError("Authorization is required to use this tool, " + 
+            "but the agent secret is not configured.");
+    }
     json payload = {
         flowId: authResponse.flowId,
         selectedAuthenticator: {
@@ -279,10 +284,7 @@ isolated function getClientCredentialToken(ClientCredentialConfig config, string
     } else if scopes is string {
         formData["scope"] = scopes;
     }
-    string? resourceVal = config.'resource;
-    if resourceVal is string {
-        formData["resource"] = resourceVal;
-    }
+    formData["resource"] = config.'resource;
     string[] messageParams = [];
     foreach var [k, v] in formData.entries() {
         string|error encoded = url:encode(v, UTF8_ENCODING);
@@ -298,16 +300,20 @@ isolated function getClientCredentialToken(ClientCredentialConfig config, string
     if httpClient is http:ClientError {
         return error TokenAcquisitionError(httpClient.message());
     }
+    observe:ExchangeTokenSpan exchangeTokenSpan = observe:createExchangeTokenSpan();
+    exchangeTokenSpan.addExchangeDetails(config.clientId);
     Token|error token = httpClient->post("", body, {
         "Content-Type": APPLICATION_X_WWW_FORM_URLENCODED,
         "Authorization": string `Basic ${base64Credentials}`
     });
     if token is error {
+        exchangeTokenSpan.close(token);
         log:printError("Failed to obtain client credentials access token", 'error = token,
             toolName = toolName);
         return error TokenAcquisitionError("Failed to obtain client credentials access token",
             detail = {cause: token});
     }
+    exchangeTokenSpan.close();
     log:printDebug("Successfully obtained client credentials access token", toolName = toolName);
     return token;
 }
@@ -345,7 +351,7 @@ isolated function validateToken(string toolName, Token token, cache:Cache tokenM
 } 
 
 isolated function validateToolScope(map<()> scopesInToken, string toolName, string|string[]? scopes, 
-        string agentId) returns InsufficientScopeError? {
+        string? agentId) returns InsufficientScopeError? {
     observe:ValidateToolAuthorizationSpan toolAuthorizationSpan = observe:createValidateToolAuthorizationSpan(toolName);
     log:printDebug("Validating scopes for tool: ",
             agentId = agentId,

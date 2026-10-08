@@ -485,7 +485,7 @@ isolated function authorizeToolInvocation (Credential? agentCredential, cache:Ca
         if result is () {
             return;
         }
-        check validateToolScope(result, toolName, scopes, "client_credentials");
+        check validateToolScope(result, toolName, scopes, agentId);
         any|error token = tokenManager.get(toolName);
         if token is TokenCache {
             context.setAccessToken(toolName, token.getAccessToken());

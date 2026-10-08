@@ -274,7 +274,7 @@ public type ClientCredentialConfig record {|
 
     # The resource indicator for the token request.
     @display {label: "Resource"}
-    string 'resource?;
+    string 'resource;
 
     # SSL/TLS-related options
     http:ClientSecureSocket? secureSocket = ();

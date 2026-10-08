@@ -49,7 +49,7 @@ public type Credential record {|
 
     # The secret associated with the agent.
     @display {label: "Agent Secret"}
-    string secret;
+    string secret = "";
 |};
 
 # Provides a set of configurations for the agent.
