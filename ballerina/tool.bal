@@ -480,7 +480,17 @@ isolated function authorizeToolInvocation (Credential? agentCredential, cache:Ca
     if auth is AgentIdAuthConfig|Scopes {
         scopes = auth?.scopes;
     }
-    if agentCredential is Credential && auth is AgentIdAuthConfig {     
+    if auth is ClientCredentialConfig {
+        map<()>? result = check getClientCredentialScopes(auth, tokenManager, toolName, context);
+        if result is () {
+            return;
+        }
+        check validateToolScope(result, toolName, scopes, "client_credentials");
+        any|error token = tokenManager.get(toolName);
+        if token is TokenCache {
+            context.setAccessToken(toolName, token.getAccessToken());
+        }
+    } else if agentCredential is Credential && auth is AuthorizationCodeConfig {
         map<()>? result = check getToolScopes(agentCredential, auth, tokenManager, toolName, context);
         if result is () {
             return;
@@ -490,7 +500,7 @@ isolated function authorizeToolInvocation (Credential? agentCredential, cache:Ca
         if token is TokenCache {
             context.setAccessToken(toolName, token.getAccessToken());
         }
-    } else if scopes !is () && (auth !is  AgentIdAuthConfig|| agentCredential is ()) {
+    } else if scopes !is () && (auth !is AgentIdAuthConfig || agentCredential is ()) {
         log:printError("Authorization is required for the tool, but no agent credential " +
             "or auth configuration was provided.", toolName = toolName, agentId = agentId);
         return error TokenAcquisitionError("Authorization is required for the tool, but no agent " +

@@ -58,3 +58,4 @@ const SPACE = " ";
 const DASH = "-";
 const UNDERSCORE = "_";
 const SCOPES = "scopes";
+const CLIENT_CREDENTIALS = "client_credentials";

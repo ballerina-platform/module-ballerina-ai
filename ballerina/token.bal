@@ -65,8 +65,8 @@ type Code record {
     record {string code;} authData;
 };
 
-isolated function getToolScopes(Credential agentCredential, AgentIdAuthConfig agentIdAuthConfig, 
-    cache:Cache tokenManager, string toolName, Context context) returns 
+isolated function getToolScopes(Credential agentCredential, AuthorizationCodeConfig agentIdAuthConfig,
+    cache:Cache tokenManager, string toolName, Context context) returns
     TokenAcquisitionError|InsufficientScopeError|TokenValidationError|map<()>?  {
     string agentId = agentCredential.id;
     boolean needsRefresh = true;
@@ -87,12 +87,12 @@ isolated function getToolScopes(Credential agentCredential, AgentIdAuthConfig ag
                 toolName = toolName,
                 scopes = scopes
         );
-        http:Client|http:ClientError httpclient = new (baseUrl, 
+        http:Client|http:ClientError httpclient = new (baseUrl,
             secureSocket = agentIdAuthConfig.secureSocket);
         if  httpclient is http:ClientError {
             return error TokenAcquisitionError(httpclient.message());
-        }   
-        Token freshToken = check getFreshToken(agentCredential, agentIdAuthConfig, agentId, 
+        }
+        Token freshToken = check getFreshToken(agentCredential, agentIdAuthConfig, agentId,
                 scopes, toolName, httpclient, baseUrl);
         error|map<()> validateTokenResult = validateToken(toolName, freshToken, tokenManager);
         if validateTokenResult is error {
@@ -103,8 +103,29 @@ isolated function getToolScopes(Credential agentCredential, AgentIdAuthConfig ag
     return scopeInToken;
 }
 
-isolated function getFreshToken(Credential agentCredential, AgentIdAuthConfig agentIdConfig, 
-        string agentId, string|string[]? scopes, string toolName, http:Client httpclient, 
+isolated function getClientCredentialScopes(ClientCredentialConfig config,
+    cache:Cache tokenManager, string toolName, Context context) returns
+    TokenAcquisitionError|map<()>? {
+    boolean needsRefresh = true;
+    map<()> scopeInToken = {};
+    if tokenManager.hasKey(toolName) {
+        any|error token = tokenManager.get(toolName);
+        if token is TokenCache {
+            needsRefresh = token.isAccessTokenExpired();
+            scopeInToken = token.getScopes();
+        }
+    }
+    if needsRefresh {
+        log:printDebug("Requesting a new client credentials token for tool: ", toolName = toolName,
+                scopes = config.scopes);
+        Token freshToken = check getClientCredentialToken(config, toolName);
+        return cacheClientCredentialToken(toolName, freshToken, tokenManager);
+    }
+    return scopeInToken;
+}
+
+isolated function getFreshToken(Credential agentCredential, AuthorizationCodeConfig agentIdConfig,
+        string agentId, string|string[]? scopes, string toolName, http:Client httpclient,
         string baseUrl) returns TokenAcquisitionError|Token {
     observe:InvokeAuthorizeEndpointSpan invokeAuthorizeEndpointSpan = 
                     observe:createInvokeAuthorizeEndpointSpan("WSO2");
@@ -242,6 +263,60 @@ isolated function getToken(string code, string clientId, string redirectUri, str
     }
     return httpclient->/token.post(strings:'join(AMPERSAND, ...messageParams), 
         {"Content-Type": APPLICATION_X_WWW_FORM_URLENCODED});
+}
+
+isolated function getClientCredentialToken(ClientCredentialConfig config, string toolName)
+        returns TokenAcquisitionError|Token {
+    log:printDebug("Requesting access token via client credentials grant", toolName = toolName);
+    string credentials = string `${config.clientId}:${config.clientSecret}`;
+    string base64Credentials = credentials.toBytes().toBase64();
+    map<string> formData = {
+        grant_type: CLIENT_CREDENTIALS
+    };
+    string|string[]? scopes = config.scopes;
+    if scopes is string[] {
+        formData["scope"] = string:'join(SPACE, ...scopes);
+    } else if scopes is string {
+        formData["scope"] = scopes;
+    }
+    string? resourceVal = config.'resource;
+    if resourceVal is string {
+        formData["resource"] = resourceVal;
+    }
+    string[] messageParams = [];
+    foreach var [k, v] in formData.entries() {
+        string|error encoded = url:encode(v, UTF8_ENCODING);
+        if encoded is error {
+            return error TokenAcquisitionError("Failed to encode token request parameters",
+                detail = {cause: encoded});
+        }
+        messageParams.push(string `${k}=${encoded}`);
+    }
+    string body = strings:'join(AMPERSAND, ...messageParams);
+    http:Client|http:ClientError httpClient = new (config.tokenUrl,
+        secureSocket = config.secureSocket);
+    if httpClient is http:ClientError {
+        return error TokenAcquisitionError(httpClient.message());
+    }
+    Token|error token = httpClient->post("", body, {
+        "Content-Type": APPLICATION_X_WWW_FORM_URLENCODED,
+        "Authorization": string `Basic ${base64Credentials}`
+    });
+    if token is error {
+        log:printError("Failed to obtain client credentials access token", 'error = token,
+            toolName = toolName);
+        return error TokenAcquisitionError("Failed to obtain client credentials access token",
+            detail = {cause: token});
+    }
+    log:printDebug("Successfully obtained client credentials access token", toolName = toolName);
+    return token;
+}
+
+isolated function cacheClientCredentialToken(string toolName, Token token, cache:Cache tokenManager)
+        returns map<()> {
+    [int, decimal] currentTime = time:utcNow();
+    token.expires_in = currentTime[0] + token.expires_in;
+    return addToken(toolName, token, tokenManager);
 }
 
 isolated function addToken(string toolName, Token token, cache:Cache tokenManager) returns map<()> {

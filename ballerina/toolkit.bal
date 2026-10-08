@@ -538,11 +538,11 @@ isolated function getInputSchemaValues(mcp:ToolDefinition tool) returns map<json
 public isolated function getPermittedMcpToolConfigs(mcp:StreamableHttpClient mcpClient, mcp:Implementation info,
         map<FunctionTool>|FunctionTool permittedTools, AgentIdAuthConfig? auth = ()) returns ToolConfig[]|Error {
     do {
-        if auth is AgentIdAuthConfig {
+        if auth is AuthorizationCodeConfig {
             log:printWarn(
-                "Stateful session mode is not supported when agent identity is used. " + 
+                "Stateful session mode is not supported when agent identity is used. " +
                     "If you are using STATEFUL mode, switch to STATELESS or AUTO mode."
-            );        
+            );
         } else {
             _ = check mcpClient->initialize(info);
         }
@@ -564,14 +564,18 @@ public isolated function getPermittedMcpToolConfigs(mcp:StreamableHttpClient mcp
     }
 }
 
-isolated function addScopeInConfig(map<FunctionTool>|FunctionTool permittedTools, string toolName, 
+isolated function addScopeInConfig(map<FunctionTool>|FunctionTool permittedTools, string toolName,
         AgentIdAuthConfig? clientConfig) returns AgentIdAuthConfig|Scopes {
     string|string[]? clientToolScopes = getClientToolScopes(permittedTools, toolName);
     if clientToolScopes !is () {
-        if clientConfig is AgentIdAuthConfig {
-            AgentIdAuthConfig aiClientConfig  = {...clientConfig}; 
-            aiClientConfig.scopes = clientToolScopes;
-            return aiClientConfig;
+        if clientConfig is AuthorizationCodeConfig {
+            AuthorizationCodeConfig cfg = {...clientConfig};
+            cfg.scopes = clientToolScopes;
+            return cfg;
+        } else if clientConfig is ClientCredentialConfig {
+            ClientCredentialConfig cfg = {...clientConfig};
+            cfg.scopes = clientToolScopes;
+            return cfg;
         }
     } else if clientConfig is AgentIdAuthConfig {
         return clientConfig;
