@@ -27,7 +27,6 @@ import io.ballerina.runtime.api.values.BMap;
 import io.ballerina.runtime.api.values.BObject;
 import io.ballerina.runtime.api.values.BString;
 
-import java.util.Arrays;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -83,25 +82,21 @@ public final class NativeHttpToChatServiceAdaptor {
     }
 
     private static Object invokeResource(Environment env, BObject dispatcher, String pathSegment,
-                                         Object... available) {
+                                         BMap<BString, Object> request, BObject headers) {
         BObject userService = (BObject) dispatcher.getNativeData(USER_CHAT_SERVICE);
         ResourceMethodType resource = findResource(userService, pathSegment);
         if (resource == null) {
             return ModuleUtils.createError("no 'post " + pathSegment + "' resource found in the attached chat service");
         }
         String methodName = resource.getName();
-        // The user's resource decides how much of what the dispatcher holds it actually wants. A
-        // `decision` resource that takes only the payload is called with one argument, exactly as
-        // before; one that also declares `http:Headers` is called with both. Without this, the
-        // extra parameter stays null and the resource fails with a NullPointerException the moment
-        // it touches it, since the resource signature is not constrained by `ChatService`.
+
         int declared = resource.getParameters().length;
-        if (declared > available.length) {
+        if (declared > 2 || declared == 0) {
             return ModuleUtils.createError("the 'post " + pathSegment + "' resource declares " + declared
-                    + " parameter(s), but the chat listener can supply only " + available.length
-                    + ". Expected the payload, optionally followed by an 'http:Headers' parameter.");
+                    + " parameter(s). Only the payload, optionally followed by an 'http:Headers' parameter,"
+                    + " is supported.");
         }
-        Object[] args = declared == available.length ? available : Arrays.copyOf(available, declared);
+        Object[] args = declared == 2 ? new Object[]{request, headers} : new Object[]{request};
         return env.yieldAndRun(() -> {
             CompletableFuture<Object> future = new CompletableFuture<>();
             try {

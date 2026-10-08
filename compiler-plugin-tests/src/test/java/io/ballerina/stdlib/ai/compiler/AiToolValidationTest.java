@@ -19,6 +19,7 @@
 package io.ballerina.stdlib.ai.compiler;
 
 import io.ballerina.projects.DiagnosticResult;
+import io.ballerina.projects.PackageCompilation;
 import io.ballerina.projects.ProjectEnvironmentBuilder;
 import io.ballerina.projects.directory.BuildProject;
 import io.ballerina.projects.environment.Environment;
@@ -42,9 +43,14 @@ import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.CO
 import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.INVALID_APPROVAL_PREDICATE_SIGNATURE;
 import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.INVALID_AGENT_ID_AUTH_CONFIG;
 import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.INVALID_AUTH_CONFIG;
+import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.INVALID_HEADERS_PARAMETER_TYPE;
+import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.INVALID_RESOURCE_PARAMETER_COUNT;
 import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.INVALID_RETURN_TYPE_IN_TOOL;
+import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.MISSING_CHAT_RESOURCE;
+import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.MISSING_PAYLOAD_ANNOTATION;
 import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.PARAMETER_IS_NOT_A_SUBTYPE_OF_ANYDATA;
 import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.UNABLE_TO_GENERATE_SCHEMA_FOR_FUNCTION;
+import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.UNSUPPORTED_RESOURCE;
 import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.XML_PARAMETER_NOT_SUPPORTED_BY_TOOL;
 
 /**
@@ -216,10 +222,63 @@ public class AiToolValidationTest {
                 messages.toString());
     }
 
+    @Test(description = "Test chat service resource validation: a missing `chat` resource, a wrong parameter "
+            + "count, a missing `@http:Payload`, a wrong `http:Headers` type, and an unsupported resource")
+    public void testChatServiceResourceValidation() {
+        String packagePath = "10_chat_service_resource_validation";
+        // `ChatResourceValidationTask` is a `CodeAnalyzer` task (like `OpenAPIGenerator`/`EndpointExportTask`),
+        // not a `CodeModifier` one, so its diagnostics only surface on `getCompilation()`, not on
+        // `getDiagnosticResult`'s own `runCodeGenAndModifyPlugins()` return value.
+        DiagnosticResult diagnosticResult = getFullDiagnosticResult(packagePath);
+        Assert.assertEquals(diagnosticResult.errorCount(), 7);
+        Assert.assertEquals(diagnosticResult.warningCount(), 1);
+
+        Iterator<Diagnostic> diagnosticIterator = diagnosticResult.errors().iterator();
+        Diagnostic diagnostic = diagnosticIterator.next();
+        String message = getErrorMessage(MISSING_CHAT_RESOURCE);
+        assertErrorMessage(diagnostic, message, 36, 1);
+
+        diagnostic = diagnosticIterator.next();
+        message = getErrorMessage(INVALID_RESOURCE_PARAMETER_COUNT, "post chat", 3);
+        assertErrorMessage(diagnostic, message, 45, 5);
+
+        diagnostic = diagnosticIterator.next();
+        message = getErrorMessage(INVALID_RESOURCE_PARAMETER_COUNT, "post decision", 3);
+        assertErrorMessage(diagnostic, message, 50, 5);
+
+        diagnostic = diagnosticIterator.next();
+        message = getErrorMessage(INVALID_RESOURCE_PARAMETER_COUNT, "post chat", 0);
+        assertErrorMessage(diagnostic, message, 59, 5);
+
+        diagnostic = diagnosticIterator.next();
+        message = getErrorMessage(INVALID_RESOURCE_PARAMETER_COUNT, "post decision", 0);
+        assertErrorMessage(diagnostic, message, 63, 5);
+
+        diagnostic = diagnosticIterator.next();
+        message = getErrorMessage(MISSING_PAYLOAD_ANNOTATION, "post chat");
+        assertErrorMessage(diagnostic, message, 71, 33);
+
+        diagnostic = diagnosticIterator.next();
+        message = getErrorMessage(INVALID_HEADERS_PARAMETER_TYPE, "post chat", "string");
+        assertErrorMessage(diagnostic, message, 79, 74);
+
+        diagnostic = diagnosticResult.warnings().iterator().next();
+        message = getErrorMessage(UNSUPPORTED_RESOURCE);
+        assertWarningMessage(diagnostic, message, 91, 5);
+    }
+
     private DiagnosticResult getDiagnosticResult(String path) {
         Path projectDirPath = RESOURCE_DIRECTORY.resolve(path);
         BuildProject project = BuildProject.load(getEnvironmentBuilder(), projectDirPath);
         return project.currentPackage().runCodeGenAndModifyPlugins();
+    }
+
+    private DiagnosticResult getFullDiagnosticResult(String path) {
+        Path projectDirPath = RESOURCE_DIRECTORY.resolve(path);
+        BuildProject project = BuildProject.load(getEnvironmentBuilder(), projectDirPath);
+        project.currentPackage().runCodeGenAndModifyPlugins();
+        PackageCompilation compilation = project.currentPackage().getCompilation();
+        return compilation.diagnosticResult();
     }
 
     private static ProjectEnvironmentBuilder getEnvironmentBuilder() {
@@ -233,6 +292,12 @@ public class AiToolValidationTest {
 
     private void assertErrorMessage(Diagnostic diagnostic, String message, int line, int column) {
         Assert.assertEquals(diagnostic.diagnosticInfo().severity(), DiagnosticSeverity.ERROR);
+        Assert.assertEquals(diagnostic.message(), message);
+        assertErrorLocation(diagnostic.location(), line, column);
+    }
+
+    private void assertWarningMessage(Diagnostic diagnostic, String message, int line, int column) {
+        Assert.assertEquals(diagnostic.diagnosticInfo().severity(), DiagnosticSeverity.WARNING);
         Assert.assertEquals(diagnostic.message(), message);
         assertErrorLocation(diagnostic.location(), line, column);
     }

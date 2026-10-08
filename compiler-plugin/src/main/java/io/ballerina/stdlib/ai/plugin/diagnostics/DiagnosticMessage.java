@@ -46,7 +46,12 @@ public enum DiagnosticMessage {
             " Default port ''{0}'' will be used as the server port in the generated OpenAPI specification."),
     WARNING_112("the current Ballerina version does not support exporting endpoints of AI agent services." +
             " Use Ballerina 2201.13.6 or above."),
-    ERROR_113("a service attached to an `ai:Listener` must declare a `post chat` resource.");
+    ERROR_113("a service attached to an `ai:Listener` must declare a `post chat` resource."),
+    ERROR_114("the resource ''{0}'' declares {1} parameter(s). Only the payload, optionally followed by an " +
+            "`http:Headers` parameter, is supported."),
+    ERROR_115("the resource ''{0}'' must annotate its first parameter with `@http:Payload`."),
+    ERROR_116("the resource ''{0}'' must declare its second parameter as `http:Headers`, found ''{1}''."),
+    WARNING_117("only `post chat` and `post decision` resources are supported in `ai:Listener`.");
 
     private final String message;
 

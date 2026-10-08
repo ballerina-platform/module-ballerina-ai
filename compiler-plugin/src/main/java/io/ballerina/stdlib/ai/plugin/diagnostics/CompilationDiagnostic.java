@@ -43,7 +43,11 @@ public enum CompilationDiagnostic {
     INVALID_AGENT_ID_AUTH_CONFIG(DiagnosticMessage.ERROR_110, DiagnosticCode.AI_110, ERROR),
     INVALID_APPROVAL_PREDICATE_SIGNATURE(DiagnosticMessage.ERROR_111, DiagnosticCode.AI_111, ERROR),
     UNSUPPORTED_ENDPOINT_METADATA(DiagnosticMessage.WARNING_112, DiagnosticCode.AI_112, WARNING),
-    MISSING_CHAT_RESOURCE(DiagnosticMessage.ERROR_113, DiagnosticCode.AI_113, ERROR);
+    MISSING_CHAT_RESOURCE(DiagnosticMessage.ERROR_113, DiagnosticCode.AI_113, ERROR),
+    INVALID_RESOURCE_PARAMETER_COUNT(DiagnosticMessage.ERROR_114, DiagnosticCode.AI_114, ERROR),
+    MISSING_PAYLOAD_ANNOTATION(DiagnosticMessage.ERROR_115, DiagnosticCode.AI_115, ERROR),
+    INVALID_HEADERS_PARAMETER_TYPE(DiagnosticMessage.ERROR_116, DiagnosticCode.AI_116, ERROR),
+    UNSUPPORTED_RESOURCE(DiagnosticMessage.WARNING_117, DiagnosticCode.AI_117, WARNING);
 
     private final String diagnostic;
     private final String diagnosticCode;
