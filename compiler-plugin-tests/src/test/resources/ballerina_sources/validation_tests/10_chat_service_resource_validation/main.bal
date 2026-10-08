@@ -28,6 +28,10 @@ listener ai:Listener unsupportedResourceListener = new (9207);
 listener ai:Listener invalidPayloadTypeListener = new (9208);
 listener ai:Listener invalidReturnTypeListener = new (9209);
 listener ai:Listener aliasedImportListener = new (9210);
+listener ai:Listener aliasedReturnTypeListener = new (9211);
+
+// A named alias for exactly the type the dispatcher expects back.
+type ChatResp ai:ChatRespMessage|error;
 
 // No diagnostics expected: declares `chat` and nothing else.
 service /valid on validListener {
@@ -118,6 +122,14 @@ service /invalidReturnType on invalidReturnTypeListener {
 service /aliasedImport on aliasedImportListener {
     resource function post chat(@h:Payload ai:ChatReqMessage request, h:Headers headers)
             returns ai:ChatRespMessage|error {
+        return {message: request.message};
+    }
+}
+
+// No diagnostics expected: `ChatResp` is a named alias for exactly `ai:ChatRespMessage|error`, so it
+// must be accepted the same way the union itself would be.
+service /aliasedReturnType on aliasedReturnTypeListener {
+    resource function post chat(@http:Payload ai:ChatReqMessage request) returns ChatResp {
         return {message: request.message};
     }
 }

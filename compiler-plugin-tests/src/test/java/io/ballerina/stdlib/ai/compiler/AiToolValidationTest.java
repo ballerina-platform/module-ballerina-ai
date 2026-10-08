@@ -239,43 +239,43 @@ public class AiToolValidationTest {
         Iterator<Diagnostic> diagnosticIterator = diagnosticResult.errors().iterator();
         Diagnostic diagnostic = diagnosticIterator.next();
         String message = getErrorMessage(MISSING_CHAT_RESOURCE);
-        assertErrorMessage(diagnostic, message, 40, 1);
+        assertErrorMessage(diagnostic, message, 44, 1);
 
         diagnostic = diagnosticIterator.next();
         message = getErrorMessage(INVALID_RESOURCE_PARAMETER_COUNT, "post chat", 3);
-        assertErrorMessage(diagnostic, message, 49, 5);
+        assertErrorMessage(diagnostic, message, 53, 5);
 
         diagnostic = diagnosticIterator.next();
         message = getErrorMessage(INVALID_RESOURCE_PARAMETER_COUNT, "post decision", 3);
-        assertErrorMessage(diagnostic, message, 54, 5);
+        assertErrorMessage(diagnostic, message, 58, 5);
 
         diagnostic = diagnosticIterator.next();
         message = getErrorMessage(INVALID_RESOURCE_PARAMETER_COUNT, "post chat", 0);
-        assertErrorMessage(diagnostic, message, 63, 5);
-
-        diagnostic = diagnosticIterator.next();
-        message = getErrorMessage(INVALID_RESOURCE_PARAMETER_COUNT, "post decision", 0);
         assertErrorMessage(diagnostic, message, 67, 5);
 
         diagnostic = diagnosticIterator.next();
+        message = getErrorMessage(INVALID_RESOURCE_PARAMETER_COUNT, "post decision", 0);
+        assertErrorMessage(diagnostic, message, 71, 5);
+
+        diagnostic = diagnosticIterator.next();
         message = getErrorMessage(MISSING_PAYLOAD_ANNOTATION, "post chat");
-        assertErrorMessage(diagnostic, message, 75, 51);
+        assertErrorMessage(diagnostic, message, 79, 51);
 
         diagnostic = diagnosticIterator.next();
         message = getErrorMessage(INVALID_HEADERS_PARAMETER_TYPE, "post chat", "string");
-        assertErrorMessage(diagnostic, message, 83, 81);
+        assertErrorMessage(diagnostic, message, 87, 81);
 
         diagnostic = diagnosticIterator.next();
         message = getErrorMessage(INVALID_PAYLOAD_PARAMETER_TYPE, "post chat", "ChatReqMessage", "string");
-        assertErrorMessage(diagnostic, message, 103, 54);
+        assertErrorMessage(diagnostic, message, 107, 54);
 
         diagnostic = diagnosticIterator.next();
         message = getErrorMessage(INVALID_RESOURCE_RETURN_TYPE, "post chat", "string");
-        assertErrorMessage(diagnostic, message, 111, 23);
+        assertErrorMessage(diagnostic, message, 115, 23);
 
         diagnostic = diagnosticResult.warnings().iterator().next();
         message = getErrorMessage(UNSUPPORTED_RESOURCE);
-        assertWarningMessage(diagnostic, message, 95, 5);
+        assertWarningMessage(diagnostic, message, 99, 5);
     }
 
     private DiagnosticResult getDiagnosticResult(String path) {

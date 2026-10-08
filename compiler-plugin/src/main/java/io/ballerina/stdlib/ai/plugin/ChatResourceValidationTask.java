@@ -27,6 +27,7 @@ import io.ballerina.compiler.api.symbols.ParameterSymbol;
 import io.ballerina.compiler.api.symbols.Symbol;
 import io.ballerina.compiler.api.symbols.SymbolKind;
 import io.ballerina.compiler.api.symbols.TypeDefinitionSymbol;
+import io.ballerina.compiler.api.symbols.TypeReferenceTypeSymbol;
 import io.ballerina.compiler.api.symbols.TypeSymbol;
 import io.ballerina.compiler.api.symbols.UnionTypeSymbol;
 import io.ballerina.compiler.syntax.tree.FunctionDefinitionNode;
@@ -217,13 +218,19 @@ public class ChatResourceValidationTask implements AnalysisTask<SyntaxNodeAnalys
     }
 
     // A union return type (the common case, e.g. `ChatRespMessage|error`) only needs every member to land in
-    // one of the two buckets; a non-union return type just needs to land in one of them directly.
+    // one of the two buckets; a non-union return type just needs to land in one of them directly. A named
+    // alias (e.g. `type ChatResp ai:ChatRespMessage|error;`) resolves to a TypeReferenceTypeSymbol wrapping
+    // the union, so it has to be unwrapped first, or it would wrongly fall into the non-union branch.
     private static boolean isAssignableToEither(TypeSymbol type, TypeSymbol first, TypeSymbol second) {
-        if (type instanceof UnionTypeSymbol union) {
+        TypeSymbol resolvedType = type;
+        while (resolvedType instanceof TypeReferenceTypeSymbol reference) {
+            resolvedType = reference.typeDescriptor();
+        }
+        if (resolvedType instanceof UnionTypeSymbol union) {
             return union.memberTypeDescriptors().stream()
                     .allMatch(member -> member.subtypeOf(first) || member.subtypeOf(second));
         }
-        return type.subtypeOf(first) || type.subtypeOf(second);
+        return resolvedType.subtypeOf(first) || resolvedType.subtypeOf(second);
     }
 
     private static boolean hasAnnotation(ParameterSymbol parameter, String moduleName, String annotationName) {
