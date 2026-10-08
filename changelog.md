@@ -5,7 +5,11 @@ This file documents all significant changes made to the Ballerina AI package acr
 ## [Unreleased]
 
 ### Added
-- [Allow `http:Headers` in the `ai:ChatService` Contract](https://github.com/ballerina-platform/ballerina-library/issues/9272)
+- [Add header support to a chat service](https://github.com/ballerina-platform/ballerina-library/issues/9272)
+- Validate the shape of a `chat`/`decision` resource through the compiler plugin: a service attached to an
+  `ai:Listener` must declare `chat`, each of `chat`/`decision` must declare the payload (with `@http:Payload`)
+  optionally followed by `http:Headers`, and any other resource on that service is flagged, since
+  `ai:ChatService` no longer enforces any of this at the type level
 
 ### Fixed
 - [Fix AI Agent Chat Services Not Being Exported with the `--export-endpoints` Build Option](https://github.com/wso2/product-integrator/issues/2572)
