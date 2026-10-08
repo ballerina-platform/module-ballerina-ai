@@ -47,7 +47,9 @@ public enum CompilationDiagnostic {
     INVALID_RESOURCE_PARAMETER_COUNT(DiagnosticMessage.ERROR_114, DiagnosticCode.AI_114, ERROR),
     MISSING_PAYLOAD_ANNOTATION(DiagnosticMessage.ERROR_115, DiagnosticCode.AI_115, ERROR),
     INVALID_HEADERS_PARAMETER_TYPE(DiagnosticMessage.ERROR_116, DiagnosticCode.AI_116, ERROR),
-    UNSUPPORTED_RESOURCE(DiagnosticMessage.WARNING_117, DiagnosticCode.AI_117, WARNING);
+    UNSUPPORTED_RESOURCE(DiagnosticMessage.WARNING_117, DiagnosticCode.AI_117, WARNING),
+    INVALID_PAYLOAD_PARAMETER_TYPE(DiagnosticMessage.ERROR_118, DiagnosticCode.AI_118, ERROR),
+    INVALID_RESOURCE_RETURN_TYPE(DiagnosticMessage.ERROR_119, DiagnosticCode.AI_119, ERROR);
 
     private final String diagnostic;
     private final String diagnosticCode;

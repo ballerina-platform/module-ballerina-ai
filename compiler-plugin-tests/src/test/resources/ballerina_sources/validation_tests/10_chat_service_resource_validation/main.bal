@@ -16,6 +16,7 @@
 
 import ballerina/ai;
 import ballerina/http;
+import ballerina/http as h;
 
 listener ai:Listener validListener = new (9201);
 listener ai:Listener missingChatListener = new (9202);
@@ -24,6 +25,9 @@ listener ai:Listener zeroParamsListener = new (9204);
 listener ai:Listener missingPayloadAnnotationListener = new (9205);
 listener ai:Listener invalidHeadersTypeListener = new (9206);
 listener ai:Listener unsupportedResourceListener = new (9207);
+listener ai:Listener invalidPayloadTypeListener = new (9208);
+listener ai:Listener invalidReturnTypeListener = new (9209);
+listener ai:Listener aliasedImportListener = new (9210);
 
 // No diagnostics expected: declares `chat` and nothing else.
 service /valid on validListener {
@@ -90,5 +94,30 @@ service /unsupportedResource on unsupportedResourceListener {
 
     resource function get health() returns string {
         return "ok";
+    }
+}
+
+// Expect INVALID_PAYLOAD_PARAMETER_TYPE: the payload is annotated correctly, but its type can never
+// hold the `ai:ChatReqMessage` value the dispatcher actually sends.
+service /invalidPayloadType on invalidPayloadTypeListener {
+    resource function post chat(@http:Payload string request) returns ai:ChatRespMessage|error {
+        return {message: request};
+    }
+}
+
+// Expect INVALID_RESOURCE_RETURN_TYPE: a `string` can never hold what the native adaptor and
+// `toResponse` both expect back.
+service /invalidReturnType on invalidReturnTypeListener {
+    resource function post chat(@http:Payload ai:ChatReqMessage request) returns string {
+        return request.message;
+    }
+}
+
+// No diagnostics expected: `http` is imported under an alias, but the annotation and the headers
+// type still resolve to the same `ballerina/http` module, so this must compile clean.
+service /aliasedImport on aliasedImportListener {
+    resource function post chat(@h:Payload ai:ChatReqMessage request, h:Headers headers)
+            returns ai:ChatRespMessage|error {
+        return {message: request.message};
     }
 }

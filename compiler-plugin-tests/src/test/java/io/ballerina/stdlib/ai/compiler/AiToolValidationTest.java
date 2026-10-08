@@ -44,7 +44,9 @@ import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.IN
 import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.INVALID_AGENT_ID_AUTH_CONFIG;
 import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.INVALID_AUTH_CONFIG;
 import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.INVALID_HEADERS_PARAMETER_TYPE;
+import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.INVALID_PAYLOAD_PARAMETER_TYPE;
 import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.INVALID_RESOURCE_PARAMETER_COUNT;
+import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.INVALID_RESOURCE_RETURN_TYPE;
 import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.INVALID_RETURN_TYPE_IN_TOOL;
 import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.MISSING_CHAT_RESOURCE;
 import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.MISSING_PAYLOAD_ANNOTATION;
@@ -223,48 +225,57 @@ public class AiToolValidationTest {
     }
 
     @Test(description = "Test chat service resource validation: a missing `chat` resource, a wrong parameter "
-            + "count, a missing `@http:Payload`, a wrong `http:Headers` type, and an unsupported resource")
+            + "count, a missing `@http:Payload`, a wrong `http:Headers` type, an unsupported resource, a payload "
+            + "type that can't hold the dispatcher's value, and a return type that can't hold the response")
     public void testChatServiceResourceValidation() {
         String packagePath = "10_chat_service_resource_validation";
         // `ChatResourceValidationTask` is a `CodeAnalyzer` task (like `OpenAPIGenerator`/`EndpointExportTask`),
         // not a `CodeModifier` one, so its diagnostics only surface on `getCompilation()`, not on
         // `getDiagnosticResult`'s own `runCodeGenAndModifyPlugins()` return value.
         DiagnosticResult diagnosticResult = getFullDiagnosticResult(packagePath);
-        Assert.assertEquals(diagnosticResult.errorCount(), 7);
+        Assert.assertEquals(diagnosticResult.errorCount(), 9);
         Assert.assertEquals(diagnosticResult.warningCount(), 1);
 
         Iterator<Diagnostic> diagnosticIterator = diagnosticResult.errors().iterator();
         Diagnostic diagnostic = diagnosticIterator.next();
         String message = getErrorMessage(MISSING_CHAT_RESOURCE);
-        assertErrorMessage(diagnostic, message, 36, 1);
+        assertErrorMessage(diagnostic, message, 40, 1);
 
         diagnostic = diagnosticIterator.next();
         message = getErrorMessage(INVALID_RESOURCE_PARAMETER_COUNT, "post chat", 3);
-        assertErrorMessage(diagnostic, message, 45, 5);
+        assertErrorMessage(diagnostic, message, 49, 5);
 
         diagnostic = diagnosticIterator.next();
         message = getErrorMessage(INVALID_RESOURCE_PARAMETER_COUNT, "post decision", 3);
-        assertErrorMessage(diagnostic, message, 50, 5);
+        assertErrorMessage(diagnostic, message, 54, 5);
 
         diagnostic = diagnosticIterator.next();
         message = getErrorMessage(INVALID_RESOURCE_PARAMETER_COUNT, "post chat", 0);
-        assertErrorMessage(diagnostic, message, 59, 5);
-
-        diagnostic = diagnosticIterator.next();
-        message = getErrorMessage(INVALID_RESOURCE_PARAMETER_COUNT, "post decision", 0);
         assertErrorMessage(diagnostic, message, 63, 5);
 
         diagnostic = diagnosticIterator.next();
+        message = getErrorMessage(INVALID_RESOURCE_PARAMETER_COUNT, "post decision", 0);
+        assertErrorMessage(diagnostic, message, 67, 5);
+
+        diagnostic = diagnosticIterator.next();
         message = getErrorMessage(MISSING_PAYLOAD_ANNOTATION, "post chat");
-        assertErrorMessage(diagnostic, message, 71, 33);
+        assertErrorMessage(diagnostic, message, 75, 51);
 
         diagnostic = diagnosticIterator.next();
         message = getErrorMessage(INVALID_HEADERS_PARAMETER_TYPE, "post chat", "string");
-        assertErrorMessage(diagnostic, message, 79, 74);
+        assertErrorMessage(diagnostic, message, 83, 81);
+
+        diagnostic = diagnosticIterator.next();
+        message = getErrorMessage(INVALID_PAYLOAD_PARAMETER_TYPE, "post chat", "ChatReqMessage", "string");
+        assertErrorMessage(diagnostic, message, 103, 54);
+
+        diagnostic = diagnosticIterator.next();
+        message = getErrorMessage(INVALID_RESOURCE_RETURN_TYPE, "post chat", "string");
+        assertErrorMessage(diagnostic, message, 111, 23);
 
         diagnostic = diagnosticResult.warnings().iterator().next();
         message = getErrorMessage(UNSUPPORTED_RESOURCE);
-        assertWarningMessage(diagnostic, message, 91, 5);
+        assertWarningMessage(diagnostic, message, 95, 5);
     }
 
     private DiagnosticResult getDiagnosticResult(String path) {

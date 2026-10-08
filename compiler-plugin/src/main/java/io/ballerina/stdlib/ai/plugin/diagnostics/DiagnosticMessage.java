@@ -51,7 +51,11 @@ public enum DiagnosticMessage {
             "`http:Headers` parameter, is supported."),
     ERROR_115("the resource ''{0}'' must annotate its first parameter with `@http:Payload`."),
     ERROR_116("the resource ''{0}'' must declare its second parameter as `http:Headers`, found ''{1}''."),
-    WARNING_117("only `post chat` and `post decision` resources are supported in `ai:Listener`.");
+    WARNING_117("only `post chat` and `post decision` resources are supported in `ai:Listener`."),
+    ERROR_118("the resource ''{0}'' must accept an `ai:{1}` value in its payload parameter, but declares it " +
+            "as ''{2}''."),
+    ERROR_119("the resource ''{0}'' must return a value assignable to `ai:ChatRespMessage|error`, but " +
+            "declares its return type as ''{1}''.");
 
     private final String message;
 
