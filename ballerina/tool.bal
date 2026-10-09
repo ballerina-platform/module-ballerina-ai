@@ -481,6 +481,10 @@ isolated function authorizeToolInvocation (Credential? agentCredential, cache:Ca
         scopes = auth?.scopes;
     }
     if auth is ClientCredentialConfig {
+        if agentId is () || agentId == "" {
+            return error TokenAcquisitionError("Authorization is required for the tool, but the agent " + 
+            "id is not configured.");
+        }
         map<()>? result = check getClientCredentialScopes(auth, tokenManager, toolName, context);
         if result is () {
             return;
