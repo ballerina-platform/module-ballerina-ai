@@ -540,13 +540,18 @@ public isolated function getPermittedMcpToolConfigs(mcp:StreamableHttpClient mcp
     do {
         if auth is AgentIdAuthConfig {
             log:printWarn(
-                "Stateful session mode is not supported when agent identity is used. " + 
+                "Stateful session mode is not supported when agent identity is used. " +
                     "If you are using STATEFUL mode, switch to STATELESS or AUTO mode."
-            );        
+            );
         } else {
             _ = check mcpClient->initialize(info);
         }
-        mcp:ListToolsResult listTools = check mcpClient->listTools();
+        map<string|string[]> authHeaders = {};
+        if auth is ClientCredentialConfig {
+            Token token = check getClientCredentialToken(auth, "listTools");
+            authHeaders["Authorization"] = string `Bearer ${token.access_token}`;
+        }
+        mcp:ListToolsResult listTools = check mcpClient->listTools(authHeaders);
         return from mcp:ToolDefinition tool in listTools.tools
             let string toolName = tool.name
             where permittedTools is FunctionTool || permittedTools.hasKey(toolName)
@@ -564,14 +569,18 @@ public isolated function getPermittedMcpToolConfigs(mcp:StreamableHttpClient mcp
     }
 }
 
-isolated function addScopeInConfig(map<FunctionTool>|FunctionTool permittedTools, string toolName, 
+isolated function addScopeInConfig(map<FunctionTool>|FunctionTool permittedTools, string toolName,
         AgentIdAuthConfig? clientConfig) returns AgentIdAuthConfig|Scopes {
     string|string[]? clientToolScopes = getClientToolScopes(permittedTools, toolName);
     if clientToolScopes !is () {
-        if clientConfig is AgentIdAuthConfig {
-            AgentIdAuthConfig aiClientConfig  = {...clientConfig}; 
-            aiClientConfig.scopes = clientToolScopes;
-            return aiClientConfig;
+        if clientConfig is AuthorizationCodeConfig {
+            AuthorizationCodeConfig cfg = {...clientConfig};
+            cfg.scopes = clientToolScopes;
+            return cfg;
+        } else if clientConfig is ClientCredentialConfig {
+            ClientCredentialConfig cfg = {...clientConfig};
+            cfg.scopes = clientToolScopes;
+            return cfg;
         }
     } else if clientConfig is AgentIdAuthConfig {
         return clientConfig;

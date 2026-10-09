@@ -217,10 +217,10 @@ public type StreamableHttpClientTransportConfig record {|
     string sessionId?;
 |};
 
-# Represents the OAuth 2.0 client configuration required to interact
+# Represents the OAuth 2.0 Authorization Code flow configuration required to interact
 # with an external Authorization Server and validate issued access tokens.
-@display {label: "OAuth Client Configuration"}
-public type AgentIdAuthConfig record {|
+@display {label: "Authorization Code Configuration"}
+public type AuthorizationCodeConfig record {|
 
     # The base URL of the Authorization Server used to resolve
     # OAuth 2.0 endpoints such as authorization, token, and introspection.
@@ -248,10 +248,43 @@ public type AgentIdAuthConfig record {|
     # for the Authorization Code flow.
     @display {label: "Enable PKCE"}
     boolean isPkceEnabled = false;
-    
+
     # SSL/TLS-related options
     http:ClientSecureSocket? secureSocket = ();
 |};
+
+# Represents the OAuth 2.0 Client Credentials flow configuration used to obtain
+# access tokens directly using client credentials without user interaction.
+@display {label: "Client Credential Configuration"}
+public type ClientCredentialConfig record {|
+
+    # The full URL of the token endpoint used to obtain access tokens.
+    @display {label: "Token URL"}
+    string tokenUrl;
+
+    # The OAuth 2.0 client identifier issued to this client application.
+    @display {label: "Client ID"}
+    string clientId;
+
+    # The OAuth 2.0 client secret issued to this client application.
+    @display {label: "Client Secret"}
+    string clientSecret;
+
+    # Scopes required to invoke this tool.
+    @display {label: "Required Scopes"}
+    string|string[] scopes?;
+
+    # The resource indicator for the token request.
+    @display {label: "Resource"}
+    string 'resource;
+
+    # SSL/TLS-related options
+    http:ClientSecureSocket? secureSocket = ();
+|};
+
+# Represents the OAuth 2.0 client authentication configuration.
+# Supports Authorization Code flow or Client Credentials flow.
+public type AgentIdAuthConfig AuthorizationCodeConfig|ClientCredentialConfig;
 
 # Represents the OAuth scopes required for invoking a tool.
 public type Scopes record {|
