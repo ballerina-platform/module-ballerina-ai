@@ -256,10 +256,19 @@ function testShortTermMemoryWithSummarizationOnOverflow1() returns error? {
     InMemoryShortTermMemoryStore store = check new (4);
     ModelProvider model = isolated client object {
         isolated remote function chat(
-                ChatMessage[]|ChatUserMessage messages, 
+                ChatMessage[]|ChatUserMessage messages,
                 ChatCompletionFunctions[] tools, string? stop) returns ChatAssistantMessage|Error {
             assertSummarizationRequestChatMessages(messages, [km1, km2, km3, km4], defaultSummarizationPrompt);
-            return memorySummaryMessage;                    
+            return memorySummaryMessage;
+        }
+
+        isolated remote function chatAsStream(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [], string? stop = ())
+            returns stream<ChatMessageChunk, Error?>|Error {
+            return error Error("chatAsStream not implemented");
+        }
+
+        isolated remote function generateAsStream(Prompt prompt) returns stream<string, Error?>|Error {
+            return error Error("generateAsStream not implemented");
         }
 
         isolated remote function generate(Prompt prompt, typedesc<anydata> td) returns td|Error = external;
@@ -271,7 +280,7 @@ function testShortTermMemoryWithSummarizationOnOverflow1() returns error? {
             model
         }
     );
-    
+
     final string k = "key";
 
     check memory.update(k, ksm1);
@@ -365,6 +374,15 @@ function testShortTermMemoryWithSummarizationOnOverflow1WithBatchUpdate() return
                 ChatCompletionFunctions[] tools, string? stop) returns ChatAssistantMessage|Error {
             assertSummarizationRequestChatMessages(messages, [km1, km2, km3, km4], defaultSummarizationPrompt);
             return memorySummaryMessage;
+        }
+
+        isolated remote function chatAsStream(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [], string? stop = ())
+            returns stream<ChatMessageChunk, Error?>|Error {
+            return error Error("chatAsStream not implemented");
+        }
+
+        isolated remote function generateAsStream(Prompt prompt) returns stream<string, Error?>|Error {
+            return error Error("generateAsStream not implemented");
         }
 
         isolated remote function generate(Prompt prompt, typedesc<anydata> td) returns td|Error = external;
@@ -672,10 +690,19 @@ function testOverridingSummarizationPrompt() returns error? {
 
     ModelProvider model = isolated client object {
         isolated remote function chat(
-                ChatMessage[]|ChatUserMessage messages, 
+                ChatMessage[]|ChatUserMessage messages,
                 ChatCompletionFunctions[] tools, string? stop) returns ChatAssistantMessage|Error {
             assertSummarizationRequestChatMessages(messages, [km1, km2, km3], customSummarizationPrompt);
-            return mockSummaryMessage;                    
+            return mockSummaryMessage;
+        }
+
+        isolated remote function chatAsStream(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [], string? stop = ())
+            returns stream<ChatMessageChunk, Error?>|Error {
+            return error Error("chatAsStream not implemented");
+        }
+
+        isolated remote function generateAsStream(Prompt prompt) returns stream<string, Error?>|Error {
+            return error Error("generateAsStream not implemented");
         }
 
         isolated remote function generate(Prompt prompt, typedesc<anydata> td) returns td|Error = external;
@@ -752,10 +779,19 @@ function testSummarizationFailure() returns error? {
 
     ModelProvider model = isolated client object {
         isolated remote function chat(
-                ChatMessage[]|ChatUserMessage messages, 
+                ChatMessage[]|ChatUserMessage messages,
                 ChatCompletionFunctions[] tools, string? stop) returns ChatAssistantMessage|Error {
             assertSummarizationRequestChatMessages(messages, [km1, km2, km3], defaultSummarizationPrompt);
-            return error("Simulated summarization failure");                    
+            return error("Simulated summarization failure");
+        }
+
+        isolated remote function chatAsStream(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [], string? stop = ())
+            returns stream<ChatMessageChunk, Error?>|Error {
+            return error Error("chatAsStream not implemented");
+        }
+
+        isolated remote function generateAsStream(Prompt prompt) returns stream<string, Error?>|Error {
+            return error Error("generateAsStream not implemented");
         }
 
         isolated remote function generate(Prompt prompt, typedesc<anydata> td) returns td|Error = external;
@@ -822,9 +858,18 @@ isolated client class MockSummarizerModel {
     }
 
     isolated remote function chat(
-            ChatMessage[]|ChatUserMessage messages, 
-            ChatCompletionFunctions[] tools, string? stop) returns ChatAssistantMessage|Error => 
+            ChatMessage[]|ChatUserMessage messages,
+            ChatCompletionFunctions[] tools, string? stop) returns ChatAssistantMessage|Error =>
                 self.memorySummaryMessage;
+
+    isolated remote function chatAsStream(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [], string? stop = ())
+        returns stream<ChatMessageChunk, Error?>|Error {
+        return error Error("chatAsStream not implemented");
+    }
+
+    isolated remote function generateAsStream(Prompt prompt) returns stream<string, Error?>|Error {
+        return error Error("generateAsStream not implemented");
+    }
 
     isolated remote function generate(Prompt prompt, typedesc<anydata> td) returns td|Error = external;
 }

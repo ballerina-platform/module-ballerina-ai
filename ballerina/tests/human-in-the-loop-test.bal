@@ -91,6 +91,15 @@ public isolated client class HitlMockLLM {
     isolated remote function generate(Prompt prompt, typedesc<anydata> td = <>) returns td|Error = @java:Method {
         'class: "io.ballerina.lib.ai.MockGenerator"
     } external;
+
+    isolated remote function chatAsStream(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [], string? stop = ())
+        returns stream<ChatMessageChunk, Error?>|Error {
+        return error Error("chatAsStream not implemented in HitlMockLLM");
+    }
+
+    isolated remote function generateAsStream(Prompt prompt) returns stream<string, Error?>|Error {
+        return error Error("generateAsStream not implemented");
+    }
 }
 
 function newHitlTestAgent() returns Agent|error =>
@@ -176,6 +185,15 @@ public isolated client class HitlStructuredMockLLM {
     isolated remote function generate(Prompt prompt, typedesc<anydata> td = <>) returns td|Error = @java:Method {
         'class: "io.ballerina.lib.ai.MockGenerator"
     } external;
+
+    isolated remote function chatAsStream(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [], string? stop = ())
+        returns stream<ChatMessageChunk, Error?>|Error {
+        return error Error("chatAsStream not implemented in HitlStructuredMockLLM");
+    }
+
+    isolated remote function generateAsStream(Prompt prompt) returns stream<string, Error?>|Error {
+        return error Error("generateAsStream not implemented");
+    }
 }
 
 @test:Config
@@ -318,6 +336,15 @@ public isolated client class MaxIterMockLLM {
     isolated remote function generate(Prompt prompt, typedesc<anydata> td = <>) returns td|Error = @java:Method {
         'class: "io.ballerina.lib.ai.MockGenerator"
     } external;
+
+    isolated remote function chatAsStream(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [], string? stop = ())
+        returns stream<ChatMessageChunk, Error?>|Error {
+        return error Error("chatAsStream not implemented in MaxIterMockLLM");
+    }
+
+    isolated remote function generateAsStream(Prompt prompt) returns stream<string, Error?>|Error {
+        return error Error("generateAsStream not implemented");
+    }
 }
 
 @test:Config
@@ -410,6 +437,15 @@ public isolated client class HitlMixedBatchMockLLM {
     isolated remote function generate(Prompt prompt, typedesc<anydata> td = <>) returns td|Error = @java:Method {
         'class: "io.ballerina.lib.ai.MockGenerator"
     } external;
+
+    isolated remote function chatAsStream(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [], string? stop = ())
+        returns stream<ChatMessageChunk, Error?>|Error {
+        return error Error("chatAsStream not implemented in HitlMixedBatchMockLLM");
+    }
+
+    isolated remote function generateAsStream(Prompt prompt) returns stream<string, Error?>|Error {
+        return error Error("generateAsStream not implemented");
+    }
 }
 
 @test:Config
@@ -469,6 +505,15 @@ public isolated client class HitlTwoGatesMockLLM {
     isolated remote function generate(Prompt prompt, typedesc<anydata> td = <>) returns td|Error = @java:Method {
         'class: "io.ballerina.lib.ai.MockGenerator"
     } external;
+
+    isolated remote function chatAsStream(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [], string? stop = ())
+        returns stream<ChatMessageChunk, Error?>|Error {
+        return error Error("chatAsStream not implemented in HitlTwoGatesMockLLM");
+    }
+
+    isolated remote function generateAsStream(Prompt prompt) returns stream<string, Error?>|Error {
+        return error Error("generateAsStream not implemented");
+    }
 }
 
 @test:Config
@@ -650,6 +695,15 @@ public isolated client class HitlAuthFailureMockLLM {
     isolated remote function generate(Prompt prompt, typedesc<anydata> td = <>) returns td|Error = @java:Method {
         'class: "io.ballerina.lib.ai.MockGenerator"
     } external;
+
+    isolated remote function chatAsStream(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [], string? stop = ())
+        returns stream<ChatMessageChunk, Error?>|Error {
+        return error Error("chatAsStream not implemented in HitlAuthFailureMockLLM");
+    }
+
+    isolated remote function generateAsStream(Prompt prompt) returns stream<string, Error?>|Error {
+        return error Error("generateAsStream not implemented");
+    }
 }
 
 @test:Config
@@ -928,6 +982,15 @@ public isolated client class HitlConditionalMockLLM {
     isolated remote function generate(Prompt prompt, typedesc<anydata> td = <>) returns td|Error = @java:Method {
         'class: "io.ballerina.lib.ai.MockGenerator"
     } external;
+
+    isolated remote function chatAsStream(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [], string? stop = ())
+        returns stream<ChatMessageChunk, Error?>|Error {
+        return error Error("chatAsStream not implemented in HitlConditionalMockLLM");
+    }
+
+    isolated remote function generateAsStream(Prompt prompt) returns stream<string, Error?>|Error {
+        return error Error("generateAsStream not implemented");
+    }
 }
 
 @test:Config
