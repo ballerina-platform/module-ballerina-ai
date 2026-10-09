@@ -73,7 +73,7 @@ modules = [
 [[package]]
 org = "ballerina"
 name = "constraint"
-version = "1.7.0"
+version = "1.7.1"
 dependencies = [
 	{org = "ballerina", name = "jballerina.java"}
 ]
@@ -96,7 +96,7 @@ modules = [
 [[package]]
 org = "ballerina"
 name = "data.jsondata"
-version = "1.1.4"
+version = "1.1.5"
 dependencies = [
 	{org = "ballerina", name = "jballerina.java"},
 	{org = "ballerina", name = "lang.object"}
@@ -347,7 +347,7 @@ modules = [
 [[package]]
 org = "ballerina"
 name = "mime"
-version = "2.12.2"
+version = "2.12.3"
 dependencies = [
 	{org = "ballerina", name = "io"},
 	{org = "ballerina", name = "jballerina.java"},
@@ -407,7 +407,7 @@ modules = [
 [[package]]
 org = "ballerina"
 name = "task"
-version = "2.11.2"
+version = "2.11.3"
 dependencies = [
 	{org = "ballerina", name = "jballerina.java"},
 	{org = "ballerina", name = "time"},
@@ -431,7 +431,7 @@ modules = [
 [[package]]
 org = "ballerina"
 name = "time"
-version = "2.8.1"
+version = "2.8.2"
 dependencies = [
 	{org = "ballerina", name = "jballerina.java"}
 ]
@@ -442,7 +442,7 @@ modules = [
 [[package]]
 org = "ballerina"
 name = "url"
-version = "2.6.2"
+version = "2.6.3"
 dependencies = [
 	{org = "ballerina", name = "jballerina.java"}
 ]
