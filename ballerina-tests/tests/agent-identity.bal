@@ -207,6 +207,10 @@ service /llm on llmListener {
                 fn = "getCurrentDate";
             } else if text.includes("delete") {
                 fn = "deleteTask";
+            } else if text.includes("generate report") {
+                fn = "generateReport";
+            } else if text.includes("remove report") {
+                fn = "deleteReport";
             }
 
             return {
@@ -239,6 +243,8 @@ service /llm on llmListener {
                 msg = "Here are your current tasks.";
             } else if fnName == "getCurrentDate" {
                 msg = "Retrieved today’s date successfully.";
+            } else if fnName == "generateReport" {
+                msg = "Report generated successfully.";
             }
             return {
                 id: "mock-id-2",
@@ -373,5 +379,99 @@ function testAgentIdentityLocalListTool() returns error? {
 }
 function testAgentIdentityDeleteTask() returns error? {
     string result = check taskAssistantAgent.run("Run deleteTask.");
+    test:assertTrue(result.includes("I could not complete your request due to an authorization issue"));
+}
+
+// ── Client Credential Tests ─────────────────────────────────────────────────
+
+final string CC_CLIENT_ID = "cc-client";
+final string CC_CLIENT_SECRET = "cc-secret";
+final string CC_TOKEN_URL = "http://localhost:8094/ccauth/token";
+final string CC_RESOURCE = "api://reports";
+final string CC_VALID_SCOPE = "report";
+
+service /ccauth on authListener {
+    resource function post token(http:Request req)
+            returns json|http:BadRequest|error {
+        map<string|string[]> form = check req.getFormParams();
+        if form["grant_type"].toString() != "client_credentials" {
+            return <http:BadRequest>{body: "unsupported_grant"};
+        }
+        return {
+            access_token: "mock-cc-access-token",
+            token_type: "Bearer",
+            expires_in: 3600,
+            scope: CC_VALID_SCOPE
+        };
+    }
+}
+
+
+@ai:AgentTool {
+    auth: {
+        tokenUrl: CC_TOKEN_URL,
+        clientId: CC_CLIENT_ID,
+        clientSecret: CC_CLIENT_SECRET,
+        scopes: CC_VALID_SCOPE,
+        'resource: CC_RESOURCE
+    }
+}
+isolated function generateReport() returns string {
+    return "Report generated successfully.";
+}
+
+@ai:AgentTool {
+    auth: {
+        tokenUrl: CC_TOKEN_URL,
+        clientId: CC_CLIENT_ID,
+        clientSecret: CC_CLIENT_SECRET,
+        scopes: "delete",
+        'resource: CC_RESOURCE
+    }
+}
+isolated function deleteReport() returns string {
+    return "Report deleted.";
+}
+
+final ai:Agent ccAssistantAgent = check new (
+    systemPrompt = {
+        role: "Report Assistant",
+        instructions: "You help users generate and manage reports."
+    },
+    model = taskAssistantAgentModel,
+    tools = [generateReport, deleteReport],
+    credential = {id: "service-agent", secret: ""}
+);
+
+final ai:Agent ccAssistantAgentNoCredential = check new (
+    systemPrompt = {
+        role: "Report Assistant",
+        instructions: "You help users generate and manage reports."
+    },
+    model = taskAssistantAgentModel,
+    tools = [generateReport, deleteReport]
+);
+
+@test:Config {
+    groups: ["agent-identity"]
+}
+function testClientCredentialGenerateReport() returns error? {
+    string result = check ccAssistantAgent.run("Please generate report.");
+    test:assertTrue(result.includes("Report generated successfully."));
+}
+
+@test:Config {
+    groups: ["agent-identity"]
+}
+function testClientCredentialInsufficientScope() returns error? {
+    string result = check ccAssistantAgent.run("Please remove report.");
+    test:assertTrue(result.includes("I could not complete your request due to an authorization issue"));
+}
+
+@test:Config {
+    groups: ["agent-identity"]
+}
+function testClientCredentialNoAgentId() returns error? {
+    string result = check ccAssistantAgentNoCredential.run("Please generate report.");
     test:assertTrue(result.includes("I could not complete your request due to an authorization issue"));
 }
