@@ -227,8 +227,8 @@ isolated function getFlowId(string clientId, string redirectUri, string agentId,
 
 isolated function getCode(AuthResponse authResponse, Credential agentCredential, http:Client httpclient) returns error|Code {
     log:printDebug("Requesting authorization code for token acquisition", agentId = agentCredential.id);
-    string secret = agentCredential.secret;
-    if secret == "" {
+    string? secret = agentCredential.secret;
+    if secret is () || secret == "" {
         return error TokenAcquisitionError("Authorization is required to use this tool, " + 
             "but the agent secret is not configured.");
     }
