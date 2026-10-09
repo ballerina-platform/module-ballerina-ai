@@ -37,5 +37,6 @@ public class AiCodeAnalyzer extends CodeAnalyzer {
     public void init(CodeAnalysisContext codeAnalysisContext) {
         codeAnalysisContext.addSyntaxNodeAnalysisTask(new OpenAPIGenerator(), SERVICE_DECLARATION);
         codeAnalysisContext.addSyntaxNodeAnalysisTask(new EndpointExportTask(endpoints), SERVICE_DECLARATION);
+        codeAnalysisContext.addSyntaxNodeAnalysisTask(new ChatResourceValidationTask(), SERVICE_DECLARATION);
     }
 }

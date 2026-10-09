@@ -56,7 +56,6 @@ dependencies = [
 	{org = "ballerina", name = "jwt"},
 	{org = "ballerina", name = "lang.array"},
 	{org = "ballerina", name = "lang.regexp"},
-	{org = "ballerina", name = "otel"},
 	{org = "ballerina", name = "test"},
 	{org = "ballerina", name = "time"},
 	{org = "ballerina", name = "uuid"},
@@ -376,21 +375,6 @@ dependencies = [
 
 [[package]]
 org = "ballerina"
-name = "otel"
-version = "1.0.0"
-dependencies = [
-	{org = "ballerina", name = "io"},
-	{org = "ballerina", name = "jballerina.java"},
-	{org = "ballerina", name = "log"},
-	{org = "ballerina", name = "observe"},
-	{org = "ballerina", name = "task"}
-]
-modules = [
-	{org = "ballerina", packageName = "otel", moduleName = "otel"}
-]
-
-[[package]]
-org = "ballerina"
 name = "random"
 version = "1.7.1"
 dependencies = [
@@ -425,7 +409,7 @@ modules = [
 [[package]]
 org = "ballerina"
 name = "time"
-version = "2.8.3"
+version = "2.8.2"
 dependencies = [
 	{org = "ballerina", name = "jballerina.java"}
 ]
@@ -436,7 +420,7 @@ modules = [
 [[package]]
 org = "ballerina"
 name = "url"
-version = "2.6.4"
+version = "2.6.3"
 dependencies = [
 	{org = "ballerina", name = "jballerina.java"}
 ]

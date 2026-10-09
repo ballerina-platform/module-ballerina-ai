@@ -47,6 +47,52 @@ function testAgentChatDecision() returns error? {
     test:assertTrue(message.includes("req-2=REJECTnot needed"), "Missing or wrong decision for req-2: " + message);
 }
 
+// A `decision` resource that declares `http:Headers` receives the real request headers, so it can
+// authenticate the caller before releasing a gated tool call. Before this was forwarded, the
+// parameter was left null and the resource failed with a NullPointerException on first use.
+@test:Config {}
+function testAgentChatDecisionWithHeaders() returns error? {
+    http:Client httpClient = check new ("http://localhost:9090/headerAwareService");
+    ai:DecisionMessage req = {sessionId: "1", decisions: {"req-1": {outcome: ai:APPROVE}}};
+
+    ai:ChatRespMessage resp = check httpClient->/decision.post(req, {Authorization: "Bearer tok"});
+    test:assertEquals(resp.message, "1: Bearer tok", "The resource did not receive the header");
+}
+
+// The same resource rejects a caller that presents no credential, which is the behaviour the
+// header parameter exists to make possible.
+@test:Config {}
+function testAgentChatDecisionWithoutCredential() returns error? {
+    http:Client httpClient = check new ("http://localhost:9090/headerAwareService");
+    ai:DecisionMessage req = {sessionId: "1", decisions: {"req-1": {outcome: ai:APPROVE}}};
+
+    http:Response resp = check httpClient->post("/decision", req);
+    test:assertEquals(resp.statusCode, 401, "An unauthenticated decision should be refused");
+}
+
+// Every `chat` resource receives the real request headers, since `ChatService` requires an
+// `http:Headers` parameter, so a service can authenticate the caller before a run even starts,
+// not only before a decision is released.
+@test:Config {}
+function testAgentChatWithHeaders() returns error? {
+    http:Client httpClient = check new ("http://localhost:9090/headerAwareService");
+    ai:ChatReqMessage req = {sessionId: "1", message: "Hello Ballerina!"};
+
+    ai:ChatRespMessage resp = check httpClient->/chat.post(req, {Authorization: "Bearer tok"});
+    test:assertEquals(resp.message, "1: Bearer tok", "The resource did not receive the header");
+}
+
+// The same resource rejects a caller that presents no credential, which is the behaviour the
+// header parameter exists to make possible.
+@test:Config {}
+function testAgentChatWithoutCredential() returns error? {
+    http:Client httpClient = check new ("http://localhost:9090/headerAwareService");
+    ai:ChatReqMessage req = {sessionId: "1", message: "Hello Ballerina!"};
+
+    http:Response resp = check httpClient->post("/chat", req);
+    test:assertEquals(resp.statusCode, 401, "An unauthenticated chat request should be refused");
+}
+
 // Verifies the dispatcher converts a returned `ai:ApprovalRequiredError` into a structured HTTP
 // response (custom status + `{requests: [...]}` body), without the service doing any mapping.
 // The fixture pauses with two pending requests, so this also verifies the dispatcher preserves

@@ -59,12 +59,14 @@ public final class NativeHttpToChatServiceAdaptor {
         return chatService.getNativeData(DISPATCHER);
     }
 
-    public static Object invokeChat(Environment env, BObject dispatcher, BMap<BString, Object> request) {
-        return invokeResource(env, dispatcher, "chat", request);
+    public static Object invokeChat(Environment env, BObject dispatcher, BMap<BString, Object> request,
+                                    BObject headers) {
+        return invokeResource(env, dispatcher, "chat", request, headers);
     }
 
-    public static Object invokeDecision(Environment env, BObject dispatcher, BMap<BString, Object> request) {
-        return invokeResource(env, dispatcher, "decision", request);
+    public static Object invokeDecision(Environment env, BObject dispatcher, BMap<BString, Object> request,
+                                        BObject headers) {
+        return invokeResource(env, dispatcher, "decision", request, headers);
     }
 
     private static ResourceMethodType findResource(BObject userService, String pathSegment) {
@@ -79,17 +81,26 @@ public final class NativeHttpToChatServiceAdaptor {
         return null;
     }
 
-    private static Object invokeResource(Environment env, BObject dispatcher, String pathSegment, Object request) {
+    private static Object invokeResource(Environment env, BObject dispatcher, String pathSegment,
+                                         BMap<BString, Object> request, BObject headers) {
         BObject userService = (BObject) dispatcher.getNativeData(USER_CHAT_SERVICE);
         ResourceMethodType resource = findResource(userService, pathSegment);
         if (resource == null) {
             return ModuleUtils.createError("no 'post " + pathSegment + "' resource found in the attached chat service");
         }
         String methodName = resource.getName();
+
+        int declared = resource.getParameters().length;
+        if (declared > 2 || declared == 0) {
+            return ModuleUtils.createError("the 'post " + pathSegment + "' resource declares " + declared
+                    + " parameter(s). Only the payload, optionally followed by an 'http:Headers' parameter,"
+                    + " is supported.");
+        }
+        Object[] args = declared == 2 ? new Object[]{request, headers} : new Object[]{request};
         return env.yieldAndRun(() -> {
             CompletableFuture<Object> future = new CompletableFuture<>();
             try {
-                Object result = env.getRuntime().callMethod(userService, methodName, null, request);
+                Object result = env.getRuntime().callMethod(userService, methodName, null, args);
                 // A returned error (e.g. ApprovalRequiredError) comes back here as `result`, with its
                 // type and detail intact, and flows through unchanged for the dispatcher to map.
                 Utils.notifySuccess(future, result);
