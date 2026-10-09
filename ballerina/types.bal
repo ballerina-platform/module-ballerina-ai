@@ -47,10 +47,12 @@ public type ChatClientConfiguration record {|
     *http:ClientConfiguration;
 |};
 
-# Defines a chat service interface that handles incoming chat messages.
+# Defines a chat service interface that handles incoming chat messages. `chat` isn't declared here
+# so that an `http:Headers` parameter stays optional: a resource that wants it can declare it,
+# and one that doesn't is unaffected, exactly like `decision`. The compiler plugin checks for a
+# `post chat` resource directly, since the type itself can no longer enforce it.
 public type ChatService distinct service object {
     *http:Service;
-    resource function post chat(@http:Payload ChatReqMessage request) returns ChatRespMessage|error;
 };
 
 type ExecutionTrace record {|

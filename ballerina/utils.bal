@@ -14,6 +14,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
+import ballerina/http;
 import ballerina/jballerina.java;
 
 isolated function getToolParameterTypes(FunctionTool functionPointer) returns map<typedesc<anydata|Context>> {
@@ -61,15 +62,19 @@ isolated function getDispatcher(ChatService chatService) returns ChatDispatcherS
 } external;
 
 // Reflectively invokes the user service's `post chat` resource, returning its result (a
-// `ChatRespMessage`, or an `error` such as `ApprovalRequiredError`) intact.
-isolated function invokeChat(ChatDispatcherService dispatcher, ChatReqMessage request)
+// `ChatRespMessage`, or an `error` such as `ApprovalRequiredError`) intact. `headers` is forwarded
+// only when the user's resource declares a parameter for it, so a resource that takes the payload
+// alone is unaffected.
+isolated function invokeChat(ChatDispatcherService dispatcher, ChatReqMessage request, http:Headers headers)
     returns ChatRespMessage|error = @java:Method {
     'class: "io.ballerina.stdlib.ai.NativeHttpToChatServiceAdaptor"
 } external;
 
 // Reflectively invokes the user service's `post decision` resource, returning its result intact.
-isolated function invokeDecision(ChatDispatcherService dispatcher, DecisionMessage request)
-    returns ChatRespMessage|error = @java:Method {
+// `headers` is forwarded only when the user's resource declares a parameter for it, so a resource
+// that takes the payload alone is unaffected.
+isolated function invokeDecision(ChatDispatcherService dispatcher, DecisionMessage request,
+        http:Headers headers) returns ChatRespMessage|error = @java:Method {
     'class: "io.ballerina.stdlib.ai.NativeHttpToChatServiceAdaptor"
 } external;
 

@@ -49,14 +49,14 @@ type ResumeErrorBody record {|
 isolated service class ChatDispatcherService {
     *http:Service;
 
-    isolated resource function post chat(@http:Payload ChatReqMessage request)
+    isolated resource function post chat(@http:Payload ChatReqMessage request, http:Headers headers)
             returns ChatRespMessage|ApprovalRequiredResponse|http:NotFound|http:BadRequest|error {
-        return toResponse(invokeChat(self, request));
+        return toResponse(invokeChat(self, request, headers));
     }
 
-    isolated resource function post decision(@http:Payload DecisionMessage request)
+    isolated resource function post decision(@http:Payload DecisionMessage request, http:Headers headers)
             returns ChatRespMessage|ApprovalRequiredResponse|http:NotFound|http:BadRequest|error {
-        return toResponse(invokeDecision(self, request));
+        return toResponse(invokeDecision(self, request, headers));
     }
 }
 
