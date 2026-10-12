@@ -15,6 +15,7 @@
 // under the License.
 
 import ballerina/jballerina.java;
+import ballerina/mcp;
 import ballerina/test;
 import ballerina/time;
 
@@ -1201,3 +1202,91 @@ function testMemoryWithoutCheckpointerFallsBackAndStillWorks() returns error? {
     }
 }
 
+
+// ---- Approval on MCP tools ----
+
+// An MCP tool dispatcher, as a generated MCP toolkit declares one: the agent calls it with the
+// LLM's arguments wrapped in `mcp:CallToolParams`.
+isolated function mcpRefundDispatcherMock(mcp:CallToolParams params) returns mcp:CallToolResult|error =>
+    {content: [{'type: "text", text: string `Called ${params.name} with ${(params?.arguments).toString()}`}]};
+
+// Predicate with the dispatcher's signature, as the compiler plugin requires on an `@ai:AgentTool`
+// MCP dispatcher. It gates by tool name too, since one dispatcher can serve every tool of a server.
+isolated function mcpRefundRequiresApprovalAboveThreshold(mcp:CallToolParams params) returns boolean {
+    record {}? arguments = params?.arguments;
+    if params.name != "issueRefund" || arguments is () {
+        return false;
+    }
+    anydata amount = arguments["amount"];
+    return amount is int && amount > 100;
+}
+
+// Stands in for a generated MCP toolkit without needing an MCP server. The agent treats its tools as
+// MCP tools because the class is an `McpBaseToolKit`.
+isolated class StubMcpToolKit {
+    *McpBaseToolKit;
+    private final readonly & ToolConfig[] tools;
+
+    isolated function init(RequiresApproval requiresApproval) {
+        ToolConfig[] tools = [
+            {
+                name: "issueRefund",
+                description: "Issues a refund for an order",
+                parameters: {
+                    properties: {
+                        orderId: {'type: STRING},
+                        amount: {'type: NUMBER}
+                    }
+                },
+                caller: mcpRefundDispatcherMock,
+                requiresApproval
+            }
+        ];
+        self.tools = tools.cloneReadOnly();
+    }
+
+    public isolated function getTools() returns ToolConfig[] => self.tools;
+}
+
+@test:Config
+function testMcpToolApprovalPredicateSkipsGateBelowThreshold() returns error? {
+    Agent agent = check new ({
+        systemPrompt: {role: "Test Agent", instructions: "Handle refunds"},
+        model: new HitlConditionalMockLLM({name: "issueRefund", arguments: {"orderId": "ORD-1", "amount": 50}, id: "call-1"}),
+        tools: [new StubMcpToolKit(mcpRefundRequiresApprovalAboveThreshold)]
+    });
+    // The predicate can only see the amount if it gets the arguments wrapped in
+    // `mcp:CallToolParams`. Otherwise it can't be called and fails safe to pausing.
+    string|Error result = agent.run("Refund order ORD-1", "hitl-mcp-below-session");
+    test:assertTrue(result is string, result is Error ? result.message() : result.toString());
+    if result is string {
+        test:assertTrue(result.includes("Called issueRefund"), result);
+    }
+}
+
+@test:Config
+function testMcpToolApprovalPredicateGatesAboveThreshold() returns error? {
+    Agent agent = check new ({
+        systemPrompt: {role: "Test Agent", instructions: "Handle refunds"},
+        model: new HitlConditionalMockLLM({name: "issueRefund", arguments: {"orderId": "ORD-1", "amount": 500}, id: "call-1"}),
+        tools: [new StubMcpToolKit(mcpRefundRequiresApprovalAboveThreshold)]
+    });
+    string sessionId = "hitl-mcp-above-session";
+    string|Error result = agent.run("Refund order ORD-1", sessionId);
+    test:assertTrue(result is ApprovalRequiredError);
+    if result is ApprovalRequiredError {
+        ApprovalRequest[] requests = result.detail().requests;
+        test:assertEquals(requests.length(), 1);
+        test:assertEquals(requests[0].toolName, "issueRefund");
+        // The human sees the arguments the LLM proposed, not the `mcp:CallToolParams` wrapper.
+        test:assertEquals(requests[0].arguments, {"orderId": "ORD-1", "amount": 500});
+    }
+
+    string|Error resumed = result is ApprovalRequiredError
+        ? agent.run(singleResume(result, {outcome: APPROVE}), sessionId)
+        : result;
+    test:assertTrue(resumed is string, resumed is Error ? resumed.message() : resumed.toString());
+    if resumed is string {
+        test:assertTrue(resumed.includes("Called issueRefund"), resumed);
+    }
+}

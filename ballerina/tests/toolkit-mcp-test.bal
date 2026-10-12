@@ -206,3 +206,84 @@ function testCustomMcpToolKitWithAllToolsPermitted() returns error? {
     };
     test:assertEquals((check output.value).toJson(), expectedResult);
 }
+
+isolated class ApprovalGatedMcpToolKit {
+    *McpBaseToolKit;
+    private final mcp:StreamableHttpClient mcpClient;
+    private final readonly & ToolConfig[] tools;
+
+    public isolated function init(string serverUrl = "http://localhost:3000/mcp",
+            mcp:Implementation info = {name: "MCP", version: "1.0.0"},
+            *mcp:StreamableHttpClientTransportConfig config) returns Error? {
+        final map<FunctionTool> permittedTools = {
+            "single-greeting": self.singleGreeting,
+            "multi-greet": self.multiGreet
+        };
+        do {
+            self.mcpClient = check new mcp:StreamableHttpClient(serverUrl, config);
+            self.tools = check getPermittedMcpToolConfigs(self.mcpClient, info, permittedTools).cloneReadOnly();
+        } on fail error e {
+            return error Error("Failed to initialize MCP toolkit", e);
+        }
+    }
+
+    public isolated function getTools() returns ToolConfig[] => self.tools;
+
+    @AgentTool {requiresApproval: true}
+    public isolated function singleGreeting(mcp:CallToolParams params) returns mcp:CallToolResult|error {
+        return self.mcpClient->callTool(params);
+    }
+
+    @AgentTool
+    public isolated function multiGreet(mcp:CallToolParams params) returns mcp:CallToolResult|error {
+        return self.mcpClient->callTool(params);
+    }
+}
+
+@test:Config {
+    groups: ["mcp"]
+}
+function testMcpToolKitCarriesRequiresApprovalPerTool() returns error? {
+    ApprovalGatedMcpToolKit mcpToolKit = check new;
+    map<RequiresApproval> approvals = map from ToolConfig tool in mcpToolKit.getTools()
+        select [tool.name, tool.requiresApproval];
+    test:assertEquals(approvals.length(), 2);
+    test:assertTrue(approvals["single-greeting"] === true);
+    test:assertTrue(approvals["multi-greet"] === false);
+}
+
+isolated class ApprovalGatedAllToolsMcpToolKit {
+    *McpBaseToolKit;
+    private final mcp:StreamableHttpClient mcpClient;
+    private final readonly & ToolConfig[] tools;
+
+    public isolated function init(string serverUrl = "http://localhost:3000/mcp",
+            mcp:Implementation info = {name: "MCP", version: "1.0.0"},
+            *mcp:StreamableHttpClientTransportConfig config) returns Error? {
+        do {
+            self.mcpClient = check new mcp:StreamableHttpClient(serverUrl, config);
+            self.tools = check getPermittedMcpToolConfigs(self.mcpClient, info, self.callTool).cloneReadOnly();
+        } on fail error e {
+            return error Error("Failed to initialize MCP toolkit", e);
+        }
+    }
+
+    public isolated function getTools() returns ToolConfig[] => self.tools;
+
+    @AgentTool {requiresApproval: true}
+    public isolated function callTool(mcp:CallToolParams params) returns mcp:CallToolResult|error {
+        return self.mcpClient->callTool(params);
+    }
+}
+
+@test:Config {
+    groups: ["mcp"]
+}
+function testMcpToolKitCarriesRequiresApprovalToAllTools() returns error? {
+    ApprovalGatedAllToolsMcpToolKit mcpToolKit = check new;
+    ToolConfig[] tools = mcpToolKit.getTools();
+    test:assertEquals(tools.length(), 2);
+    foreach ToolConfig tool in tools {
+        test:assertTrue(tool.requiresApproval === true, tool.name);
+    }
+}
