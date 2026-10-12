@@ -1290,3 +1290,32 @@ function testMcpToolApprovalPredicateGatesAboveThreshold() returns error? {
         test:assertTrue(resumed.includes("Called issueRefund"), resumed);
     }
 }
+
+// Dispatchers with no `name` or `description`, as the annotation looks when the compiler plugin has not
+// filled them in. `requiresApproval` must still be read.
+isolated class BareAnnotatedMcpDispatchers {
+    @AgentTool {requiresApproval: true}
+    public isolated function gated(mcp:CallToolParams params) returns mcp:CallToolResult|error => {content: []};
+
+    @AgentTool {requiresApproval: mcpRefundRequiresApprovalAboveThreshold}
+    public isolated function conditional(mcp:CallToolParams params) returns mcp:CallToolResult|error => {content: []};
+
+    @AgentTool
+    public isolated function plain(mcp:CallToolParams params) returns mcp:CallToolResult|error => {content: []};
+
+    public isolated function unannotated(mcp:CallToolParams params) returns mcp:CallToolResult|error =>
+        {content: []};
+}
+
+@test:Config
+function testMcpDispatcherApprovalIsReadFromABareAnnotation() {
+    BareAnnotatedMcpDispatchers dispatchers = new;
+    test:assertTrue(getClientToolApproval(dispatchers.gated, "any") === true);
+    test:assertTrue(getClientToolApproval(dispatchers.conditional, "any") is isolated function);
+    test:assertTrue(getClientToolApproval(dispatchers.plain, "any") === false);
+    test:assertTrue(getClientToolApproval(dispatchers.unannotated, "any") === false);
+
+    map<FunctionTool> byTool = {"a": dispatchers.gated, "b": dispatchers.plain};
+    test:assertTrue(getClientToolApproval(byTool, "a") === true);
+    test:assertTrue(getClientToolApproval(byTool, "b") === false);
+}

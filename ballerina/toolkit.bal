@@ -588,7 +588,10 @@ isolated function getClientToolScopes(map<FunctionTool>|FunctionTool permittedTo
 
 isolated function getClientToolApproval(map<FunctionTool>|FunctionTool permittedTools, string toolName)
         returns RequiresApproval {
-    ToolConfig|Error toolConfig = permittedTools is FunctionTool ? getToolConfig(permittedTools) :
-                            getToolConfig(permittedTools.get(toolName));
-    return toolConfig is ToolConfig ? toolConfig.requiresApproval : false;
+    FunctionTool tool = permittedTools is FunctionTool ? permittedTools : permittedTools.get(toolName);
+    // Read only `requiresApproval`. `getToolConfig` also checks `name` and `description`, and an error
+    // there would silently turn off a gate the annotation asked for.
+    typedesc<FunctionTool> typedescriptor = typeof tool;
+    ToolAnnotationConfig? config = typedescriptor.@AgentTool;
+    return config is () ? false : config.requiresApproval;
 }
