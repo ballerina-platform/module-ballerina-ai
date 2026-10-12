@@ -229,12 +229,14 @@ isolated class ApprovalGatedMcpToolKit {
 
     public isolated function getTools() returns ToolConfig[] => self.tools;
 
-    @AgentTool {requiresApproval: true}
+    // `name` and `description` are given explicitly because the compiler plugin, which fills them in for
+    // users, does not run on this package's own tests.
+    @AgentTool {name: "singleGreeting", description: "Greets a single person", requiresApproval: true}
     public isolated function singleGreeting(mcp:CallToolParams params) returns mcp:CallToolResult|error {
         return self.mcpClient->callTool(params);
     }
 
-    @AgentTool
+    @AgentTool {name: "multiGreet", description: "Greets several people"}
     public isolated function multiGreet(mcp:CallToolParams params) returns mcp:CallToolResult|error {
         return self.mcpClient->callTool(params);
     }
@@ -270,7 +272,7 @@ isolated class ApprovalGatedAllToolsMcpToolKit {
 
     public isolated function getTools() returns ToolConfig[] => self.tools;
 
-    @AgentTool {requiresApproval: true}
+    @AgentTool {name: "callTool", description: "Calls any tool on the MCP server", requiresApproval: true}
     public isolated function callTool(mcp:CallToolParams params) returns mcp:CallToolResult|error {
         return self.mcpClient->callTool(params);
     }
