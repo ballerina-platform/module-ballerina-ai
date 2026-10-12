@@ -1295,16 +1295,19 @@ function testMcpToolApprovalPredicateGatesAboveThreshold() returns error? {
 // filled them in. `requiresApproval` must still be read.
 isolated class BareAnnotatedMcpDispatchers {
     @AgentTool {requiresApproval: true}
-    public isolated function gated(mcp:CallToolParams params) returns mcp:CallToolResult|error => {content: []};
+    public isolated function gated(mcp:CallToolParams params) returns mcp:CallToolResult|error =>
+        mcpRefundDispatcherMock(params);
 
     @AgentTool {requiresApproval: mcpRefundRequiresApprovalAboveThreshold}
-    public isolated function conditional(mcp:CallToolParams params) returns mcp:CallToolResult|error => {content: []};
+    public isolated function conditional(mcp:CallToolParams params) returns mcp:CallToolResult|error =>
+        mcpRefundDispatcherMock(params);
 
     @AgentTool
-    public isolated function plain(mcp:CallToolParams params) returns mcp:CallToolResult|error => {content: []};
+    public isolated function plain(mcp:CallToolParams params) returns mcp:CallToolResult|error =>
+        mcpRefundDispatcherMock(params);
 
     public isolated function unannotated(mcp:CallToolParams params) returns mcp:CallToolResult|error =>
-        {content: []};
+        mcpRefundDispatcherMock(params);
 }
 
 @test:Config
