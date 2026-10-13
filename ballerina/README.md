@@ -256,7 +256,46 @@ TaskManagerToolkit taskManagerTools = new;
 
 Now the `taskManagerTools` instance can be passed to an AI agent, enabling **stateful task management** through its tools.
 
-### 2.5 Define the Memory
+### 2.5 Define Skills
+
+[Agent Skills](https://agentskills.io) package reusable instructions and reference material that teach an agent how to perform a specific kind of task. A skill is a directory with a `SKILL.md` file, and optional `references/` and `assets/` directories:
+
+```
+skills/
+└── expense-report/
+    ├── SKILL.md
+    ├── references/
+    │   └── policy.md
+    └── assets/
+        └── template.csv
+```
+
+`SKILL.md` starts with YAML frontmatter containing the skill's `name` and `description`, followed by the instructions:
+
+```markdown
+---
+name: expense-report
+description: Prepares and validates employee expense reports. Use when the user asks to file, check, or summarize expenses.
+---
+
+1. Check every item against the limits in `references/policy.md`.
+2. Produce the report using the columns in `assets/template.csv`.
+```
+
+Skills are loaded with progressive disclosure: only each skill's name and description are added to the system prompt. The agent loads a skill's full instructions, and the resource files it lists, on demand through the built-in `activate_skill` and `read_skill_resource` tools.
+
+A skill source is either a path to a skill directory (or to a directory of skills), or a skill defined inline. A relative path is resolved against the current working directory of the running program.
+
+```ballerina
+final ai:Skill toneSkill = {
+    name: "customer-tone",
+    description: "Guidelines for the tone of customer-facing replies. Use when drafting a message to a customer.",
+    instructions: "Be polite and concise. See references/phrases.md for approved phrases.",
+    resources: {"references/phrases.md": "- Thank you for reaching out."}
+};
+```
+
+### 2.6 Define the Memory
 
 The `ai` module manages memory for individual user sessions using `Memory`. By default, agents are configured with memory that has a predefined capacity. To create a stateless agent, set `memory` to `()` when defining the agent. You can also customize the memory capacity or provide your own memory implementation. Example:
 
@@ -264,7 +303,7 @@ The `ai` module manages memory for individual user sessions using `Memory`. By d
 final ai:Memory memory = check new ai:ShortTermMemory(check new ai:InMemoryShortTermMemoryStore(15));
 ```
 
-### 2.6 Define the Agent
+### 2.7 Define the Agent
 
 Create a Ballerina AI agent using the configurations defined earlier:
 
@@ -273,11 +312,12 @@ final ai:Agent mathTutorAgent = check new (
     systemPrompt = systemPrompt,
     model = model,
     tools = [sum, mult, taskManagerTools], // Provide an array of function pointers and toolkit instances
+    skills = [{path: "./skills"}, toneSkill], // Optional: skill directories and inline skills
     memory = memory
 );
 ```
 
-### 2.7 Invoke the Agent
+### 2.8 Invoke the Agent
 
 Finally, invoke the agent by calling the `run` method:
 

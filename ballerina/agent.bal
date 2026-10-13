@@ -68,6 +68,11 @@ public type AgentConfiguration record {|
     @display {label: "Tools"}
     (BaseToolKit|ToolConfig|FunctionTool)[] tools = [];
 
+    # Skills available to the agent. Only each skill's name and description are added to the system prompt;
+    # the full instructions and resources are loaded on demand through built-in skill tools.
+    @display {label: "Skills"}
+    SkillSource[] skills?;
+
     # The maximum number of reasoning-action cycles the agent performs to complete the task.
     # A single cycle is one LLM call plus the execution of every tool call returned in
     # that response, so multiple tool calls from one response count as one iteration.
@@ -235,6 +240,8 @@ public isolated distinct class Agent {
     private final boolean hitlEnabled;
     private final int maxIter;
     private final readonly & SystemPrompt systemPrompt;
+    // The catalog of the configured skills added to the system prompt, or `()` when there are no skills.
+    private final string? skillCatalog;
     private final boolean verbose;
     private final string uniqueId = uuid:createRandomUuid();
     private final readonly & ToolSchema[] toolSchemas;
@@ -246,7 +253,6 @@ public isolated distinct class Agent {
     public isolated function init(@display {label: "Agent Configuration"} *AgentConfiguration config) returns Error? {
         observe:CreateAgentSpan span = observe:createCreateAgentSpan(config.systemPrompt.role);
         span.addId(self.uniqueId);
-        span.addSystemInstructions(getFomatedSystemPrompt(config.systemPrompt));
 
         INFER_TOOL_COUNT|int maxIter = config.maxIter;
         self.verbose = config.verbose;
@@ -262,7 +268,16 @@ public isolated distinct class Agent {
             }
         }
         do {
-            self.toolStore = check new (...config.tools);
+            map<SkillInfo> & readonly skills = check loadSkills(config.skills ?: []);
+            if skills.length() == 0 {
+                self.skillCatalog = ();
+                self.toolStore = check new (...config.tools);
+            } else {
+                self.skillCatalog = buildSkillCatalog(skills);
+                self.toolStore = check new (...[...config.tools, new SkillsToolKit(skills)]);
+                span.addSkills(skills.keys());
+            }
+            span.addSystemInstructions(getFomatedSystemPrompt(config.systemPrompt, self.skillCatalog));
             self.model = config.model;
             self.memory = memory ?: check new ShortTermMemory();
             self.stateless = memory is ();
@@ -477,7 +492,7 @@ public isolated distinct class Agent {
         span.addId(self.uniqueId);
         span.addSessionId(sessionId);
         span.addInput(queryString);
-        string systemPrompt = getFomatedSystemPrompt(self.systemPrompt);
+        string systemPrompt = getFomatedSystemPrompt(self.systemPrompt, self.skillCatalog);
 
         ResponseSchema? responseSchema = ();
         if td !is typedesc<string|Trace> && td is typedesc<anydata> {
@@ -909,11 +924,14 @@ isolated function constructError(ExecutionTrace executionTrace) returns Error {
     return error Error("Unable to obtain valid answer from the agent", steps = steps);
 }
 
-isolated function getFomatedSystemPrompt(SystemPrompt systemPrompt) returns string {
-    return string `# Role  
+isolated function getFomatedSystemPrompt(SystemPrompt systemPrompt, string? skillCatalog = ()) returns string {
+    string formattedPrompt = string `# Role  
 ${systemPrompt.role}  
 
 # Instructions  
 ${systemPrompt.instructions}
+`;
+    return skillCatalog is () ? formattedPrompt : string `${formattedPrompt}
+${skillCatalog}
 `;
 }
