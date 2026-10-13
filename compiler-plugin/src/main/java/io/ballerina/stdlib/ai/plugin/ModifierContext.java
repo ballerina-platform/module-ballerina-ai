@@ -67,6 +67,7 @@ class ModifierContext {
  *
  * @param aiModulePrefix         the import prefix used for the `ballerina/ai` module in the document
  * @param tools                  the statically identified tools available to the agent
+ * @param skills                 the statically identified skill entries available to the agent
  * @param systemPrompt           the statically resolved system prompt of the composed agent, or {@code null} when its
  *                               role or instructions cannot be resolved at compile time
  * @param modelProviderParamName the name of the `init` parameter supplying the agent's model, or {@code null} when the
@@ -74,8 +75,8 @@ class ModifierContext {
  * @param memoryParamName        the name of the `init` parameter supplying the agent's memory, or {@code null} when the
  *                               memory is not injectable via the constructor
  */
-record AgentMetadataConfig(String aiModulePrefix, List<ToolMetadata> tools, SystemPromptMetadata systemPrompt,
-                           String modelProviderParamName, String memoryParamName) {
+record AgentMetadataConfig(String aiModulePrefix, List<ToolMetadata> tools, List<SkillMetadata> skills,
+                           SystemPromptMetadata systemPrompt, String modelProviderParamName, String memoryParamName) {
 }
 
 /**
@@ -105,6 +106,25 @@ enum ToolKind {
  * @param icon  the icon path from the tool's `@display` annotation, or {@code null}
  */
 record ToolMetadata(String name, ToolKind kind, String label, String icon) {
+}
+
+/**
+ * The kind of a skill entry available to an agent. The names mirror the `ai:SkillKind` enum members.
+ */
+enum SkillKind {
+    LOCAL_SKILL_SOURCE,
+    INLINE_SKILL
+}
+
+/**
+ * Metadata about a single skill entry available to a custom agent.
+ *
+ * @param kind the kind of skill entry
+ * @param path the path of a local skill source written as a literal, or {@code null}
+ * @param name the name of an inline skill written as a literal, or the variable name of the skill entry, or
+ *             {@code null}
+ */
+record SkillMetadata(SkillKind kind, String path, String name) {
 }
 
 record ToolAnnotationConfig(

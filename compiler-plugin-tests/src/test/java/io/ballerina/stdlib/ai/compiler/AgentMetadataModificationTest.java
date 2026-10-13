@@ -164,6 +164,25 @@ public class AgentMetadataModificationTest {
     }
 
     @Test
+    public void testAgentMetadataAnnotationWithSkills() {
+        String modifiedSource = getModifiedSourceForProject("08_custom_agent_with_skills");
+        // A literal (const-referenced) path, a `LocalSkillSource` variable, an `ai:Skill` variable, and an inline
+        // skill with a literal name are recorded in order. The local source whose path comes from a function call
+        // cannot be resolved statically and is skipped.
+        Assert.assertTrue(modifiedSource.contains(
+                        "@display {label: \"SupportAgent\", agentMetadata: {tools: [], skills: ["
+                                + "{kind: ai:LOCAL_SKILL_SOURCE, path: \"./skills\"}, "
+                                + "{kind: ai:LOCAL_SKILL_SOURCE, name: \"sharedSkills\"}, "
+                                + "{kind: ai:INLINE_SKILL, name: \"toneSkill\"}, "
+                                + "{kind: ai:INLINE_SKILL, name: \"escalation\"}], "
+                                + "systemPrompt: {role: \"Support Agent\", instructions: \"Help customers.\"}, "
+                                + "modelProvider: {parameterName: \"model\"}}}"),
+                "Expected the statically identifiable skill entries to be recorded in agentMetadata");
+        Assert.assertFalse(agentMetadataAnnotation(modifiedSource).contains("dynamic-skills"),
+                "A skill source whose path is not statically known must be skipped");
+    }
+
+    @Test
     public void testAgentMetadataAnnotationForEdgeCases() {
         String modifiedSource = getModifiedSourceForProject("07_edge_cases");
         // `tools = <variable>` is not a list literal, so no tools are read, but the model parameter is still
