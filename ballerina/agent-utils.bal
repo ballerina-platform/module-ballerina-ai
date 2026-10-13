@@ -576,7 +576,8 @@ isolated function callRequiresApproval(Agent agent, FunctionCall call) returns b
     if rule is boolean {
         return rule;
     }
-    return evaluateApprovalPredicate(rule, call.arguments ?: {});
+    // The predicate shares the tool's signature, so it is called with the same input as the tool.
+    return evaluateApprovalPredicate(rule, agent.toolStore.toCallerInput(call.name, call.arguments ?: {}));
 }
 
 # Invokes a function-valued approval predicate the way a tool is invoked: the proposed call's

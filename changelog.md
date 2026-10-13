@@ -4,6 +4,11 @@ This file documents all significant changes made to the Ballerina AI package acr
 
 ## [Unreleased]
 
+### Fixed
+- [Fix `requiresApproval` Being Ignored on MCP Tools](https://github.com/ballerina-platform/ballerina-library/issues/9291)
+
+## [1.16.0] - 2026-10-09
+
 ### Added
 - [Add header support to a chat service](https://github.com/ballerina-platform/ballerina-library/issues/9272)
 - Validate the shape of a `chat`/`decision` resource through the compiler plugin: a service attached to an

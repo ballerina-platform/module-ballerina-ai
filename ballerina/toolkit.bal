@@ -555,6 +555,7 @@ public isolated function getPermittedMcpToolConfigs(mcp:StreamableHttpClient mcp
                 description: tool.description ?: "",
                 parameters: (<map<json>>tool.inputSchema).cloneReadOnly(),
                 auth: addScopeInConfig(permittedTools, toolName, auth),
+                requiresApproval: getClientToolApproval(permittedTools, toolName),
                 caller: permittedTools is FunctionTool
                     ? permittedTools
                     : permittedTools.get(toolName)
@@ -583,4 +584,14 @@ isolated function getClientToolScopes(map<FunctionTool>|FunctionTool permittedTo
     ToolConfig|Error toolConfig =  permittedTools is FunctionTool ? getToolConfig(permittedTools) :
                             getToolConfig(permittedTools.get(toolName));
     return toolConfig is ToolConfig ? toolConfig.auth?.scopes : ();
+}
+
+isolated function getClientToolApproval(map<FunctionTool>|FunctionTool permittedTools, string toolName)
+        returns RequiresApproval {
+    FunctionTool tool = permittedTools is FunctionTool ? permittedTools : permittedTools.get(toolName);
+    // Read only `requiresApproval`. `getToolConfig` also checks `name` and `description`, and an error
+    // there would silently turn off a gate the annotation asked for.
+    typedesc<FunctionTool> typedescriptor = typeof tool;
+    ToolAnnotationConfig? config = typedescriptor.@AgentTool;
+    return config is () ? false : config.requiresApproval;
 }

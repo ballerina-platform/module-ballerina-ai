@@ -148,9 +148,7 @@ public isolated class ToolStore {
         isolated function caller = self.tools.get(name).caller;
         // The tool is executed outside any `lock` statement so that multiple tool calls can
         // run concurrently on the same tool store when parallel tool calling is enabled.
-        readonly & map<json> toolInput = self.isMcpTool(name)
-            ? {params: {name, arguments: inputValues}}.cloneReadOnly()
-            : inputValues.cloneReadOnly();
+        readonly & map<json> toolInput = self.toCallerInput(name, inputValues).cloneReadOnly();
         ToolExecutionResult|error execution = trap executeTool(caller, toolInput, context);
         if execution is error {
             log:printDebug("Tool execution failed",
@@ -211,6 +209,11 @@ public isolated class ToolStore {
             return self.mcpTools.hasKey(toolName);
         }
     }
+
+    // The input the tool's function is called with. An MCP tool gets the LLM's arguments wrapped in
+    // `mcp:CallToolParams`. Any other tool gets them as they are.
+    isolated function toCallerInput(string toolName, map<json> inputValues) returns map<json> =>
+        self.isMcpTool(toolName) ? {params: {name: toolName, arguments: inputValues}} : inputValues;
 
     isolated function getToolKitName(string toolName) returns string? {
         lock {
