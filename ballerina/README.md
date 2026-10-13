@@ -282,7 +282,7 @@ description: Prepares and validates employee expense reports. Use when the user 
 2. Produce the report using the columns in `assets/template.csv`.
 ```
 
-Skills are loaded with progressive disclosure: only each skill's name and description are added to the system prompt. The agent loads a skill's full instructions, and the resource files it lists, on demand through the built-in `activate_skill` and `read_skill_resource` tools.
+Skills are loaded with progressive disclosure: only each skill's name and description are added to the system prompt. The agent loads a skill's full instructions, and the resource files it lists, on demand through the built-in `__activate_skill__` and `__read_skill_resource__` tools. Reading a binary resource (such as an image or a PDF) returns an error, since tool results are text.
 
 A skill source is either a path to a skill directory (or to a directory of skills), or a skill defined inline. A relative path is resolved against the current working directory of the running program.
 

@@ -111,7 +111,7 @@ function testInlineSkillWithEmptyNameFails() {
 
 @test:Config {groups: ["skills"], dataProvider: invalidSkillMdData}
 function testParseInvalidSkillMd(string content, string expectedMessage) {
-    SkillMetadata|Error metadata = parseSkillMd(content);
+    ParsedSkillMd|Error metadata = parseSkillMd(content);
     if metadata !is Error {
         test:assertFail("Expected an error for invalid SKILL.md content");
     }
@@ -131,7 +131,7 @@ function invalidSkillMdData() returns string[][] => [
 
 @test:Config {groups: ["skills"]}
 function testParseSkillMd() returns error? {
-    SkillMetadata metadata = check parseSkillMd("\r\n---\r\nname: my-skill\r\ndescription: Does things\r\n---\r\n\r\nLine 1\r\nLine 2\r\n");
+    ParsedSkillMd metadata = check parseSkillMd("\r\n---\r\nname: my-skill\r\ndescription: Does things\r\n---\r\n\r\nLine 1\r\nLine 2\r\n");
     test:assertEquals(metadata, {name: "my-skill", description: "Does things", instructions: "Line 1\nLine 2"});
 }
 
@@ -345,4 +345,16 @@ isolated client class SkillsMockLLM {
 function testActivateSkillEscapesNameAttribute() returns error? {
     SkillsToolKit toolKit = new (check loadSkills([{name: "a\"b", description: "Quoted name", instructions: "Body"}]));
     test:assertEquals(check toolKit.activateSkill("a\"b"), "<skill_content name=\"a&quot;b\">\nBody\n</skill_content>");
+}
+
+@test:Config {groups: ["skills"]}
+function testReadBinarySkillResource() returns error? {
+    SkillsToolKit toolKit = new (check loadSkills([{path: SKILLS_RESOURCES + "/binary-skill"}]));
+    test:assertTrue((check toolKit.activateSkill("binary-skill")).includes("<resource>assets/logo.png</resource>"));
+    string|Error content = toolKit.readSkillResource("binary-skill", "assets/logo.png");
+    if content !is Error {
+        test:assertFail("Expected an error when reading a binary resource");
+    }
+    test:assertEquals(content.message(),
+        "Resource 'assets/logo.png' of skill 'binary-skill' is a binary file and cannot be returned as text");
 }

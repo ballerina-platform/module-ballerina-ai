@@ -18,7 +18,7 @@ import ballerina/file;
 import ballerina/io;
 import ballerina/jballerina.java;
 import ballerina/log;
-import ballerina/yaml;
+import ballerina/data.yaml;
 
 const SKILL_FILE_NAME = "SKILL.md";
 const REFERENCES_DIR = "references";
@@ -26,14 +26,15 @@ const ASSETS_DIR = "assets";
 const FRONTMATTER_DELIMITER = "---";
 const MAX_SKILL_NAME_LENGTH = 64;
 const MAX_SKILL_DESCRIPTION_LENGTH = 1024;
-const ACTIVATE_SKILL_TOOL = "activate_skill";
-const READ_SKILL_RESOURCE_TOOL = "read_skill_resource";
+const ACTIVATE_SKILL_TOOL = "__activate_skill__";
+const READ_SKILL_RESOURCE_TOOL = "__read_skill_resource__";
 
 const SKILL_CATALOG_INSTRUCTIONS = "Skills contain the policies and procedures you must follow. " +
-    "If a request relates to any skill listed below, you MUST call the `activate_skill` tool with that skill's name\n" +
+    "If a request relates to any skill listed below, you MUST call the `" + ACTIVATE_SKILL_TOOL +
+    "` tool with that skill's name\n" +
     "before answering or making any decision, and follow its instructions exactly. " +
     "Do not rely on your own assumptions in place of a skill.\n" +
-    "Read a skill's resources with the `read_skill_resource` tool when its instructions refer to them.";
+    "Read a skill's resources with the `" + READ_SKILL_RESOURCE_TOOL + "` tool when its instructions refer to them.";
 
 # Represents a skill, or a directory of skills, on the local file system in the Agent Skills format.
 public type LocalSkillSource record {|
@@ -74,7 +75,7 @@ type SkillInfo readonly & record {|
     string[] resources;
 |};
 
-type SkillMetadata record {|
+type ParsedSkillMd record {|
     string name;
     string description;
     string instructions;
@@ -144,7 +145,7 @@ isolated function isSkillDir(string dir) returns boolean|error =>
 isolated function loadLocalSkill(string dir) returns SkillInfo|Error {
     do {
         string content = check io:fileReadString(check file:joinPath(dir, SKILL_FILE_NAME));
-        SkillMetadata {name, description, instructions} = check parseSkillMd(content);
+        ParsedSkillMd {name, description, instructions} = check parseSkillMd(content);
         warnSpecViolations(name, description, check file:basename(dir));
         string[] resources = check listLocalResources(dir);
         return {
@@ -177,7 +178,7 @@ isolated function loadInlineSkill(Skill skill) returns SkillInfo|Error {
 #
 # + content - The content of the `SKILL.md` file
 # + return - The skill metadata and instructions, or an `Error` if the content is invalid
-isolated function parseSkillMd(string content) returns SkillMetadata|Error {
+isolated function parseSkillMd(string content) returns ParsedSkillMd|Error {
     string[] lines = re `\r?\n`.split(content.trim());
     if lines[0].trim() != FRONTMATTER_DELIMITER {
         return error Error("SKILL.md must start with YAML frontmatter delimited by '---' lines");
@@ -193,7 +194,7 @@ isolated function parseSkillMd(string content) returns SkillMetadata|Error {
         return error Error("SKILL.md frontmatter is not closed with a '---' line");
     }
 
-    json|yaml:Error frontmatter = yaml:readString(string:'join("\n", ...lines.slice(1, closingLine)));
+    json|yaml:Error frontmatter = yaml:parseString(string:'join("\n", ...lines.slice(1, closingLine)));
     if frontmatter is yaml:Error {
         return error Error("SKILL.md frontmatter is not valid YAML", frontmatter);
     }
@@ -381,7 +382,12 @@ ${skill.instructions}
             if (check file:relativePath(baseDir, realPath)).startsWith("..") {
                 return error Error(string `Resource '${resourcePath}' resolves outside the skill directory`);
             }
-            return check string:fromBytes(check io:fileReadBytes(realPath));
+            string|error content = string:fromBytes(check io:fileReadBytes(realPath));
+            if content is error {
+                return error Error(string `Resource '${resourcePath}' of skill '${skillName}' is a binary file ` +
+                    "and cannot be returned as text");
+            }
+            return content;
         } on fail error err {
             return err is Error ? err
                 : error Error(string `Failed to read resource '${resourcePath}' of skill '${skillName}'`, err);

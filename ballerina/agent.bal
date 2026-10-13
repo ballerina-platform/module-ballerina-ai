@@ -133,6 +133,25 @@ public type ToolMetadata record {|
     string icon?;
 |};
 
+# Represents the kind of a skill entry available to an agent.
+public enum SkillKind {
+    # A skill directory, or a directory of skills, on the local file system
+    LOCAL_SKILL_SOURCE,
+    # A skill defined inline in code
+    INLINE_SKILL
+}
+
+# Provides metadata about a single skill entry available to a custom agent.
+public type SkillMetadata record {|
+    # The kind of skill entry
+    SkillKind kind;
+    # The path of a local skill source, when it is written as a literal
+    string path?;
+    # The name of an inline skill when it is written as a literal, or otherwise the variable name used in the
+    # agent for the skill entry
+    string name?;
+|};
+
 # Identifies an `init` parameter of a custom agent definition through which a dependency is supplied.
 public type ParameterInfo record {|
     # The name of the parameter in the `init` method's signature
@@ -148,6 +167,8 @@ public type ParameterInfo record {|
 public type AgentMetadataConfig record {|
     # The tools available to the agent
     ToolMetadata[] tools = [];
+    # The skills available to the agent
+    SkillMetadata[] skills = [];
     # The system prompt of the composed agent. Present only when both the role and the instructions are
     # statically resolvable (string literals, interpolation-free string templates, or `const` references).
     SystemPrompt systemPrompt?;
