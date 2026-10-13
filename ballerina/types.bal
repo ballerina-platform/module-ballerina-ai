@@ -14,6 +14,9 @@
 // specific language governing permissions and limitations
 // under the License.
 
+import ai.intelligence;
+
+import ballerina/data.jsondata;
 import ballerina/http;
 
 # Represents a request message for the chat service.
@@ -258,3 +261,102 @@ public type Scopes record {|
     # The required OAuth scope or list of scopes.
     string|string[] scopes?;
 |};
+
+# A streamed chunk of an assistant message. Each provider's native stream is mapped onto
+# this type, with one chunk per event that carries something for the caller.
+public type ChatMessageChunk record {|
+    # Identifier of the response; stable across all chunks of one response
+    string id?;
+    # Role of the author of the message; set on every chunk
+    ASSISTANT role;
+    # The answer text fragment for this chunk; `()` for non-content chunks
+    string? content = ();
+    # Reasoning/thinking fragment (e.g. Anthropic `thinking_delta`, DeepSeek
+    # `reasoning_content`, Ollama `thinking`); `()` when absent or unsupported
+    string? reasoning = ();
+    # Incremental tool calls produced by the model; correlate fragments by `index`
+    ToolCallChunk[]? toolCalls = ();
+    # Reason the model stopped generating tokens; `()` until the final chunk
+    FinishReason? finishReason = ();
+|};
+
+# An incremental tool call delivered within a streamed chunk. With parallel tool
+# calling, several tool calls stream concurrently, distinguished by `index`.
+public type ToolCallChunk record {|
+    # Index used to accumulate fragments of the same tool call across chunks
+    int index;
+    # Identifier of the tool call; only sent on the first fragment of the call
+    string id?;
+    # Name of the function to call; only sent on the first fragment of the call
+    string name?;
+    # Incremental JSON-string fragment of the function arguments; accumulate across chunks
+    string arguments?;
+|};
+
+# The reason the model stopped generating tokens, normalized to the OpenAI set.
+public enum FinishReason {
+    # Hit a natural stop point or a provided stop sequence
+    STOP = "stop",
+    # Reached the maximum number of tokens specified in the request
+    LENGTH = "length",
+    # The model called one or more tools
+    TOOL_CALLS = "tool_calls",
+    # Content was omitted due to a content-filter flag
+    CONTENT_FILTER = "content_filter"
+}
+
+# Named alias for the SSE event stream targetType, since `stream<http:SseEvent, error?>` used
+# inline as an expression (e.g. `targetType = stream<http:SseEvent, error?>`) is ambiguous for
+# the parser around the trailing `?>`.
+type Wso2SseEventStream stream<http:SseEvent, error?>;
+
+# Raw shape of a single SSE `data` payload emitted by the WSO2 intelligence
+# `/chat/completions` endpoint when `stream: true` is set, mirroring the OpenAI
+# chat-completion-chunk wire format. Kept separate from the public `ChatMessageChunk`
+# type since the wire format uses provider-specific/legacy field names (for example,
+# `function_call` rather than `tool_calls`).
+#
+# + id - Unique identifier for the completion; stable across all chunks of one response
+# + model - The model that produced the completion
+# + choices - The streamed choices for this chunk
+# + usage - Token usage statistics; sent as `null` or omitted on all but the final chunk
+# + error - Error details, sent in place of choices when the provider fails mid-stream
+type Wso2StreamChunk record {
+    string id?;
+    string model?;
+    Wso2StreamChoice[] choices?;
+    intelligence:CompletionUsage? usage?;
+    Wso2StreamError? 'error?;
+};
+
+# Error details carried by a mid-stream error event.
+#
+# + message - Human-readable description of the error
+type Wso2StreamError record {
+    string message?;
+};
+
+# + index - Index of the choice in the list of choices
+# + delta - The incremental message content for this chunk
+# + finishReason - Reason the model stopped generating tokens; absent until the final chunk
+type Wso2StreamChoice record {
+    int index?;
+    Wso2StreamDelta delta?;
+    @jsondata:Name {value: "finish_reason"}
+    string? finishReason?;
+};
+
+# + content - The answer text fragment for this chunk
+# + functionCall - The function name/arguments fragment, when the model is calling a function
+type Wso2StreamDelta record {
+    string? content?;
+    @jsondata:Name {value: "function_call"}
+    Wso2StreamFunctionCall? functionCall?;
+};
+
+# + name - Name of the function to call; only sent on the first fragment of the call
+# + arguments - Incremental JSON-string fragment of the function arguments
+type Wso2StreamFunctionCall record {
+    string name?;
+    string arguments?;
+};

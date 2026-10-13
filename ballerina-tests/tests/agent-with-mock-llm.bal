@@ -179,6 +179,15 @@ ${"```"}`
     isolated remote function generate(ai:Prompt prompt, typedesc<anydata> td = <>) returns td|ai:Error = @java:Method {
         'class: "io.ballerina.lib.ai.MockGenerator"
     } external;
+
+    isolated remote function chatAsStream(ai:ChatMessage[]|ai:ChatUserMessage messages, ai:ChatCompletionFunctions[] tools = [],
+            string? stop = ()) returns stream<ai:ChatMessageChunk, ai:Error?>|ai:Error {
+        return error ai:Error("chatAsStream not implemented in MockLlm");
+    }
+
+    isolated remote function generateAsStream(ai:Prompt prompt) returns stream<string, ai:Error?>|ai:Error {
+        return error ai:Error("generateAsStream not implemented in MockLlm");
+    }
 }
 
 isolated function getChatMessageStringContent(ai:Prompt|string prompt) returns string {

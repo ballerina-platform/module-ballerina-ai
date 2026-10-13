@@ -100,6 +100,15 @@ public isolated client class MockLLM {
         return error LlmError("Unexpected prompt to MockLLM");
     }
 
+    isolated remote function chatAsStream(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [], string? stop = ())
+        returns stream<ChatMessageChunk, Error?>|Error {
+        return error Error("chatAsStream not implemented in MockLLM");
+    }
+
+    isolated remote function generateAsStream(Prompt prompt) returns stream<string, Error?>|Error {
+        return error Error("generateAsStream not implemented");
+    }
+
     isolated remote function generate(Prompt prompt, typedesc<anydata> td = <>) returns td|Error = @java:Method {
         'class: "io.ballerina.lib.ai.MockGenerator"
     } external;
@@ -134,6 +143,15 @@ public isolated client class ScriptedMockLLM {
     }
 
     isolated remote function generate(Prompt prompt, typedesc<anydata> td = <>) returns td|Error = external;
+
+    isolated remote function chatAsStream(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [], string? stop = ())
+        returns stream<ChatMessageChunk, Error?>|Error {
+        return error Error("chatAsStream not implemented in ScriptedMockLLM");
+    }
+
+    isolated remote function generateAsStream(Prompt prompt) returns stream<string, Error?>|Error {
+        return error Error("generateAsStream not implemented");
+    }
 }
 
 // Returns both the `Search` and `Calculator` tool calls together in a single response, then, once
@@ -182,6 +200,15 @@ public isolated client class MultiToolCallMockLLM {
             return self.chatCallCount;
         }
     }
+
+    isolated remote function chatAsStream(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [], string? stop = ())
+        returns stream<ChatMessageChunk, Error?>|Error {
+        return error Error("chatAsStream not implemented in MultiToolCallMockLLM");
+    }
+
+    isolated remote function generateAsStream(Prompt prompt) returns stream<string, Error?>|Error {
+        return error Error("generateAsStream not implemented");
+    }
 }
 
 // Always responds with a `Search` tool call and never produces a final answer, so an
@@ -216,6 +243,15 @@ public isolated client class NeverAnsweringMockLLM {
         lock {
             return self.chatCallCount;
         }
+    }
+
+    isolated remote function chatAsStream(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [], string? stop = ())
+        returns stream<ChatMessageChunk, Error?>|Error {
+        return error Error("chatAsStream not implemented in NeverAnsweringMockLLM");
+    }
+
+    isolated remote function generateAsStream(Prompt prompt) returns stream<string, Error?>|Error {
+        return error Error("generateAsStream not implemented");
     }
 }
 

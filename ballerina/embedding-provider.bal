@@ -88,8 +88,8 @@ public distinct isolated client class Wso2EmbeddingProvider {
         intelligence:EmbeddingRequest request = {input: chunk.content};
         span.addInputContent(chunk.content);
         intelligence:EmbeddingResponse|error response = self.embeddingClient->/embeddings.post(request, headers = {
-            "x-product": "bi",
-            "x-usage-context": "model_provider_embeddings"
+            "x-product": WSO2_PRODUCT,
+            "x-usage-context": WSO2_EMBEDDINGS_USAGE_CONTEXT
         });
         if response is error {
             Error err = error Error("Error generating embedding for provided chunk", response);
@@ -130,8 +130,8 @@ public distinct isolated client class Wso2EmbeddingProvider {
         span.addInputContent(input);
 
         intelligence:EmbeddingResponse|error response = self.embeddingClient->/embeddings.post({input}, headers = {
-            "x-product": "bi",
-            "x-usage-context": "model_provider_embeddings"
+            "x-product": WSO2_PRODUCT,
+            "x-usage-context": WSO2_EMBEDDINGS_USAGE_CONTEXT
         });
         if response is error {
             Error err = error Error("Error generating embedding for provided chunk", response);

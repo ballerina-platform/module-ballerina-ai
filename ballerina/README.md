@@ -13,10 +13,12 @@ It includes capabilities for:
 You can directly interact with Large Language Models (LLMs) using `ModelProvider` implementations.
 The `ai:ModelProvider` type serves as a unified abstraction layer that enables integration with different LLMs through provider-specific modules such as `ballerinax/ai.openai`, `ballerinax/ai.anthropic`, and more.
 
-Each model provider exposes two main high-level APIs:
+Each model provider exposes four main high-level APIs:
 
 - **`chat`** – Used for multi-turn conversational interactions.
 - **`generate`** – Used for single-turn text generation with structured output generation.
+- **`chatAsStream`** – The streaming counterpart of `chat`, which yields the response as incremental chunks.
+- **`generateAsStream`** – The streaming counterpart of `generate`, which yields the generated answer as text fragments.
 
 Ballerina offers several model providers available on [Ballerina Central](https://central.ballerina.io/search?q=model+provider&sort=relevance%2CDESC&page=1&m=packages).
 You can also implement your own custom provider if required.
@@ -99,6 +101,83 @@ public function main(string subject) returns error? {
     io:println("Punchline: ", jokeResponse.punchline);
 }
 ```
+
+### 1.4 Streaming Responses with `chatAsStream` and `generateAsStream`
+
+Both `chat` and `generate` wait for the model to finish before returning. Their streaming counterparts — `chatAsStream` and `generateAsStream` — return a stream instead, so the response can be processed as soon as the first tokens arrive. This is useful for interactive applications, where displaying the answer progressively reduces the perceived latency.
+
+#### 1.4.1 Streaming Text with `generateAsStream`
+
+The `generateAsStream` method takes the same prompt as `generate` and streams back the generated answer as text fragments.
+
+Streaming produces text only. Structured types have no valid intermediate state, so use `generate` when a structured output is required.
+
+```ballerina
+public function main(string subject) returns error? {
+    stream<string, ai:Error?> textStream = check model->generateAsStream(`Tell me a joke about ${subject}!`);
+
+    // Print each fragment as it arrives, so the joke appears progressively.
+    check from string fragment in textStream
+        do {
+            io:print(fragment);
+        };
+}
+```
+
+#### 1.4.2 Streaming a Conversation with `chatAsStream`
+
+The `chatAsStream` method accepts the same arguments as `chat` and streams back `ai:ChatMessageChunk` values, with one chunk per model event that carries something for the caller.
+
+Each chunk holds the fragment produced by that event:
+
+- **`content`** – The answer text fragment, or `()` for non-content chunks.
+- **`reasoning`** – A reasoning/thinking fragment, where the provider supports it.
+- **`toolCalls`** – Incremental tool calls produced by the model.
+- **`finishReason`** – The reason the model stopped, which is `()` until the final chunk.
+
+```ballerina
+public function main(string subject) returns error? {
+    ai:ChatUserMessage userMessage = {
+        role: ai:USER,
+        content: `Tell me a joke about ${subject}!`
+    };
+
+    stream<ai:ChatMessageChunk, ai:Error?> chunkStream = check model->chatAsStream(userMessage);
+
+    // Print each fragment as it arrives, and accumulate them to rebuild the full response.
+    string joke = "";
+    check from ai:ChatMessageChunk chunk in chunkStream
+        do {
+            string? content = chunk.content;
+            if content is string {
+                io:print(content);
+                joke += content;
+            }
+        };
+
+    // The accumulated text is the same answer that `chat` would have returned.
+    io:println("\nAssembled response: ", joke);
+}
+```
+
+With parallel tool calling, several tool calls are streamed concurrently. Correlate the fragments of each call using the `index` field of `ai:ToolCallChunk`, and concatenate the `arguments` fragments that share an `index` to rebuild the JSON argument string of that call.
+
+#### 1.4.3 Closing the Stream
+
+Iterating a stream to completion closes it and releases the underlying connection. If the iteration is stopped early, close the stream explicitly:
+
+```ballerina
+stream<ai:ChatMessageChunk, ai:Error?> chunkStream = check model->chatAsStream(userMessage);
+
+// Consume only the first chunk, then stop.
+record {|ai:ChatMessageChunk value;|}|ai:Error? first = chunkStream.next();
+if first is record {|ai:ChatMessageChunk value;|} {
+    io:println(first.value.content);
+}
+check chunkStream.close();
+```
+
+A stream that ends before the model signals completion fails with an `ai:LlmConnectionError`. Therefore, always `check` the terminal value of the stream rather than treating an early end as a complete response.
 
 ## 2. AI Agents
 
