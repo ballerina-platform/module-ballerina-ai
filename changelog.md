@@ -6,6 +6,7 @@ This file documents all significant changes made to the Ballerina AI package acr
 
 ### Fixed
 - [Fix `requiresApproval` Being Ignored on MCP Tools](https://github.com/ballerina-platform/ballerina-library/issues/9291)
+- [Fix `Wso2ModelProvider` Not Supporting Parallel Tool Calls](https://github.com/wso2/product-integrator/issues/2802)
 
 ## [1.16.0] - 2026-10-09
 
