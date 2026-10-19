@@ -219,19 +219,24 @@ service /llm on llmListener {
                         index: 0,
                         message: {
                             role: "assistant",
-                            functionCall: {
-                                name: fn,
-                                arguments: args.toJsonString()
-                            }
+                            toolCalls: [{
+                                id: string `call-${fn}`,
+                                'type: "function",
+                                'function: {
+                                    name: fn,
+                                    arguments: args.toJsonString()
+                                }
+                            }]
                         },
-                        finishReason: "function_call"
+                        finishReason: "tool_calls"
                     }
                 ]
             };
         }
 
-        if role == "function" {
-            string fnName = check last["name"].ensureType();
+        if role == "tool" {
+            string toolCallId = check last["tool_call_id"].ensureType();
+            string fnName = toolCallId.substring("call-".length());
             string msg = "Operation completed.";
             if fnName == "addTask" {
                 msg = "Task added successfully.";

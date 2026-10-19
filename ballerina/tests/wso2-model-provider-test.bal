@@ -90,8 +90,7 @@ isolated function getMockToolCallsResponse(json[] toolCalls) returns json => {
             },
             finish_reason: "tool_calls"
         }
-    ],
-    usage: {prompt_tokens: 5, completion_tokens: 10, total_tokens: 15}
+    ]
 };
 
 isolated function getMockTextResponse(string content) returns json => {
@@ -108,8 +107,7 @@ isolated function getMockTextResponse(string content) returns json => {
             },
             finish_reason: "stop"
         }
-    ],
-    usage: {prompt_tokens: 5, completion_tokens: 10, total_tokens: 15}
+    ]
 };
 
 @test:Config {
@@ -252,12 +250,19 @@ function testWso2ModelProviderChatMapsParallelToolCallHistory() returns error? {
 @test:Config {
     groups: ["wso2-model-provider"]
 }
-function testWso2ModelProviderChatFallsBackToToolNameWhenIdIsMissing() returns error? {
+function testWso2ModelProviderChatUsesUniqueFallbackIdsWhenIdsAreMissing() returns error? {
     Wso2ModelProvider provider = check new (MOCK_CHAT_URL, "test-token");
     ChatMessage[] messages = [
-        {role: USER, content: "Search for test"},
-        {role: ASSISTANT, toolCalls: [{name: "searchFunction", arguments: {query: "test"}}]},
-        {role: FUNCTION, name: "searchFunction", content: "search result"}
+        {role: USER, content: "Search for test and examples"},
+        {
+            role: ASSISTANT,
+            toolCalls: [
+                {name: "searchFunction", arguments: {query: "test"}},
+                {name: "searchFunction", arguments: {query: "examples"}}
+            ]
+        },
+        {role: FUNCTION, name: "searchFunction", content: "test result"},
+        {role: FUNCTION, name: "searchFunction", content: "example result"}
     ];
     ChatAssistantMessage response = check provider->chat(messages, []);
     string? content = response.content;
@@ -269,13 +274,19 @@ function testWso2ModelProviderChatFallsBackToToolNameWhenIdIsMissing() returns e
         role: "assistant",
         tool_calls: [
             {
-                id: "searchFunction",
+                id: "searchFunction-0",
                 'type: "function",
                 'function: {name: "searchFunction", arguments: "{\"query\":\"test\"}"}
+            },
+            {
+                id: "searchFunction-1",
+                'type: "function",
+                'function: {name: "searchFunction", arguments: "{\"query\":\"examples\"}"}
             }
         ]
     });
-    test:assertEquals(sentMessages[2], {role: "tool", tool_call_id: "searchFunction", content: "search result"});
+    test:assertEquals(sentMessages[2], {role: "tool", tool_call_id: "searchFunction-0", content: "test result"});
+    test:assertEquals(sentMessages[3], {role: "tool", tool_call_id: "searchFunction-1", content: "example result"});
 }
 
 @test:Config {
@@ -396,7 +407,10 @@ isolated function deleteFileMock(string path) returns string => string `File ${p
 isolated function transferFundsMock(decimal amount, string recipient) returns string =>
     string `Transferred ${amount} to ${recipient}.`;
 
-isolated function transferNeedsApproval(decimal amount, string recipient) returns boolean => amount > 1000d;
+isolated function transferNeedsApproval(decimal amount, string recipient) returns boolean {
+    _ = recipient;
+    return amount > 1000d;
+}
 
 function newWso2ModelProviderHitlAgent() returns Agent|error =>
     new ({

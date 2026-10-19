@@ -289,14 +289,17 @@ public isolated distinct client class Wso2ModelProvider {
             return [self.mapUserOrSystemMessage(messages)];
         }
         intelligence:ChatCompletionRequestMessage[] chatCompletionRequestMessages = [];
+        int nextToolResultIndex = 0;
         foreach ChatMessage message in messages {
             if message is ChatAssistantMessage {
                 intelligence:ChatCompletionRequestMessage assistantMessage = {role: ASSISTANT};
                 FunctionCall[]? toolCalls = message.toolCalls;
                 if toolCalls is FunctionCall[] && toolCalls.length() > 0 {
-                    assistantMessage["tool_calls"] = from FunctionCall toolCall in toolCalls
+                    nextToolResultIndex = 0;
+                    assistantMessage["tool_calls"] =
+                        from [int, FunctionCall] [index, toolCall] in toolCalls.enumerate()
                         select {
-                            id: toolCall.id ?: toolCall.name,
+                            id: toolCall.id ?: string `${toolCall.name}-${index}`,
                             'type: "function",
                             'function: {
                                 name: toolCall.name,
@@ -318,10 +321,11 @@ public isolated distinct client class Wso2ModelProvider {
                 chatCompletionRequestMessages.push(transformedMessage);
                 continue;
             }
-            // Falls back to the function name when the id is absent, matching the assistant `tool_calls` mapping.
+            string toolCallId = message.id ?: string `${message.name}-${nextToolResultIndex}`;
+            nextToolResultIndex += 1;
             chatCompletionRequestMessages.push({
                 role: "tool",
-                "tool_call_id": message.id ?: message.name,
+                "tool_call_id": toolCallId,
                 "content": message.content ?: ""
             });
         }
