@@ -21,13 +21,30 @@ const int MOCK_CHAT_PORT = 9096;
 const MOCK_CHAT_URL = "http://localhost:9096";
 
 const MOCK_CHAT_TEXT_RESPONSE = "Hello! How can I help you today?";
+const MOCK_CONTEXT_LENGTH_ERROR = "This model's maximum context length is 128000 tokens. However, your messages " +
+    "resulted in 178766 tokens. Please reduce the length of the messages or functions.";
 
 // Mock intelligence service for Wso2ModelProvider tests.
 // Returns a function-call response when the request contains `functions`, otherwise a plain text response.
 service on new http:Listener(MOCK_CHAT_PORT) {
 
     resource function post chat/completions(@http:Payload json payload, @http:Header string Authorization)
-    returns json|error {
+    returns json|http:BadRequest|http:Unauthorized|error {
+        if Authorization == "Bearer context-overflow-token" {
+            return <http:BadRequest>{
+                body: {
+                    'error: {
+                        message: MOCK_CONTEXT_LENGTH_ERROR,
+                        'type: "invalid_request_error",
+                        param: "messages",
+                        code: "context_length_exceeded"
+                    }
+                }
+            };
+        }
+        if Authorization == "Bearer expired-token" {
+            return <http:Unauthorized>{body: {code: "900901", description: "Invalid Credentials"}};
+        }
         if Authorization != "Bearer test-token" {
             return error("invalid authorization token");
         }
@@ -138,4 +155,49 @@ function testWso2ModelProviderChatWithTools() returns error? {
         test:assertFail("Expected arguments in tool call");
     }
     test:assertEquals(args["query"], "test");
+}
+
+@test:Config {
+    groups: ["wso2-model-provider"]
+}
+function testWso2ModelProviderChatErrorIncludesProviderMessage() returns error? {
+    Wso2ModelProvider provider = check new (MOCK_CHAT_URL, "context-overflow-token");
+    ChatAssistantMessage|Error response = provider->chat({role: USER, content: "Hello"}, []);
+    if response !is LlmConnectionError {
+        test:assertFail("Expected an LlmConnectionError");
+    }
+    test:assertEquals(response.message(), "Error while connecting to the model: " + MOCK_CONTEXT_LENGTH_ERROR);
+    test:assertTrue(response.cause() is http:ApplicationResponseError);
+}
+
+@test:Config {
+    groups: ["wso2-model-provider"]
+}
+function testWso2ModelProviderChatErrorIncludesNonOpenAiErrorBody() returns error? {
+    Wso2ModelProvider provider = check new (MOCK_CHAT_URL, "expired-token");
+    ChatAssistantMessage|Error response = provider->chat({role: USER, content: "Hello"}, []);
+    if response !is LlmConnectionError {
+        test:assertFail("Expected an LlmConnectionError");
+    }
+    test:assertEquals(response.message(),
+        "Error while connecting to the model: {\"code\":\"900901\", \"description\":\"Invalid Credentials\"}");
+}
+
+@test:Config {
+    groups: ["wso2-model-provider"]
+}
+function testAgentRunErrorSurfacesModelError() returns error? {
+    Wso2ModelProvider model = check new (MOCK_CHAT_URL, "context-overflow-token");
+    Agent agent = check new ({
+        systemPrompt: {role: "Test Agent", instructions: "Answer the questions"},
+        model,
+        tools: []
+    });
+    string|Error result = agent.run("Hello");
+    if result is string {
+        test:assertFail("Expected the agent run to fail");
+    }
+    test:assertEquals(result.message(), "Unable to obtain valid answer from the agent: " +
+        "Error while connecting to the model: " + MOCK_CONTEXT_LENGTH_ERROR);
+    test:assertTrue(result.cause() is LlmConnectionError);
 }

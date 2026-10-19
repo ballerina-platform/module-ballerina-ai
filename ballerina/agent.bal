@@ -906,6 +906,15 @@ isolated function constructError(ExecutionTrace executionTrace) returns Error {
             return <MemoryError>step.'error;
         }
     }
+    // A run that stopped on an error (e.g. a failed model call) carries that error as its last step.
+    // Surface it as the cause and in the message, since an HTTP 500 body shows only the message.
+    if steps.length() > 0 {
+        ExecutionResult|ExecutionError|Error lastStep = steps[steps.length() - 1];
+        if lastStep is Error {
+            return error Error(string `Unable to obtain valid answer from the agent: ${lastStep.message()}`,
+                lastStep, steps = steps);
+        }
+    }
     return error Error("Unable to obtain valid answer from the agent", steps = steps);
 }
 

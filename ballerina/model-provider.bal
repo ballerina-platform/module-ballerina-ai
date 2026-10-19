@@ -17,6 +17,7 @@
 import ai.intelligence;
 import ai.observe;
 
+import ballerina/http;
 import ballerina/jballerina.java;
 
 # Roles for the chat messages.
@@ -222,7 +223,7 @@ public isolated distinct client class Wso2ModelProvider {
             "x-usage-context": "model_provider_chat"
         });
         if response is error {
-            Error err = error LlmConnectionError("Error while connecting to the model", response);
+            Error err = error LlmConnectionError(getConnectionErrorMessage(response), response);
             span.close(err);
             return err;
         }
@@ -341,4 +342,33 @@ isolated function convertMessageToJson(ChatMessage[]|ChatMessage messages) retur
     }
     return messages !is ChatUserMessage|ChatSystemMessage ? messages :
         {role: messages.role, content: getChatMessageStringContent(messages.content), name: messages.name};
+}
+
+# Builds the message of an `LlmConnectionError`, appending the provider's own error message (e.g. a
+# context length or token expiry error) when the model responded with an error status.
+#
+# + err - The error returned by the model client
+# + return - The connection error message
+isolated function getConnectionErrorMessage(error err) returns string {
+    string message = "Error while connecting to the model";
+    if err !is http:ApplicationResponseError {
+        return message;
+    }
+    anydata body = err.detail().body;
+    if body is () {
+        return message;
+    }
+    // OpenAI-compatible providers wrap the reason in `{"error": {"message": ...}}`; any other body is
+    // appended as is, so the reason is not lost for a provider using a different shape.
+    if body is map<json> && body["error"] is map<json> {
+        json providerMessage = (<map<json>>body["error"])["message"];
+        if providerMessage is string && providerMessage != "" {
+            return string `${message}: ${providerMessage}`;
+        }
+    }
+    string|error bodyText = body is byte[] ? string:fromBytes(body) : body is string ? body : body.toJsonString();
+    if bodyText is error || bodyText.trim() == "" {
+        return message;
+    }
+    return string `${message}: ${bodyText.trim()}`;
 }

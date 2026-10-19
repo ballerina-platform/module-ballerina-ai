@@ -6,6 +6,7 @@ This file documents all significant changes made to the Ballerina AI package acr
 
 ### Fixed
 - [Fix `requiresApproval` Being Ignored on MCP Tools](https://github.com/ballerina-platform/ballerina-library/issues/9291)
+- [Surface the Model Error in the Message of a Failed Agent Run](https://github.com/wso2/product-integrator/issues/1036)
 - [Report a Compilation Error for an Unsupported Resource on an `ai:Listener` Service](https://github.com/wso2/product-integrator/issues/2579)
   - **Breaking:** A resource other than `post chat` or `post decision` on a service attached to an `ai:Listener` is now a compilation error instead of a warning. Such a resource has always returned 404 since 1.14.0, so no working endpoint is lost. Move any other endpoint (e.g. `/health`) to an `http:Service` attached to the `http:Listener` passed as `listenOn`.
 
