@@ -1,0 +1,8 @@
+# ballerina:13 matches constants whose NAMES contain auth/token (AUTHN_HEADER = "authn", AUTHORIZE = "authorize",
+# AUTHORIZATION_CODE = "authorization_code", TOKEN = "token", TOKEN_WITH_EQUAL = "token=", TOKEN_TYPE_HINT): these are
+# OAuth/HTTP protocol keywords, not credentials. ballerina:14 matches identifiers such as inputTokens/promptTokens (LLM
+# usage counters), tokenManager/toolAccessToken (runtime caches, empty initial values), auth/accessToken/clientSecret
+# parameters and the public `auth = ()` / `clientSecret = ()` API defaults (nil, not a credential). No literal secret
+# is embedded; renaming would break the public API.
+[rule]
+exclude = ["ballerina:13", "ballerina:14"]
