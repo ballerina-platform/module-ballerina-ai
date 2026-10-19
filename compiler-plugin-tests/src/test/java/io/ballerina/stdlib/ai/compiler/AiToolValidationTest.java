@@ -233,8 +233,8 @@ public class AiToolValidationTest {
         // not a `CodeModifier` one, so its diagnostics only surface on `getCompilation()`, not on
         // `getDiagnosticResult`'s own `runCodeGenAndModifyPlugins()` return value.
         DiagnosticResult diagnosticResult = getFullDiagnosticResult(packagePath);
-        Assert.assertEquals(diagnosticResult.errorCount(), 9);
-        Assert.assertEquals(diagnosticResult.warningCount(), 1);
+        Assert.assertEquals(diagnosticResult.errorCount(), 15);
+        Assert.assertEquals(diagnosticResult.warningCount(), 0);
 
         Iterator<Diagnostic> diagnosticIterator = diagnosticResult.errors().iterator();
         Diagnostic diagnostic = diagnosticIterator.next();
@@ -266,16 +266,36 @@ public class AiToolValidationTest {
         assertErrorMessage(diagnostic, message, 87, 81);
 
         diagnostic = diagnosticIterator.next();
+        message = getErrorMessage(UNSUPPORTED_RESOURCE, "post extra");
+        assertErrorMessage(diagnostic, message, 100, 5);
+
+        diagnostic = diagnosticIterator.next();
+        message = getErrorMessage(UNSUPPORTED_RESOURCE, "get health");
+        assertErrorMessage(diagnostic, message, 104, 5);
+
+        diagnostic = diagnosticIterator.next();
+        message = getErrorMessage(UNSUPPORTED_RESOURCE, "get [string id]");
+        assertErrorMessage(diagnostic, message, 108, 5);
+
+        diagnostic = diagnosticIterator.next();
+        message = getErrorMessage(UNSUPPORTED_RESOURCE, "get chat");
+        assertErrorMessage(diagnostic, message, 112, 5);
+
+        diagnostic = diagnosticIterator.next();
+        message = getErrorMessage(UNSUPPORTED_RESOURCE, "post chat/history");
+        assertErrorMessage(diagnostic, message, 116, 5);
+
+        diagnostic = diagnosticIterator.next();
+        message = getErrorMessage(UNSUPPORTED_RESOURCE, "post decision/[string id]");
+        assertErrorMessage(diagnostic, message, 120, 5);
+
+        diagnostic = diagnosticIterator.next();
         message = getErrorMessage(INVALID_PAYLOAD_PARAMETER_TYPE, "post chat", "ChatReqMessage", "string");
-        assertErrorMessage(diagnostic, message, 107, 54);
+        assertErrorMessage(diagnostic, message, 128, 54);
 
         diagnostic = diagnosticIterator.next();
         message = getErrorMessage(INVALID_RESOURCE_RETURN_TYPE, "post chat", "string");
-        assertErrorMessage(diagnostic, message, 115, 23);
-
-        diagnostic = diagnosticResult.warnings().iterator().next();
-        message = getErrorMessage(UNSUPPORTED_RESOURCE);
-        assertWarningMessage(diagnostic, message, 99, 5);
+        assertErrorMessage(diagnostic, message, 136, 23);
     }
 
     private DiagnosticResult getDiagnosticResult(String path) {
@@ -303,12 +323,6 @@ public class AiToolValidationTest {
 
     private void assertErrorMessage(Diagnostic diagnostic, String message, int line, int column) {
         Assert.assertEquals(diagnostic.diagnosticInfo().severity(), DiagnosticSeverity.ERROR);
-        Assert.assertEquals(diagnostic.message(), message);
-        assertErrorLocation(diagnostic.location(), line, column);
-    }
-
-    private void assertWarningMessage(Diagnostic diagnostic, String message, int line, int column) {
-        Assert.assertEquals(diagnostic.diagnosticInfo().severity(), DiagnosticSeverity.WARNING);
         Assert.assertEquals(diagnostic.message(), message);
         assertErrorLocation(diagnostic.location(), line, column);
     }
