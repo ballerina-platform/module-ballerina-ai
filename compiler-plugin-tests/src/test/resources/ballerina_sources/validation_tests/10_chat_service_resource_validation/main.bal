@@ -90,14 +90,35 @@ service /invalidHeadersType on invalidHeadersTypeListener {
     }
 }
 
-// Expect UNSUPPORTED_RESOURCE on `get health` only: `chat` is present and fine on its own.
+// Expect UNSUPPORTED_RESOURCE on every resource but `post chat`, which is present and fine on its own.
+// None of the others is ever reached through the dispatcher, whatever its accessor or path.
 service /unsupportedResource on unsupportedResourceListener {
     resource function post chat(@http:Payload ai:ChatReqMessage request) returns ai:ChatRespMessage|error {
         return {message: request.message};
     }
 
+    resource function post extra(@http:Payload ai:ChatReqMessage request) returns ai:ChatRespMessage|error {
+        return {message: request.message};
+    }
+
     resource function get health() returns string {
         return "ok";
+    }
+
+    resource function get [string id]() returns string {
+        return id;
+    }
+
+    resource function get chat() returns string {
+        return "chat";
+    }
+
+    resource function post chat/history() returns string {
+        return "history";
+    }
+
+    resource function post decision/[string id]() returns string {
+        return id;
     }
 }
 
