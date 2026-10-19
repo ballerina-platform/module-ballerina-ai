@@ -42,6 +42,7 @@ import io.ballerina.tools.diagnostics.Location;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 import static io.ballerina.openapi.service.mapper.utils.MapperCommonUtils.containErrors;
 import static io.ballerina.stdlib.ai.plugin.OpenAPIGenerator.isAiAgentService;
@@ -71,9 +72,9 @@ import static io.ballerina.stdlib.ai.plugin.diagnostics.CompilationDiagnostic.ge
  * <li>its second parameter, if present, must accept the {@code http:Headers} value the dispatcher sends;</li>
  * <li>its return type must be assignable to {@code ai:ChatRespMessage|error}, since that's what the native
  * adaptor and {@code toResponse} both assume;</li>
- * <li>any other resource is flagged, since the dispatcher only ever looks up a resource named exactly
- * {@code chat} or {@code decision} with the {@code post} accessor - anything else compiles but is never
- * reached.</li>
+ * <li>any other resource is rejected, since the dispatcher only ever looks up a resource named exactly
+ * {@code chat} or {@code decision} with the {@code post} accessor - anything else would compile but always
+ * return a 404.</li>
  * </ul>
  */
 public class ChatResourceValidationTask implements AnalysisTask<SyntaxNodeAnalysisContext> {
@@ -118,7 +119,8 @@ public class ChatResourceValidationTask implements AnalysisTask<SyntaxNodeAnalys
             } else if (DECISION_RESOURCE_NAME.equals(pathSegment)) {
                 validateResource(context, semanticModel, resourceNode, pathSegment, DECISION_MESSAGE);
             } else {
-                context.reportDiagnostic(getDiagnostic(UNSUPPORTED_RESOURCE, resourceNode.location()));
+                context.reportDiagnostic(getDiagnostic(UNSUPPORTED_RESOURCE, resourceNode.location(),
+                        resourceLabel(resourceNode)));
             }
         }
 
@@ -267,6 +269,14 @@ public class ChatResourceValidationTask implements AnalysisTask<SyntaxNodeAnalys
             return Optional.of(typeSymbol);
         }
         return Optional.empty();
+    }
+
+    private static String resourceLabel(FunctionDefinitionNode resourceNode) {
+        String path = resourceNode.relativeResourcePath().stream()
+                .map(Node::toSourceCode)
+                .collect(Collectors.joining())
+                .trim();
+        return resourceNode.functionName().text().trim() + " " + path;
     }
 
     private static String singlePathSegment(NodeList<Node> resourcePath) {
