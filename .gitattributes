@@ -15,3 +15,7 @@
 
 # Ballerina source files should always use LF
 *.bal          text eol=lf
+
+# Skill test fixtures are compared byte for byte, so keep their line endings
+ballerina/tests/resources/skills/** text eol=lf
+*.png          binary

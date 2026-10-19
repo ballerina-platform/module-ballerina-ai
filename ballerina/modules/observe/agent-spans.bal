@@ -52,6 +52,14 @@ public isolated distinct class CreateAgentSpan {
         self.addTag(AGENT_TOOLS, tools);
     }
 
+    // Not mandated by spec
+    # Records the names of the skills available to the agent.
+    #
+    # + skillNames - Names of the skills available to the agent
+    public isolated function addSkills(string[] skillNames) {
+        self.addTag(AGENT_SKILLS, skillNames);
+    }
+
     isolated function addTag(GenAiTagNames key, anydata value) {
         self.baseSpan.addTag(key, value);
     }

@@ -88,6 +88,9 @@ import java.util.Optional;
  *     <li>Any other toolkit: its variable/type name, marked as {@link ToolKind#TOOLKIT}.</li>
  * </ul>
  *
+ * <p>Skill entries in the agent's `skills` list are collected too: a local skill source with a literal `path`, an
+ * inline skill with a literal `name`, or a variable of either type recorded under its variable name.
+ *
  * <p>Additionally, when the agent's `model` or `memory` argument is a direct reference to an `init` parameter, the
  * parameter's name is recorded — telling consumers which constructor inputs supply the model provider and the memory.
  */
@@ -100,6 +103,11 @@ class CustomAgentAnalysisTask implements AnalysisTask<SyntaxNodeAnalysisContext>
     private static final String BASE_TOOLKIT_NAME = "BaseToolKit";
     private static final String INIT_METHOD_NAME = "init";
     private static final String TOOLS_ARG_NAME = "tools";
+    private static final String SKILLS_ARG_NAME = "skills";
+    private static final String LOCAL_SKILL_SOURCE_NAME = "LocalSkillSource";
+    private static final String SKILL_NAME = "Skill";
+    private static final String SKILL_PATH_FIELD = "path";
+    private static final String SKILL_NAME_FIELD = "name";
     private static final String MODEL_ARG_NAME = "model";
     private static final String MEMORY_ARG_NAME = "memory";
     private static final String SYSTEM_PROMPT_ARG_NAME = "systemPrompt";
@@ -135,6 +143,7 @@ class CustomAgentAnalysisTask implements AnalysisTask<SyntaxNodeAnalysisContext>
                 .map(method -> getAgentNewExpressions(semanticModel, method))
                 .orElse(List.of());
         List<ToolMetadata> tools = getTools(analysisContext, agentNewExpressions);
+        List<SkillMetadata> skills = getSkills(semanticModel, agentNewExpressions);
         List<String> initParameterNames = initMethod.map(this::getParameterNames).orElse(List.of());
         String modelProviderParamName =
                 getInjectedParameterName(semanticModel, agentNewExpressions, MODEL_ARG_NAME, initParameterNames);
@@ -142,7 +151,7 @@ class CustomAgentAnalysisTask implements AnalysisTask<SyntaxNodeAnalysisContext>
                 getInjectedParameterName(semanticModel, agentNewExpressions, MEMORY_ARG_NAME, initParameterNames);
         SystemPromptMetadata systemPrompt = getSystemPrompt(semanticModel, agentNewExpressions);
         this.modifierContextMap.computeIfAbsent(context.documentId(), document -> new ModifierContext())
-                .add(classDefinitionNode, new AgentMetadataConfig(aiModulePrefix.get(), tools, systemPrompt,
+                .add(classDefinitionNode, new AgentMetadataConfig(aiModulePrefix.get(), tools, skills, systemPrompt,
                         modelProviderParamName, memoryParamName));
     }
 
@@ -215,6 +224,62 @@ class CustomAgentAnalysisTask implements AnalysisTask<SyntaxNodeAnalysisContext>
             }
         }
         return new ArrayList<>(tools.values());
+    }
+
+    /**
+     * Collects the statically identifiable skill entries from the `skills` argument of every `ai:Agent` constructed
+     * within the `init` method. An inline mapping is classified by its fields: `path` makes it a local skill source
+     * and `name` an inline skill, recorded only when the value resolves statically. A variable reference is classified
+     * by its type and recorded under its variable name. Anything else is skipped.
+     */
+    private List<SkillMetadata> getSkills(SemanticModel semanticModel, List<NewExpressionNode> agentNewExpressions) {
+        TypeSymbol localSkillSourceType = getAiType(semanticModel, LOCAL_SKILL_SOURCE_NAME);
+        TypeSymbol skillType = getAiType(semanticModel, SKILL_NAME);
+        List<SkillMetadata> skills = new ArrayList<>();
+        for (NewExpressionNode newExpression : agentNewExpressions) {
+            Optional<ListConstructorExpressionNode> skillsList = getNamedArgumentValue(newExpression, SKILLS_ARG_NAME)
+                    .filter(ListConstructorExpressionNode.class::isInstance)
+                    .map(ListConstructorExpressionNode.class::cast);
+            if (skillsList.isEmpty()) {
+                continue;
+            }
+            for (Node element : skillsList.get().expressions()) {
+                getSkillMetadata(semanticModel, localSkillSourceType, skillType, element)
+                        .filter(skill -> !skills.contains(skill))
+                        .ifPresent(skills::add);
+            }
+        }
+        return skills;
+    }
+
+    private Optional<SkillMetadata> getSkillMetadata(SemanticModel semanticModel, TypeSymbol localSkillSourceType,
+                                                     TypeSymbol skillType, Node element) {
+        Node skill = unwrapCheck(element);
+        if (skill instanceof MappingConstructorExpressionNode mapping) {
+            Optional<ExpressionNode> path = getMappingFieldValue(mapping, SKILL_PATH_FIELD);
+            if (path.isPresent()) {
+                return Optional.ofNullable(getStaticStringValue(semanticModel, path.get()))
+                        .map(value -> new SkillMetadata(SkillKind.LOCAL_SKILL_SOURCE, value, null));
+            }
+            return getMappingFieldValue(mapping, SKILL_NAME_FIELD)
+                    .map(name -> getStaticStringValue(semanticModel, name))
+                    .map(value -> new SkillMetadata(SkillKind.INLINE_SKILL, null, value));
+        }
+        if (!(skill instanceof NameReferenceNode) && !(skill instanceof FieldAccessExpressionNode)) {
+            return Optional.empty();
+        }
+        Optional<String> variableName = getReferenceName(skill);
+        Optional<TypeSymbol> type = semanticModel.typeOf(skill);
+        if (variableName.isEmpty() || type.isEmpty()) {
+            return Optional.empty();
+        }
+        if (subtypeOf(type.get(), localSkillSourceType)) {
+            return Optional.of(new SkillMetadata(SkillKind.LOCAL_SKILL_SOURCE, null, variableName.get()));
+        }
+        if (subtypeOf(type.get(), skillType)) {
+            return Optional.of(new SkillMetadata(SkillKind.INLINE_SKILL, null, variableName.get()));
+        }
+        return Optional.empty();
     }
 
     private List<String> getParameterNames(FunctionDefinitionNode method) {

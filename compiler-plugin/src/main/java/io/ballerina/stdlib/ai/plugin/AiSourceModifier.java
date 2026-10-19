@@ -78,6 +78,10 @@ class AiSourceModifier implements ModifierTask<SourceModifierContext> {
     private static final String DISPLAY_LABEL_FIELD_NAME = "label";
     private static final String AGENT_METADATA_FIELD_NAME = "agentMetadata";
     private static final String AGENT_METADATA_TOOLS_FIELD_NAME = "tools";
+    private static final String AGENT_METADATA_SKILLS_FIELD_NAME = "skills";
+    private static final String SKILL_KIND_FIELD_NAME = "kind";
+    private static final String SKILL_PATH_FIELD_NAME = "path";
+    private static final String SKILL_NAME_FIELD_NAME = "name";
     private static final String AGENT_METADATA_MODEL_PROVIDER_FIELD_NAME = "modelProvider";
     private static final String AGENT_METADATA_MEMORY_FIELD_NAME = "memory";
     private static final String AGENT_METADATA_SYSTEM_PROMPT_FIELD_NAME = "systemPrompt";
@@ -411,12 +415,19 @@ class AiSourceModifier implements ModifierTask<SourceModifierContext> {
         return NodeParser.parseAnnotation(annotationSource);
     }
 
-    // Renders the `ai:AgentMetadataConfig` record literal, e.g. {@code {tools: [...], systemPrompt: {...}}}.
+    // Renders the `ai:AgentMetadataConfig` record literal, e.g. {@code {tools: [...], skills: [...]}}.
     private String agentMetadataRecordSource(AgentMetadataConfig config) {
         String tools = config.tools().stream().map(tool -> toolMetadataSource(tool, config.aiModulePrefix()))
                 .collect(Collectors.joining(COMMA_TOKEN.stringValue() + " ", "[", "]"));
         StringBuilder record = new StringBuilder(OPEN_BRACE_TOKEN.stringValue())
                 .append(AGENT_METADATA_TOOLS_FIELD_NAME).append(COLON_TOKEN.stringValue()).append(" ").append(tools);
+        if (!config.skills().isEmpty()) {
+            String skills = config.skills().stream().map(skill -> skillMetadataSource(skill, config.aiModulePrefix()))
+                    .collect(Collectors.joining(COMMA_TOKEN.stringValue() + " ", "[", "]"));
+            record.append(COMMA_TOKEN.stringValue()).append(" ")
+                    .append(AGENT_METADATA_SKILLS_FIELD_NAME).append(COLON_TOKEN.stringValue()).append(" ")
+                    .append(skills);
+        }
         if (config.systemPrompt() != null) {
             record.append(COMMA_TOKEN.stringValue()).append(" ")
                     .append(AGENT_METADATA_SYSTEM_PROMPT_FIELD_NAME).append(COLON_TOKEN.stringValue()).append(" ")
@@ -471,6 +482,27 @@ class AiSourceModifier implements ModifierTask<SourceModifierContext> {
             builder.append(COMMA_TOKEN.stringValue()).append(" ")
                     .append(TOOL_ICON_FIELD_NAME).append(COLON_TOKEN.stringValue()).append(" ")
                     .append(toStringLiteral(tool.icon()));
+        }
+        return builder.append(CLOSE_BRACE_TOKEN.stringValue()).toString();
+    }
+
+    /**
+     * Renders a single skill entry as a `SkillMetadata` record literal, e.g.
+     * {@code {kind: ai:LOCAL_SKILL_SOURCE, path: "./skills"}} or {@code {kind: ai:INLINE_SKILL, name: "tone"}}.
+     */
+    private String skillMetadataSource(SkillMetadata skill, String aiModulePrefix) {
+        StringBuilder builder = new StringBuilder(OPEN_BRACE_TOKEN.stringValue());
+        builder.append(SKILL_KIND_FIELD_NAME).append(COLON_TOKEN.stringValue()).append(" ")
+                .append(aiModulePrefix).append(COLON_TOKEN.stringValue()).append(skill.kind().name());
+        if (skill.path() != null) {
+            builder.append(COMMA_TOKEN.stringValue()).append(" ")
+                    .append(SKILL_PATH_FIELD_NAME).append(COLON_TOKEN.stringValue()).append(" ")
+                    .append(toStringLiteral(skill.path()));
+        }
+        if (skill.name() != null) {
+            builder.append(COMMA_TOKEN.stringValue()).append(" ")
+                    .append(SKILL_NAME_FIELD_NAME).append(COLON_TOKEN.stringValue()).append(" ")
+                    .append(toStringLiteral(skill.name()));
         }
         return builder.append(CLOSE_BRACE_TOKEN.stringValue()).toString();
     }

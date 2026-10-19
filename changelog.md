@@ -4,6 +4,9 @@ This file documents all significant changes made to the Ballerina AI package acr
 
 ## [Unreleased]
 
+### Added
+- [Add Agent Skills Support to AI Agents](https://github.com/wso2/product-integrator/issues/2758)
+
 ### Fixed
 - [Fix `requiresApproval` Being Ignored on MCP Tools](https://github.com/ballerina-platform/ballerina-library/issues/9291)
 - [Report a Compilation Error for an Unsupported Resource on an `ai:Listener` Service](https://github.com/wso2/product-integrator/issues/2579)
