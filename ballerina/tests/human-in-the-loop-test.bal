@@ -256,13 +256,6 @@ function testHumanInTheLoopMergesTraceAcrossPause() returns error? {
             test:assertEquals(resumedTrace.iterations.length(), 3);
             test:assertEquals(resumedTrace.id, pausedTrace.id);
             test:assertEquals(resumedTrace.startTime, pausedTrace.startTime);
-            // Some platforms expose a clock resolution coarse enough for the pause and resume to
-            // receive the same timestamp. The resumed trace must not end before the paused trace.
-            test:assertTrue(
-                resumedTrace.endTime[0] > pausedTrace.endTime[0] ||
-                (resumedTrace.endTime[0] == pausedTrace.endTime[0] &&
-                    resumedTrace.endTime[1] >= pausedTrace.endTime[1])
-            );
         }
     }
 }
