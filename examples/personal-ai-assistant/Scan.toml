@@ -1,0 +1,4 @@
+# ballerina:14 flags `auth: {refreshToken: googleRefreshToken, clientId, clientSecret, refreshUrl}`. All of these values are
+# `configurable ... = ?` (supplied at deployment time, no fixed value); the rule only matches the identifier names.
+[rule]
+exclude = ["ballerina:14"]
