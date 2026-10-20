@@ -1,0 +1,12 @@
+[
+  {
+    "name": "io.ballerina.stdlib.observe.mockextension.BMockSpan",
+    "allDeclaredFields": true,
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "io.ballerina.stdlib.observe.mockextension.BMockSpan$BMockEvent",
+    "allDeclaredFields": true,
+    "allDeclaredConstructors": true
+  }
+]
