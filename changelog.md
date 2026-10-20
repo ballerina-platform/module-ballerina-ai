@@ -10,6 +10,7 @@ This file documents all significant changes made to the Ballerina AI package acr
 - [Fix `Wso2ModelProvider` Not Supporting Parallel Tool Calls](https://github.com/wso2/product-integrator/issues/2802)
 - [Report a Compilation Error for an Unsupported Resource on an `ai:Listener` Service](https://github.com/wso2/product-integrator/issues/2579)
   - **Breaking:** A resource other than `post chat` or `post decision` on a service attached to an `ai:Listener` is now a compilation error instead of a warning. Such a resource has always returned 404 since 1.14.0, so no working endpoint is lost. Move any other endpoint (e.g. `/health`) to an `http:Service` attached to the `http:Listener` passed as `listenOn`.
+- [Fix the `entrypoint.service.name` Trace Attribute Naming an Internal Service for a Chat Service](https://github.com/wso2/product-integrator/issues/2298)
 
 
 ## [1.16.0] - 2026-10-09
