@@ -43,7 +43,10 @@ service /tracedChatService on chatListener {
 // dispatcher inside `ai:Listener`. The trace must still name the user's service and module as its
 // entrypoint, as tooling uses `entrypoint.service.name` to tell apart the same agent running in
 // different services. This holds for the dispatcher's span and every span beneath it.
-@test:Config {}
+//
+// In the `tracing` group, which the GraalVM check disables: the mock tracer converts its spans to JSON
+// reflectively, and its span classes are not registered for reflection in a native image.
+@test:Config {groups: ["tracing"]}
 function testChatServiceIsTraceEntrypoint() returns error? {
     ai:ChatClient chatClient = check new ("http://localhost:9090/tracedChatService");
     _ = check chatClient->/chat.post({sessionId: "1", message: "Greet John"});
