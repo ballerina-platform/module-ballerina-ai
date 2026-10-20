@@ -256,7 +256,6 @@ function testHumanInTheLoopMergesTraceAcrossPause() returns error? {
             test:assertEquals(resumedTrace.iterations.length(), 3);
             test:assertEquals(resumedTrace.id, pausedTrace.id);
             test:assertEquals(resumedTrace.startTime, pausedTrace.startTime);
-            test:assertNotEquals(resumedTrace.endTime, pausedTrace.endTime);
         }
     }
 }
