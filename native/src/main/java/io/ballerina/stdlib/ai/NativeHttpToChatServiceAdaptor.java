@@ -133,9 +133,20 @@ public final class NativeHttpToChatServiceAdaptor {
     // user's service the entrypoint, its resource is given a fresh context that is not yet started:
     // the runtime then fills the entrypoint from that resource, as it did before the dispatcher
     // existed, while the parent link keeps its span under the dispatcher's span.
+    //
+    // The context is seeded from the dispatcher's, and the resource overwrites these values when it
+    // starts. Service resources are always instrumented, so it does start; but if it ever did not,
+    // spans started under this context would otherwise find a null parent span and fail. Seeded,
+    // they attach to the dispatcher's span as they would without this context.
     private static ObserverContext newUserContext(Environment env, ObserverContext dispatcherContext) {
         ObserverContext userContext = new ObserverContext();
         userContext.setParent(dispatcherContext);
+        userContext.setSpan(dispatcherContext.getSpan());
+        userContext.setServiceName(dispatcherContext.getServiceName());
+        userContext.setEntrypointFunctionModule(dispatcherContext.getEntrypointFunctionModule());
+        userContext.setEntrypointServiceName(dispatcherContext.getEntrypointServiceName());
+        userContext.setEntrypointFunctionName(dispatcherContext.getEntrypointFunctionName());
+        userContext.setEntrypointResourceAccessor(dispatcherContext.getEntrypointResourceAccessor());
         ObserveUtils.setObserverContextToCurrentFrame(env, userContext);
         return userContext;
     }
@@ -146,7 +157,7 @@ public final class NativeHttpToChatServiceAdaptor {
     private static void restoreDispatcherContext(Environment env, ObserverContext dispatcherContext,
                                                  ObserverContext userContext) {
         ObserveUtils.setObserverContextToCurrentFrame(env, dispatcherContext);
-        if (userContext.getEntrypointServiceName() == null) {
+        if (!userContext.isStarted()) {
             // The user's resource was not observed, so there is no entrypoint to take from it.
             return;
         }
