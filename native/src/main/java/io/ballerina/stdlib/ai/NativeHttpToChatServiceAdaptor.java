@@ -26,6 +26,8 @@ import io.ballerina.runtime.api.values.BError;
 import io.ballerina.runtime.api.values.BMap;
 import io.ballerina.runtime.api.values.BObject;
 import io.ballerina.runtime.api.values.BString;
+import io.ballerina.runtime.observability.ObserveUtils;
+import io.ballerina.runtime.observability.ObserverContext;
 
 import java.util.concurrent.CompletableFuture;
 
@@ -43,6 +45,10 @@ public final class NativeHttpToChatServiceAdaptor {
     // The dispatcher, stored on the user's ChatService as native data (used by `detach`).
     private static final String DISPATCHER = "AI_CHAT_DISPATCHER";
     private static final String POST_ACCESSOR = "post";
+    private static final String ENTRYPOINT_FUNCTION_MODULE_TAG = "entrypoint.function.module";
+    private static final String ENTRYPOINT_SERVICE_NAME_TAG = "entrypoint.service.name";
+    private static final String ENTRYPOINT_FUNCTION_NAME_TAG = "entrypoint.function.name";
+    private static final String ENTRYPOINT_RESOURCE_ACCESSOR_TAG = "entrypoint.resource.accessor";
 
     private NativeHttpToChatServiceAdaptor() {
     }
@@ -97,18 +103,78 @@ public final class NativeHttpToChatServiceAdaptor {
                     + " is supported.");
         }
         Object[] args = declared == 2 ? new Object[]{request, headers} : new Object[]{request};
-        return env.yieldAndRun(() -> {
-            CompletableFuture<Object> future = new CompletableFuture<>();
-            try {
-                Object result = env.getRuntime().callMethod(userService, methodName, null, args);
-                // A returned error (e.g. ApprovalRequiredError) comes back here as `result`, with its
-                // type and detail intact, and flows through unchanged for the dispatcher to map.
-                Utils.notifySuccess(future, result);
-                return Utils.getResult(future);
-            } catch (BError error) {
-                // A panic from the user's resource; surface it as-is.
-                return error;
+        ObserverContext dispatcherContext = ObserveUtils.isObservabilityEnabled()
+                ? ObserveUtils.getObserverContextOfCurrentFrame(env) : null;
+        ObserverContext userContext = dispatcherContext == null ? null : newUserContext(env, dispatcherContext);
+        try {
+            return env.yieldAndRun(() -> {
+                CompletableFuture<Object> future = new CompletableFuture<>();
+                try {
+                    Object result = env.getRuntime().callMethod(userService, methodName, null, args);
+                    // A returned error (e.g. ApprovalRequiredError) comes back here as `result`, with
+                    // its type and detail intact, and flows through unchanged for the dispatcher to map.
+                    Utils.notifySuccess(future, result);
+                    return Utils.getResult(future);
+                } catch (BError error) {
+                    // A panic from the user's resource; surface it as-is.
+                    return error;
+                }
+            });
+        } finally {
+            if (userContext != null) {
+                restoreDispatcherContext(env, dispatcherContext, userContext);
             }
-        });
+        }
+    }
+
+    // A trace's entrypoint (service, module, function and accessor) is taken from its first
+    // resource, and every span beneath it inherits that. Here that is the dispatcher, an internal
+    // service of this module, so the trace would name it instead of the user's service. To keep the
+    // user's service the entrypoint, its resource is given a fresh context that is not yet started:
+    // the runtime then fills the entrypoint from that resource, as it did before the dispatcher
+    // existed, while the parent link keeps its span under the dispatcher's span.
+    //
+    // The context is seeded from the dispatcher's, and the resource overwrites these values when it
+    // starts. Service resources are always instrumented, so it does start; but if it ever did not,
+    // spans started under this context would otherwise find a null parent span and fail. Seeded,
+    // they attach to the dispatcher's span as they would without this context.
+    private static ObserverContext newUserContext(Environment env, ObserverContext dispatcherContext) {
+        ObserverContext userContext = new ObserverContext();
+        userContext.setParent(dispatcherContext);
+        userContext.setSpan(dispatcherContext.getSpan());
+        userContext.setServiceName(dispatcherContext.getServiceName());
+        userContext.setEntrypointFunctionModule(dispatcherContext.getEntrypointFunctionModule());
+        userContext.setEntrypointServiceName(dispatcherContext.getEntrypointServiceName());
+        userContext.setEntrypointFunctionName(dispatcherContext.getEntrypointFunctionName());
+        userContext.setEntrypointResourceAccessor(dispatcherContext.getEntrypointResourceAccessor());
+        ObserveUtils.setObserverContextToCurrentFrame(env, userContext);
+        return userContext;
+    }
+
+    // Puts the dispatcher's context back in place and gives it the entrypoint recorded by the user's
+    // resource. Tags are copied onto a span only when it finishes, so the dispatcher's span reports
+    // the user's service as well.
+    private static void restoreDispatcherContext(Environment env, ObserverContext dispatcherContext,
+                                                 ObserverContext userContext) {
+        ObserveUtils.setObserverContextToCurrentFrame(env, dispatcherContext);
+        if (!userContext.isStarted()) {
+            // The user's resource was not observed, so there is no entrypoint to take from it.
+            return;
+        }
+        dispatcherContext.setEntrypointFunctionModule(userContext.getEntrypointFunctionModule());
+        dispatcherContext.setEntrypointServiceName(userContext.getEntrypointServiceName());
+        dispatcherContext.setEntrypointFunctionName(userContext.getEntrypointFunctionName());
+        dispatcherContext.setEntrypointResourceAccessor(userContext.getEntrypointResourceAccessor());
+        addTagIfPresent(dispatcherContext, ENTRYPOINT_FUNCTION_MODULE_TAG, userContext.getEntrypointFunctionModule());
+        addTagIfPresent(dispatcherContext, ENTRYPOINT_SERVICE_NAME_TAG, userContext.getEntrypointServiceName());
+        addTagIfPresent(dispatcherContext, ENTRYPOINT_FUNCTION_NAME_TAG, userContext.getEntrypointFunctionName());
+        addTagIfPresent(dispatcherContext, ENTRYPOINT_RESOURCE_ACCESSOR_TAG,
+                userContext.getEntrypointResourceAccessor());
+    }
+
+    private static void addTagIfPresent(ObserverContext context, String key, String value) {
+        if (value != null) {
+            context.addTag(key, value);
+        }
     }
 }
