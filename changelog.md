@@ -4,6 +4,8 @@ This file documents all significant changes made to the Ballerina AI package acr
 
 ## [Unreleased]
 
+## [1.16.1] - 2026-10-23
+
 ### Fixed
 - [Fix `requiresApproval` Being Ignored on MCP Tools](https://github.com/ballerina-platform/ballerina-library/issues/9291)
 - [Surface the Model Error in the Message of a Failed Agent Run](https://github.com/wso2/product-integrator/issues/1036)
