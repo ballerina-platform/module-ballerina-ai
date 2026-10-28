@@ -120,6 +120,28 @@ public class HtmlChunkerIntegrationTest {
     }
 
     @Test
+    public void testOverlapOfASentenceFromAnUnterminatedParagraph() {
+        // The first sentence fills a chunk on its own and is longer than the overlap, so it becomes the overlap of
+        // the next chunk and is split further. It keeps the opening <p> tag without the closing tag.
+        String html = "<p>" + "Alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu ".repeat(2)
+                + "and a few more words. "
+                + "Nu xi omicron pi rho sigma tau upsilon phi chi psi omega. ".repeat(4) + "</p>";
+
+        List<TextSegment> chunks = HtmlChunker.chunk(html, HtmlChunker.HtmlChunkStrategy.HTML_PARAGRAPH, 200, 40);
+
+        Assert.assertTrue(chunks.size() > 1, "Expected the paragraph to be split into several chunks");
+        chunks.forEach(chunk -> Assert.assertTrue(chunk.text().length() <= 200, "Chunk exceeds the maximum size"));
+    }
+
+    @Test
+    public void testSentenceSplitterSplitsAtFullStops() {
+        RecursiveChunker.Splitter splitter = HtmlChunker.HtmlChunkStrategy.SENTENCE.getSplitters().get(0);
+
+        Assert.assertEquals(TestUtil.splitPieces(splitter, "First sentence. Second sentence."),
+                List.of("First sentence", ". Second sentence", "."));
+    }
+
+    @Test
     public void testHeaderSplitters() {
         String htmlWithHeaders = """
                 <h1>Header 1</h1>

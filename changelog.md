@@ -5,6 +5,7 @@ This file documents all significant changes made to the Ballerina AI package acr
 ## [Unreleased]
 
 ### Fixed
+- [Fix the `SENTENCE` Strategy of `MarkdownChunker` and `HtmlChunker` Not Splitting at Sentences](https://github.com/wso2/product-integrator/issues/2893)
 - [Fix `MarkdownChunker` Never Splitting on Horizontal Rules](https://github.com/wso2/product-integrator/issues/2892)
 - [Fix `Context.getWithType` Returning the Stored Value Instead of a Copy](https://github.com/wso2/product-integrator/issues/2891)
 - [Default the `tools` Parameter of `Wso2ModelProvider.chat` to an Empty Array](https://github.com/wso2/product-integrator/issues/2903)

@@ -234,9 +234,12 @@ public class MarkdownChunkerIntegrationTest {
         List<RecursiveChunker.Splitter> splitters =
                 MarkdownChunker.MarkdownChunkStrategy.BY_HORIZONTAL_LINE.getSplitters();
 
-        Assert.assertEquals(splitPieces(splitters.get(0), "Intro\n****\nOutro"), List.of("Intro", "\n****\nOutro"));
-        Assert.assertEquals(splitPieces(splitters.get(1), "Intro\n---\nOutro"), List.of("Intro", "\n---\nOutro"));
-        Assert.assertEquals(splitPieces(splitters.get(2), "Intro\n___\nOutro"), List.of("Intro", "\n___\nOutro"));
+        Assert.assertEquals(TestUtil.splitPieces(splitters.get(0), "Intro\n****\nOutro"),
+                List.of("Intro", "\n****\nOutro"));
+        Assert.assertEquals(TestUtil.splitPieces(splitters.get(1), "Intro\n---\nOutro"),
+                List.of("Intro", "\n---\nOutro"));
+        Assert.assertEquals(TestUtil.splitPieces(splitters.get(2), "Intro\n___\nOutro"),
+                List.of("Intro", "\n___\nOutro"));
     }
 
     @Test
@@ -279,6 +282,15 @@ public class MarkdownChunkerIntegrationTest {
                 MarkdownChunker.MarkdownChunkStrategy.BY_SENTENCE, 30, 5);
 
         Assert.assertTrue(chunks.size() >= 2, "BY_SENTENCE should split at sentence boundaries");
+    }
+
+    @Test
+    public void testSentenceSplitterSplitsAtFullStops() {
+        RecursiveChunker.Splitter splitter =
+                MarkdownChunker.MarkdownChunkStrategy.BY_SENTENCE.getSplitters().get(0);
+
+        Assert.assertEquals(TestUtil.splitPieces(splitter, "First sentence. Second sentence."),
+                List.of("First sentence", ". Second sentence", "."));
     }
 
     @Test
@@ -357,12 +369,6 @@ public class MarkdownChunkerIntegrationTest {
             Assert.assertEquals(chunks.getFirst().text(), singleWord,
                     "Strategy " + strategy + " should preserve single word content");
         }
-    }
-
-    static List<String> splitPieces(RecursiveChunker.Splitter splitter, String content) {
-        List<String> pieces = new java.util.ArrayList<>();
-        splitter.split(content).forEachRemaining(chunk -> pieces.add(chunk.piece()));
-        return pieces;
     }
 
     private void validateTextSegmentMaxSize(List<TextSegment> chunks, int maxSize) {
