@@ -4,6 +4,9 @@ This file documents all significant changes made to the Ballerina AI package acr
 
 ## [Unreleased]
 
+### Fixed
+- [Respond with 404 When the Attached Chat Service Lacks the Requested Resource](https://github.com/wso2/product-integrator/issues/2894)
+
 ## [1.16.1] - 2026-10-23
 
 ### Fixed
