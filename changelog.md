@@ -5,6 +5,7 @@ This file documents all significant changes made to the Ballerina AI package acr
 ## [Unreleased]
 
 ### Fixed
+- [Fix Agent Runs Failing When a Custom `Memory` Returns History Without a System Message](https://github.com/wso2/product-integrator/issues/2896)
 - [Fix AI Spans That Close Successfully Not Being Removed from the Current-Span Registry](https://github.com/wso2/product-integrator/issues/2895)
 - [Respond with 404 When the Attached Chat Service Lacks the Requested Resource](https://github.com/wso2/product-integrator/issues/2894)
 - [Fix the `SENTENCE` Strategy of `MarkdownChunker` and `HtmlChunker` Not Splitting at Sentences](https://github.com/wso2/product-integrator/issues/2893)
