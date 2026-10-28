@@ -230,6 +230,19 @@ public class MarkdownChunkerIntegrationTest {
     }
 
     @Test
+    public void testHorizontalLineSplittersMatchHorizontalRules() {
+        List<RecursiveChunker.Splitter> splitters =
+                MarkdownChunker.MarkdownChunkStrategy.BY_HORIZONTAL_LINE.getSplitters();
+
+        Assert.assertEquals(TestUtil.splitPieces(splitters.get(0), "Intro\n****\nOutro"),
+                List.of("Intro", "\n****\nOutro"));
+        Assert.assertEquals(TestUtil.splitPieces(splitters.get(1), "Intro\n---\nOutro"),
+                List.of("Intro", "\n---\nOutro"));
+        Assert.assertEquals(TestUtil.splitPieces(splitters.get(2), "Intro\n___\nOutro"),
+                List.of("Intro", "\n___\nOutro"));
+    }
+
+    @Test
     public void testByParagraphStrategy() {
         String markdownWithParagraphs = """
                 First paragraph with some content.
@@ -269,6 +282,15 @@ public class MarkdownChunkerIntegrationTest {
                 MarkdownChunker.MarkdownChunkStrategy.BY_SENTENCE, 30, 5);
 
         Assert.assertTrue(chunks.size() >= 2, "BY_SENTENCE should split at sentence boundaries");
+    }
+
+    @Test
+    public void testSentenceSplitterSplitsAtFullStops() {
+        RecursiveChunker.Splitter splitter =
+                MarkdownChunker.MarkdownChunkStrategy.BY_SENTENCE.getSplitters().get(0);
+
+        Assert.assertEquals(TestUtil.splitPieces(splitter, "First sentence. Second sentence."),
+                List.of("First sentence", ". Second sentence", "."));
     }
 
     @Test

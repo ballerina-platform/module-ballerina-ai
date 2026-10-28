@@ -37,6 +37,11 @@ class RecursiveChunker {
     // Types that should not be merged with other chunks
     private final Set<String> nonMergeableTypes;
 
+    // An overlap is a trailing fragment of a chunk, so it is split only by text boundaries. Structural splitters
+    // such as header or tag splitters do not apply to a fragment, which may contain an unterminated element.
+    private static final List<Splitter> OVERLAP_SPLITTERS = List.of(Splitter.createSentenceSplitter(),
+            Splitter.createWordSplitter(), Splitter.createCharacterSplitter());
+
     RecursiveChunker(Set<String> nonMergeableTypes) {
         this.nonMergeableTypes = nonMergeableTypes;
     }
@@ -48,9 +53,8 @@ class RecursiveChunker {
     private List<Chunk> chunkUsingSplittersInner(String content, List<Splitter> splitters,
                                                  int maxChunkSize, int maxOverlapSize,
                                                  Map<String, String> parentMetadata) {
-        return this.mergeChunksWithOverlap(splitters,
-                chunkWithNoMerge(content, splitters, maxChunkSize, parentMetadata), maxChunkSize,
-                maxOverlapSize);
+        return this.mergeChunksWithOverlap(chunkWithNoMerge(content, splitters, maxChunkSize, parentMetadata),
+                maxChunkSize, maxOverlapSize);
     }
 
     private List<Chunk> chunkWithNoMerge(String content, List<Splitter> delimiters,
@@ -126,8 +130,7 @@ class RecursiveChunker {
         return chunks;
     }
 
-    private List<Chunk> mergeChunksWithOverlap(List<Splitter> splitters, List<Chunk> pieces, int maxChunkSize,
-                                               int maxOverlapSize) {
+    private List<Chunk> mergeChunksWithOverlap(List<Chunk> pieces, int maxChunkSize, int maxOverlapSize) {
         List<Chunk> chunks = new ArrayList<>();
         List<Chunk> mergeBuffer = new ArrayList<>();
         int mergeBufferSize = 0;
@@ -171,7 +174,7 @@ class RecursiveChunker {
                 if (maxOverlapSize > 0) {
                     lastPiece = mergeBuffer.getLast();
                     if (lastPiece.length() > maxOverlapSize) {
-                        List<Chunk> p = chunkWithNoMerge(lastPiece.piece(), splitters, maxOverlapSize,
+                        List<Chunk> p = chunkWithNoMerge(lastPiece.piece(), OVERLAP_SPLITTERS, maxOverlapSize,
                                 lastPiece.metadata);
                         assert p.size() > 1;
                         lastPiece = p.getLast();
@@ -203,7 +206,7 @@ class RecursiveChunker {
         Iterator<Chunk> split(String content);
 
         static Splitter createSentenceSplitter() {
-            return new SimpleDelimiterSplitter("\\.");
+            return new SimpleDelimiterSplitter(".");
         }
 
         static Splitter createWordSplitter() {
@@ -268,7 +271,15 @@ class RecursiveChunker {
         private final Pattern pattern;
 
         SimpleDelimiterSplitter(String delimiter) {
-            pattern = Pattern.compile(Pattern.quote(delimiter));
+            this(Pattern.compile(Pattern.quote(delimiter)));
+        }
+
+        private SimpleDelimiterSplitter(Pattern pattern) {
+            this.pattern = pattern;
+        }
+
+        static SimpleDelimiterSplitter ofRegex(String regex) {
+            return new SimpleDelimiterSplitter(Pattern.compile(regex));
         }
 
         @Override

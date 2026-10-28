@@ -5,7 +5,16 @@ This file documents all significant changes made to the Ballerina AI package acr
 ## [Unreleased]
 
 ### Fixed
+
 - [Fix `ShortTermMemory` Batch Trimming Panicking and Losing the Stored History](https://github.com/wso2/product-integrator/issues/2897)
+- [Fix Agent Runs Failing When a Custom `Memory` Returns History Without a System Message](https://github.com/wso2/product-integrator/issues/2896)
+- [Fix AI Spans That Close Successfully Not Being Removed from the Current-Span Registry](https://github.com/wso2/product-integrator/issues/2895)
+- [Respond with 404 When the Attached Chat Service Lacks the Requested Resource](https://github.com/wso2/product-integrator/issues/2894)
+- [Fix the `SENTENCE` Strategy of `MarkdownChunker` and `HtmlChunker` Not Splitting at Sentences](https://github.com/wso2/product-integrator/issues/2893)
+- [Fix `MarkdownChunker` Never Splitting on Horizontal Rules](https://github.com/wso2/product-integrator/issues/2892)
+- [Fix `Context.getWithType` Returning the Stored Value Instead of a Copy](https://github.com/wso2/product-integrator/issues/2891)
+- [Default the `tools` Parameter of `Wso2ModelProvider.chat` to an Empty Array](https://github.com/wso2/product-integrator/issues/2903)
+
 
 ## [1.16.1] - 2026-10-23
 
