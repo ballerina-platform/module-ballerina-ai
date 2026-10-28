@@ -268,7 +268,15 @@ class RecursiveChunker {
         private final Pattern pattern;
 
         SimpleDelimiterSplitter(String delimiter) {
-            pattern = Pattern.compile(Pattern.quote(delimiter));
+            this(Pattern.compile(Pattern.quote(delimiter)));
+        }
+
+        private SimpleDelimiterSplitter(Pattern pattern) {
+            this.pattern = pattern;
+        }
+
+        static SimpleDelimiterSplitter ofRegex(String regex) {
+            return new SimpleDelimiterSplitter(Pattern.compile(regex));
         }
 
         @Override
