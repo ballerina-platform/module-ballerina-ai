@@ -194,6 +194,34 @@ function testShortTermMemoryWithIncomingBatchSizeLargerThanCapacity() returns er
     assertChatMessageEquals(k1CurrentMemory[0], K1M4);
 }
 
+@test:Config
+function testShortTermMemorySummarizationStaysWithinCapacity() returns error? {
+    final readonly & ChatAssistantMessage summary = {role: ASSISTANT, content: "Summary of the earlier conversation."};
+    Memory memory = check new ShortTermMemory(check new InMemoryShortTermMemoryStore(3),
+        overflowConfiguration = {model: new MockSummarizerModel(summary)});
+
+    ChatUserMessage question1 = {role: USER, content: "First question"};
+    ChatAssistantMessage answer1 = {role: ASSISTANT, content: "First answer"};
+    ChatUserMessage question2 = {role: USER, content: "Second question"};
+    ChatAssistantMessage answer2 = {role: ASSISTANT, content: "Second answer"};
+    ChatUserMessage question3 = {role: USER, content: "Third question"};
+    ChatAssistantMessage answer3 = {role: ASSISTANT, content: "Third answer"};
+
+    check memory.update(K1, [question1, answer1]);
+    // A batch exactly the size of the capacity overflows the memory.
+    check memory.update(K1, [question2, answer2, question3]);
+    ChatMessage[] current = check memory.get(K1);
+    test:assertTrue(current.length() <= 3, string `Expected at most 3 messages, found ${current.length()}`);
+    assertChatMessageEquals(current[0], summary);
+    assertChatMessageEquals(current[current.length() - 1], question3);
+
+    // A batch whose size is a multiple of the capacity overflows it again.
+    check memory.update(K1, [answer3, question1, answer1, question2, answer2, question3]);
+    current = check memory.get(K1);
+    test:assertTrue(current.length() <= 3, string `Expected at most 3 messages, found ${current.length()}`);
+    assertChatMessageEquals(current[current.length() - 1], question3);
+}
+
 const CHAT_METHOD = "chat";
 
 @test:Config
