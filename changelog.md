@@ -4,6 +4,9 @@ This file documents all significant changes made to the Ballerina AI package acr
 
 ## [Unreleased]
 
+### Fixed
+- [Fix `TextDataLoader` Rejecting Files with Upper-Case Extensions](https://github.com/wso2/product-integrator/issues/2899)
+
 ## [1.16.1] - 2026-10-23
 
 ### Fixed
