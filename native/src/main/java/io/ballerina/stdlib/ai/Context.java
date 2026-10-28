@@ -18,28 +18,32 @@
 
 package io.ballerina.stdlib.ai;
 
-import io.ballerina.runtime.api.utils.StringUtils;
+import io.ballerina.runtime.api.Environment;
 import io.ballerina.runtime.api.values.BError;
-import io.ballerina.runtime.api.values.BMap;
 import io.ballerina.runtime.api.values.BObject;
 import io.ballerina.runtime.api.values.BString;
 import io.ballerina.runtime.api.values.BTypedesc;
 import org.ballerinalang.langlib.value.EnsureType;
 
 public final class Context {
-    private static final BString CONTEXT_ENTRIES = StringUtils.fromString("entries");
+    private static final String GET_ENTRY_METHOD_NAME = "getEntry";
 
-    public static Object getWithType(BObject requestCtx, BString key, BTypedesc targetType) {
-        BMap members = requestCtx.getMapValue(CONTEXT_ENTRIES);
-        try {
-            Object value = members.getOrThrow(key);
+    private Context() {
+    }
+
+    // The entry is read through `getEntry`, which takes the context's lock and clones `Cloneable` values,
+    // so the value returned here is never shared with the context or with other callers.
+    public static Object getWithType(Environment env, BObject requestCtx, BString key, BTypedesc targetType) {
+        return env.yieldAndRun(() -> {
+            Object value = env.getRuntime().callMethod(requestCtx, GET_ENTRY_METHOD_NAME, null, key);
+            if (value instanceof BError) {
+                return value;
+            }
             Object convertedType = EnsureType.ensureType(value, targetType);
             if (convertedType instanceof BError) {
                 return ModuleUtils.createError("type conversion failed for value of key: " + key.getValue());
             }
             return convertedType;
-        } catch (RuntimeException e) {
-            return ModuleUtils.createError("no member found for key: " + key.getValue());
-        }
+        });
     }
 }

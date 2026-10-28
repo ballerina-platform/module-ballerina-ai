@@ -21,6 +21,7 @@ package io.ballerina.stdlib.ai;
 import dev.langchain4j.data.segment.TextSegment;
 
 import java.lang.reflect.Field;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
@@ -57,5 +58,11 @@ public class TestUtil {
         }
 
         return sb.toString();
+    }
+
+    static List<String> splitPieces(RecursiveChunker.Splitter splitter, String content) {
+        List<String> pieces = new ArrayList<>();
+        splitter.split(content).forEachRemaining(chunk -> pieces.add(chunk.piece()));
+        return pieces;
     }
 }
