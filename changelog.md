@@ -4,6 +4,9 @@ This file documents all significant changes made to the Ballerina AI package acr
 
 ## [Unreleased]
 
+### Fixed
+- [Default the `tools` Parameter of `Wso2ModelProvider.chat` to an Empty Array](https://github.com/wso2/product-integrator/issues/2903)
+
 ## [1.16.1] - 2026-10-23
 
 ### Fixed

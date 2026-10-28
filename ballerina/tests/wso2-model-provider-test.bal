@@ -141,6 +141,17 @@ function testWso2ModelProviderChatWithUserMessage() returns error? {
 @test:Config {
     groups: ["wso2-model-provider"]
 }
+function testWso2ModelProviderChatWithoutTools() returns error? {
+    Wso2ModelProvider provider = check new (MOCK_CHAT_URL, "test-token");
+    ChatAssistantMessage response = check provider->chat({role: USER, content: "Hello"});
+    test:assertEquals(response.role, ASSISTANT);
+    test:assertEquals(response.content, MOCK_CHAT_TEXT_RESPONSE);
+    test:assertTrue(response.toolCalls is (), "Expected no tool calls when no tools are given");
+}
+
+@test:Config {
+    groups: ["wso2-model-provider"]
+}
 function testWso2ModelProviderChatWithMultipleMessages() returns error? {
     Wso2ModelProvider provider = check new (MOCK_CHAT_URL, "test-token");
     ChatMessage[] messages = [
