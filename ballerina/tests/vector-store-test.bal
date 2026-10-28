@@ -55,6 +55,28 @@ final readonly & string[] words = [
 ];
 
 @test:Config
+isolated function testInMemoryStoreEuclideanReturnsNearestFirst() returns error? {
+    VectorStore vectorStore = check new InMemoryVectorStore(similarityMetric = EUCLIDEAN);
+    check vectorStore.add([
+        {id: "far", embedding: [10.0, 10.0], chunk: <TextChunk>{content: "far", metadata: {fileName: "a.txt"}}},
+        {id: "near", embedding: [1.0, 1.0], chunk: <TextChunk>{content: "near", metadata: {fileName: "a.txt"}}},
+        {id: "middle", embedding: [4.0, 4.0], chunk: <TextChunk>{content: "middle", metadata: {fileName: "a.txt"}}}
+    ]);
+
+    VectorMatch[] matches = check vectorStore.query({embedding: [0.0, 0.0], topK: 2});
+    test:assertEquals(matches.map(m => m.id), ["near", "middle"]);
+    test:assertTrue(matches[0].similarityScore < matches[1].similarityScore,
+            "Expected the Euclidean distance to be the score, smallest first");
+
+    VectorMatch[] filtered = check vectorStore.query({
+        embedding: [0.0, 0.0],
+        topK: 1,
+        filters: {filters: [{key: "fileName", value: "a.txt"}]}
+    });
+    test:assertEquals(filtered.map(m => m.id), ["near"]);
+}
+
+@test:Config
 isolated function testInMemoryStoreWithMetrics() returns error? {
     VectorStore vectorStore1 = check new InMemoryVectorStore();
     VectorStore vectorStore2 = check new InMemoryVectorStore(similarityMetric = DOT_PRODUCT);
@@ -80,7 +102,7 @@ isolated function testInMemoryStoreWithMetrics() returns error? {
     VectorMatch[] matchWithDotProduct = check vectorStore2.query({embedding: dogEmbedding});
     test:assertEquals(matchWithDotProduct[0].chunk.content, expectedContent);
 
-    VectorMatch[] matchWithEuclidean = check vectorStore2.query({embedding: dogEmbedding});
+    VectorMatch[] matchWithEuclidean = check vectorStore3.query({embedding: dogEmbedding});
     test:assertEquals(matchWithEuclidean[0].chunk.content, expectedContent);
 }
 
