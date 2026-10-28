@@ -34,3 +34,12 @@ isolated function testVectorKnowledgeBase() returns error? {
     'match = check kb.retrieve("dog");
     test:assertEquals('match.length(), 0);
 }
+
+@test:Config
+function testGuessChunkerUsesFileNameExtension() {
+    test:assertTrue(guessChunker(<TextDocument>{content: "", metadata: {fileName: "page.htm"}}) is HtmlChunker);
+    test:assertTrue(guessChunker(<TextDocument>{content: "", metadata: {fileName: "PAGE.HTML"}}) is HtmlChunker);
+    test:assertTrue(guessChunker(<TextDocument>{content: "", metadata: {fileName: "README.MD"}}) is MarkdownChunker);
+    test:assertTrue(guessChunker(<TextDocument>{content: "", metadata: {fileName: "notes.txt"}})
+            is GenericRecursiveChunker);
+}
