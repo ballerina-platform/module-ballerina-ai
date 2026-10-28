@@ -219,10 +219,7 @@ isolated class BaseSpanImp {
             return;
         }
 
-        if err is () {
-            finishSpan(spanId);
-            return;
-        }
+        // Remove the span while it is still the current span, so its registry entry is keyed as it was recorded.
         removeCurrentAiSpan();
         finishSpan(spanId, err);
     }
