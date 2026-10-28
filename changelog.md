@@ -4,6 +4,9 @@ This file documents all significant changes made to the Ballerina AI package acr
 
 ## [Unreleased]
 
+### Fixed
+- [Fix the `SENTENCE` Strategy of `MarkdownChunker` and `HtmlChunker` Not Splitting at Sentences](https://github.com/wso2/product-integrator/issues/2893)
+
 ## [1.16.1] - 2026-10-23
 
 ### Fixed

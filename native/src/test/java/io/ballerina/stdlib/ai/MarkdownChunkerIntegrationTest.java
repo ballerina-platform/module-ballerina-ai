@@ -272,6 +272,15 @@ public class MarkdownChunkerIntegrationTest {
     }
 
     @Test
+    public void testSentenceSplitterSplitsAtFullStops() {
+        RecursiveChunker.Splitter splitter =
+                MarkdownChunker.MarkdownChunkStrategy.BY_SENTENCE.getSplitters().get(0);
+
+        Assert.assertEquals(TestUtil.splitPieces(splitter, "First sentence. Second sentence."),
+                List.of("First sentence", ". Second sentence", "."));
+    }
+
+    @Test
     public void testByWordStrategy() {
         String markdownWithWords = "word1 word2 word3 word4 word5 word6 word7 word8";
 
