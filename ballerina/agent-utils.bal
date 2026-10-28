@@ -729,13 +729,13 @@ isolated function run(Agent agent, string instruction, string|Prompt query, int 
     }
     ChatMessage[] history = (prevHistory is ChatMessage[]) ? [...prevHistory] : [];
     ChatSystemMessage systemMessage = {role: SYSTEM, content: instruction};
-    if history.length() > 0 {
-        ChatMessage firstMessage = history[0];
-        if firstMessage is ChatSystemMessage && instruction != toString(firstMessage.content) {
-            history[0] = systemMessage;
-        }
-    } else {
+    // A custom memory may store the conversation without a system message, so add one when the
+    // history does not start with it.
+    ChatMessage? firstMessage = history.length() > 0 ? history[0] : ();
+    if firstMessage !is ChatSystemMessage {
         history.unshift(systemMessage);
+    } else if instruction != toString(firstMessage.content) {
+        history[0] = systemMessage;
     }
     ChatUserMessage userMessage = {role: USER, content: query};
     history.push(userMessage);

@@ -4,6 +4,9 @@ This file documents all significant changes made to the Ballerina AI package acr
 
 ## [Unreleased]
 
+### Fixed
+- [Fix Agent Runs Failing When a Custom `Memory` Returns History Without a System Message](https://github.com/wso2/product-integrator/issues/2896)
+
 ## [1.16.1] - 2026-10-23
 
 ### Fixed

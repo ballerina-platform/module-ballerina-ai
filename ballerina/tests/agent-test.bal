@@ -366,3 +366,80 @@ function testAgentRunExecutesToolCallsSequentially() returns error? {
             string `Expected tool executions to run sequentially, but Search ran during ` +
             string `${searchWindow.toString()} and Calculator ran during ${calculatorWindow.toString()}`);
 }
+
+// A custom `Memory` whose stored history has no leading system message, as a user-defined memory
+// may keep only the conversation.
+isolated class ConversationOnlyMemory {
+    *Memory;
+    private final InMemoryShortTermMemoryStore store;
+
+    isolated function init(string sessionId) returns MemoryError? {
+        self.store = check new;
+        check self.store.put(sessionId, [
+            {role: USER, content: "previous question"},
+            {role: ASSISTANT, content: "previous answer"}
+        ]);
+    }
+
+    public isolated function get(string sessionId) returns ChatMessage[]|MemoryError =>
+        self.store.getChatInteractiveMessages(sessionId);
+
+    public isolated function update(string sessionId, ChatMessage|ChatMessage[] message) returns MemoryError? =>
+        self.store.put(sessionId, message);
+
+    public isolated function delete(string sessionId) returns MemoryError? => self.store.removeAll(sessionId);
+}
+
+// Answers every call and records the roles of the messages it was sent, and the text of the first one.
+isolated client class MessageRecordingMockLLM {
+    *ModelProvider;
+    private ROLE[] lastRoles = [];
+    private string firstContent = "";
+
+    isolated remote function chat(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [],
+            string? stop = ()) returns ChatAssistantMessage|Error {
+        ChatMessage[] sent = [];
+        if messages is ChatUserMessage {
+            sent.push(messages);
+        } else {
+            sent.push(...messages);
+        }
+        ROLE[] roles = from ChatMessage message in sent select message.role;
+        ChatMessage first = sent[0];
+        string firstContent = first is ChatUserMessage|ChatSystemMessage
+            ? getChatMessageStringContent(first.content) : first.content ?: "";
+        lock {
+            self.lastRoles = roles.clone();
+            self.firstContent = firstContent;
+        }
+        return {role: ASSISTANT, content: "answer"};
+    }
+
+    isolated remote function generate(Prompt prompt, typedesc<anydata> td = <>) returns td|Error = external;
+
+    isolated function getLastRoles() returns ROLE[] {
+        lock {
+            return self.lastRoles.clone();
+        }
+    }
+
+    isolated function getFirstContent() returns string {
+        lock {
+            return self.firstContent;
+        }
+    }
+}
+
+@test:Config
+function testAgentAddsSystemPromptWhenMemoryHasNone() returns error? {
+    MessageRecordingMockLLM model = new;
+    ConversationOnlyMemory memory = check new ("conversation-only");
+    Agent agent = check new (systemPrompt = {role: "Assistant", instructions: "Answer briefly."}, model = model,
+        memory = memory);
+
+    string answer = check agent.run("new question", sessionId = "conversation-only");
+    test:assertEquals(answer, "answer");
+    test:assertEquals(model.getLastRoles(), [SYSTEM, USER, ASSISTANT, USER],
+            "Expected the system prompt, then the stored conversation, then the new question");
+    test:assertTrue(model.getFirstContent().includes("Answer briefly."), "Expected the agent's system prompt");
+}
