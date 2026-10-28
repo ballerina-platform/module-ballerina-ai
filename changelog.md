@@ -5,6 +5,7 @@ This file documents all significant changes made to the Ballerina AI package acr
 ## [Unreleased]
 
 ### Fixed
+- [Fix `Context.getWithType` Returning the Stored Value Instead of a Copy](https://github.com/wso2/product-integrator/issues/2891)
 - [Default the `tools` Parameter of `Wso2ModelProvider.chat` to an Empty Array](https://github.com/wso2/product-integrator/issues/2903)
 
 ## [1.16.1] - 2026-10-23
