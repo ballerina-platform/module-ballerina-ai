@@ -390,6 +390,55 @@ isolated class ConversationOnlyMemory {
     public isolated function delete(string sessionId) returns MemoryError? => self.store.removeAll(sessionId);
 }
 
+// A custom `Memory` that appends every update to the stored history and returns it as stored, starting
+// from a conversation that has no system message.
+isolated class AppendOnlyMemory {
+    *Memory;
+    private final map<MemoryChatMessage[] & readonly> histories = {};
+
+    isolated function init(string sessionId) {
+        lock {
+            self.histories[sessionId] = [
+                {role: USER, content: "previous question"},
+                {role: ASSISTANT, content: "previous answer"}
+            ];
+        }
+    }
+
+    public isolated function get(string sessionId) returns ChatMessage[]|MemoryError {
+        lock {
+            return self.histories[sessionId] ?: [];
+        }
+    }
+
+    public isolated function update(string sessionId, ChatMessage|ChatMessage[] message) returns MemoryError? {
+        ChatMessage[] messages = message is ChatMessage[] ? message : [message];
+        MemoryChatMessage[] & readonly newMessages = from ChatMessage msg in messages
+            select check mapToMemoryChatMessage(msg);
+        lock {
+            self.histories[sessionId] = [...self.histories[sessionId] ?: [], ...newMessages];
+        }
+    }
+
+    public isolated function delete(string sessionId) returns MemoryError? {
+        lock {
+            _ = self.histories.removeIfHasKey(sessionId);
+        }
+    }
+}
+
+@test:Config
+function testAgentSendsOneSystemPromptWithAppendOnlyMemory() returns error? {
+    MessageRecordingMockLLM model = new;
+    Agent agent = check new (systemPrompt = {role: "Assistant", instructions: "Answer briefly."}, model = model,
+        memory = new AppendOnlyMemory("append-only"));
+
+    string _ = check agent.run("first question", sessionId = "append-only");
+    string _ = check agent.run("second question", sessionId = "append-only");
+    test:assertEquals(model.getLastRoles(), [SYSTEM, USER, ASSISTANT, USER, ASSISTANT, USER],
+            "Expected a single system prompt before the stored conversation on every turn");
+}
+
 // Answers every call and records the roles of the messages it was sent, and the text of the first one.
 isolated client class MessageRecordingMockLLM {
     *ModelProvider;
