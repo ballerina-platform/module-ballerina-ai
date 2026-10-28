@@ -23,8 +23,7 @@ After the code block, we continue with regular text. The chunker should split on
 
 
 --- Chunk 2 ---
-Metadata: {"id": "116","index": "1"}
-
+Metadata: {"id": "118","index": "1"}
 
 ***
 
@@ -47,7 +46,7 @@ More text after the Python code block.
 
 
 --- Chunk 3 ---
-Metadata: {"id": "119","index": "2"}
+Metadata: {"id": "121","index": "2"}
 
 ## Section After Dash Horizontal Line  
 
@@ -69,7 +68,7 @@ ___
 
 
 --- Chunk 4 ---
-Metadata: {"id": "122","index": "3"}
+Metadata: {"id": "124","index": "3"}
 
 ## Section After Underscore Horizontal Line
 
@@ -87,7 +86,7 @@ Final section with more content to ensure proper chunking behavior.
 
 
 --- Chunk 5 ---
-Metadata: {"header": "Multiple Code Blocks","id": "124","index": "4"}
+Metadata: {"header": "Multiple Code Blocks","id": "126","index": "4"}
 
 ## Multiple Code Blocks
 
