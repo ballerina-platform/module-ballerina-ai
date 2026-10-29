@@ -223,6 +223,35 @@ function testShortTermMemorySummarizationStaysWithinCapacity() returns error? {
 }
 
 @test:Config
+function testShortTermMemorySummarizationKeepsToolResultsWithTheirCall() returns error? {
+    final readonly & ChatAssistantMessage summary = {role: ASSISTANT, content: "Summary of the earlier conversation."};
+    Memory memory = check new ShortTermMemory(check new InMemoryShortTermMemoryStore(3),
+        overflowConfiguration = {model: new MockSummarizerModel(summary)});
+
+    ChatUserMessage question = {role: USER, content: "What do I have on my plate today?"};
+    ChatAssistantMessage toolCall = {role: ASSISTANT, toolCalls: [{name: "listTasks", arguments: {}}]};
+    ChatFunctionMessage toolResult = {role: FUNCTION, name: "listTasks", content: "[]"};
+    ChatFunctionMessage secondToolResult = {role: FUNCTION, name: "listTasks", content: "[]"};
+    ChatAssistantMessage answer = {role: ASSISTANT, content: "You have nothing on your plate today."};
+
+    // The summary keeps the stored user message after it, leaving room for only two incoming messages.
+    check memory.update(K1, [answer, question]);
+    check memory.update(K1, [toolCall, toolResult, answer]);
+    ChatMessage[] current = check memory.get(K1);
+    test:assertEquals(current.length(), 2);
+    assertChatMessageEquals(current[0], summary);
+    assertChatMessageEquals(current[1], answer);
+
+    // Two tool results leave the second one at the start of the kept messages.
+    check memory.delete(K1);
+    check memory.update(K1, [question, toolCall, toolResult, secondToolResult, answer]);
+    current = check memory.get(K1);
+    test:assertEquals(current.length(), 2);
+    assertChatMessageEquals(current[0], summary);
+    assertChatMessageEquals(current[1], answer);
+}
+
+@test:Config
 function testShortTermMemoryBatchTrimWithTrimCountLargerThanHistory() returns error? {
     InMemoryShortTermMemoryStore store = check new (3);
     Memory memory = check new ShortTermMemory(store, <TrimOverflowHandlerConfiguration>{trimCount: 10});

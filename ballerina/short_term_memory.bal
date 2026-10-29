@@ -222,9 +222,14 @@ public isolated class ShortTermMemory {
 
             int effectiveCount = incoming % maxSize == 0 ? maxSize : incoming % maxSize;
             // The summary takes one message, or two when the last summarized message is a user message,
-            // which is kept after the summary. Keep only as many incoming messages as fit alongside it.
+            // which is kept after the summary. Keep only as many incoming messages as fit alongside it, and
+            // never start the kept messages with a tool result, which would separate it from its tool call.
             while effectiveCount > 0 {
                 int headEnd = incoming - effectiveCount;
+                if interactiveMsgs[headEnd] is ChatFunctionMessage {
+                    effectiveCount -= 1;
+                    continue;
+                }
                 ChatInteractiveMessage? lastSummarized = headEnd > 0 ? interactiveMsgs[headEnd - 1]
                     : currentMessages.length() > 0 ? currentMessages[currentMessages.length() - 1] : ();
                 int summaryLength = lastSummarized is ChatUserMessage ? 2 : 1;
