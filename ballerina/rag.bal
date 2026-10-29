@@ -219,10 +219,11 @@ isolated function guessChunker(Document|Chunk doc) returns Chunker {
     // Fallback to file name
     string? fileName = doc.metadata?.fileName;
     if fileName is string {
-        if fileName.endsWith(".md") {
+        string extension = getFileExtension(fileName).toLowerAscii();
+        if extension == MARKDOWN {
             return new MarkdownChunker();
         }
-        if fileName.endsWith(".html") {
+        if extension == HTML || extension == HTM {
             return new HtmlChunker();
         }
     }
