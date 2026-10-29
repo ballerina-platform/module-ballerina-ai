@@ -103,11 +103,14 @@ isolated function getFileType(string path) returns SupportedFileType? {
 }
 
 isolated function getFileExtension(string path) returns string {
-    int? lastDotIndex = path.toLowerAscii().lastIndexOf(".");
+    // Only the file name can carry the extension; a dot in a directory name does not.
+    int lastSeparatorIndex = int:max(path.lastIndexOf("/") ?: -1, path.lastIndexOf("\\") ?: -1);
+    string fileName = path.substring(lastSeparatorIndex + 1);
+    int? lastDotIndex = fileName.lastIndexOf(".");
     if lastDotIndex is () {
         return "unknown";
     }
-    return path.substring(lastDotIndex + 1);
+    return fileName.substring(lastDotIndex + 1).toLowerAscii();
 }
 
 isolated function readMarkupDocument(string filePath) returns TextDocument|Error {

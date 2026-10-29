@@ -38,7 +38,7 @@ Metadata: {"header": "Nested Header in Div","header1": "Document with Mixed Tags
             
 
 --- Chunk 4 ---
-Metadata: {"header1": "Document with Mixed Tags","id": "381","index": "3"}
+Metadata: {"header1": "Document with Mixed Tags","id": "334","index": "3"}
  <h4>Header in Section Tag</h4>
             <p>Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.</p>
         </section>
@@ -55,7 +55,7 @@ Metadata: {"header1": "Document with Mixed Tags","id": "381","index": "3"}
             
 
 --- Chunk 5 ---
-Metadata: {"header": "Another Top-Level Section","header1": "Document with Mixed Tags","header2": "Another Top-Level Section","id": "386","index": "4"}
+Metadata: {"header": "Another Top-Level Section","header1": "Document with Mixed Tags","header2": "Another Top-Level Section","id": "339","index": "4"}
 
         </header>
 
@@ -73,7 +73,7 @@ Metadata: {"header": "Another Top-Level Section","header1": "Document with Mixed
             
 
 --- Chunk 6 ---
-Metadata: {"header": "Another Top-Level Section","header1": "Document with Mixed Tags","header2": "Another Top-Level Section","id": "474","index": "5"}
+Metadata: {"header": "Another Top-Level Section","header1": "Document with Mixed Tags","header2": "Another Top-Level Section","id": "419","index": "5"}
  <p>Footer with div: Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt.</p>
         </div>
     </footer>
