@@ -222,6 +222,29 @@ function testShortTermMemorySummarizationStaysWithinCapacity() returns error? {
     assertChatMessageEquals(current[current.length() - 1], question3);
 }
 
+@test:Config
+function testShortTermMemoryBatchTrimWithTrimCountLargerThanHistory() returns error? {
+    InMemoryShortTermMemoryStore store = check new (3);
+    Memory memory = check new ShortTermMemory(store, <TrimOverflowHandlerConfiguration>{trimCount: 10});
+
+    check memory.update(K1, [K1M1, k1m2, K1M3]);
+    // Overflows with a trim count larger than the stored and incoming messages together.
+    check memory.update(K1, [K1M4]);
+
+    ChatMessage[] k1CurrentMemory = check memory.get(K1);
+    test:assertEquals(k1CurrentMemory.length(), 1);
+    assertChatMessageEquals(k1CurrentMemory[0], K1M4);
+}
+
+@test:Config
+function testShortTermMemoryRejectsNonPositiveTrimCount() returns error? {
+    ShortTermMemory|MemoryError memory = new (overflowConfiguration = <TrimOverflowHandlerConfiguration>{trimCount: 0});
+    if memory !is MemoryError {
+        test:assertFail("Expected a trim count of 0 to be rejected");
+    }
+    test:assertTrue(memory.message().includes("trimCount"), "Expected the error to name trimCount: " + memory.message());
+}
+
 const CHAT_METHOD = "chat";
 
 @test:Config

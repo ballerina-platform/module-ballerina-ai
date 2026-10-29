@@ -75,6 +75,11 @@ public final class NativeHttpToChatServiceAdaptor {
         return invokeResource(env, dispatcher, "decision", request, headers);
     }
 
+    public static boolean hasResource(BObject dispatcher, BString path) {
+        BObject userService = (BObject) dispatcher.getNativeData(USER_CHAT_SERVICE);
+        return findResource(userService, path.getValue()) != null;
+    }
+
     private static ResourceMethodType findResource(BObject userService, String pathSegment) {
         ServiceType serviceType = (ServiceType) TypeUtils.getReferredType(TypeUtils.getType(userService));
         for (ResourceMethodType method : serviceType.getResourceMethods()) {

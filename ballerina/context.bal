@@ -110,6 +110,21 @@ public isolated class Context {
         'class: "io.ballerina.stdlib.ai.Context"
     } external;
 
+    // Reads an entry under the lock and clones it when it is `Cloneable`, as `get` does.
+    // Used by the native implementation of `getWithType`.
+    isolated function getEntry(string key) returns ContextEntry|Error {
+        lock {
+            if !self.entries.hasKey(key) {
+                return error Error(string `no member found for key: ${key}`);
+            }
+            Cloneable|isolated object {} value = self.entries.get(key);
+            if value is Cloneable {
+                return value.clone();
+            }
+            return value;
+        }
+    }
+
     # Removes the entry associated with the given key. Panics if the key does not exist.
     #
     # + key - The key identifying the entry to remove

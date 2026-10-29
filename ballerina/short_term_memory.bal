@@ -85,6 +85,10 @@ public isolated class ShortTermMemory {
             self.store = store ?: check new InMemoryShortTermMemoryStore();
 
             if overflowConfiguration is TrimOverflowHandlerConfiguration {
+                if overflowConfiguration.trimCount <= 0 {
+                    return error("trimCount must be a positive integer, found " +
+                        overflowConfiguration.trimCount.toString());
+                }
                 self.overflowHandler = overflowConfiguration.cloneReadOnly();
             } else {
                 final ModelProvider model = overflowConfiguration.model ?: check getDefaultModelProvider();
@@ -187,7 +191,6 @@ public isolated class ShortTermMemory {
         lock {
             int incomingCount = incomingInteractiveMsgs.length();
             ChatMessage[] existing = check self.store.getChatInteractiveMessages(key);
-            check self.store.removeChatInteractiveMessages(key);
 
             int currentSize = existing.length();
             int trimCount = trimHandler.trimCount;
@@ -199,8 +202,13 @@ public isolated class ShortTermMemory {
             int totalRemovals = trimCycles * trimCount;
 
             ChatMessage[] combined = [...existing, ...incomingInteractiveMsgs.clone()];
+            // Trimming in multiples of the trim count may exceed the messages available; the newest
+            // message is always kept, as when a single message is added.
+            totalRemovals = int:min(totalRemovals, combined.length() - 1);
             combined = totalRemovals > 0 ? combined.slice(totalRemovals) : combined;
-            return combined.'map(msg => check mapToMemoryChatMessage(msg)).clone();
+            ChatMessage[] trimmed = combined.'map(msg => check mapToMemoryChatMessage(msg)).clone();
+            check self.store.removeChatInteractiveMessages(key);
+            return trimmed;
         }
     }
 
