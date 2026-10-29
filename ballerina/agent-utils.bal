@@ -727,15 +727,13 @@ isolated function run(Agent agent, string instruction, string|Prompt query, int 
                 sessionId = sessionId
         );
     }
-    ChatMessage[] history = (prevHistory is ChatMessage[]) ? [...prevHistory] : [];
+    // The model always receives the current system prompt once, first. A custom memory may store the
+    // conversation without a system message, or, if it only appends updates, with the system message of
+    // each turn in the middle of the history, so any stored system message is dropped.
     ChatSystemMessage systemMessage = {role: SYSTEM, content: instruction};
-    if history.length() > 0 {
-        ChatMessage firstMessage = history[0];
-        if firstMessage is ChatSystemMessage && instruction != toString(firstMessage.content) {
-            history[0] = systemMessage;
-        }
-    } else {
-        history.unshift(systemMessage);
+    ChatMessage[] history = [systemMessage];
+    if prevHistory is ChatMessage[] {
+        history.push(...prevHistory.filter(message => message !is ChatSystemMessage));
     }
     ChatUserMessage userMessage = {role: USER, content: query};
     history.push(userMessage);

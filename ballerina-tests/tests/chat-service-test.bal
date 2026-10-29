@@ -139,3 +139,19 @@ function testAgentChatDecisionUnknownId() returns error? {
     string message = check (check body.message).ensureType();
     test:assertTrue(message.includes("Unknown approval id"), "Expected message to explain why: " + message);
 }
+
+// Verifies that a `decision` request to a service without a `decision` resource is answered with
+// HTTP 404, as for any other path the service does not serve, rather than a server error.
+@test:Config {}
+function testAgentChatDecisionWithoutDecisionResource() returns error? {
+    http:Client httpClient = check new ("http://localhost:9090");
+    http:Response resp = check httpClient->/chatOnlyService/decision.post({sessionId: "1", decisions: {}});
+    test:assertEquals(resp.statusCode, 404, "Expected a missing decision resource to map to HTTP 404");
+
+    ai:ChatClient chatClient = check new ("http://localhost:9090/chatOnlyService");
+    ai:ChatRespMessage|error result = chatClient->/decision.post({sessionId: "1", decisions: {}});
+    if result !is http:ClientRequestError {
+        test:assertFail("Expected the chat client to return a 4XX client request error");
+    }
+    test:assertEquals(result.detail().statusCode, 404);
+}

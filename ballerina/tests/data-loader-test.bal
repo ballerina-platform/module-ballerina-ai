@@ -14,6 +14,8 @@
 // specific language governing permissions and limitations
 // under the License.
 
+import ballerina/file;
+import ballerina/io;
 import ballerina/test;
 
 // Helper function to validate document structure and metadata
@@ -166,6 +168,30 @@ function testTextDataLoaderCaseInsensitiveExtensions() returns error? {
     Document[]|Document|Error result = loader.load();
     Document document = check getSingleDocument(result);
     check validateDocument(document, "application/pdf", "TestDoc.pdf");
+}
+
+@test:Config {groups: ["document-loader"]}
+function testTextDataLoaderLoadsUppercaseExtension() returns error? {
+    string mdPath = check file:createTemp(suffix = ".MD");
+    check io:fileWriteString(mdPath, check io:fileReadString("tests/resources/data-loader/Test.md"));
+    TextDataLoader loader = check new (mdPath);
+
+    Document document = check getSingleDocument(loader.load());
+    test:assertEquals(document.metadata?.fileName, check file:basename(mdPath));
+    check file:remove(mdPath);
+}
+
+@test:Config {groups: ["document-loader"]}
+function testGetFileTypeIgnoresCaseAndDirectoryDots() {
+    test:assertEquals(getFileType("docs/REPORT.PDF"), PDF);
+    test:assertEquals(getFileType("notes.Md"), MARKDOWN);
+    test:assertEquals(getFileType("page.HTM"), HTM);
+    test:assertEquals(getFileExtension("./docs/README"), "unknown",
+            "A dot in a directory name must not be taken as the file extension");
+    test:assertEquals(getFileExtension("v1.2/notes"), "unknown");
+    // Windows paths use backslashes as separators.
+    test:assertEquals(getFileType("C:\\docs.v1\\REPORT.PDF"), PDF);
+    test:assertEquals(getFileExtension("C:\\v1.2\\notes"), "unknown");
 }
 
 @test:Config {groups: ["document-loader", "error-handling"]}

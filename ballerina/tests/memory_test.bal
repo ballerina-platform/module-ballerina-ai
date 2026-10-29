@@ -194,6 +194,86 @@ function testShortTermMemoryWithIncomingBatchSizeLargerThanCapacity() returns er
     assertChatMessageEquals(k1CurrentMemory[0], K1M4);
 }
 
+@test:Config
+function testShortTermMemorySummarizationStaysWithinCapacity() returns error? {
+    final readonly & ChatAssistantMessage summary = {role: ASSISTANT, content: "Summary of the earlier conversation."};
+    Memory memory = check new ShortTermMemory(check new InMemoryShortTermMemoryStore(3),
+        overflowConfiguration = {model: new MockSummarizerModel(summary)});
+
+    ChatUserMessage question1 = {role: USER, content: "First question"};
+    ChatAssistantMessage answer1 = {role: ASSISTANT, content: "First answer"};
+    ChatUserMessage question2 = {role: USER, content: "Second question"};
+    ChatAssistantMessage answer2 = {role: ASSISTANT, content: "Second answer"};
+    ChatUserMessage question3 = {role: USER, content: "Third question"};
+    ChatAssistantMessage answer3 = {role: ASSISTANT, content: "Third answer"};
+
+    check memory.update(K1, [question1, answer1]);
+    // A batch exactly the size of the capacity overflows the memory.
+    check memory.update(K1, [question2, answer2, question3]);
+    ChatMessage[] current = check memory.get(K1);
+    test:assertTrue(current.length() <= 3, string `Expected at most 3 messages, found ${current.length()}`);
+    assertChatMessageEquals(current[0], summary);
+    assertChatMessageEquals(current[current.length() - 1], question3);
+
+    // A batch whose size is a multiple of the capacity overflows it again.
+    check memory.update(K1, [answer3, question1, answer1, question2, answer2, question3]);
+    current = check memory.get(K1);
+    test:assertTrue(current.length() <= 3, string `Expected at most 3 messages, found ${current.length()}`);
+    assertChatMessageEquals(current[current.length() - 1], question3);
+}
+
+@test:Config
+function testShortTermMemorySummarizationKeepsToolResultsWithTheirCall() returns error? {
+    final readonly & ChatAssistantMessage summary = {role: ASSISTANT, content: "Summary of the earlier conversation."};
+    Memory memory = check new ShortTermMemory(check new InMemoryShortTermMemoryStore(3),
+        overflowConfiguration = {model: new MockSummarizerModel(summary)});
+
+    ChatUserMessage question = {role: USER, content: "What do I have on my plate today?"};
+    ChatAssistantMessage toolCall = {role: ASSISTANT, toolCalls: [{name: "listTasks", arguments: {}}]};
+    ChatFunctionMessage toolResult = {role: FUNCTION, name: "listTasks", content: "[]"};
+    ChatFunctionMessage secondToolResult = {role: FUNCTION, name: "listTasks", content: "[]"};
+    ChatAssistantMessage answer = {role: ASSISTANT, content: "You have nothing on your plate today."};
+
+    // The summary keeps the stored user message after it, leaving room for only two incoming messages.
+    check memory.update(K1, [answer, question]);
+    check memory.update(K1, [toolCall, toolResult, answer]);
+    ChatMessage[] current = check memory.get(K1);
+    test:assertEquals(current.length(), 2);
+    assertChatMessageEquals(current[0], summary);
+    assertChatMessageEquals(current[1], answer);
+
+    // Two tool results leave the second one at the start of the kept messages.
+    check memory.delete(K1);
+    check memory.update(K1, [question, toolCall, toolResult, secondToolResult, answer]);
+    current = check memory.get(K1);
+    test:assertEquals(current.length(), 2);
+    assertChatMessageEquals(current[0], summary);
+    assertChatMessageEquals(current[1], answer);
+}
+
+@test:Config
+function testShortTermMemoryBatchTrimWithTrimCountLargerThanHistory() returns error? {
+    InMemoryShortTermMemoryStore store = check new (3);
+    Memory memory = check new ShortTermMemory(store, <TrimOverflowHandlerConfiguration>{trimCount: 10});
+
+    check memory.update(K1, [K1M1, k1m2, K1M3]);
+    // Overflows with a trim count larger than the stored and incoming messages together.
+    check memory.update(K1, [K1M4]);
+
+    ChatMessage[] k1CurrentMemory = check memory.get(K1);
+    test:assertEquals(k1CurrentMemory.length(), 1);
+    assertChatMessageEquals(k1CurrentMemory[0], K1M4);
+}
+
+@test:Config
+function testShortTermMemoryRejectsNonPositiveTrimCount() returns error? {
+    ShortTermMemory|MemoryError memory = new (overflowConfiguration = <TrimOverflowHandlerConfiguration>{trimCount: 0});
+    if memory !is MemoryError {
+        test:assertFail("Expected a trim count of 0 to be rejected");
+    }
+    test:assertTrue(memory.message().includes("trimCount"), "Expected the error to name trimCount: " + memory.message());
+}
+
 const CHAT_METHOD = "chat";
 
 @test:Config
