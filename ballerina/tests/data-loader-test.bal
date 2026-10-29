@@ -189,6 +189,9 @@ function testGetFileTypeIgnoresCaseAndDirectoryDots() {
     test:assertEquals(getFileExtension("./docs/README"), "unknown",
             "A dot in a directory name must not be taken as the file extension");
     test:assertEquals(getFileExtension("v1.2/notes"), "unknown");
+    // Windows paths use backslashes as separators.
+    test:assertEquals(getFileType("C:\\docs.v1\\REPORT.PDF"), PDF);
+    test:assertEquals(getFileExtension("C:\\v1.2\\notes"), "unknown");
 }
 
 @test:Config {groups: ["document-loader", "error-handling"]}
