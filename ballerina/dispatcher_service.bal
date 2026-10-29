@@ -51,11 +51,18 @@ isolated service class ChatDispatcherService {
 
     isolated resource function post chat(@http:Payload ChatReqMessage request, http:Headers headers)
             returns ChatRespMessage|ApprovalRequiredResponse|http:NotFound|http:BadRequest|error {
+        if !hasResource(self, "chat") {
+            return <http:NotFound>{};
+        }
         return toResponse(invokeChat(self, request, headers));
     }
 
     isolated resource function post decision(@http:Payload DecisionMessage request, http:Headers headers)
             returns ChatRespMessage|ApprovalRequiredResponse|http:NotFound|http:BadRequest|error {
+        // A user service is not required to declare `decision`; without it, the path is not served.
+        if !hasResource(self, "decision") {
+            return <http:NotFound>{};
+        }
         return toResponse(invokeDecision(self, request, headers));
     }
 }

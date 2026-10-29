@@ -91,3 +91,10 @@ service /pausingService on chatListener {
         return error ai:UnknownApprovalIdError("Unknown approval id for session '" + request.sessionId + "'.");
     }
 }
+
+// A service that declares only the `chat` resource, so a `decision` request has no resource to reach.
+service /chatOnlyService on chatListener {
+    resource function post chat(@http:Payload ai:ChatReqMessage request) returns ai:ChatRespMessage {
+        return {message: "Hello, " + request.message};
+    }
+}

@@ -62,8 +62,8 @@ ____
 
 
 --- Chunk 3 ---
-Metadata: {"id": "74","index": "2"}
-
+Metadata: {"id": "60","index": "2"}
+.
 
 ____
 
@@ -76,6 +76,12 @@ _____
 ## Five Underscores
 
 Testing with five underscores.
+
+## Mixed Content Section
+
+
+--- Chunk 4 ---
+Metadata: {"header": "Mixed Content Section","id": "62","index": "3"}
 
 ## Mixed Content Section
 
