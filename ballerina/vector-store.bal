@@ -117,7 +117,7 @@ public distinct isolated class InMemoryVectorStore {
                 stream<VectorMatch, Error?> matchStream = from InMemoryVectorEntry entry in self.entries
                     let float similarity = self.calculateSimilarity(<Vector>query.embedding.clone(), <Vector>entry.embedding)
                     where check entryMatchesFilters(entry, metadataFilters)
-                    order by similarity descending
+                    order by self.rank(similarity) descending
                     select {
                         chunk: entry.chunk.cloneReadOnly(),
                         embedding: entry.embedding.cloneReadOnly(),
@@ -128,7 +128,7 @@ public distinct isolated class InMemoryVectorStore {
             }
             stream<VectorMatch, Error?> matchStream = from InMemoryVectorEntry entry in self.entries
                 let float similarity = self.calculateSimilarity(<Vector>query.embedding.clone(), <Vector>entry.embedding)
-                order by similarity descending
+                order by self.rank(similarity) descending
                 select {
                     chunk: entry.chunk,
                     embedding: entry.embedding,
@@ -151,6 +151,11 @@ public distinct isolated class InMemoryVectorStore {
             limit topK
             select entry;
     }
+
+    // Ranks a score so that the closest match ranks highest: the Euclidean score is a distance, where a
+    // smaller value is closer, while the other metrics score a closer match higher.
+    private isolated function rank(float score) returns float =>
+        self.similarityMetric == EUCLIDEAN ? -score : score;
 
     private isolated function calculateSimilarity(Vector queryEmbedding, Vector entryEmbedding) returns float {
         match self.similarityMetric {
