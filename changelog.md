@@ -16,6 +16,7 @@ This file documents all significant changes made to the Ballerina AI package acr
 - [Fix `MarkdownChunker` Never Splitting on Horizontal Rules](https://github.com/wso2/product-integrator/issues/2892)
 - [Fix `Context.getWithType` Returning the Stored Value Instead of a Copy](https://github.com/wso2/product-integrator/issues/2891)
 - [Default the `tools` Parameter of `Wso2ModelProvider.chat` to an Empty Array](https://github.com/wso2/product-integrator/issues/2903)
+- [Remove the `Vendor/N/A` Keyword from the Package](https://github.com/ballerina-platform/ballerina-library/issues/9419)
 
 
 ## [1.16.1] - 2026-10-23
