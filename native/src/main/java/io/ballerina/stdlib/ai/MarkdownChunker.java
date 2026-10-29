@@ -51,9 +51,9 @@ class MarkdownChunker {
                     splitters.add(new CodeBlockSplitter());
                 case BY_HORIZONTAL_LINE:
                     splitters.addAll(List.of(
-                            new RecursiveChunker.SimpleDelimiterSplitter("\n\\*\\*\\*+\n"),
-                            new RecursiveChunker.SimpleDelimiterSplitter("\\n---+\\n"),
-                            new RecursiveChunker.SimpleDelimiterSplitter("\n___+\n")));
+                            RecursiveChunker.SimpleDelimiterSplitter.ofRegex("\n\\*{3,}\n"),
+                            RecursiveChunker.SimpleDelimiterSplitter.ofRegex("\n-{3,}\n"),
+                            RecursiveChunker.SimpleDelimiterSplitter.ofRegex("\n_{3,}\n")));
                 case BY_PARAGRAPH:
                     splitters.add(new RecursiveChunker.SimpleDelimiterSplitter("\n\n"));
                 case BY_LINE:

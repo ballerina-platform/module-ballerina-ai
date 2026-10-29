@@ -40,3 +40,34 @@ isolated function testContext() returns error? {
     ctx.remove("key1");
     test:assertEquals(ctx.hasKey("key1"), false);
 }
+
+@test:Config
+isolated function testContextGetWithTypeReturnsACopy() returns error? {
+    Context ctx = new;
+    int[] initialItems = [1, 2];
+    ctx.set("items", initialItems);
+
+    int[] items = check ctx.getWithType("items");
+    items.push(3);
+
+    int[] storedItems = check ctx.getWithType("items");
+    test:assertEquals(storedItems, [1, 2], "Mutating a value from getWithType must not change the context");
+}
+
+@test:Config
+isolated function testContextGetWithTypeErrors() {
+    Context ctx = new;
+    ctx.set("count", 1);
+
+    string|Error missing = ctx.getWithType("unknown");
+    if missing !is Error {
+        test:assertFail("Expected an error for a missing key");
+    }
+    test:assertEquals(missing.message(), "no member found for key: unknown");
+
+    string|Error wrongType = ctx.getWithType("count");
+    if wrongType !is Error {
+        test:assertFail("Expected an error for a value of a different type");
+    }
+    test:assertEquals(wrongType.message(), "type conversion failed for value of key: count");
+}

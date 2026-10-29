@@ -1,22 +1,37 @@
 # Represents the memory interface for the agents.
+#
+# An agent reads the conversation history of a session with `get` before a run, and writes the
+# messages of the run with `update` once the run completes. A run that pauses for human approval
+# writes nothing until it is resumed and completes.
+#
+# Implementations should store the system message separately from the conversation: `update`
+# replaces any stored system message instead of appending it, and `get` returns it first. The
+# agent always sends its current system prompt first, so a stored system message is only used by
+# other readers of the memory.
 public type Memory isolated object {
 
-    # Retrieves all stored chat messages.
+    # Retrieves the stored chat messages of a session, oldest first. If a system message is stored,
+    # it is the first element.
     #
     # + sessionId - The ID associated with the memory
-    # + return - An array of messages or an `ai:Error`
+    # + return - An array of messages, empty if nothing is stored, or an `ai:MemoryError`
     public isolated function get(string sessionId) returns ChatMessage[]|MemoryError;
 
-    # Stores one or more chat messages in memory for the specified session.
+    # Stores one or more chat messages for a session. After a completed run, an agent passes a single
+    # batch: its system message, the user message, the tool call and tool result messages, and the
+    # final assistant message. A system message replaces any stored system message. An
+    # implementation that limits its size should keep a tool call message and its tool result
+    # messages together, as some models reject a tool result without its tool call.
     #
     # + sessionId - The ID associated with the memory
     # + message - The chat message or array of messages to store in memory
-    # + return - nil on success, or an `ai:Error` if the operation fails 
+    # + return - nil on success, or an `ai:MemoryError` if the operation fails
     public isolated function update(string sessionId, ChatMessage|ChatMessage[] message) returns MemoryError?;
 
-    # Deletes all stored messages.
+    # Deletes all stored messages of a session.
+    #
     # + sessionId - The ID associated with the memory
-    # + return - nil on success, or an `ai:Error` if the operation fails
+    # + return - nil on success, or an `ai:MemoryError` if the operation fails
     public isolated function delete(string sessionId) returns MemoryError?;
 };
 

@@ -61,6 +61,11 @@ isolated function getDispatcher(ChatService chatService) returns ChatDispatcherS
     'class: "io.ballerina.stdlib.ai.NativeHttpToChatServiceAdaptor"
 } external;
 
+// Returns whether the user service attached through `dispatcher` declares a `post` resource at `path`.
+isolated function hasResource(ChatDispatcherService dispatcher, string path) returns boolean = @java:Method {
+    'class: "io.ballerina.stdlib.ai.NativeHttpToChatServiceAdaptor"
+} external;
+
 // Reflectively invokes the user service's `post chat` resource, returning its result (a
 // `ChatRespMessage`, or an `error` such as `ApprovalRequiredError`) intact. `headers` is forwarded
 // only when the user's resource declares a parameter for it, so a resource that takes the payload
