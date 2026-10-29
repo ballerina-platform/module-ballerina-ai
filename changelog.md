@@ -6,6 +6,7 @@ This file documents all significant changes made to the Ballerina AI package acr
 
 ### Fixed
 
+- [Fix `TextDataLoader` Rejecting Files with Upper-Case Extensions](https://github.com/wso2/product-integrator/issues/2899)
 - [Fix `ShortTermMemory` Summarization Exceeding the Memory Capacity](https://github.com/wso2/product-integrator/issues/2898)
 - [Fix `ShortTermMemory` Batch Trimming Panicking and Losing the Stored History](https://github.com/wso2/product-integrator/issues/2897)
 - [Fix Agent Runs Failing When a Custom `Memory` Returns History Without a System Message](https://github.com/wso2/product-integrator/issues/2896)
