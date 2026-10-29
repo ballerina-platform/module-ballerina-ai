@@ -176,21 +176,18 @@ public distinct isolated class InMemoryVectorStore {
     # Remove entries that matches the given reference identifiers.
     #
     # + ids - The reference identifiers of vector entries to delete
-    # + return - `ai:Error` if the reference ID is not found, otherwise `nil`
+    # + return - `ai:Error` if a reference ID is not found, in which case no entry is deleted, otherwise `nil`
     public isolated function delete(string|string[] ids) returns Error? {
-        if ids is string {
-            check self.deleteEntry(ids);
-            return;
-        }
-        _ = ids.'map(id => check self.deleteEntry(id));
-    }
-
-    private isolated function deleteEntry(string id) returns Error? {
+        final readonly & string[] idsToDelete = ids is string[] ? ids.cloneReadOnly() : [ids];
         lock {
-            if !self.entries.hasKey(id) {
-                return error Error(string `Vector entry with reference id '${id}' not found`);
+            foreach string id in idsToDelete {
+                if !self.entries.hasKey(id) {
+                    return error Error(string `Vector entry with reference id '${id}' not found`);
+                }
             }
-            _ = self.entries.remove(id);
+            foreach string id in idsToDelete {
+                _ = self.entries.remove(id);
+            }
         }
     }
 }

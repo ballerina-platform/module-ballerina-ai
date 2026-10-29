@@ -5,6 +5,7 @@ This file documents all significant changes made to the Ballerina AI package acr
 ## [Unreleased]
 
 ### Fixed
+- [Fix `InMemoryVectorStore.delete` with an Array Panicking on an Unknown Id](https://github.com/wso2/product-integrator/issues/2902)
 - [Fix `InMemoryVectorStore` Returning the Farthest Matches First with `EUCLIDEAN`](https://github.com/wso2/product-integrator/issues/2901)
 - [Fix AUTO Chunking Ignoring `.htm` Files and Upper-Case Extensions](https://github.com/wso2/product-integrator/issues/2900)
 - [Fix `TextDataLoader` Rejecting Files with Upper-Case Extensions](https://github.com/wso2/product-integrator/issues/2899)
