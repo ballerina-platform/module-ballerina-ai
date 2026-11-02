@@ -2,10 +2,10 @@
 distribution = "2201.14.0"
 org = "ballerina"
 name = "ai"
-version = "1.16.1"
+version = "1.16.2"
 license = ["Apache-2.0"]
 authors = ["Ballerina"]
-keywords = ["AI/Agent", "Cost/Freemium", "Agent", "Vendor/N/A", "Area/AI", "Type/Connector"]
+keywords = ["AI/Agent", "Cost/Freemium", "Agent", "Area/AI", "Type/Connector"]
 repository = "https://github.com/ballerina-platform/module-ballerina-ai"
 icon="icon.png"
 
@@ -20,14 +20,14 @@ graalvmCompatible = true
 [[platform.java25.dependency]]
 groupId = "io.ballerina.stdlib"
 artifactId = "ai-native"
-version = "1.16.1"
-path = "../native/build/libs/ai-native-1.16.1.jar"
+version = "1.16.2"
+path = "../native/build/libs/ai-native-1.16.2-SNAPSHOT.jar"
 
 [[platform.java25.dependency]]
 groupId = "io.ballerina.stdlib"
 artifactId = "ai-native"
-version = "1.16.1"
-path = "../native/build/libs/ai-native-1.16.1-tests.jar"
+version = "1.16.2"
+path = "../native/build/libs/ai-native-1.16.2-SNAPSHOT-tests.jar"
 testOnly = true
 
 [[platform.java25.dependency]]
