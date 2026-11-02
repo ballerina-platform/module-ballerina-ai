@@ -186,7 +186,8 @@ public distinct isolated class InMemoryVectorStore {
                 }
             }
             foreach string id in idsToDelete {
-                _ = self.entries.remove(id);
+                // A repeated id has already been removed by its first occurrence.
+                _ = self.entries.removeIfHasKey(id);
             }
         }
     }

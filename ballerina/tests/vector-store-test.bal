@@ -197,7 +197,8 @@ isolated function testInMemoryStoreDeleteWithUnknownIdInArray() returns error? {
     VectorMatch[] remaining = check vectorStore.query({embedding: [1.0, 0.0], topK: -1});
     test:assertEquals(remaining.length(), 2, "Expected no entry to be deleted when an id is unknown");
 
-    check vectorStore.delete(["first", "second"]);
+    // A repeated id deletes its entry once, and the ids after it are still deleted.
+    check vectorStore.delete(["first", "first", "second"]);
     remaining = check vectorStore.query({embedding: [1.0, 0.0], topK: -1});
     test:assertEquals(remaining.length(), 0);
 }
