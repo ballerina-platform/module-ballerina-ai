@@ -1,4 +1,7 @@
 # ballerina:14 flags `auth: {refreshToken: googleRefreshToken, clientId, clientSecret, refreshUrl}`. All of these values are
 # `configurable ... = ?` (supplied at deployment time, no fixed value); the rule only matches the identifier names.
+# TODO: replace this rule exclusion with a targeted scan suppression (with a reason) once `bal scan` supports it
+# (planned for v0.13.0), and fix the false positives on the scan tool side: a secret-named identifier should only be
+# reported when it is assigned a fixed value.
 [rule]
 exclude = ["ballerina:14"]
