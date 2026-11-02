@@ -180,3 +180,25 @@ isolated function testInMemoryVectorDeletion() returns error? {
         test:assertFail("Expected an 'Error' but got '()'");
     }
 }
+
+@test:Config
+isolated function testInMemoryStoreDeleteWithUnknownIdInArray() returns error? {
+    VectorStore vectorStore = check new InMemoryVectorStore();
+    check vectorStore.add([
+        {id: "first", embedding: [1.0, 0.0], chunk: <TextChunk>{content: "first"}},
+        {id: "second", embedding: [0.0, 1.0], chunk: <TextChunk>{content: "second"}}
+    ]);
+
+    Error? result = vectorStore.delete(["first", "missing"]);
+    if result !is Error {
+        test:assertFail("Expected an error for an unknown id");
+    }
+    test:assertEquals(result.message(), "Vector entry with reference id 'missing' not found");
+    VectorMatch[] remaining = check vectorStore.query({embedding: [1.0, 0.0], topK: -1});
+    test:assertEquals(remaining.length(), 2, "Expected no entry to be deleted when an id is unknown");
+
+    // A repeated id deletes its entry once, and the ids after it are still deleted.
+    check vectorStore.delete(["first", "first", "second"]);
+    remaining = check vectorStore.query({embedding: [1.0, 0.0], topK: -1});
+    test:assertEquals(remaining.length(), 0);
+}
