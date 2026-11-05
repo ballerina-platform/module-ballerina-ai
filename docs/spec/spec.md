@@ -3,7 +3,7 @@
 _Owners_: @MohamedSabthar @shafreenAnfar @kalaiyarasiganeshalingam @RadCod3  
 _Reviewers_: @MohamedSabthar @shafreenAnfar @kalaiyarasiganeshalingam @RadCod3  
 _Created_: 2026/10/28  
-_Updated_: 2026/10/28  
+_Updated_: 2026/11/05  
 _Edition_: Swan Lake
 
 
@@ -363,7 +363,7 @@ public isolated distinct client class Wso2ModelProvider {
             readonly & GeneratorConfig generatorConfig = {},
             *ConnectionConfig connectionConfig) returns Error?;
 
-    isolated remote function chat(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools, string? stop = ())
+    isolated remote function chat(ChatMessage[]|ChatUserMessage messages, ChatCompletionFunctions[] tools = [], string? stop = ())
         returns ChatAssistantMessage|Error;
 
     isolated remote function generate(Prompt prompt, typedesc<anydata> td = <>) returns td|Error;
@@ -1168,7 +1168,8 @@ Each run is associated with a session ID. The default session ID is `"sessionId"
 
 At the start of a run, the agent loads the history of the session from memory.
 - If loading fails, the run proceeds with an empty history.
-- If the stored system message differs from the agent's current system prompt, it is replaced.
+- Any system message in the loaded history is dropped, and the agent's current system prompt is sent first. The
+  history may therefore come from a memory that does not store a system message.
 - The user message of the turn is then appended.
 
 The messages produced during the run are written to memory in a single batch once the run ends, whether it
@@ -1680,7 +1681,8 @@ public type TrimOverflowHandlerConfiguration record {|
 On overflow, the oldest interactive messages are removed in multiples of `trimCount` until the incoming messages
 fit within the capacity, and the incoming messages are then stored. When a batch of messages is added, the stored
 and incoming messages are trimmed together, so a batch larger than the capacity also loses its own leading
-messages.
+messages. The newest message is always kept, even when `trimCount` exceeds the number of messages. `trimCount` must
+be a positive integer; otherwise, the `ai:ShortTermMemory` initializer returns an `ai:MemoryError`.
 
 #### 6.2.2. Model-assisted overflow handling
 
@@ -1700,8 +1702,10 @@ On overflow, the stored interactive messages are summarized by a model.
 The model is called with `prompt` as the system message and a user message containing the history to summarize.
 The summarized history is replaced by a single assistant message containing the summary.
 - If the last message to be summarized is a user message, it is kept verbatim after the summary.
-- When a batch of incoming messages is larger than the capacity, the leading part of the batch is summarized
-  together with the stored messages, and the trailing part is kept as is.
+- When a batch of incoming messages overflows the capacity, the leading part of the batch is summarized together
+  with the stored messages, and the trailing part is kept as is. The trailing part holds only as many messages as
+  fit within the capacity alongside the summary, and never starts with a tool result message: tool results are
+  summarized together with the tool call message they answer.
 - If the summarization call fails, `update` returns an `ai:MemoryError`.
 
 ```ballerina
@@ -1905,7 +1909,8 @@ public type DataLoader isolated object {
 ```
 
 `TextDataLoader` loads files from the local file system as `TextDocument` values. The supported file extensions are
-`pdf`, `docx`, `pptx`, `html`, `htm`, and `md`. The `init` method returns an `ai:Error` if any of the given paths does
+`pdf`, `docx`, `pptx`, `html`, `htm`, and `md`, matched case-insensitively against the extension of the file name.
+The `init` method returns an `ai:Error` if any of the given paths does
 not exist. The `load` method returns an `ai:Error` for a file with an unsupported extension. When a single path is
 given, `load` returns a single `Document`; otherwise it returns a `Document[]`.
 
@@ -1937,8 +1942,8 @@ The library provides three chunkers. Each starts splitting with the configured s
 a finer-grained strategy when a piece exceeds `maxChunkSize` characters. `maxOverlapSize` is the maximum number of
 characters reused from the end of the previous chunk when creating the next one. For `ai:GenericRecursiveChunker`,
 the overlap is made of complete sentences taken in reverse from the previous chunk. For `ai:MarkdownChunker` and
-`ai:HtmlChunker`, the overlap is the last piece of the previous chunk, split further with the strategy's own
-splitters until it fits within `maxOverlapSize`.
+`ai:HtmlChunker`, the overlap is the last piece of the previous chunk, split further by full stops, then words, then
+characters until it fits within `maxOverlapSize`.
 
 ```ballerina
 public isolated class GenericRecursiveChunker {
@@ -2040,6 +2045,9 @@ public enum HtmlChunkStrategy {
 - `HTML_PARAGRAPH` splits by `<p>` elements, then falls back to `HTML_LINE`, `SENTENCE`, `WORD`, and `CHARACTER`.
 - `HTML_LINE` splits by the literal text `<br>` (other forms such as `<br/>` are not matched), then falls back to `SENTENCE`, `WORD`, and `CHARACTER`.
 
+In `ai:MarkdownChunker` and `ai:HtmlChunker`, `SENTENCE` splits at full stops (`.`), unlike `ai:GenericRecursiveChunker`,
+which detects sentence boundaries with OpenNLP.
+
 #### 7.3.2. Automatic and disabled chunking
 
 A `VectorKnowledgeBase` accepts a `Chunker`, or one of the following constants, as its chunker configuration.
@@ -2050,8 +2058,8 @@ public const DISABLE = "DISABLE";
 ```
 
 - `AUTO` selects a chunker per document: a `MarkdownChunker` when `metadata.mimeType` is `"text/markdown"`, an
-  `HtmlChunker` when it is `"text/html"`; otherwise, a `MarkdownChunker` when `metadata.fileName` ends with `.md`, an
-  `HtmlChunker` when it ends with `.html`, and a `GenericRecursiveChunker` in all other cases. Each selected chunker
+  `HtmlChunker` when it is `"text/html"`; otherwise, a `MarkdownChunker` when the extension of `metadata.fileName` is
+  `md`, an `HtmlChunker` when it is `html` or `htm` (ignoring case), and a `GenericRecursiveChunker` in all other cases. Each selected chunker
   uses its default configuration.
 - `DISABLE` performs no chunking; each document is stored as a single chunk.
 
@@ -2137,8 +2145,11 @@ returned, subject to `topK`. Setting `topK` to `-1` returns all matching entries
   is given.
 - `add` generates a random UUID as the `id` of an entry without one, and replaces an existing entry with the same
   `id`.
-- When the query has an `embedding`, matches are ordered by the score of the configured `SimilarityMetric`, in
-  descending order. When the query has no `embedding`, `similarityScore` is `0.0`.
+- `delete` returns an `ai:Error` if any of the given ids is not found, in which case no entry is deleted. An id
+  given more than once deletes its entry once.
+- When the query has an `embedding`, matches are ordered from the closest to the farthest. For `COSINE` and
+  `DOT_PRODUCT`, `similarityScore` is the similarity, in descending order; for `EUCLIDEAN`, it is the distance, in
+  ascending order. When the query has no `embedding`, `similarityScore` is `0.0`.
 - When the query has `filters`, only entries whose chunk metadata satisfies the filters are returned. An entry with no
   metadata never satisfies a filter.
 - A `topK` value less than `1` returns all matching entries.
