@@ -163,8 +163,9 @@ class ToolAnnotationAnalysisTask implements AnalysisTask<SyntaxNodeAnalysisConte
             return false;
         }
         ModuleID id = module.get().id();
+        // Tools built on the `mcp.v2` client use that module's types.
         boolean isMcpModule = id.orgName().equals("ballerina") &&
-                id.moduleName().equals("mcp");
+                (id.moduleName().equals("mcp") || id.moduleName().equals("mcp.v2"));
         boolean isExpectedType = ref.getName().isPresent() &&
                 ref.getName().get().equals(expectedType);
         return isMcpModule && isExpectedType;

@@ -1,0 +1,20 @@
+[package]
+org = "ballerina"
+name = "ai_tests"
+version = "1.16.1"
+
+[build-options]
+observabilityIncluded = true
+
+[[platform.java25.dependency]]
+groupId = "io.ballerina.stdlib"
+artifactId = "ai-native"
+version = "1.16.1"
+path = "../../../../../../../native/build/libs/ai-native-1.16.1.jar"
+
+[[platform.java25.dependency]]
+groupId = "io.ballerina.stdlib"
+artifactId = "ai-native"
+version = "1.16.1"
+path = "../../../../../../../native/build/libs/ai-native-1.16.1-tests.jar"
+testOnly = true

@@ -4,6 +4,13 @@ This file documents all significant changes made to the Ballerina AI package acr
 
 ## [Unreleased]
 
+### Added
+- Support MCP servers on the modern (2026-07-28) protocol through `mcp` 1.5.0
+  - `ai:getPermittedMcpToolConfigs` also accepts the `ballerina/mcp.v2` `StreamableHttpClient`, which uses the
+    modern protocol when the server offers it and the legacy handshake otherwise, and an `mcp.v2` `Implementation`.
+    Its tool dispatchers use the `mcp.v2` `CallToolParams` and `CallToolResult`, and take `Scopes` in `@ai:AgentTool` auth
+  - `ai:McpToolKit` keeps using the `ballerina/mcp` client
+
 ### Fixed
 - [Fix `InMemoryVectorStore.delete` with an Array Panicking on an Unknown Id](https://github.com/wso2/product-integrator/issues/2902)
 - [Fix `InMemoryVectorStore` Returning the Farthest Matches First with `EUCLIDEAN`](https://github.com/wso2/product-integrator/issues/2901)

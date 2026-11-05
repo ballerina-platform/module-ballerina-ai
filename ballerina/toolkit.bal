@@ -17,6 +17,7 @@
 import ballerina/http;
 import ballerina/log;
 import ballerina/mcp;
+import ballerina/mcp.v2 as mcpv2;
 
 # Supported HTTP methods.
 public enum HttpMethod {
@@ -516,6 +517,28 @@ isolated function getInputSchemaValues(mcp:ToolDefinition tool) returns map<json
     return inputSchema;
 };
 
+// Follows `nextCursor`, since a server may split its tools across pages.
+isolated function listAllMcpTools(mcpv2:StreamableHttpClient mcpClient)
+        returns mcpv2:ToolDefinition[]|mcpv2:ClientError {
+    mcpv2:ToolDefinition[] tools = [];
+    mcpv2:Cursor? cursor = ();
+    while true {
+        mcpv2:ListToolsResult page = check mcpClient->listTools(cursor = cursor);
+        tools.push(...page.tools);
+        mcpv2:Cursor? nextCursor = page.nextCursor;
+        if nextCursor is () || nextCursor == cursor {
+            return tools;
+        }
+        cursor = nextCursor;
+    }
+}
+
+// `mcp` and `mcp.v2` records are distinct types, so values cross between the modules by conversion.
+isolated function connectMcpClient(mcpv2:StreamableHttpClient mcpClient, record {string name; string version;} info)
+        returns mcpv2:ConnectionInfo|error {
+    return mcpClient->connect(check info.cloneWithType());
+}
+
 # Constructs the list of permitted MCP tool configurations by querying the MCP server.
 #
 # This function initializes the MCP client using the provided implementation information
@@ -527,27 +550,46 @@ isolated function getInputSchemaValues(mcp:ToolDefinition tool) returns map<json
 # @ai:AgentTool
 # isolated function (mcp:CallToolParams) returns mcp:CallToolResult|error;
 # ```
+# With an `mcpv2:StreamableHttpClient` from `ballerina/mcp.v2`, the dispatcher uses that module's types:
+# ```ballerina
+# @ai:AgentTool
+# isolated function (mcpv2:CallToolParams) returns mcpv2:CallToolResult|error;
+# ```
 #
-# + mcpClient - The MCP client instance used to query the MCP server
-# + info - The implementation information used to initialize the client
+# + mcpClient - The MCP client instance used to query the MCP server. An `mcpv2:StreamableHttpClient`
+# speaks both the legacy and the modern MCP protocol
+# + info - The implementation information used to initialize the client, as an `mcp:Implementation` or an
+# `mcpv2:Implementation`. A union of the two would make a mapping constructor argument ambiguous
 # + permittedTools - A map of tool names to their respective MCP function tool dispatchers,
 # or a single dispatcher if all tools are permitted
 # + auth - Configuration for authenticating with an external authorization server
 #       to obtain access tokens required for MCP tool invocation
 # + return - An array of tool configurations or an error if the operation fails
-public isolated function getPermittedMcpToolConfigs(mcp:StreamableHttpClient mcpClient, mcp:Implementation info,
-        map<FunctionTool>|FunctionTool permittedTools, AgentIdAuthConfig? auth = ()) returns ToolConfig[]|Error {
+public isolated function getPermittedMcpToolConfigs(mcp:StreamableHttpClient|mcpv2:StreamableHttpClient mcpClient,
+        record {string name; string version;} info, map<FunctionTool>|FunctionTool permittedTools,
+        AgentIdAuthConfig? auth = ()) returns ToolConfig[]|Error {
     do {
         if auth is AgentIdAuthConfig {
             log:printWarn(
                 "Stateful session mode is not supported when agent identity is used. " + 
                     "If you are using STATEFUL mode, switch to STATELESS or AUTO mode."
             );        
-        } else {
-            _ = check mcpClient->initialize(info);
         }
-        mcp:ListToolsResult listTools = check mcpClient->listTools();
-        return from mcp:ToolDefinition tool in listTools.tools
+        (mcp:ToolDefinition|mcpv2:ToolDefinition)[] tools;
+        if mcpClient is mcpv2:StreamableHttpClient {
+            // Unlike the deprecated client, it cannot list tools before connecting, even with agent identity.
+            _ = check connectMcpClient(mcpClient, info);
+            tools = check listAllMcpTools(mcpClient);
+        } else {
+            // Object types are not narrowed in the else branch.
+            mcp:StreamableHttpClient deprecatedClient = <mcp:StreamableHttpClient>mcpClient;
+            if auth !is AgentIdAuthConfig {
+                _ = check deprecatedClient->initialize(check info.cloneWithType());
+            }
+            mcp:ListToolsResult listTools = check deprecatedClient->listTools();
+            tools = listTools.tools;
+        }
+        return from mcp:ToolDefinition|mcpv2:ToolDefinition tool in tools
             let string toolName = tool.name
             where permittedTools is FunctionTool || permittedTools.hasKey(toolName)
             select {
