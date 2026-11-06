@@ -9,6 +9,8 @@ This file documents all significant changes made to the Ballerina AI package acr
   - `ai:getPermittedMcpToolConfigs` also accepts the `ballerina/mcp.v2` `StreamableHttpClient`, which uses the
     modern protocol when the server offers it and the legacy handshake otherwise, and an `mcp.v2` `Implementation`.
     Its tool dispatchers use the `mcp.v2` `CallToolParams` and `CallToolResult`, and take `Scopes` in `@ai:AgentTool` auth
+  - With agent identity (`auth`), the `mcp.v2` client skips the legacy `initialize` handshake, as the `mcp` client
+    does, so no HTTP session is created at start-up
   - `ai:McpToolKit` keeps using the `ballerina/mcp` client
 
 ### Fixed

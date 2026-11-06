@@ -534,9 +534,9 @@ isolated function listAllMcpTools(mcpv2:StreamableHttpClient mcpClient)
 }
 
 // `mcp` and `mcp.v2` records are distinct types, so values cross between the modules by conversion.
-isolated function connectMcpClient(mcpv2:StreamableHttpClient mcpClient, record {string name; string version;} info)
-        returns mcpv2:ConnectionInfo|error {
-    return mcpClient->connect(check info.cloneWithType());
+isolated function connectMcpClient(mcpv2:StreamableHttpClient mcpClient, record {string name; string version;} info,
+        boolean legacyInitialize = true) returns mcpv2:ConnectionInfo|error {
+    return mcpClient->connect(check info.cloneWithType(), legacyInitialize = legacyInitialize);
 }
 
 # Constructs the list of permitted MCP tool configurations by querying the MCP server.
@@ -577,8 +577,8 @@ public isolated function getPermittedMcpToolConfigs(mcp:StreamableHttpClient|mcp
         }
         (mcp:ToolDefinition|mcpv2:ToolDefinition)[] tools;
         if mcpClient is mcpv2:StreamableHttpClient {
-            // Unlike the deprecated client, it cannot list tools before connecting, even with agent identity.
-            _ = check connectMcpClient(mcpClient, info);
+            // Each agent-identity call carries its own user's token, so no legacy session may be created up front.
+            _ = check connectMcpClient(mcpClient, info, legacyInitialize = auth !is AgentIdAuthConfig);
             tools = check listAllMcpTools(mcpClient);
         } else {
             // Object types are not narrowed in the else branch.

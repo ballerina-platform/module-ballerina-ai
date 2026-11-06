@@ -14,6 +14,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
+import ballerina/http;
 import ballerina/mcp;
 import ballerina/mcp.v2 as mcpv2;
 import ballerina/test;
@@ -102,4 +103,69 @@ function testPermittedMcpToolConfigsWithV2ImplementationAndDeprecatedClient() re
     mcpv2:Implementation info = {name: "MCP", version: "1.0.0"};
     ToolConfig[] tools = check getPermittedMcpToolConfigs(mcpClient, info, mcpV2Dispatcher);
     test:assertEquals(tools.length(), 2);
+}
+
+// A real mcp.v2 service cannot report whether initialize arrived, so this legacy-only mock records it.
+isolated map<string[]> recordedMcpMethods = {};
+
+isolated function recordedMethods(string scenario) returns string[] {
+    lock {
+        return (recordedMcpMethods[scenario] ?: []).clone();
+    }
+}
+
+service /recording on new http:Listener(9099) {
+    resource function post [string scenario](@http:Payload map<json> payload) returns http:Response|error {
+        string method = check payload.method.ensureType();
+        lock {
+            string[] methods = recordedMcpMethods[scenario] ?: [];
+            methods.push(method);
+            recordedMcpMethods[scenario] = methods;
+        }
+        http:Response response = new;
+        json id = payload["id"];
+        if id is () {
+            response.statusCode = http:STATUS_ACCEPTED;
+            return response;
+        }
+        json result = {};
+        match method {
+            "server/discover" => {
+                result = {
+                    resultType: "complete",
+                    ttlMs: 0,
+                    cacheScope: "private",
+                    supportedVersions: ["2025-11-25"],
+                    capabilities: {}
+                };
+            }
+            "initialize" => {
+                result = {protocolVersion: "2025-11-25", capabilities: {}, serverInfo: {name: "mock", version: "1"}};
+            }
+            "tools/list" => {
+                result = {tools: [{name: "echo", inputSchema: {'type: "object"}}]};
+            }
+        }
+        response.setJsonPayload({jsonrpc: "2.0", id, result});
+        return response;
+    }
+}
+
+@test:Config
+function testAgentIdentitySkipsLegacyInitializeWithV2Client() returns error? {
+    mcpv2:StreamableHttpClient mcpClient = check new ("http://localhost:9099/recording/agentId");
+    AgentIdAuthConfig auth = {baseAuthUrl: "http://localhost:9/auth", clientId: "client", redirectUri: "http://localhost/cb"};
+    ToolConfig[] tools = check getPermittedMcpToolConfigs(mcpClient, {name: "MCP", version: "1.0.0"}, mcpV2Dispatcher,
+            auth);
+    test:assertEquals(tools.map(tool => tool.name), ["echo"]);
+    test:assertEquals(recordedMethods("agentId"), ["server/discover", "tools/list"]);
+}
+
+@test:Config
+function testV2ClientRunsLegacyInitializeWithoutAgentIdentity() returns error? {
+    mcpv2:StreamableHttpClient mcpClient = check new ("http://localhost:9099/recording/noAuth");
+    ToolConfig[] tools = check getPermittedMcpToolConfigs(mcpClient, {name: "MCP", version: "1.0.0"}, mcpV2Dispatcher);
+    test:assertEquals(tools.map(tool => tool.name), ["echo"]);
+    test:assertEquals(recordedMethods("noAuth"), ["server/discover", "initialize", "notifications/initialized",
+            "tools/list"]);
 }
