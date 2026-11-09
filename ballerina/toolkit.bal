@@ -539,6 +539,28 @@ isolated function connectMcpClient(mcpv2:StreamableHttpClient mcpClient, record 
     return mcpClient->connect(check info.cloneWithType(), legacyInitialize = legacyInitialize);
 }
 
+// The model needs only an MCP tool's output; `_meta` and `resultType` are protocol metadata.
+isolated function unwrapMcpToolResult(anydata value) returns anydata {
+    if value !is mcp:CallToolResult|mcpv2:CallToolResult {
+        return value;
+    }
+    // Servers also serialize structured content as text, so it stands in only when there is no content.
+    anydata output = value.content.length() == 0 ? value?.structuredContent
+        : getMcpContentText(value.content) ?: value.content;
+    return value?.isError == true ? {isError: true, content: output} : output;
+}
+
+isolated function getMcpContentText(anydata[] content) returns string? {
+    string[] texts = [];
+    foreach anydata block in content {
+        if block !is mcp:TextContent|mcpv2:TextContent {
+            return ();
+        }
+        texts.push(block.text);
+    }
+    return string:'join("\n", ...texts);
+}
+
 # Constructs the list of permitted MCP tool configurations by querying the MCP server.
 #
 # This function initializes the MCP client using the provided implementation information

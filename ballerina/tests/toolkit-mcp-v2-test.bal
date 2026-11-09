@@ -79,6 +79,59 @@ function testCustomMcpV2ToolKitWithModernServer() returns error? {
     ToolOutput output = check toolStore.execute({name: "greet", arguments: {"greetName": "John"}});
     mcpv2:CallToolResult result = check (check output.value).ensureType();
     test:assertEquals(result.content.toJson(), [{"type": "text", "text": "Hey John! Welcome to Ballerina!"}]);
+    // The modern result also carries `structuredContent`, `resultType` and `_meta`, none of which reach the model.
+    test:assertEquals(unwrapMcpToolResult(result), "Hey John! Welcome to Ballerina!");
+}
+
+@test:Config
+function testUnwrapMcpToolResultJoinsTextContent() {
+    mcp:CallToolResult result = {content: [{'type: "text", text: "Line 1"}, {'type: "text", text: "Line 2"}]};
+    test:assertEquals(unwrapMcpToolResult(result), "Line 1\nLine 2");
+}
+
+@test:Config
+function testUnwrapMcpToolResultKeepsNonTextContent() {
+    mcpv2:CallToolResult result = {
+        content: [{'type: "text", text: "A chart"}, {'type: "image", data: "aGk=", mimeType: "image/png"}],
+        structuredContent: {chart: "bar"}
+    };
+    test:assertEquals(unwrapMcpToolResult(result), result.content);
+}
+
+@test:Config
+function testUnwrapMcpToolResultFallsBackToStructuredContent() {
+    mcpv2:CallToolResult result = {content: [], structuredContent: {temperature: 22}};
+    test:assertEquals(unwrapMcpToolResult(result), {temperature: 22});
+}
+
+@test:Config
+function testUnwrapMcpToolResultKeepsErrorFlag() {
+    mcpv2:CallToolResult result = {content: [{'type: "text", text: "City not found"}], isError: true};
+    test:assertEquals(unwrapMcpToolResult(result), {isError: true, content: "City not found"});
+}
+
+@test:Config
+function testTraceOutputMatchesModelObservationForMcpResult() returns error? {
+    mcpv2:CallToolResult result = {
+        content: [{'type: "text", text: "Sunny"}],
+        structuredContent: {weather: "Sunny"},
+        resultType: "complete"
+    };
+    ChatFunctionMessage output = check getOutputOfStep({tool: {name: "getWeather"}, observation: result});
+    test:assertEquals(output.content, "Sunny");
+}
+
+@test:Config
+function testObservationForEmptyMcpToolResult() {
+    mcpv2:CallToolResult result = {content: []};
+    test:assertEquals(getObservationString(result),
+        "Tool didn't return anything. Probably it is successful. Should we verify using another tool?");
+}
+
+@test:Config
+function testUnwrapMcpToolResultLeavesOtherValues() {
+    record {anydata[] content;} value = {content: []};
+    test:assertEquals(unwrapMcpToolResult(value), value);
 }
 
 @AgentTool

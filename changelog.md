@@ -13,6 +13,10 @@ This file documents all significant changes made to the Ballerina AI package acr
     does, so no HTTP session is created at start-up
   - `ai:McpToolKit` keeps using the `ballerina/mcp` client
 
+### Changed
+- Agents pass the model only the content of an MCP tool result, not the whole `CallToolResult`. Text content is
+  joined into a string, and `structuredContent` is used only when there is no content
+
 ### Fixed
 - [Fix `InMemoryVectorStore.delete` with an Array Panicking on an Unknown Id](https://github.com/wso2/product-integrator/issues/2902)
 - [Fix `InMemoryVectorStore` Returning the Farthest Matches First with `EUCLIDEAN`](https://github.com/wso2/product-integrator/issues/2901)

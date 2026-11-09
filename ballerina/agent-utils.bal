@@ -1097,7 +1097,9 @@ isolated function collectToolCalls(ExecutionStep[] steps) returns FunctionCall[]
     where llmResponse is FunctionCall
     select llmResponse;
 
-isolated function getObservationString(anydata|error observation) returns string {
+isolated function getObservationString(anydata|error toolResult) returns string {
+    // Both the model's history and the trace output come from here, so they show the same unwrapped result.
+    anydata|error observation = toolResult is error ? toolResult : unwrapMcpToolResult(toolResult);
     if observation is () {
         return "Tool didn't return anything. Probably it is successful. Should we verify using another tool?";
     } else if observation is error {
