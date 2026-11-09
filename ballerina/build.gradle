@@ -55,6 +55,13 @@ configurations {
 }
 
 dependencies {
+    // opentelemetry-api comes in transitively through ballerina-lang (pinned to 1.65.0 there);
+    // 1.67.0 fixes CVE-2026-118259 (quadratic CPU consumption in W3C tracestate parsing)
+    constraints {
+        externalJars('io.opentelemetry:opentelemetry-api:1.67.0') {
+            because 'CVE-2026-118259, fixed in 1.67.0'
+        }
+    }
     externalJars project(":ai-native")
     
     externalJars(group: 'dev.langchain4j', name: 'langchain4j', version:  "${project.langchain4jVersion}") {
