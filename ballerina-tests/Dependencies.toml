@@ -151,7 +151,7 @@ dependencies = [
 [[package]]
 org = "ballerina"
 name = "http"
-version = "2.18.1"
+version = "2.18.2"
 dependencies = [
 	{org = "ballerina", name = "auth"},
 	{org = "ballerina", name = "cache"},
