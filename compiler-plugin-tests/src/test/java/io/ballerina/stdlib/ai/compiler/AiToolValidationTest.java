@@ -244,7 +244,7 @@ public class AiToolValidationTest {
         // not a `CodeModifier` one, so its diagnostics only surface on `getCompilation()`, not on
         // `getDiagnosticResult`'s own `runCodeGenAndModifyPlugins()` return value.
         DiagnosticResult diagnosticResult = getFullDiagnosticResult(packagePath);
-        Assert.assertEquals(diagnosticResult.errorCount(), 15);
+        Assert.assertEquals(diagnosticResult.errorCount(), 15, diagnosticResult.errors().toString());
         Assert.assertEquals(diagnosticResult.warningCount(), 0);
 
         Iterator<Diagnostic> diagnosticIterator = diagnosticResult.errors().iterator();
