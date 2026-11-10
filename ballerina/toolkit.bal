@@ -537,12 +537,6 @@ isolated function listAllMcpTools(mcpv2:StreamableHttpClient mcpClient)
     return error Error(string `MCP server returned more than ${MAX_MCP_TOOL_PAGES} pages of tools`);
 }
 
-// `mcp` and `mcp.v2` records are distinct types, so values cross between the modules by conversion.
-isolated function connectMcpClient(mcpv2:StreamableHttpClient mcpClient, record {string name; string version;} info,
-        boolean legacyInitialize = true) returns mcpv2:ConnectionInfo|error {
-    return mcpClient->connect(check info.cloneWithType(), legacyInitialize = legacyInitialize);
-}
-
 // The model needs only an MCP tool's output; `_meta` and `resultType` are protocol metadata.
 isolated function unwrapMcpToolResult(anydata value) returns anydata {
     if value !is mcp:CallToolResult|mcpv2:CallToolResult {
@@ -603,8 +597,8 @@ public isolated function getPermittedMcpToolConfigs(mcp:StreamableHttpClient|mcp
         }
         (mcp:ToolDefinition|mcpv2:ToolDefinition)[] tools;
         if mcpClient is mcpv2:StreamableHttpClient {
-            // Each agent-identity call carries its own user's token, so no legacy session may be created up front.
-            _ = check connectMcpClient(mcpClient, info, legacyInitialize = auth !is AgentIdAuthConfig);
+            // `mcp` and `mcp.v2` records are distinct types, so `info` crosses over by conversion.
+            _ = check mcpClient->connect(check info.cloneWithType());
             tools = check listAllMcpTools(mcpClient);
         } else {
             // Object types are not narrowed in the else branch.

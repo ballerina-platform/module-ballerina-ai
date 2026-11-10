@@ -15,7 +15,6 @@
 // under the License.
 
 import ballerina/http;
-import ballerina/mcp.v2 as mcpv2;
 
 # Represents a request message for the chat service.
 #
@@ -216,69 +215,6 @@ public type StreamableHttpClientTransportConfig record {|
     http:ClientSecureSocket? secureSocket = ();
     # Optional session identifier for continued interactions
     string sessionId?;
-|};
-
-# Configuration options of an MCP client on `ballerina/mcp.v2`. It mirrors `mcpv2:StreamableHttpClientConfig`,
-# with `httpConfig.auth` also accepting agent identity.
-public type McpStreamableHttpClientConfig record {|
-    # Auto probes discovery and falls back to the legacy handshake.
-    mcpv2:ProtocolMode protocolMode = "auto";
-    # HTTP transport settings, including authorization
-    McpHttpClientConfig httpConfig = {};
-    # Reuse of modern results while their caching hints keep them fresh. `()` disables reuse.
-    mcpv2:ResultCacheConfig? resultCache = {};
-    # Answers elicitations in input-required results, and advertises the elicitation capability.
-    mcpv2:ElicitationHandler elicitationHandler?;
-    # Maximum number of input-required continuations per call.
-    int maxInputRounds = 10;
-    # Legacy session to resume; cannot be combined with `"modern"`.
-    string sessionId?;
-|};
-
-# HTTP settings of an MCP client on `ballerina/mcp.v2`. It mirrors `mcpv2:HttpClientConfig`,
-# with `auth` also accepting agent identity.
-public type McpHttpClientConfig record {|
-    # HTTP protocol version supported by the client
-    http:HttpVersion httpVersion = http:HTTP_2_0;
-    # HTTP/1.x specific settings
-    http:ClientHttp1Settings http1Settings = {};
-    # HTTP/2 specific settings
-    http:ClientHttp2Settings http2Settings = {};
-    # Maximum time in seconds to wait for a response
-    decimal timeout = 30;
-    # Controls the `Forwarded` and `X-Forwarded-For` headers when acting as a proxy
-    string forwarded = "disable";
-    # HTTP redirect handling. `()` follows redirects, except with `mcpv2:OAuth2DiscoveryConfig`,
-    # which cannot be combined with enabled redirects
-    http:FollowRedirects? followRedirects = ();
-    # Request connection pool configuration
-    http:PoolConfiguration? poolConfig = ();
-    # HTTP response cache configuration
-    http:CacheConfig cache = {};
-    # Request and response compression behavior
-    http:Compression compression = http:COMPRESSION_AUTO;
-    # How requests to the MCP server are authorized. `mcpv2:OAuth2DiscoveryConfig` obtains access
-    # tokens through MCP authorization, `http:ClientAuthConfig` supplies an existing credential, and
-    # `AgentIdAuthConfig` obtains a token for each tool call through agent identity
-    (http:ClientAuthConfig|mcpv2:OAuth2DiscoveryConfig|AgentIdAuthConfig)? auth = ();
-    # Circuit breaker configuration
-    http:CircuitBreakerConfig? circuitBreaker = ();
-    # Automatic retry configuration
-    http:RetryConfig? retryConfig = ();
-    # Cookie handling configuration
-    http:CookieConfig? cookieConfig = ();
-    # Response size and header limits
-    http:ResponseLimitConfigs responseLimits = {};
-    # Proxy server configuration, also used for authorization requests
-    http:ProxyConfig? proxy = ();
-    # Enables payload validation against constraints
-    boolean validation = true;
-    # Low level socket configuration
-    http:ClientSocketConfig socketConfig = {};
-    # Enables relaxed response data binding
-    boolean laxDataBinding = false;
-    # SSL/TLS configuration, also used for authorization requests
-    http:ClientSecureSocket? secureSocket = ();
 |};
 
 # Represents the OAuth 2.0 client configuration required to interact
