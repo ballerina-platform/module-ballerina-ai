@@ -129,6 +129,11 @@ public type McpBaseToolKit distinct isolated object {
 };
 
 # Represents a toolkit for interacting with an MCP server, invoking tools via the MCP protocol.
+#
+# # Deprecated
+# This class is deprecated and will be removed in future releases.
+# Use a custom toolkit built with `ai:getPermittedMcpToolConfigs` and the `ballerina/mcp.v2` client instead.
+@deprecated
 public isolated class McpToolKit {
     *McpBaseToolKit;
     private final mcp:StreamableHttpClient mcpClient;

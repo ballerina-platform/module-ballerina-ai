@@ -9,7 +9,9 @@ This file documents all significant changes made to the Ballerina AI package acr
   - `ai:getPermittedMcpToolConfigs` also accepts the `ballerina/mcp.v2` `StreamableHttpClient`, which uses the
     modern protocol when the server offers it and the legacy handshake otherwise, and an `mcp.v2` `Implementation`.
     Its tool dispatchers use the `mcp.v2` `CallToolParams` and `CallToolResult`, and take `Scopes` in `@ai:AgentTool` auth
-  - `ai:McpToolKit` keeps using the `ballerina/mcp` client
+
+### Deprecated
+- [Deprecate `ai:McpToolKit` in Favour of Custom Toolkits on the `mcp.v2` Client](https://github.com/ballerina-platform/ballerina-library/issues/9647)
 
 ### Fixed
 - [Fix Agents Passing the Entire MCP `CallToolResult` to the Model](https://github.com/ballerina-platform/ballerina-library/issues/9648)
