@@ -29,6 +29,16 @@ service mcpv2:StreamableHttpService /mcp on modernMcpListener {
     remote isolated function greet(string greetName) returns string => string `Hey ${greetName}! Welcome to Ballerina!`;
 }
 
+// Always returns a new cursor, like a broken server that never stops paging.
+@mcpv2:StreamableHttpServiceConfig {info: {name: "Endless", version: "1.0.0"}}
+service mcpv2:StreamableHttpAdvancedService /endless on modernMcpListener {
+    remote isolated function onListTools(mcpv2:Cursor? cursor) returns mcpv2:ListToolsResult =>
+        {tools: [], nextCursor: (cursor ?: "") + "x"};
+
+    remote isolated function onCallTool(mcpv2:CallToolParams params) returns mcpv2:CallToolResult =>
+        {content: []};
+}
+
 isolated class McpV2ToolKit {
     *McpBaseToolKit;
     private final mcpv2:StreamableHttpClient mcpClient;
@@ -135,7 +145,8 @@ function testUnwrapMcpToolResultLeavesOtherValues() {
 }
 
 @AgentTool
-isolated function mcpV2Dispatcher(mcpv2:CallToolParams params) returns mcpv2:CallToolResult|error => {content: []};
+isolated function mcpV2Dispatcher(mcpv2:CallToolParams params) returns mcpv2:CallToolResult|error =>
+    {content: [{'type: "text", text: params.name}]};
 
 @test:Config
 function testPermittedMcpToolConfigsWithEitherImplementation() returns error? {
@@ -146,6 +157,16 @@ function testPermittedMcpToolConfigsWithEitherImplementation() returns error? {
         ToolConfig[] tools = check getPermittedMcpToolConfigs(mcpClient, clientInfo, mcpV2Dispatcher);
         test:assertEquals(tools.map(tool => tool.name), ["greet"]);
     }
+}
+
+@test:Config
+function testPermittedMcpToolConfigsStopsAtPageCap() returns error? {
+    mcpv2:StreamableHttpClient mcpClient = check new ("http://localhost:9098/endless");
+    ToolConfig[]|Error tools = getPermittedMcpToolConfigs(mcpClient, {name: "MCP", version: "1.0.0"}, mcpV2Dispatcher);
+    if tools !is Error {
+        test:assertFail("Expected an error for a server that never stops paging");
+    }
+    test:assertEquals((<error>tools.cause()).message(), "MCP server returned more than 100 pages of tools");
 }
 
 @test:Config {

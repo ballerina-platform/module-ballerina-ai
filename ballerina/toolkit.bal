@@ -517,12 +517,15 @@ isolated function getInputSchemaValues(mcp:ToolDefinition tool) returns map<json
     return inputSchema;
 };
 
+// No real server needs this many pages; it stops a server that never stops paging.
+const MAX_MCP_TOOL_PAGES = 100;
+
 // Follows `nextCursor`, since a server may split its tools across pages.
 isolated function listAllMcpTools(mcpv2:StreamableHttpClient mcpClient)
-        returns mcpv2:ToolDefinition[]|mcpv2:ClientError {
+        returns mcpv2:ToolDefinition[]|mcpv2:ClientError|Error {
     mcpv2:ToolDefinition[] tools = [];
     mcpv2:Cursor? cursor = ();
-    while true {
+    foreach int _ in 0 ..< MAX_MCP_TOOL_PAGES {
         mcpv2:ListToolsResult page = check mcpClient->listTools(cursor = cursor);
         tools.push(...page.tools);
         mcpv2:Cursor? nextCursor = page.nextCursor;
@@ -531,6 +534,7 @@ isolated function listAllMcpTools(mcpv2:StreamableHttpClient mcpClient)
         }
         cursor = nextCursor;
     }
+    return error Error(string `MCP server returned more than ${MAX_MCP_TOOL_PAGES} pages of tools`);
 }
 
 // `mcp` and `mcp.v2` records are distinct types, so values cross between the modules by conversion.
