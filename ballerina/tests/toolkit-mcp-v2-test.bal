@@ -177,3 +177,74 @@ function testPermittedMcpToolConfigsWithV2ImplementationAndDeprecatedClient() re
     ToolConfig[] tools = check getPermittedMcpToolConfigs(mcpClient, info, mcpV2Dispatcher);
     test:assertEquals(tools.length(), 2);
 }
+
+isolated function renamedParamsDispatcher(mcpv2:CallToolParams request) returns mcpv2:CallToolResult|error {
+    record {}? arguments = request?.arguments;
+    return {content: [{'type: "text", text: string `${request.name}: ${(arguments ?: {}).toString()}`}]};
+}
+
+isolated function contextFirstDispatcher(Context ctx, mcpv2:CallToolParams request) returns mcpv2:CallToolResult|error =>
+    renamedParamsDispatcher(request);
+
+isolated function otherParamFirstDispatcher(string? tenant, mcpv2:CallToolParams request)
+        returns mcpv2:CallToolResult|error => renamedParamsDispatcher(request);
+
+isolated function largeRefundNeedsApproval(mcpv2:CallToolParams request) returns boolean {
+    record {}? arguments = request?.arguments;
+    anydata amount = arguments is () ? () : arguments["amount"];
+    return amount is int && amount > 100;
+}
+
+isolated class RenamedParamsMcpToolKit {
+    *McpBaseToolKit;
+    private final readonly & ToolConfig[] tools;
+
+    isolated function init(RequiresApproval requiresApproval = false) {
+        ToolConfig[] tools = [
+            {
+                name: "refund",
+                description: "Issues a refund",
+                parameters: {properties: {amount: {'type: INTEGER}}},
+                caller: renamedParamsDispatcher,
+                requiresApproval
+            },
+            {name: "withContext", description: "Takes a context first", caller: contextFirstDispatcher},
+            {name: "withTenant", description: "Takes another parameter first", caller: otherParamFirstDispatcher}
+        ];
+        self.tools = tools.cloneReadOnly();
+    }
+
+    public isolated function getTools() returns ToolConfig[] => self.tools;
+}
+
+@test:Config
+function testMcpDispatcherWithRenamedParameter() returns error? {
+    ToolStore toolStore = check new (new RenamedParamsMcpToolKit());
+    foreach string toolName in ["refund", "withContext", "withTenant"] {
+        ToolOutput output = check toolStore.execute({name: toolName, arguments: {"amount": 500}});
+        test:assertEquals(unwrapMcpToolResult(check output.value), string `${toolName}: {"amount":500}`);
+    }
+}
+
+@test:Config
+function testMcpApprovalPredicateWithRenamedParameterSkipsGate() returns error? {
+    Agent agent = check new ({
+        systemPrompt: {role: "Test Agent", instructions: "Handle refunds"},
+        model: new HitlConditionalMockLLM({name: "refund", arguments: {"amount": 50}, id: "call-1"}),
+        tools: [new RenamedParamsMcpToolKit(largeRefundNeedsApproval)]
+    });
+    // An unbound predicate fails safe to pausing, so running shows the arguments reached it.
+    string result = check agent.run("Refund 50", "renamed-params-below-session");
+    test:assertTrue(result.includes(string `refund: {"amount":50}`), result);
+}
+
+@test:Config
+function testMcpApprovalPredicateWithRenamedParameterGates() returns error? {
+    Agent agent = check new ({
+        systemPrompt: {role: "Test Agent", instructions: "Handle refunds"},
+        model: new HitlConditionalMockLLM({name: "refund", arguments: {"amount": 500}, id: "call-1"}),
+        tools: [new RenamedParamsMcpToolKit(largeRefundNeedsApproval)]
+    });
+    string|Error result = agent.run("Refund 500", "renamed-params-above-session");
+    test:assertTrue(result is ApprovalRequiredError, result is Error ? result.message() : result);
+}

@@ -564,6 +564,16 @@ isolated function getMcpContentText(anydata[] content) returns string? {
     return string:'join("\n", ...texts);
 }
 
+// Arguments bind by parameter name, and a dispatcher may name its `CallToolParams` parameter anything.
+isolated function getMcpParamsName(FunctionTool dispatcher) returns string {
+    foreach [string, any] [name, typedescriptor] in getParameterTypes(dispatcher).entries() {
+        if typedescriptor is typedesc<mcp:CallToolParams|mcpv2:CallToolParams> {
+            return name;
+        }
+    }
+    return "params";
+}
+
 # Constructs the list of permitted MCP tool configurations by querying the MCP server.
 #
 # This function initializes the MCP client using the provided implementation information
