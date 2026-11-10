@@ -5,7 +5,7 @@ This file documents all significant changes made to the Ballerina AI package acr
 ## [Unreleased]
 
 ### Added
-- Support MCP servers on the modern (2026-07-28) protocol through `mcp` 1.5.0
+- [Support MCP Servers on Spec Version `2026-07-28` through `mcp` 1.5.0](https://github.com/ballerina-platform/ballerina-library/issues/9647)
   - `ai:getPermittedMcpToolConfigs` also accepts the `ballerina/mcp.v2` `StreamableHttpClient`, which uses the
     modern protocol when the server offers it and the legacy handshake otherwise, and an `mcp.v2` `Implementation`.
     Its tool dispatchers use the `mcp.v2` `CallToolParams` and `CallToolResult`, and take `Scopes` in `@ai:AgentTool` auth
@@ -13,11 +13,10 @@ This file documents all significant changes made to the Ballerina AI package acr
     does, so no HTTP session is created at start-up
   - `ai:McpToolKit` keeps using the `ballerina/mcp` client
 
-### Changed
-- Agents pass the model only the content of an MCP tool result, not the whole `CallToolResult`. Text content is
-  joined into a string, and `structuredContent` is used only when there is no content
-
 ### Fixed
+- [Fix Agents Passing the Entire MCP `CallToolResult` to the Model](https://github.com/ballerina-platform/ballerina-library/issues/9648)
+  - The model gets only the result's content. Text content is joined into a string, and `structuredContent` is used
+    only when there is no content
 - [Fix `InMemoryVectorStore.delete` with an Array Panicking on an Unknown Id](https://github.com/wso2/product-integrator/issues/2902)
 - [Fix `InMemoryVectorStore` Returning the Farthest Matches First with `EUCLIDEAN`](https://github.com/wso2/product-integrator/issues/2901)
 - [Fix AUTO Chunking Ignoring `.htm` Files and Upper-Case Extensions](https://github.com/wso2/product-integrator/issues/2900)
