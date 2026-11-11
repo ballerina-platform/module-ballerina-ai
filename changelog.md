@@ -4,7 +4,19 @@ This file documents all significant changes made to the Ballerina AI package acr
 
 ## [Unreleased]
 
+### Added
+- [Support MCP Servers on Spec Version `2026-07-28` through `mcp` 1.5.0](https://github.com/ballerina-platform/ballerina-library/issues/9647)
+  - `ai:getPermittedMcpToolConfigs` also accepts the `ballerina/mcp.v2` `StreamableHttpClient`, which uses the
+    modern protocol when the server offers it and the legacy handshake otherwise, and an `mcp.v2` `Implementation`.
+    Its tool dispatchers use the `mcp.v2` `CallToolParams` and `CallToolResult`, and take `Scopes` in `@ai:AgentTool` auth
+
+### Deprecated
+- [Deprecate `ai:McpToolKit` in Favour of Custom Toolkits on the `mcp.v2` Client](https://github.com/ballerina-platform/ballerina-library/issues/9647)
+
 ### Fixed
+- [Fix Agents Passing the Entire MCP `CallToolResult` to the Model](https://github.com/ballerina-platform/ballerina-library/issues/9648)
+  - The model gets only the result's content as a string. Binary content becomes a marker such as `[image: image/png]`,
+    and `structuredContent` is used only when there is no content
 - [Fix `InMemoryVectorStore.delete` with an Array Panicking on an Unknown Id](https://github.com/wso2/product-integrator/issues/2902)
 - [Fix `InMemoryVectorStore` Returning the Farthest Matches First with `EUCLIDEAN`](https://github.com/wso2/product-integrator/issues/2901)
 - [Fix AUTO Chunking Ignoring `.htm` Files and Upper-Case Extensions](https://github.com/wso2/product-integrator/issues/2900)

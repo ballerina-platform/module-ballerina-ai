@@ -17,6 +17,7 @@
 import ballerina/http;
 import ballerina/log;
 import ballerina/mcp;
+import ballerina/mcp.v2 as mcpv2;
 
 # Supported HTTP methods.
 public enum HttpMethod {
@@ -128,6 +129,11 @@ public type McpBaseToolKit distinct isolated object {
 };
 
 # Represents a toolkit for interacting with an MCP server, invoking tools via the MCP protocol.
+#
+# # Deprecated
+# This class is deprecated and will be removed in future releases.
+# Use a custom toolkit built with `ai:getPermittedMcpToolConfigs` and the `ballerina/mcp.v2` client instead.
+@deprecated
 public isolated class McpToolKit {
     *McpBaseToolKit;
     private final mcp:StreamableHttpClient mcpClient;
@@ -516,6 +522,77 @@ isolated function getInputSchemaValues(mcp:ToolDefinition tool) returns map<json
     return inputSchema;
 };
 
+// No real server needs this many pages; it stops a server that never stops paging.
+const MAX_MCP_TOOL_PAGES = 100;
+
+// Follows `nextCursor`, since a server may split its tools across pages.
+isolated function listAllMcpTools(mcpv2:StreamableHttpClient mcpClient)
+        returns mcpv2:ToolDefinition[]|mcpv2:ClientError|Error {
+    mcpv2:ToolDefinition[] tools = [];
+    mcpv2:Cursor? cursor = ();
+    foreach int _ in 0 ..< MAX_MCP_TOOL_PAGES {
+        mcpv2:ListToolsResult page = check mcpClient->listTools(cursor = cursor);
+        tools.push(...page.tools);
+        mcpv2:Cursor? nextCursor = page.nextCursor;
+        if nextCursor is () || nextCursor == cursor {
+            return tools;
+        }
+        cursor = nextCursor;
+    }
+    return error Error(string `MCP server returned more than ${MAX_MCP_TOOL_PAGES} pages of tools`);
+}
+
+// The model needs only an MCP tool's output; `_meta` and `resultType` are protocol metadata.
+isolated function unwrapMcpToolResult(anydata value) returns anydata {
+    if value !is mcp:CallToolResult|mcpv2:CallToolResult {
+        return value;
+    }
+    // Servers also serialize structured content as text, so it stands in only when there is no content.
+    anydata output = value.content.length() == 0 ? value?.structuredContent : getMcpContentText(value.content);
+    if value?.isError != true {
+        return output;
+    }
+    return {isError: true, content: output ?: "The tool reported an error without details."};
+}
+
+isolated function getMcpContentText(anydata[] content) returns string {
+    string[] texts = from anydata block in content select getMcpBlockText(block);
+    return string:'join("\n", ...texts);
+}
+
+// Binary data becomes a short marker: the model can't use base64, and it would be resent every turn.
+isolated function getMcpBlockText(anydata block) returns string {
+    if block is mcp:TextContent|mcpv2:TextContent {
+        return block.text;
+    }
+    if block is mcp:ImageContent|mcpv2:ImageContent {
+        return string `[image: ${block.mimeType}]`;
+    }
+    if block is mcp:AudioContent|mcpv2:AudioContent {
+        return string `[audio: ${block.mimeType}]`;
+    }
+    if block is mcp:ResourceLink|mcpv2:ResourceLink {
+        return string `[resource: ${block.uri}]`;
+    }
+    if block is mcp:EmbeddedResource|mcpv2:EmbeddedResource {
+        mcp:TextResourceContents|mcp:BlobResourceContents|mcpv2:TextResourceContents|mcpv2:BlobResourceContents
+            embedded = block.'resource;
+        return embedded is mcp:TextResourceContents|mcpv2:TextResourceContents
+            ? embedded.text : string `[resource: ${embedded.uri}]`;
+    }
+    return block.toString();
+}
+
+// Arguments bind by parameter name, and a dispatcher may name its `CallToolParams` parameter anything.
+isolated function getMcpParamsName(FunctionTool dispatcher) returns string {
+    foreach [string, any] [name, typedescriptor] in getParameterTypes(dispatcher).entries() {
+        if typedescriptor is typedesc<mcp:CallToolParams|mcpv2:CallToolParams> {
+            return name;
+        }
+    }
+    return "params";
+}
+
 # Constructs the list of permitted MCP tool configurations by querying the MCP server.
 #
 # This function initializes the MCP client using the provided implementation information
@@ -527,27 +604,46 @@ isolated function getInputSchemaValues(mcp:ToolDefinition tool) returns map<json
 # @ai:AgentTool
 # isolated function (mcp:CallToolParams) returns mcp:CallToolResult|error;
 # ```
+# With an `mcpv2:StreamableHttpClient` from `ballerina/mcp.v2`, the dispatcher uses that module's types:
+# ```ballerina
+# @ai:AgentTool
+# isolated function (mcpv2:CallToolParams) returns mcpv2:CallToolResult|error;
+# ```
 #
-# + mcpClient - The MCP client instance used to query the MCP server
-# + info - The implementation information used to initialize the client
+# + mcpClient - The MCP client instance used to query the MCP server. An `mcpv2:StreamableHttpClient`
+# speaks both the legacy and the modern MCP protocol
+# + info - The implementation information used to initialize the client, as an `mcp:Implementation` or an
+# `mcpv2:Implementation`. A union of the two would make a mapping constructor argument ambiguous
 # + permittedTools - A map of tool names to their respective MCP function tool dispatchers,
 # or a single dispatcher if all tools are permitted
 # + auth - Configuration for authenticating with an external authorization server
 #       to obtain access tokens required for MCP tool invocation
 # + return - An array of tool configurations or an error if the operation fails
-public isolated function getPermittedMcpToolConfigs(mcp:StreamableHttpClient mcpClient, mcp:Implementation info,
-        map<FunctionTool>|FunctionTool permittedTools, AgentIdAuthConfig? auth = ()) returns ToolConfig[]|Error {
+public isolated function getPermittedMcpToolConfigs(mcp:StreamableHttpClient|mcpv2:StreamableHttpClient mcpClient,
+        record {string name; string version;} info, map<FunctionTool>|FunctionTool permittedTools,
+        AgentIdAuthConfig? auth = ()) returns ToolConfig[]|Error {
     do {
         if auth is AgentIdAuthConfig {
             log:printWarn(
                 "Stateful session mode is not supported when agent identity is used. " + 
                     "If you are using STATEFUL mode, switch to STATELESS or AUTO mode."
             );        
-        } else {
-            _ = check mcpClient->initialize(info);
         }
-        mcp:ListToolsResult listTools = check mcpClient->listTools();
-        return from mcp:ToolDefinition tool in listTools.tools
+        (mcp:ToolDefinition|mcpv2:ToolDefinition)[] tools;
+        if mcpClient is mcpv2:StreamableHttpClient {
+            // `mcp` and `mcp.v2` records are distinct types, so `info` crosses over by conversion.
+            _ = check mcpClient->connect(check info.cloneWithType());
+            tools = check listAllMcpTools(mcpClient);
+        } else {
+            // Object types are not narrowed in the else branch.
+            mcp:StreamableHttpClient deprecatedClient = <mcp:StreamableHttpClient>mcpClient;
+            if auth !is AgentIdAuthConfig {
+                _ = check deprecatedClient->initialize(check info.cloneWithType());
+            }
+            mcp:ListToolsResult listTools = check deprecatedClient->listTools();
+            tools = listTools.tools;
+        }
+        return from mcp:ToolDefinition|mcpv2:ToolDefinition tool in tools
             let string toolName = tool.name
             where permittedTools is FunctionTool || permittedTools.hasKey(toolName)
             select {

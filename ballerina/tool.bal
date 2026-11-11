@@ -54,7 +54,8 @@ type ToolInfo record {|
 
 public isolated class ToolStore {
     public final map<Tool> & readonly tools;
-    private final map<()> mcpTools = {};
+    // Maps each MCP tool to the name of its dispatcher's `CallToolParams` parameter.
+    private final map<string> mcpTools = {};
     private final map<string> toolToToolKitMap = {};
 
     # Register tools to the agent. 
@@ -89,8 +90,9 @@ public isolated class ToolStore {
                 if tool is McpBaseToolKit {
                     foreach ToolConfig element in toolsFromToolKit {
                         string sanitizedName = sanitizeToolName(element.name);
+                        string paramsName = getMcpParamsName(element.caller);
                         lock {
-                            self.mcpTools[sanitizedName] = ();
+                            self.mcpTools[sanitizedName] = paramsName;
                         }
                     }
                 }
@@ -211,9 +213,14 @@ public isolated class ToolStore {
     }
 
     // The input the tool's function is called with. An MCP tool gets the LLM's arguments wrapped in
-    // `mcp:CallToolParams`. Any other tool gets them as they are.
-    isolated function toCallerInput(string toolName, map<json> inputValues) returns map<json> =>
-        self.isMcpTool(toolName) ? {params: {name: toolName, arguments: inputValues}} : inputValues;
+    // `CallToolParams`. Any other tool gets them as they are.
+    isolated function toCallerInput(string toolName, map<json> inputValues) returns map<json> {
+        string? paramsName;
+        lock {
+            paramsName = self.mcpTools[toolName];
+        }
+        return paramsName is () ? inputValues : {[paramsName]: {name: toolName, arguments: inputValues}};
+    }
 
     isolated function getToolKitName(string toolName) returns string? {
         lock {

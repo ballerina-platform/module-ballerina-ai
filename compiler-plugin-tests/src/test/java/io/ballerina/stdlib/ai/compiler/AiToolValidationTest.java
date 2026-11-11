@@ -205,6 +205,17 @@ public class AiToolValidationTest {
         assertErrorMessage(diagnostic, message, 30, 11);
     }
 
+    @Test(description = "Test AgentTool auth annotation validation on an mcp.v2 tool")
+    public void testMcpV2AgentToolAnnotationAuth() {
+        String packagePath = "11_mcp_v2_tool_with_scope_annotation";
+        DiagnosticResult diagnosticResult = getDiagnosticResult(packagePath);
+        Assert.assertEquals(diagnosticResult.errorCount(), 1);
+
+        Diagnostic diagnostic = diagnosticResult.errors().iterator().next();
+        String message = getErrorMessage(INVALID_AUTH_CONFIG);
+        assertErrorMessage(diagnostic, message, 30, 11);
+    }
+
     @Test(description = "Test invalid requiresApproval predicate signature validation")
     public void testInvalidApprovalPredicateValidation() {
         String packagePath = "09_tool_with_invalid_approval_predicate";
@@ -233,7 +244,7 @@ public class AiToolValidationTest {
         // not a `CodeModifier` one, so its diagnostics only surface on `getCompilation()`, not on
         // `getDiagnosticResult`'s own `runCodeGenAndModifyPlugins()` return value.
         DiagnosticResult diagnosticResult = getFullDiagnosticResult(packagePath);
-        Assert.assertEquals(diagnosticResult.errorCount(), 15);
+        Assert.assertEquals(diagnosticResult.errorCount(), 15, diagnosticResult.errors().toString());
         Assert.assertEquals(diagnosticResult.warningCount(), 0);
 
         Iterator<Diagnostic> diagnosticIterator = diagnosticResult.errors().iterator();
