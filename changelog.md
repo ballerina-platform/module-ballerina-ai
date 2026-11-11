@@ -15,8 +15,8 @@ This file documents all significant changes made to the Ballerina AI package acr
 
 ### Fixed
 - [Fix Agents Passing the Entire MCP `CallToolResult` to the Model](https://github.com/ballerina-platform/ballerina-library/issues/9648)
-  - The model gets only the result's content. Text content is joined into a string, and `structuredContent` is used
-    only when there is no content
+  - The model gets only the result's content as a string. Binary content becomes a marker such as `[image: image/png]`,
+    and `structuredContent` is used only when there is no content
 - [Fix `InMemoryVectorStore.delete` with an Array Panicking on an Unknown Id](https://github.com/wso2/product-integrator/issues/2902)
 - [Fix `InMemoryVectorStore` Returning the Farthest Matches First with `EUCLIDEAN`](https://github.com/wso2/product-integrator/issues/2901)
 - [Fix AUTO Chunking Ignoring `.htm` Files and Upper-Case Extensions](https://github.com/wso2/product-integrator/issues/2900)

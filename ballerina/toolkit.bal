@@ -548,20 +548,39 @@ isolated function unwrapMcpToolResult(anydata value) returns anydata {
         return value;
     }
     // Servers also serialize structured content as text, so it stands in only when there is no content.
-    anydata output = value.content.length() == 0 ? value?.structuredContent
-        : getMcpContentText(value.content) ?: value.content;
-    return value?.isError == true ? {isError: true, content: output} : output;
+    anydata output = value.content.length() == 0 ? value?.structuredContent : getMcpContentText(value.content);
+    if value?.isError != true {
+        return output;
+    }
+    return {isError: true, content: output ?: "The tool reported an error without details."};
 }
 
-isolated function getMcpContentText(anydata[] content) returns string? {
-    string[] texts = [];
-    foreach anydata block in content {
-        if block !is mcp:TextContent|mcpv2:TextContent {
-            return ();
-        }
-        texts.push(block.text);
-    }
+isolated function getMcpContentText(anydata[] content) returns string {
+    string[] texts = from anydata block in content select getMcpBlockText(block);
     return string:'join("\n", ...texts);
+}
+
+// Binary data becomes a short marker: the model can't use base64, and it would be resent every turn.
+isolated function getMcpBlockText(anydata block) returns string {
+    if block is mcp:TextContent|mcpv2:TextContent {
+        return block.text;
+    }
+    if block is mcp:ImageContent|mcpv2:ImageContent {
+        return string `[image: ${block.mimeType}]`;
+    }
+    if block is mcp:AudioContent|mcpv2:AudioContent {
+        return string `[audio: ${block.mimeType}]`;
+    }
+    if block is mcp:ResourceLink|mcpv2:ResourceLink {
+        return string `[resource: ${block.uri}]`;
+    }
+    if block is mcp:EmbeddedResource|mcpv2:EmbeddedResource {
+        mcp:TextResourceContents|mcp:BlobResourceContents|mcpv2:TextResourceContents|mcpv2:BlobResourceContents
+            embedded = block.'resource;
+        return embedded is mcp:TextResourceContents|mcpv2:TextResourceContents
+            ? embedded.text : string `[resource: ${embedded.uri}]`;
+    }
+    return block.toString();
 }
 
 // Arguments bind by parameter name, and a dispatcher may name its `CallToolParams` parameter anything.

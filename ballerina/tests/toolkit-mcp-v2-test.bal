@@ -99,12 +99,26 @@ function testUnwrapMcpToolResultJoinsTextContent() {
 }
 
 @test:Config
-function testUnwrapMcpToolResultKeepsNonTextContent() {
+function testUnwrapMcpToolResultReplacesBinaryContentWithMarkers() {
     mcpv2:CallToolResult result = {
-        content: [{'type: "text", text: "A chart"}, {'type: "image", data: "aGk=", mimeType: "image/png"}],
+        content: [
+            {'type: "text", text: "A chart"},
+            {'type: "image", data: "aGk=", mimeType: "image/png"},
+            {'type: "audio", data: "aGk=", mimeType: "audio/wav"},
+            {'type: "resource_link", name: "report", uri: "file:///report.pdf"},
+            {'type: "resource", 'resource: {uri: "file:///notes.txt", text: "Notes"}},
+            {'type: "resource", 'resource: {uri: "file:///logo.png", blob: "aGk="}}
+        ],
         structuredContent: {chart: "bar"}
     };
-    test:assertEquals(unwrapMcpToolResult(result), result.content);
+    test:assertEquals(unwrapMcpToolResult(result), "A chart\n[image: image/png]\n[audio: audio/wav]\n"
+        + "[resource: file:///report.pdf]\nNotes\n[resource: file:///logo.png]");
+}
+
+@test:Config
+function testUnwrapMcpToolResultReplacesBinaryContentForDeprecatedClient() {
+    mcp:CallToolResult result = {content: [{'type: "image", data: "aGk=", mimeType: "image/jpeg"}]};
+    test:assertEquals(unwrapMcpToolResult(result), "[image: image/jpeg]");
 }
 
 @test:Config
@@ -117,6 +131,13 @@ function testUnwrapMcpToolResultFallsBackToStructuredContent() {
 function testUnwrapMcpToolResultKeepsErrorFlag() {
     mcpv2:CallToolResult result = {content: [{'type: "text", text: "City not found"}], isError: true};
     test:assertEquals(unwrapMcpToolResult(result), {isError: true, content: "City not found"});
+}
+
+@test:Config
+function testUnwrapMcpToolResultExplainsEmptyError() {
+    mcpv2:CallToolResult result = {content: [], isError: true};
+    test:assertEquals(unwrapMcpToolResult(result),
+        {isError: true, content: "The tool reported an error without details."});
 }
 
 @test:Config
