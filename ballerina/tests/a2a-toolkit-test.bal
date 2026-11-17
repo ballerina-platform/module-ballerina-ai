@@ -17,6 +17,7 @@
 import ballerina/a2a;
 import ballerina/http;
 import ballerina/test;
+import ballerina/time;
 
 // ---- helpers ---------------------------------------------------------------
 
@@ -323,9 +324,35 @@ function testA2aDelegateReportsAnAgentFailure() returns error? {
 
 @test:Config {groups: ["a2a"]}
 function testA2aDelegateReportsATaskStillWorkingWhenTheWaitRunsOut() returns error? {
-    A2aToolKit toolkit = check new (a2aScriptedAgentUrl);
+    A2aToolKit toolkit = check new (a2aScriptedAgentUrl, pollConfig = {pollInterval: 0.1, maxWait: 1});
+    time:Utc before = time:utcNow();
     string result = check a2aCall(toolkit, "delegateToScriptedAgent", "slow");
     test:assertTrue(result.startsWith("[TASK_STATE_WORKING]"), result);
+    test:assertTrue(time:utcDiffSeconds(time:utcNow(), before) < 10d, "the configured wait was not used");
+}
+
+@test:Config {groups: ["a2a"]}
+function testA2aDelegateWithNoWaitReturnsTheTaskAsFirstReported() returns error? {
+    A2aToolKit toolkit = check new (a2aScriptedAgentUrl, pollConfig = {maxWait: 0});
+    string result = check a2aCall(toolkit, "delegateToScriptedAgent", "brief");
+    test:assertFalse(result.startsWith("[TASK_STATE_COMPLETED]"), result);
+}
+
+@test:Config {groups: ["a2a"]}
+function testA2aDelegateWaitsLongerWhenConfiguredTo() returns error? {
+    A2aToolKit toolkit = check new (a2aScriptedAgentUrl, pollConfig = {pollInterval: 0.2, maxWait: 10});
+    string result = check a2aCall(toolkit, "delegateToScriptedAgent", "brief");
+    test:assertTrue(result.startsWith("[TASK_STATE_COMPLETED] brief work finished"), result);
+}
+
+@test:Config {groups: ["a2a"]}
+function testA2aInvalidPollConfigIsRejected() {
+    A2aToolKit|Error zeroInterval = new (a2aCard("Polled"), pollConfig = {pollInterval: 0});
+    test:assertTrue(zeroInterval is Error && zeroInterval.message().includes("pollInterval"),
+            "a zero pollInterval was accepted");
+    A2aToolKit|Error negativeWait = new (a2aCard("Polled"), pollConfig = {maxWait: -1});
+    test:assertTrue(negativeWait is Error && negativeWait.message().includes("maxWait"),
+            "a negative maxWait was accepted");
 }
 
 // ---- status, cancel, list ------------------------------------------------------------

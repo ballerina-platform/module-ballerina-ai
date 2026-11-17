@@ -1054,10 +1054,12 @@ The description of `delegateTo<Name>` carries what the Agent Card says about the
    continues that task, for example to answer a question the remote agent asked. The request asks the remote agent
    to return without waiting for the task to finish.
 2. If the remote agent replies with a message, the result is the text of its parts joined with a space.
-3. If the remote agent replies with a task, the toolkit reads the task with `getTask`, immediately and then every 0.5
-   seconds, until the task is settled or 20 seconds have passed. A task is settled when its state is
-   `TASK_STATE_COMPLETED`, `TASK_STATE_FAILED`, `TASK_STATE_CANCELED`, `TASK_STATE_REJECTED`,
-   `TASK_STATE_INPUT_REQUIRED`, or `TASK_STATE_AUTH_REQUIRED`. The polling is not visible to the model.
+3. If the remote agent replies with a task, the toolkit reads the task with `getTask`, immediately and then every
+   `pollConfig.pollInterval` seconds (0.5 by default), until the task is settled or `pollConfig.maxWait` seconds (20
+   by default) have passed. A `maxWait` of zero returns the task as the remote agent first reported it. A task is
+   settled when its state is `TASK_STATE_COMPLETED`, `TASK_STATE_FAILED`, `TASK_STATE_CANCELED`,
+   `TASK_STATE_REJECTED`, `TASK_STATE_INPUT_REQUIRED`, or `TASK_STATE_AUTH_REQUIRED`. The polling is not visible to
+   the model.
 4. When `taskId` is given, the task returned for the request is the task as it was before the remote agent saw the
    new message. It is not settled until its state or its status timestamp differs from that snapshot, so the earlier
    question is never returned as the reply to its own answer.

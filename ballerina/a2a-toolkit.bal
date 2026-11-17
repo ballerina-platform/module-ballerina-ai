@@ -34,9 +34,9 @@ const int A2A_MAX_CARD_TEXT_LENGTH = 1024;
 // A skill is passed in full unless its text is longer than this, in which case only that skill is summarized.
 const int A2A_MAX_SKILL_TEXT_LENGTH = 4096;
 
-// How long `delegateTo<Name>` polls a task that has not settled, and how often.
-const decimal A2A_MAX_WAIT_SECONDS = 20d;
-const decimal A2A_POLL_INTERVAL_SECONDS = 0.5d;
+// Default for how long `delegateTo<Name>` polls a task that has not settled, and how often. See `A2aPollConfig`.
+const decimal A2A_DEFAULT_MAX_WAIT_SECONDS = 20d;
+const decimal A2A_DEFAULT_POLL_INTERVAL_SECONDS = 0.5d;
 
 # Represents the base type of the A2A toolkits. Tooling uses it to recognize an A2A toolkit, the same way it uses
 # `ai:McpBaseToolKit` for MCP toolkits.
@@ -61,6 +61,18 @@ public type A2aToolSet record {|
     boolean pushNotifications = false;
 |};
 
+# Represents how `delegateTo<Name>` waits for a task that the remote agent has not finished. The toolkit reads the task
+# every `pollInterval` seconds until it settles or `maxWait` seconds have passed, and the model sees one tool call
+# and one result. A task still running when the wait ends is reported with its state and id, and the model can ask
+# for its status later.
+public type A2aPollConfig record {|
+    # Seconds between two reads of the task. Must be greater than zero
+    decimal pollInterval = A2A_DEFAULT_POLL_INTERVAL_SECONDS;
+    # Seconds to wait for the task to settle. Zero returns the task as the remote agent first reported it, without
+    # reading it again. Must not be negative
+    decimal maxWait = A2A_DEFAULT_MAX_WAIT_SECONDS;
+|};
+
 # Represents a toolkit for calling one remote [A2A](https://a2a-protocol.org/latest/specification/) agent. Its tools
 # let an agent send the remote agent a request, continue a task the remote agent asked a question about, and get,
 # cancel, and list tasks.
@@ -79,6 +91,8 @@ public isolated class A2aToolKit {
 
     private final a2a:RestClient agentClient;
     private final ToolConfig[] & readonly tools;
+    private final decimal pollInterval;
+    private final decimal maxWait;
 
     # Connects to the remote agent and builds the tools for it.
     #
@@ -94,11 +108,14 @@ public isolated class A2aToolKit {
     # + clientConfig - Configuration for fetching the card and for the client, such as `httpVersion`, `timeout`, and
     #                  TLS settings
     # + toolSet - The groups of operations to generate tools for
+    # + pollConfig - How long `delegateTo<Name>` waits for a task to settle, and how often it reads the task
     # + return - An `ai:Error` if the Agent Card cannot be read, if the remote agent offers no HTTP+JSON interface, if
     #            the streaming tools are requested but the card does not advertise streaming, if the card requires
-    #            several security schemes together, or if `secret` is given and the card declares no security scheme
+    #            several security schemes together, if `secret` is given and the card declares no security scheme, or
+    #            if `pollConfig` has a non-positive `pollInterval` or a negative `maxWait`
     public isolated function init(a2a:AgentCard|string agent, string? name = (), string? secret = (),
-            http:ClientConfiguration clientConfig = {}, A2aToolSet toolSet = {}) returns Error? {
+            http:ClientConfiguration clientConfig = {}, A2aToolSet toolSet = {},
+            A2aPollConfig pollConfig = {}) returns Error? {
         a2a:AgentCard card;
         if agent is a2a:AgentCard {
             card = agent;
@@ -118,6 +135,9 @@ public isolated class A2aToolKit {
         string? schemeName = check schemeFor(card, displayName, secret);
         check requireHttpJson(card, displayName);
         check requireStreamingIfAsked(card, displayName, toolSet);
+        check requireValidPollConfig(displayName, pollConfig);
+        self.pollInterval = pollConfig.pollInterval;
+        self.maxWait = pollConfig.maxWait;
 
         a2a:RestClient|error agentClient = connect(card, schemeName, secret, clientConfig);
         if agentClient is error {
@@ -345,15 +365,25 @@ public isolated class A2aToolKit {
         decimal elapsed = 0d;
         boolean first = true;
         while (!isSettled(task.status.state) || (continuation && unchangedSince(initial, task)))
-                && elapsed < A2A_MAX_WAIT_SECONDS {
+                && elapsed < self.maxWait {
             if !first {
-                runtime:sleep(A2A_POLL_INTERVAL_SECONDS);
-                elapsed += A2A_POLL_INTERVAL_SECONDS;
+                runtime:sleep(self.pollInterval);
+                elapsed += self.pollInterval;
             }
             first = false;
             task = check self.agentClient->getTask({id: task.id});
         }
         return task;
+    }
+}
+
+isolated function requireValidPollConfig(string displayName, A2aPollConfig pollConfig) returns Error? {
+    if pollConfig.pollInterval <= 0d {
+        return error Error(string `agent "${displayName}": pollInterval must be greater than zero, `
+            + string `got ${pollConfig.pollInterval}`);
+    }
+    if pollConfig.maxWait < 0d {
+        return error Error(string `agent "${displayName}": maxWait must not be negative, got ${pollConfig.maxWait}`);
     }
 }
 

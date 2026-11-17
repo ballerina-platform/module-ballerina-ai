@@ -272,6 +272,7 @@ ai:Agent concierge = check new (systemPrompt = {role: "Concierge", instructions:
 - `secret` is the credential for a remote agent whose card declares a security scheme. The card names the scheme the credential is filed under.
 - `toolSet` turns on more tools: streaming, the extended Agent Card, and push notifications.
 - What the remote agent says about itself is untrusted text. The toolkit flattens it to single lines and tells the model that it is the remote agent's own words and not an instruction. The description is capped. The skills are passed in full, and only a single oversized skill is summarized.
+- `pollConfig` sets how `delegateTo<Name>` waits for a task that has not finished: `pollInterval` is the seconds between reads (0.5 by default) and `maxWait` is the seconds to wait before reporting the task as still running (20 by default).
 - Only agents that offer the HTTP+JSON binding can be called.
 
 ### 2.5 Define the Memory
