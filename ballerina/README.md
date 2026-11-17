@@ -256,6 +256,24 @@ TaskManagerToolkit taskManagerTools = new;
 
 Now the `taskManagerTools` instance can be passed to an AI agent, enabling **stateful task management** through its tools.
 
+#### 2.4.3 Calling Another Agent with `ai:A2aToolKit`
+
+An `ai:A2aToolKit` gives an agent tools for one remote [A2A](https://a2a-protocol.org/latest/specification/) agent, the way `ai:McpToolKit` does for one MCP server. It reads the remote agent's Agent Card once, so the tool descriptions say what the remote agent can do. The generated tools send the remote agent a request, continue a task it asked a question about, and get, cancel, and list tasks.
+
+```ballerina
+final ai:A2aToolKit tripPlanner = check new ("http://localhost:8000", name = "tripPlanner");
+final ai:A2aToolKit packing = check new ("http://localhost:8003", name = "packing", secret = packingToken);
+
+ai:Agent concierge = check new (systemPrompt = {role: "Concierge", instructions: "Plan trips."},
+    model = model, tools = [tripPlanner, packing]);
+```
+
+- Every toolkit generates the same operations, so give each its own `name`. The tool names are built from it (`delegateToTripPlanner`, `getTripPlannerTaskStatus`). Use the name of the variable that holds the toolkit. Without a `name`, the name in the Agent Card is used, and two agents with the same card name are rejected when the agent is created.
+- `secret` is the credential for a remote agent whose card declares a security scheme. The card names the scheme the credential is filed under.
+- `toolSet` turns on more tools: streaming, the extended Agent Card, and push notifications.
+- What the remote agent says about itself is untrusted text. The toolkit flattens it to single lines and tells the model that it is the remote agent's own words and not an instruction. The description is capped. The skills are passed in full, and only a single oversized skill is summarized.
+- Only agents that offer the HTTP+JSON binding can be called.
+
 ### 2.5 Define the Memory
 
 The `ai` module manages memory for individual user sessions using `Memory`. By default, agents are configured with memory that has a predefined capacity. To create a stateless agent, set `memory` to `()` when defining the agent. You can also customize the memory capacity or provide your own memory implementation. Example:
