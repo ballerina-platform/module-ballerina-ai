@@ -3,7 +3,7 @@
 _Owners_: @MohamedSabthar @shafreenAnfar @kalaiyarasiganeshalingam @RadCod3  
 _Reviewers_: @MohamedSabthar @shafreenAnfar @kalaiyarasiganeshalingam @RadCod3  
 _Created_: 2026/10/28  
-_Updated_: 2026/11/11  
+_Updated_: 2026/11/17  
 _Edition_: Swan Lake
 
 
@@ -40,6 +40,7 @@ The conforming implementation of the specification is released and included in t
         * 4.3.2. [MCP toolkit](#432-mcp-toolkit)
         * 4.3.3. [HTTP service toolkit](#433-http-service-toolkit)
             * 4.3.3.1. [Tools from OpenAPI specifications](#4331-tools-from-openapi-specifications)
+        * 4.3.4. [A2A toolkit](#434-a2a-toolkit)
     * 4.4. [Tool authorization](#44-tool-authorization)
     * 4.5. [Context](#45-context)
 5. [Agents](#5-agents)
@@ -944,6 +945,160 @@ public isolated function parseOpenApiSpec(map<json> openApiSpec)
 ```ballerina
 ai:HttpApiSpecification spec = check ai:extractToolsFromOpenApiSpecFile("petstore.yaml");
 final ai:HttpServiceToolKit petStore = check new (spec.serviceUrl ?: "http://localhost:9090", spec.tools);
+```
+
+#### 4.3.4. A2A toolkit
+
+The `ai:A2aToolKit` exposes a single remote [Agent2Agent (A2A)](https://a2a-protocol.org/latest/specification/) agent
+as tools. During initialization it reads the remote agent's Agent Card and generates the tools described below. One
+toolkit wraps one remote agent, and several toolkits can be passed to the same agent.
+
+```ballerina
+public type A2aBaseToolKit distinct isolated object {
+    *BaseToolKit;
+};
+
+public isolated class A2aToolKit {
+    *A2aBaseToolKit;
+
+    public isolated function init(a2a:AgentCard|string agent, string? name = (), string? secret = (),
+            http:ClientConfiguration clientConfig = {}, A2aToolSet toolSet = {}) returns Error?;
+
+    public isolated function getTools() returns ToolConfig[];
+}
+
+public type A2aToolSet record {|
+    boolean core = true;
+    boolean streaming = false;
+    boolean extendedCard = false;
+    boolean pushNotifications = false;
+|};
+```
+
+##### 4.3.4.1. Configuration
+
+| Parameter      | Type                       | Default | Meaning                                                                                                                                                                                                                |
+|----------------|----------------------------|---------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `agent`        | `a2a:AgentCard\|string`    | Required | The base URL of the remote agent, or an `a2a:AgentCard`. A URL is resolved to the card with `a2a:resolveAgentCard`. A card is used as given and is not fetched again.                                                  |
+| `name`         | `string?`                  | `()`    | The name the tool names are built from. `()` means the name in the Agent Card.                                                                                                                                         |
+| `secret`       | `string?`                  | `()`    | The credential for the security scheme the card requires. `()` means no credential is sent.                                                                                                                            |
+| `clientConfig` | `http:ClientConfiguration` | `{}`    | Used both to fetch the card from a URL and by the client that calls the remote agent.                                                                                                                                  |
+| `toolSet`      | `ai:A2aToolSet`            | `{}`    | The groups of operations to generate tools for.                                                                                                                                                                        |
+
+| `A2aToolSet` field  | Default | Tools generated                                                                                        |
+|---------------------|---------|--------------------------------------------------------------------------------------------------------|
+| `core`              | `true`  | `delegateTo<Name>`, `get<Name>TaskStatus`, `cancel<Name>Task`, `list<Name>Tasks`                       |
+| `streaming`         | `false` | `streamFrom<Name>`, `subscribeTo<Name>Task`                                                            |
+| `extendedCard`      | `false` | `get<Name>ExtendedCard`                                                                                |
+| `pushNotifications` | `false` | `create<Name>PushNotificationConfig`, `list<Name>PushNotificationConfigs`, `delete<Name>PushNotificationConfig` |
+
+##### 4.3.4.2. Initialization
+
+1. The toolkit obtains the Agent Card. If `agent` is a URL, the card is fetched with `clientConfig`. The card is read
+   once. Changes to the remote agent after this point are not seen by the toolkit.
+2. The toolkit determines the security scheme for `secret`. If the card has one or more security requirements, the
+   first requirement is used. If it names exactly one scheme, `secret` is filed under that scheme. If it names more
+   than one scheme, initialization fails, because a single `secret` cannot satisfy several schemes. If `secret` is
+   given and the card declares no scheme, initialization fails.
+3. The card MUST list an interface whose `protocolBinding` is `HTTP+JSON`. No other binding is supported.
+4. When `toolSet.streaming` is `true`, the card MUST advertise `capabilities.streaming`.
+5. The toolkit creates an `a2a:RestClient` from the card. A card passed as an `a2a:AgentCard` is the card in use, so a
+   caller can verify the card's signature before passing it.
+6. The toolkit generates the tools of the enabled groups.
+
+##### 4.3.4.3. Tool names
+
+`<Name>` in the tool names is derived from `name`, or from the name in the Agent Card when `name` is `()`.
+
+1. Every character that is not an ASCII letter or digit is removed, and the character that follows it, and the first
+   character, are converted to upper case. `tripPlanner` becomes `TripPlanner`, and `Trip Planner Agent` becomes
+   `TripPlannerAgent`.
+2. If nothing remains, `<Name>` is `Agent`.
+3. If more than 32 characters remain, `<Name>` is the first 24 characters followed by the first eight hexadecimal
+   characters of the SHA-256 digest of the complete result of step 1. Two long names that start alike therefore
+   produce different tool names.
+
+A tool name is at most 64 characters long. Tool names are registered through `ai:ToolStore`, so two toolkits that
+produce the same tool name are rejected when the agent is created.
+
+##### 4.3.4.4. Tools
+
+| Tool                                      | Parameters                                   | Result                                                                                       |
+|-------------------------------------------|----------------------------------------------|----------------------------------------------------------------------------------------------|
+| `delegateTo<Name>`                        | `message: string`, `taskId: string?`         | The reply of the remote agent, as described in 4.3.4.5.                                      |
+| `get<Name>TaskStatus`                     | `taskId: string`                             | The current state of the task, read from the remote agent on every call.                     |
+| `cancel<Name>Task`                        | `taskId: string`                             | The task after the remote agent processed the cancellation.                                  |
+| `list<Name>Tasks`                         | none                                         | One line per task, or `No tasks found.`                                                      |
+| `streamFrom<Name>`                        | `message: string`                            | The updates received until the stream ends, one per line.                                    |
+| `subscribeTo<Name>Task`                   | `taskId: string`                             | The updates received until the stream ends, one per line.                                    |
+| `get<Name>ExtendedCard`                   | none                                         | The agent name, and the number and ids of the skills of the extended Agent Card.             |
+| `create<Name>PushNotificationConfig`      | `taskId: string`, `webhookUrl: string`       | A message that names the id of the registered configuration.                                 |
+| `list<Name>PushNotificationConfigs`       | `taskId: string`                             | The ids of the configurations registered for the task, or a message that there are none.     |
+| `delete<Name>PushNotificationConfig`      | `taskId: string`, `configId: string`         | A confirmation message.                                                                      |
+
+The description of `delegateTo<Name>` carries what the Agent Card says about the remote agent:
+
+1. The card's description is flattened to a single line and truncated to 1024 characters. A truncated text ends with
+   `... [truncated]`.
+2. The text is introduced by a sentence that tells the model that it is the remote agent's own text and not an
+   instruction.
+3. Every skill is listed on its own line with its name, id, description, tags, all of its examples, and its input
+   and output modes. Every text is flattened to a single line.
+4. A skill whose line is longer than 4096 characters is summarized: its name is truncated to 80 characters, its
+   description to 240 characters, and only its first two examples are kept. The line ends with a note that the skill
+   was summarized. Other skills are not affected.
+
+##### 4.3.4.5. Delegating a request
+
+1. `delegateTo<Name>` sends a user message that contains `message` as its text. When `taskId` is given, the message
+   continues that task, for example to answer a question the remote agent asked. The request asks the remote agent
+   to return without waiting for the task to finish.
+2. If the remote agent replies with a message, the result is the text of its parts joined with a space.
+3. If the remote agent replies with a task, the toolkit reads the task with `getTask`, immediately and then every
+   `pollConfig.pollInterval` seconds (0.5 by default), until the task is settled or `pollConfig.maxWait` seconds (20
+   by default) have passed. A `maxWait` of zero returns the task as the remote agent first reported it. A task is
+   settled when its state is `TASK_STATE_COMPLETED`, `TASK_STATE_FAILED`, `TASK_STATE_CANCELED`,
+   `TASK_STATE_REJECTED`, `TASK_STATE_INPUT_REQUIRED`, or `TASK_STATE_AUTH_REQUIRED`. The polling is not visible to
+   the model.
+4. When `taskId` is given, the task returned for the request is the task as it was before the remote agent saw the
+   new message. It is not settled until its state or its status timestamp differs from that snapshot, so the earlier
+   question is never returned as the reply to its own answer.
+5. The result of a task is `[<state>] <text> (task id: <id>)`. `<text>` is the text of the last artifact. If there is
+   no artifact, it is the text of the status message. If there is neither, it is
+   `(no textual response, task state: <state>)`. When the wait runs out, the state is the one the task is in at that
+   moment, for example `TASK_STATE_WORKING`, and the model can read the task later with `get<Name>TaskStatus`.
+
+##### 4.3.4.6. Errors
+
+| Condition                                                                         | Reported as                                                    |
+|-----------------------------------------------------------------------------------|----------------------------------------------------------------|
+| The card cannot be fetched or parsed                                              | `ai:Error` from `init`, with the cause                         |
+| The card offers no `HTTP+JSON` interface                                          | `ai:Error` from `init`, listing the bindings the card offers   |
+| `toolSet.streaming` is `true` and the card does not advertise streaming           | `ai:Error` from `init`                                         |
+| The card requires several security schemes together                               | `ai:Error` from `init`                                         |
+| `secret` is given and the card declares no security scheme                        | `ai:Error` from `init`                                         |
+| The client cannot be created from the card                                        | `ai:Error` from `init`, with the cause                         |
+| A call to the remote agent fails, for example with an authentication failure      | The `a2a:Error` is returned from the tool and reported to the model |
+
+##### 4.3.4.7. Security considerations
+
+* Everything in the Agent Card is written by whoever operates the remote agent and becomes part of the prompt of the
+  calling agent. The toolkit flattens it, caps the description, and labels it as the remote agent's own text. This
+  reduces the risk of prompt injection but does not remove it, so connect only to agents you trust.
+* The toolkit does not verify card signatures. To rely on a signature, verify the card first and pass the verified
+  `a2a:AgentCard` as `agent`.
+* `secret` is kept in memory in an `a2a:InMemoryCredentialStore` and sent only to the remote agent it was given for.
+
+```ballerina
+final ai:A2aToolKit tripPlanner = check new ("http://localhost:8000", name = "tripPlanner");
+final ai:A2aToolKit packing = check new ("http://localhost:8003", name = "packing", secret = packingToken,
+    toolSet = {streaming: true});
+
+ai:Agent concierge = check new (
+    systemPrompt = {role: "Concierge", instructions: "Plan trips."},
+    model = model,
+    tools = [tripPlanner, packing]
+);
 ```
 
 ### 4.4. Tool authorization
