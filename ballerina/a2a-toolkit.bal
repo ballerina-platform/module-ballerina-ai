@@ -256,7 +256,7 @@ public isolated class A2aToolKit {
                 boolean unmoved = stillAsking(pending, asked);
                 A2aOutcome outcome = isSettled(pending.status.state) && !unmoved
                     ? {task: pending, settled: true}
-                    : self.follow(pending, asked);
+                    : self.follow(pending, unmoved ? asked : ());
                 if !outcome.settled {
                     int stalled = conversation?.progress == progressOf(outcome.task)
                         ? (conversation?.stalledReplies ?: 0) + 1
@@ -397,7 +397,8 @@ public isolated class A2aToolKit {
         return confirmed;
     }
 
-    private isolated function claim(string session) returns boolean {
+    // Module-visible, not private, so the tests can hold a conversation busy.
+    isolated function claim(string session) returns boolean {
         lock {
             if self.busy.hasKey(session) {
                 return false;
@@ -413,9 +414,28 @@ public isolated class A2aToolKit {
         }
     }
 
-    private isolated function release(string session) {
+    isolated function release(string session) {
         lock {
             _ = self.busy.removeIfHasKey(session);
+            // While every conversation was in use, a new one could not push another out. Now that this call has
+            // ended, the ones over the limit that no call uses are forgotten, least recently used first.
+            while self.sessionOrder.length() > A2A_MAX_CONVERSATIONS && self.forgetLeastRecentIdle() {
+            }
+        }
+    }
+
+    // Forgets the least recently used conversation that no call is using. Returns false when there is none.
+    private isolated function forgetLeastRecentIdle() returns boolean {
+        lock {
+            foreach int i in 0 ..< self.sessionOrder.length() {
+                string candidate = self.sessionOrder[i];
+                if !self.busy.hasKey(candidate) {
+                    _ = self.sessionOrder.remove(i);
+                    _ = self.conversations.removeIfHasKey(candidate);
+                    return true;
+                }
+            }
+            return false;
         }
     }
 
@@ -473,9 +493,12 @@ public isolated class A2aToolKit {
     #           reply that is already complete, or asks something new, differs from it and is returned as it is
     # + return - A direct `a2a:Message` reply; the task, and whether it settled before the stream ended; or an error
     #            if the stream failed before the agent reported any task
-    private isolated function read(stream<a2a:StreamResponse, a2a:Error?> events, a2a:TaskStatus? asked = ())
+    isolated function read(stream<a2a:StreamResponse, a2a:Error?> events, a2a:TaskStatus? asked = ())
             returns A2aOutcome|a2a:Message|a2a:Error {
         a2a:Task? task = ();
+        // The question counts only until the task is seen to move away from it. A later question may have a status
+        // equal to it (the message and timestamp are optional), and that one is new.
+        a2a:TaskStatus? baseline = asked;
         while true {
             record {|a2a:StreamResponse value;|}|a2a:Error? next = events.next();
             if next is () {
@@ -500,7 +523,10 @@ public isolated class A2aToolKit {
             }
             task = applyEvent(task, event);
             a2a:Task current = <a2a:Task>task;
-            boolean stale = stillAsking(current, asked);
+            if baseline is a2a:TaskStatus && !stillAsking(current, baseline) {
+                baseline = ();
+            }
+            boolean stale = stillAsking(current, baseline);
             if isSettled(current.status.state) && !stale {
                 error? closed = events.close();
                 if closed is error {
@@ -514,7 +540,7 @@ public isolated class A2aToolKit {
         }
         // The stream ended first: an agent that ends its stream once the task waits on the caller, or one that hung
         // up. A task still showing the question it was asked has not been seen to move on.
-        boolean stale = stillAsking(task, asked);
+        boolean stale = stillAsking(task, baseline);
         return {task, settled: isSettled(task.status.state) && !stale};
     }
 
@@ -582,15 +608,9 @@ public isolated class A2aToolKit {
             if at is int {
                 _ = self.sessionOrder.remove(at);
             } else if self.sessionOrder.length() >= A2A_MAX_CONVERSATIONS {
-                // The least recently used conversation that no call is using; one a call depends on stays.
-                foreach int i in 0 ..< self.sessionOrder.length() {
-                    string candidate = self.sessionOrder[i];
-                    if !self.busy.hasKey(candidate) {
-                        _ = self.sessionOrder.remove(i);
-                        _ = self.conversations.removeIfHasKey(candidate);
-                        break;
-                    }
-                }
+                // The least recently used conversation that no call is using; one a call depends on stays, and the
+                // excess is forgotten when a call releases its conversation.
+                _ = self.forgetLeastRecentIdle();
             }
             self.sessionOrder.push(session);
             self.conversations[session] = entry;
@@ -814,7 +834,25 @@ isolated function isCleartextRemote(string url) returns boolean {
         int? colon = hostAndPort.indexOf(":");
         host = colon is int ? hostAndPort.substring(0, colon) : hostAndPort;
     }
-    return !(host == "localhost" || host.endsWith(".localhost") || host == "::1" || host.startsWith("127."));
+    return !(host == "localhost" || host.endsWith(".localhost") || host == "::1" || isLoopbackIpv4(host));
+}
+
+// Whether the host is an IPv4 address in 127.0.0.0/8. A name that merely begins with `127.` is not.
+isolated function isLoopbackIpv4(string host) returns boolean {
+    string[] parts = regexp:split(re `\.`, host);
+    if parts.length() != 4 {
+        return false;
+    }
+    foreach string part in parts {
+        if !regexp:isFullMatch(re `[0-9]{1,3}`, part) {
+            return false;
+        }
+        int|error octet = int:fromString(part);
+        if octet is error || octet > 255 {
+            return false;
+        }
+    }
+    return parts[0] == "127";
 }
 
 // Whether a task still shows exactly the question it was asked, compared in full (state, timestamp and message). An

@@ -145,6 +145,11 @@ function testA2aCredentialsOverPlainHttpToAnotherHostAreFlagged() {
     test:assertFalse(isCleartextRemote("http://localhost:9090"));
     test:assertFalse(isCleartextRemote("http://default-default.am-gateway.localhost:19080/weather"));
     test:assertFalse(isCleartextRemote("http://127.0.0.1:8000"));
+    test:assertFalse(isCleartextRemote("http://127.1.2.3/agent"));
+    // A name that begins with 127. is a hostname, not a loopback address, and neither is a malformed address.
+    test:assertTrue(isCleartextRemote("http://127.agent.example/planner"));
+    test:assertTrue(isCleartextRemote("http://127.0.0.256/planner"));
+    test:assertTrue(isCleartextRemote("http://127.0.0/planner"));
     test:assertFalse(isCleartextRemote("http://[::1]:8000/agent"));
 }
 
@@ -153,4 +158,52 @@ function testA2aAbandonNoticeSaysWhetherTheCancellationWasConfirmed() {
     test:assertTrue(abandonNotice(true).endsWith("so it was cancelled."), abandonNotice(true));
     test:assertTrue(abandonNotice(false).includes("did not confirm that it was cancelled"), abandonNotice(false));
     test:assertFalse(abandonNotice(false).includes("so it was cancelled"), abandonNotice(false));
+}
+
+@test:Config {groups: ["a2a"]}
+function testA2aReadReturnsANewQuestionWhoseStatusEqualsTheOldOne() returns error? {
+    A2aToolKit toolkit = check new (a2aFaultCard());
+    // An agent that sets no message and no timestamp on its statuses: the second question's status equals the first.
+    a2a:TaskStatus question = {state: a2a:TASK_STATE_INPUT_REQUIRED};
+    a2a:Task old = {id: "t", contextId: "c", status: question};
+    a2a:StreamResponse[] events = [
+        old,
+        <a2a:TaskStatusUpdateEvent>{taskId: "t", contextId: "c", status: {state: a2a:TASK_STATE_WORKING}},
+        <a2a:TaskStatusUpdateEvent>{taskId: "t", contextId: "c", status: {state: a2a:TASK_STATE_INPUT_REQUIRED}}
+    ];
+    stream<a2a:StreamResponse, a2a:Error?> reply = events.toStream();
+    A2aOutcome|a2a:Message|a2a:Error outcome = toolkit.read(reply, question);
+    if outcome !is A2aOutcome {
+        test:assertFail("expected the task, not a message or an error");
+    }
+    test:assertTrue(outcome.settled, "the new question is returned");
+    test:assertEquals(outcome.task.status.state, a2a:TASK_STATE_INPUT_REQUIRED);
+
+    // The old question alone, with nothing after it, is still not a new one.
+    stream<a2a:StreamResponse, a2a:Error?> unchanged = [<a2a:StreamResponse>old].toStream();
+    A2aOutcome|a2a:Message|a2a:Error stale = toolkit.read(unchanged, question);
+    if stale !is A2aOutcome {
+        test:assertFail("expected the task, not a message or an error");
+    }
+    test:assertFalse(stale.settled, "the old question is not settled");
+}
+
+@test:Config {groups: ["a2a"]}
+function testA2aConversationLimitIsRestoredOnceBusyCallsEnd() returns error? {
+    A2aToolKit toolkit = check new (a2aCard("Crowded"));
+    foreach int i in 0 ..< A2A_MAX_CONVERSATIONS {
+        string session = string `busy-${i}`;
+        toolkit.store(session, {contextId: string `context-${i}`});
+        test:assertTrue(toolkit.claim(session));
+    }
+    // Every conversation is in use, so none can be forgotten to make room.
+    toolkit.store("extra", {contextId: "extra-context"});
+    test:assertEquals(toolkit.conversationOf("busy-0")?.contextId, "context-0", "in use, so kept");
+    foreach int i in 0 ..< A2A_MAX_CONVERSATIONS {
+        toolkit.release(string `busy-${i}`);
+    }
+    // The excess is gone once the calls have ended: the least recently used one, and only that one.
+    test:assertEquals(toolkit.conversationOf("busy-0"), {}, "the oldest idle conversation is forgotten");
+    test:assertEquals(toolkit.conversationOf("busy-1")?.contextId, "context-1");
+    test:assertEquals(toolkit.conversationOf("extra")?.contextId, "extra-context");
 }
