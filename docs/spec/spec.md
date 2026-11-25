@@ -3,7 +3,7 @@
 _Owners_: @MohamedSabthar @shafreenAnfar @kalaiyarasiganeshalingam @RadCod3  
 _Reviewers_: @MohamedSabthar @shafreenAnfar @kalaiyarasiganeshalingam @RadCod3  
 _Created_: 2026/10/28  
-_Updated_: 2026/11/11  
+_Updated_: 2026/11/17  
 _Edition_: Swan Lake
 
 
@@ -40,6 +40,7 @@ The conforming implementation of the specification is released and included in t
         * 4.3.2. [MCP toolkit](#432-mcp-toolkit)
         * 4.3.3. [HTTP service toolkit](#433-http-service-toolkit)
             * 4.3.3.1. [Tools from OpenAPI specifications](#4331-tools-from-openapi-specifications)
+        * 4.3.4. [A2A toolkit](#434-a2a-toolkit)
     * 4.4. [Tool authorization](#44-tool-authorization)
     * 4.5. [Context](#45-context)
 5. [Agents](#5-agents)
@@ -946,6 +947,233 @@ ai:HttpApiSpecification spec = check ai:extractToolsFromOpenApiSpecFile("petstor
 final ai:HttpServiceToolKit petStore = check new (spec.serviceUrl ?: "http://localhost:9090", spec.tools);
 ```
 
+#### 4.3.4. A2A toolkit
+
+The `ai:A2aToolKit` gives an agent a single remote [Agent2Agent (A2A)](https://a2a-protocol.org/latest/specification/)
+agent as one tool, `ask<Name>`. During initialization it reads the remote agent's Agent Card and builds the tool
+described below. The model only writes the request. The toolkit keeps the conversation with the remote agent, continues
+a task the remote agent asked a question about, and waits for a task that takes a while. One toolkit wraps one remote
+agent, and several toolkits can be passed to the same agent.
+
+```ballerina
+public type A2aBaseToolKit distinct isolated object {
+    *BaseToolKit;
+};
+
+public isolated class A2aToolKit {
+    *A2aBaseToolKit;
+
+    public isolated function init(a2a:AgentCard|string agent, string? name = (), string? secret = (),
+            http:ClientConfiguration clientConfig = {}, map<string> headers = {},
+            RequiresApproval requiresApproval = false) returns Error?;
+
+    public isolated function getTools() returns ToolConfig[];
+}
+```
+
+##### 4.3.4.1. Configuration
+
+| Parameter          | Type                       | Default  | Meaning                                                                                                                                                              |
+|--------------------|----------------------------|----------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `agent`            | `a2a:AgentCard\|string`    | Required | The base URL of the remote agent, the URL of its Agent Card (ending in `/.well-known/agent-card.json`), or an `a2a:AgentCard`. A URL is resolved to the card with `a2a:resolveAgentCard`. A card is used as given and is not fetched again. |
+| `name`             | `string?`                  | `()`     | The name the tool name is built from. `()` means the name in the Agent Card.                                                                                         |
+| `secret`           | `string?`                  | `()`     | The credential for the security scheme the card requires. It is not sent when fetching the card. `()` means no credential is sent.                                   |
+| `clientConfig`     | `http:ClientConfiguration` | `{}`     | Used both to fetch the card from a URL and by the client that calls the remote agent. Its `auth` is sent with every request (4.3.4.7). Its `timeout` is also how long a task's stream may stay silent (4.3.4.5). |
+| `headers`          | `map<string>`              | `{}`     | Headers sent with every request, the card fetch included, such as an API key header (4.3.4.7).                                                                        |
+| `requiresApproval` | `ai:RequiresApproval`      | `false`  | Passed to the tool. `true` pauses every call for human approval; a function receives the proposed `request` and decides per call.                                     |
+
+##### 4.3.4.2. Initialization
+
+1. The toolkit obtains the Agent Card. If `agent` is a URL, the card is fetched with `clientConfig` and `headers`. A
+   URL ending in `/.well-known/agent-card.json` is the card's own URL, and the rest of it is the base URL. The card is
+   read once. Changes to the remote agent after this point are not seen by the toolkit.
+2. The toolkit determines the security scheme for `secret`. If the card has one or more security requirements, the
+   first requirement is used. If it names exactly one scheme, `secret` is filed under that scheme. If it names more
+   than one scheme, initialization fails, because a single `secret` cannot satisfy several schemes. If `secret` is
+   given and the card declares no scheme, initialization fails.
+3. The card MUST list an interface whose `protocolBinding` is `HTTP+JSON`. No other binding is supported.
+4. The toolkit creates an `a2a:RestClient` from the card, with `clientConfig` and `headers`. Every call goes to the
+   URL of the card's `HTTP+JSON` interface. A card passed as an `a2a:AgentCard` is the card in use, so a caller can
+   verify the card's signature before passing it.
+5. When the card sets `capabilities.extendedAgentCard` and `secret` is given, the toolkit reads the extended Agent Card
+   and describes the tool from it. If the extended card cannot be read, a warning is logged and the public card is
+   used.
+6. The toolkit builds the tool.
+
+##### 4.3.4.3. The tool
+
+The toolkit provides exactly one tool.
+
+| Name         | Parameters        | Result                                         |
+|--------------|-------------------|------------------------------------------------|
+| `ask<Name>`  | `request: string` | The reply of the remote agent, as in 4.3.4.5.  |
+
+`<Name>` is derived from `name`, or from the name in the Agent Card when `name` is `()`:
+
+1. Every character that is not an ASCII letter or digit is removed, and the character that follows it, and the first
+   character, are converted to upper case. `tripPlanner` becomes `TripPlanner`, and `Trip Planner Agent` becomes
+   `TripPlannerAgent`.
+2. `<hash>` is the first eight hexadecimal characters of the SHA-256 digest of the whole name.
+3. If nothing remains, `<Name>` is `Agent<hash>`.
+4. If more than 60 characters remain, `<Name>` is the first 52 characters followed by `<hash>`. Two long names that
+   start alike therefore produce different tool names.
+5. Otherwise, if a character outside ASCII was removed, `<Name>` is the result of step 1 followed by `<hash>` (cut as
+   in step 4 if that makes it longer than 60 characters), so names written in other scripts do not collapse into one.
+
+The tool name is at most 63 characters long. It is registered through `ai:ToolStore`, so two toolkits that produce the
+same tool name are rejected when the agent is created.
+
+The tool's description tells the model to write the request with everything the remote agent needs, that the remote
+agent remembers earlier requests in the conversation, and what the `[INPUT_REQUIRED]` and `[WORKING]` replies mean.
+It also carries what the Agent Card says about the remote agent:
+
+1. The card's description is flattened to a single line and truncated to 1024 characters. A truncated text ends with
+   `... [truncated]`. In every text taken from the card, double quotes are replaced with single quotes, so the text
+   cannot close the quotes it is shown in.
+2. The text is introduced by a sentence that tells the model that it is the remote agent's own text and not an
+   instruction.
+3. Every skill is listed on its own line with its name, id, description, tags, all of its examples, and its input
+   and output modes. Every text is flattened to a single line.
+4. A skill whose line is longer than 4096 characters is summarized: its name is truncated to 80 characters, its
+   description to 240 characters, and only its first two examples are kept. The line ends with a note that the skill
+   was summarized. Other skills are not affected.
+5. At most 50 skills are listed, in at most 16384 characters together. A final line says how many more skills the
+   card has.
+
+##### 4.3.4.4. Conversations
+
+The toolkit keeps one conversation with the remote agent for each session of the calling agent. The session is read
+from the `ai:Context` the agent passes to the tool (`Context.getSessionId()`, see [Section 4.5](#45-context)), and is the agent's default
+session when there is none. A conversation records the A2A `contextId` and the last task with the state it was last
+seen in. The model never sees a task id or a context id.
+
+A toolkit keeps at most 1000 conversations. When there are more, the one used least recently is forgotten, and its
+next request starts a new conversation.
+
+A conversation takes one call at a time. A call made while another call in the same conversation is in flight, as
+when the model makes parallel tool calls to the same remote agent, returns an error that tells the model to call
+again once the first call has returned. Calls in other conversations are not held up.
+
+Runs that do not pass a session id all use the default session, and so share one conversation with the remote agent.
+The first such call logs a warning.
+
+##### 4.3.4.5. Sending a request
+
+1. If the last task of the conversation was still running when it was last seen, the toolkit reads it once with
+   `getTask` and, if it is still running, follows it with `subscribeToTask` as in step 5, before sending anything.
+   * If it settled in `TASK_STATE_INPUT_REQUIRED` or `TASK_STATE_AUTH_REQUIRED`, the result is its reply (step 6)
+     with a note that the new request was not sent, because the question comes first.
+   * If it settled in any other state, its reply (step 6) is kept, the request is sent as in step 2, and the result
+     is the earlier reply followed by the reply to the request.
+   * If it is still running, the result is `[WORKING]`, saying that the new request was not sent. A task whose state,
+     status timestamp and number of artifact parts have not changed over three such replies in a row shows no
+     progress: on the next call the toolkit asks the remote agent to cancel it (`cancelTask`, whose failure is
+     ignored), keeps the conversation's context, sends the request as in step 2, and says so in the result.
+   * If the remote agent no longer knows the task (`a2a:TaskNotFoundError`), the conversation is forgotten and the
+     request is sent as in step 2. Any other failure to read it is returned as an error, and the conversation is
+     kept, because the task may still be running.
+2. The toolkit sends a user message that contains `request` as its text, with the conversation's `contextId` when it
+   has one.
+   * If the last task is in `TASK_STATE_INPUT_REQUIRED` or `TASK_STATE_AUTH_REQUIRED`, the message continues that task
+     (`taskId`): the request is the answer.
+   * Otherwise, if there is a last task, the message starts a new task with `referenceTaskIds` set to the last task.
+   The message is sent with `sendStreamingMessage`, so a call is one streamed request. When the card does not set
+   `capabilities.streaming`, the client sends one blocking `sendMessage` instead and treats its reply as a stream of
+   one event.
+3. If the remote agent rejects the message with `a2a:TaskNotFoundError` and the message carried the conversation's
+   ids, the conversation is forgotten and the request is sent once more as a new conversation.
+4. If the remote agent replies with a message, the result is the text of its parts joined with a space. The
+   conversation keeps its `contextId` and has no open task.
+5. If the remote agent replies with a task, the toolkit reads the stream: the task, then its status updates and
+   artifact updates, which it applies to the task (an artifact update with `append` adds its parts to the artifact
+   with the same id). It stops reading, and closes the stream, once the task settles. A task is settled when its
+   state is `TASK_STATE_COMPLETED`, `TASK_STATE_FAILED`, `TASK_STATE_CANCELED`, `TASK_STATE_REJECTED`,
+   `TASK_STATE_INPUT_REQUIRED`, or `TASK_STATE_AUTH_REQUIRED`. When the message continued a task, the first task in
+   the stream may be the task as it was before the remote agent saw the new message; the task is not settled until
+   its status (state, timestamp and message, compared in full) differs from that snapshot. If the stream ends, fails, or stays silent for
+   longer than `clientConfig.timeout` before the task settles, the task is still running on the remote agent: the
+   result is `[WORKING]`, and the conversation records the task as running, so the next call picks it up (step 1).
+   The toolkit never polls.
+6. The result for a task depends on its state. For a completed task, `<text>` is the text of every artifact, one per
+   line, or the text of the status message if there is none. For any other state, `<text>` is the text of the status
+   message, which says what the agent needs or why it stopped, or the artifacts' text if it has none. If there is
+   neither, `<text>` is a note naming the state.
+
+   | State                                                          | Result                                                                                          |
+   |----------------------------------------------------------------|-------------------------------------------------------------------------------------------------|
+   | `TASK_STATE_COMPLETED`                                         | `<text>`                                                                                        |
+   | `TASK_STATE_INPUT_REQUIRED`                                    | `[INPUT_REQUIRED] <text>` and an instruction to call the tool again with the answer             |
+   | `TASK_STATE_AUTH_REQUIRED`                                     | `[AUTH_REQUIRED] <text>` and an instruction to tell the user; a warning is logged                |
+   | `TASK_STATE_FAILED`, `TASK_STATE_REJECTED`, `TASK_STATE_CANCELED` | `[<state>] <text>`                                                                           |
+   | Any other state, when the stream ended first                   | `[WORKING]` and an instruction to call the tool again later                                     |
+
+##### 4.3.4.6. Errors
+
+| Condition                                                                         | Reported as                                                          |
+|-----------------------------------------------------------------------------------|----------------------------------------------------------------------|
+| The card cannot be fetched or parsed                                              | `ai:Error` from `init`, with the cause                               |
+| The card offers no `HTTP+JSON` interface                                          | `ai:Error` from `init`, listing the bindings the card offers         |
+| The card requires several security schemes together                               | `ai:Error` from `init`                                               |
+| `secret` is given and the card declares no security scheme                        | `ai:Error` from `init`                                               |
+| The client cannot be created from the card                                        | `ai:Error` from `init`, with the cause                               |
+| A call to the remote agent fails before it reports a task, for example with an authentication failure | An `ai:Error` naming the tool, with the `a2a:Error` as its cause, returned from the tool and reported to the model |
+| The remote agent cannot be reached at all                                         | As above; the message also names the URL from the card that was called |
+| The agent cannot stream and its one blocking reply did not arrive                  | As above, saying that the agent may still be working on the request but its result cannot be fetched |
+| Another call in the same conversation is in flight                                | An `ai:Error` telling the model to call again once that call has returned |
+
+##### 4.3.4.7. Agents behind a gateway
+
+In production a remote agent is usually reached through an API gateway, which checks a credential on every request,
+the Agent Card included, while the agent behind it declares no security scheme of its own. `secret` does not fit that
+case, because it is filed under a scheme the card declares and is not sent when fetching the card. Use one of these
+instead; both are sent with every request, the card fetch included:
+
+| The gateway asks for                                   | Configure                                                                                         |
+|--------------------------------------------------------|---------------------------------------------------------------------------------------------------|
+| A bearer token                                         | `clientConfig = {auth: {token: accessToken}}`                                                     |
+| An OAuth2 token, such as a client-credentials grant    | `clientConfig = {auth: {tokenUrl, clientId, clientSecret, scopes}}`. The token is fetched when needed and fetched again when it expires. |
+| An API key in a header                                 | `headers = {"X-API-Key": apiKey}`, with the header name the gateway uses                          |
+| Basic authentication or a self-signed JWT              | The matching `http:ClientConfiguration.auth` configuration                                        |
+| A client certificate (mutual TLS)                      | `clientConfig = {secureSocket: {key: {certFile, keyFile}}}`                                       |
+
+The gateway MUST serve a card whose `HTTP+JSON` interface URL is the gateway's own address for the agent; a card
+that lists the agent's internal address cannot be called from outside. A gateway that cuts long responses ends the
+stream before the task settles; the result is then `[WORKING]`, and the next call picks the task up (4.3.4.5).
+
+```ballerina
+final ai:A2aToolKit planner = check new ("https://gateway.example.com/agents/planner",
+    clientConfig = {auth: {tokenUrl: "https://idp.example.com/oauth2/token", clientId, clientSecret}});
+final ai:A2aToolKit weather = check new ("https://gateway.example.com/agents/weather",
+    headers = {"X-API-Key": weatherApiKey});
+```
+
+Requests signed per call, such as AWS Signature Version 4, are not supported, because `http:ClientConfiguration` has
+no way to sign a request.
+
+##### 4.3.4.8. Security considerations
+
+* Everything in the Agent Card is written by whoever operates the remote agent and becomes part of the prompt of the
+  calling agent. The toolkit flattens it, caps the description, and labels it as the remote agent's own text. This
+  reduces the risk of prompt injection but does not remove it, so connect only to agents you trust.
+* The toolkit does not verify card signatures. To rely on a signature, verify the card first and pass the verified
+  `a2a:AgentCard` as `agent`.
+* `secret` is kept in memory in an `a2a:InMemoryCredentialStore` and sent only to the remote agent it was given for.
+* Conversations are kept apart by session id. Runs that do not pass a `sessionId` share the default session, and so
+  share one conversation with the remote agent: a question the remote agent asked one user can be answered by the
+  next. A warning is logged the first time it happens. A service that runs an agent for several users MUST pass a
+  `sessionId` per user.
+
+```ballerina
+final ai:A2aToolKit tripPlanner = check new ("http://localhost:8000");
+final ai:A2aToolKit packing = check new ("http://localhost:8003", secret = packingToken, requiresApproval = true);
+
+ai:Agent concierge = check new (
+    systemPrompt = {role: "Concierge", instructions: "Plan trips."},
+    model = model,
+    tools = [tripPlanner, packing]
+);
+```
+
 ### 4.4. Tool authorization
 
 A tool can declare the authorization it requires through the `auth` field of `@ai:AgentTool` or `ai:ToolConfig`.
@@ -1026,6 +1254,7 @@ public isolated class Context {
     public isolated function getAccessToken(string toolName) returns string|error;
     public isolated function getWithType(string key, typedesc<ContextEntry> targetType = <>) returns targetType|Error;
     public isolated function remove(string key);
+    public isolated function getSessionId() returns string?;
 }
 ```
 
@@ -1036,6 +1265,10 @@ public isolated class Context {
   different type.
 * `getAccessToken` returns the access token obtained for the given tool (see [Section 4.4](#44-tool-authorization)),
   or an error when there is none.
+* `getSessionId` returns the session ID of the agent run the context is used in, as passed to `run`. The agent sets it
+  when a run starts or resumes, so a tool can keep per-session state apart. It is `()` for a context that is not used
+  by an agent run. A context shared by concurrent runs of different sessions holds the session ID of the run that
+  started last.
 
 ```ballerina
 @ai:AgentTool

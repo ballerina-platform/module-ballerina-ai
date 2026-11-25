@@ -27,6 +27,24 @@ public type ContextEntry Cloneable|isolated object {};
 public isolated class Context {
     private final map<ContextEntry> entries = {};
     private final map<string> toolAccessToken = {};
+    private string? sessionId = ();
+
+    # Returns the ID of the session the agent is running in, as passed to `ai:Agent.run`. Tools use it to keep
+    # per-conversation state apart, such as the conversation an `ai:A2aToolKit` holds with a remote agent.
+    #
+    # + return - The session ID, or `()` when the context is not used by an agent run
+    public isolated function getSessionId() returns string? {
+        lock {
+            return self.sessionId;
+        }
+    }
+
+    // Set by the agent when a run starts or resumes, so tools called in that run can read it.
+    isolated function setSessionId(string sessionId) {
+        lock {
+            self.sessionId = sessionId;
+        }
+    }
 
     # Adds or updates an entry in the context.
     #
