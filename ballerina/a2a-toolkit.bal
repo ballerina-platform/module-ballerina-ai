@@ -30,8 +30,10 @@ const int A2A_HASHED_PREFIX_LENGTH = 52;
 // description is capped before it is used.
 const int A2A_MAX_CARD_TEXT_LENGTH = 1024;
 
-// A skill is passed in full unless its text is longer than this, in which case only that skill is summarized.
+// A skill is passed in full unless its text is longer than this, in which case only that skill is summarized. The
+// summary keeps two examples, each cut to the second length.
 const int A2A_MAX_SKILL_TEXT_LENGTH = 4096;
+const int A2A_MAX_SUMMARY_EXAMPLE_LENGTH = 200;
 
 // Where an agent serves its Agent Card, relative to its base URL.
 const string A2A_CARD_PATH = "/.well-known/agent-card.json";
@@ -64,6 +66,9 @@ type A2aConversation record {|
     // looked like the last time.
     int stalledReplies?;
     string progress?;
+    // The status of the question (INPUT_REQUIRED or AUTH_REQUIRED) the toolkit last handed to the model. The next
+    // call answers it, and a task that still shows exactly this status has not been seen to act on the answer.
+    a2a:TaskStatus interrupted?;
 |};
 
 // A task as read from the remote agent's stream, and whether it settled before the stream ended. A task that did not
@@ -164,6 +169,7 @@ public isolated class A2aToolKit {
             return error Error(string `could not connect to agent "${displayName}" (${agentClient.message()})`);
         }
         self.agentClient = agentClient;
+        warnIfCredentialsAreNotEncrypted(agent, self.agentUrl, secret, clientConfig, headers, displayName);
 
         // The extended card is only served to a caller the agent can authenticate, so it is only worth asking for
         // when there is a credential. A failure is not fatal: the public card still describes the agent.
@@ -244,9 +250,13 @@ public isolated class A2aToolKit {
                     + self.describe(pending), pending);
             }
             if pending is a2a:Task {
-                A2aOutcome outcome = isSettled(pending.status.state)
+                // A task that still shows the question handed over last time has not moved on: the answer sent after
+                // it has not been seen to take effect, so the old question is not shown again as a new one.
+                a2a:TaskStatus? asked = conversation?.interrupted;
+                boolean unmoved = stillAsking(pending, asked);
+                A2aOutcome outcome = isSettled(pending.status.state) && !unmoved
                     ? {task: pending, settled: true}
-                    : self.follow(pending);
+                    : self.follow(pending, asked);
                 if !outcome.settled {
                     int stalled = conversation?.progress == progressOf(outcome.task)
                         ? (conversation?.stalledReplies ?: 0) + 1
@@ -259,12 +269,11 @@ public isolated class A2aToolKit {
                             + string `request again then.`;
                     }
                     // Still running and showing no progress: stop waiting for it, and send the new request.
-                    self.abandon(outcome.task);
+                    boolean cancelled = self.abandon(outcome.task);
                     string? keptContext = outcome.task?.contextId ?: conversation?.contextId;
                     conversation = keptContext is string ? {contextId: keptContext} : {};
                     self.store(session, conversation);
-                    earlier = string `An earlier request showed no progress after ${A2A_MAX_STALLED_REPLIES} `
-                        + string `checks, so it was cancelled.`;
+                    earlier = abandonNotice(cancelled);
                 } else {
                     self.remember(session, outcome);
                     a2a:TaskState state = outcome.task.status.state;
@@ -318,6 +327,9 @@ public isolated class A2aToolKit {
             }
         }
 
+        // The question this request answers, to tell a task that has acted on the answer from one still showing it.
+        a2a:TaskStatus? asked = continuation ? conversation?.interrupted : ();
+
         // One streamed request, like the other A2A frameworks. When the card says the agent cannot stream, the client
         // sends one blocking request instead and hands back its reply as a one-event stream.
         stream<a2a:StreamResponse, a2a:Error?>|a2a:Error result = self.agentClient->sendStreamingMessage({
@@ -333,11 +345,15 @@ public isolated class A2aToolKit {
                 message: {messageId: uuid:createType4AsString(), role: a2a:ROLE_USER, parts: [{text: request}]}
             });
             continuation = false;
+            asked = ();
+            // The rejected context is not the conversation any more, so a direct reply without a context of its own
+            // must not bring it back.
+            contextId = ();
         }
         if result is a2a:Error {
             return self.failed(result);
         }
-        A2aOutcome|a2a:Message|a2a:Error outcome = self.read(result, continuation);
+        A2aOutcome|a2a:Message|a2a:Error outcome = self.read(result, asked);
         if outcome is a2a:Error {
             return self.failed(outcome);
         }
@@ -372,10 +388,13 @@ public isolated class A2aToolKit {
     }
 
     // Asks the remote agent to cancel a task the toolkit stopped waiting for. The new request is sent either way.
-    private isolated function abandon(a2a:Task task) {
+    // Returns whether the remote agent confirmed the cancellation.
+    private isolated function abandon(a2a:Task task) returns boolean {
         a2a:Task|a2a:Error cancelled = self.agentClient->cancelTask({id: task.id});
+        boolean confirmed = cancelled is a2a:Task;
         log:printWarn("Stopped waiting for a remote task that showed no progress", tool = self.toolName,
-                taskId = task.id, cancelled = cancelled is a2a:Task);
+                taskId = task.id, cancelled = confirmed);
+        return confirmed;
     }
 
     private isolated function claim(string session) returns boolean {
@@ -384,6 +403,12 @@ public isolated class A2aToolKit {
                 return false;
             }
             self.busy[session] = true;
+            // A conversation in use is the most recently used, so it is not the next one forgotten.
+            int? at = self.sessionOrder.indexOf(session);
+            if at is int {
+                _ = self.sessionOrder.remove(at);
+                self.sessionOrder.push(session);
+            }
             return true;
         }
     }
@@ -441,17 +466,16 @@ public isolated class A2aToolKit {
     # Reads a task's stream of updates until the task settles or the stream ends.
     #
     # + events - The stream from sending the message, or from subscribing to a task
-    # + continuation - Whether this stream answers a task that was waiting on the caller. Such a stream may start
-    #                  with the task as it stood BEFORE the answer: still INPUT_REQUIRED, with the question asked last
-    #                  time. Treating that as settled would hand the model the old question while the agent is
-    #                  already working on the answer, so the task only counts as settled once it has moved on from
-    #                  that first snapshot
+    # + asked - The status of the question this stream answers, when it answers a task that was waiting on the
+    #           caller. Such a stream may start with the task as it stood BEFORE the answer: still showing that
+    #           question. Treating that as settled would hand the model the old question while the agent is already
+    #           working on the answer, so the task only counts as settled once its status differs from `asked`. A
+    #           reply that is already complete, or asks something new, differs from it and is returned as it is
     # + return - A direct `a2a:Message` reply; the task, and whether it settled before the stream ended; or an error
     #            if the stream failed before the agent reported any task
-    private isolated function read(stream<a2a:StreamResponse, a2a:Error?> events, boolean continuation = false)
+    private isolated function read(stream<a2a:StreamResponse, a2a:Error?> events, a2a:TaskStatus? asked = ())
             returns A2aOutcome|a2a:Message|a2a:Error {
         a2a:Task? task = ();
-        a2a:Task? before = ();
         while true {
             record {|a2a:StreamResponse value;|}|a2a:Error? next = events.next();
             if next is () {
@@ -475,12 +499,8 @@ public isolated class A2aToolKit {
                 return event;
             }
             task = applyEvent(task, event);
-            if continuation && before is () && event is a2a:Task {
-                before = event.clone();
-            }
             a2a:Task current = <a2a:Task>task;
-            a2a:Task? snapshot = before;
-            boolean stale = snapshot is a2a:Task && unchangedSince(snapshot, current);
+            boolean stale = stillAsking(current, asked);
             if isSettled(current.status.state) && !stale {
                 error? closed = events.close();
                 if closed is error {
@@ -493,26 +513,32 @@ public isolated class A2aToolKit {
             return error a2a:InternalError("the remote agent's stream ended without reporting a task");
         }
         // The stream ended first: an agent that ends its stream once the task waits on the caller, or one that hung
-        // up. A task still showing the snapshot it had before this call has not been seen to move on.
-        a2a:Task? snapshot = before;
-        boolean stale = snapshot is a2a:Task && unchangedSince(snapshot, task);
+        // up. A task still showing the question it was asked has not been seen to move on.
+        boolean stale = stillAsking(task, asked);
         return {task, settled: isSettled(task.status.state) && !stale};
     }
 
     # Follows a task that an earlier call left running, through the remote agent's task stream.
     #
     # + task - The task as just read
+    # + asked - The question this task was last shown as, if its status is still that question
     # + return - The task, and whether it settled; a task that cannot be followed is reported as not settled
-    private isolated function follow(a2a:Task task) returns A2aOutcome {
+    private isolated function follow(a2a:Task task, a2a:TaskStatus? asked = ()) returns A2aOutcome {
         stream<a2a:StreamResponse, a2a:Error?>|a2a:Error events = self.agentClient->subscribeToTask({id: task.id});
         if events is a2a:Error {
-            // For example an agent that cannot stream: the task is reported as still running, and read again on the
-            // next call.
+            // For example an agent that cannot stream, or a task that finished since it was read (a finished task
+            // cannot be subscribed to). The task is read once more, so a result that is already there is returned
+            // now instead of on the next call; otherwise it is reported as still running.
             log:printDebug("Could not follow the remote agent's task", tool = self.toolName, taskId = task.id,
                     'error = events);
+            a2a:Task|a2a:Error latest = self.agentClient->getTask({id: task.id});
+            if latest is a2a:Task {
+                boolean unmoved = stillAsking(latest, asked);
+                return {task: latest, settled: isSettled(latest.status.state) && !unmoved};
+            }
             return {task, settled: false};
         }
-        A2aOutcome|a2a:Message|a2a:Error outcome = self.read(events);
+        A2aOutcome|a2a:Message|a2a:Error outcome = self.read(events, asked);
         return outcome is A2aOutcome ? outcome : {task, settled: false};
     }
 
@@ -527,12 +553,21 @@ public isolated class A2aToolKit {
     // whatever its last state, so the next call reads it before sending anything.
     private isolated function remember(string session, A2aOutcome outcome, int stalledReplies = 1) {
         a2a:Task task = outcome.task;
-        string? contextId = task?.contextId ?: self.conversationOf(session)?.contextId;
+        A2aConversation earlier = self.conversationOf(session);
+        string? contextId = task?.contextId ?: earlier?.contextId;
         A2aConversation conversation = {taskId: task.id,
             taskState: outcome.settled ? task.status.state : a2a:TASK_STATE_WORKING};
         if !outcome.settled {
             conversation.stalledReplies = stalledReplies;
             conversation.progress = progressOf(task);
+            // A task still showing the question has not acted on the answer yet: the question stays the baseline.
+            a2a:TaskStatus? asked = earlier?.interrupted;
+            if asked is a2a:TaskStatus && stillAsking(task, asked) {
+                conversation.interrupted = asked;
+            }
+        } else if task.status.state == a2a:TASK_STATE_INPUT_REQUIRED
+                || task.status.state == a2a:TASK_STATE_AUTH_REQUIRED {
+            conversation.interrupted = task.status;
         }
         if contextId is string {
             conversation.contextId = contextId;
@@ -547,7 +582,15 @@ public isolated class A2aToolKit {
             if at is int {
                 _ = self.sessionOrder.remove(at);
             } else if self.sessionOrder.length() >= A2A_MAX_CONVERSATIONS {
-                _ = self.conversations.removeIfHasKey(self.sessionOrder.shift());
+                // The least recently used conversation that no call is using; one a call depends on stays.
+                foreach int i in 0 ..< self.sessionOrder.length() {
+                    string candidate = self.sessionOrder[i];
+                    if !self.busy.hasKey(candidate) {
+                        _ = self.sessionOrder.remove(i);
+                        _ = self.conversations.removeIfHasKey(candidate);
+                        break;
+                    }
+                }
             }
             self.sessionOrder.push(session);
             self.conversations[session] = entry;
@@ -700,7 +743,9 @@ isolated function describeSkill(a2a:AgentSkill skill) returns string {
     }
     string summary = string `${singleLine(skill.name, 80)}: ${singleLine(skill.description, 240)}`;
     if examples.length() > 0 {
-        summary += string ` [examples: ${string:'join("; ", ...quoted(examples.slice(0, int:min(2, examples.length()))))}]`;
+        string[] kept = from string example in examples.slice(0, int:min(2, examples.length()))
+            select string `"${singleLine(example, A2A_MAX_SUMMARY_EXAMPLE_LENGTH)}"`;
+        summary += string ` [examples: ${string:'join("; ", ...kept)}]`;
     }
     return string `${summary} [summarized: the skill's full text was over ${A2A_MAX_SKILL_TEXT_LENGTH} characters]`;
 }
@@ -723,10 +768,60 @@ isolated function singleLine(string text, int maxLength) returns string {
     return flat.length() <= maxLength ? flat : string `${flat.substring(0, maxLength)}... [truncated]`;
 }
 
-// Whether a task still looks exactly as it did in an earlier snapshot: the same status, compared in full (state,
-// timestamp and message). An agent that asks a second question is seen to have moved on, though its state is
-// INPUT_REQUIRED both times, even when it sets no timestamps: the question itself differs.
-isolated function unchangedSince(a2a:Task before, a2a:Task now) returns boolean => before.status == now.status;
+// A credential sent over plain HTTP to another machine can be read on the network. That is left to the caller, since an
+// internal network may be trusted, but it is said once, when the toolkit is created. The card is fetched from `agent`
+// and every call goes to the card's interface, so both addresses are checked.
+isolated function warnIfCredentialsAreNotEncrypted(a2a:AgentCard|string agent, string interfaceUrl, string? secret,
+        http:ClientConfiguration clientConfig, map<string> headers, string displayName) {
+    if secret is () && headers.length() == 0 && clientConfig.auth is () {
+        return;
+    }
+    string[] urls = (agent is string) ? [agent, interfaceUrl] : [interfaceUrl];
+    foreach string url in urls {
+        if isCleartextRemote(url) {
+            log:printWarn("Credentials are sent over plain HTTP to a remote host; use HTTPS unless the network is "
+                    + "trusted", agentName = displayName);
+            return;
+        }
+    }
+}
+
+// What the model is told when the toolkit stopped waiting for a task that showed no progress.
+isolated function abandonNotice(boolean cancelled) returns string {
+    string stopped = string `An earlier request showed no progress after ${A2A_MAX_STALLED_REPLIES} checks`;
+    return cancelled
+        ? stopped + ", so it was cancelled."
+        : stopped + ", so the toolkit stopped waiting for it. The agent did not confirm that it was cancelled.";
+}
+
+// Whether a URL is plain HTTP to a host that is not this machine, where credentials sent with a request can be read on
+// the network. `localhost`, `*.localhost` and the loopback addresses are this machine.
+isolated function isCleartextRemote(string url) returns boolean {
+    string lower = url.toLowerAscii();
+    if !lower.startsWith("http://") {
+        return false;
+    }
+    string rest = lower.substring(7);
+    int? slash = rest.indexOf("/");
+    string authority = slash is int ? rest.substring(0, slash) : rest;
+    int? at = authority.lastIndexOf("@");
+    string hostAndPort = at is int ? authority.substring(at + 1) : authority;
+    string host;
+    if hostAndPort.startsWith("[") {
+        int? end = hostAndPort.indexOf("]");
+        host = end is int ? hostAndPort.substring(1, end) : hostAndPort;
+    } else {
+        int? colon = hostAndPort.indexOf(":");
+        host = colon is int ? hostAndPort.substring(0, colon) : hostAndPort;
+    }
+    return !(host == "localhost" || host.endsWith(".localhost") || host == "::1" || host.startsWith("127."));
+}
+
+// Whether a task still shows exactly the question it was asked, compared in full (state, timestamp and message). An
+// agent that asks a second question is seen to have moved on, though its state is INPUT_REQUIRED both times, even when
+// it sets no timestamps: the question itself differs.
+isolated function stillAsking(a2a:Task task, a2a:TaskStatus? asked) returns boolean =>
+    asked is a2a:TaskStatus && task.status == asked;
 
 // What a running task looks like, to tell a task that is progressing from one that is not: its state, its status
 // timestamp, and how many artifact parts it has produced.

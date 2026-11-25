@@ -104,6 +104,7 @@ isolated class A2aScriptedAgentExecutor {
             return;
         }
         if text == "brief" {
+            a2aNoteBriefStarted();
             check updater.working();
             runtime:sleep(1);
             check updater.addArtifact([{text: "brief work finished"}]);
@@ -123,6 +124,21 @@ isolated class A2aScriptedAgentExecutor {
             return;
         }
         return {messageId: "scripted-direct-reply", role: a2a:ROLE_AGENT, parts: [{text: "direct: " + text}]};
+    }
+}
+
+// How many "brief" requests reached the handler, so a test can wait for its own call to be in flight.
+isolated int a2aBriefStarts = 0;
+
+isolated function a2aNoteBriefStarted() {
+    lock {
+        a2aBriefStarts += 1;
+    }
+}
+
+isolated function a2aBriefStartCount() returns int {
+    lock {
+        return a2aBriefStarts;
     }
 }
 

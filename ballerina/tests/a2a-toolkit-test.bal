@@ -275,6 +275,17 @@ function testOnlyAnOversizedA2aSkillIsSummarized() returns error? {
             "- Small skill (id small): Stays whole. [tags: kept] [examples: \"a\"; \"b\"; \"c\"]"), description);
 }
 
+// Waits (at most five seconds) until a "brief" request that came after `before` has reached the scripted agent.
+isolated function a2aWaitForBriefStart(int before) {
+    foreach int _ in 0 ..< 50 {
+        if a2aBriefStartCount() > before {
+            return;
+        }
+        runtime:sleep(0.1);
+    }
+    test:assertFail("the scripted agent never received the request");
+}
+
 // ---- calling the remote agent ------------------------------------------------------
 
 @test:Config {groups: ["a2a"]}
@@ -493,21 +504,29 @@ listener http:Listener a2aExtendedCardListener = new (A2A_EXTENDED_CARD_TEST_POR
 
 // An agent that serves only its extended Agent Card, which a card passed to the toolkit can point at directly.
 service / on a2aExtendedCardListener {
-    resource function get extendedAgentCard() returns json => {
-        name: "Extended Agent",
-        description: "The card for authenticated callers",
-        version: "1.0.0",
-        capabilities: {},
-        skills: [
-            {id: "public", name: "Public", description: "Open to everyone", tags: []},
-            {id: "admin", name: "Admin", description: "Only for authenticated callers", tags: []}
-        ],
-        supportedInterfaces: [
-            {url: string `http://localhost:${A2A_EXTENDED_CARD_TEST_PORT}`, protocolBinding: "HTTP+JSON", protocolVersion: "1.0"}
-        ],
-        defaultInputModes: ["text"],
-        defaultOutputModes: ["text"]
-    };
+    resource function get extendedAgentCard(@http:Header string? authorization) returns http:Response|json {
+        if authorization != "Bearer shh" {
+            http:Response denied = new;
+            denied.statusCode = 401;
+            denied.setJsonPayload({"error": {"code": 401, "status": "UNAUTHENTICATED", "message": "no credential"}});
+            return denied;
+        }
+        return {
+            name: "Extended Agent",
+            description: "The card for authenticated callers",
+            version: "1.0.0",
+            capabilities: {},
+            skills: [
+                {id: "public", name: "Public", description: "Open to everyone", tags: []},
+                {id: "admin", name: "Admin", description: "Only for authenticated callers", tags: []}
+            ],
+            supportedInterfaces: [
+                {url: string `http://localhost:${A2A_EXTENDED_CARD_TEST_PORT}`, protocolBinding: "HTTP+JSON", protocolVersion: "1.0"}
+            ],
+            defaultInputModes: ["text"],
+            defaultOutputModes: ["text"]
+        };
+    }
 }
 
 @test:Config {groups: ["a2a"]}
@@ -515,9 +534,17 @@ function testA2aToolDescribesTheExtendedCardWhenItCanBeRead() returns error? {
     a2a:AgentCard card = a2aCard("Extended Agent", [{"bearer": []}], extendedAgentCard = true, interfaces = [
                 {url: string `http://localhost:${A2A_EXTENDED_CARD_TEST_PORT}`, protocolBinding: "HTTP+JSON", protocolVersion: "1.0"}
             ], skills = [{id: "public", name: "Public", description: "Open to everyone", tags: []}]);
+    // The credential is only sent when the card defines the scheme it is filed under.
+    a2a:HttpAuthSecurityScheme bearer = {scheme: "Bearer"};
+    card.securitySchemes = {"bearer": bearer};
     A2aToolKit toolkit = check new (card, secret = "shh");
     string description = a2aOnlyTool(toolkit).description;
     test:assertTrue(description.includes("Admin (id admin)"), "the gated skill from the extended card is described");
+
+    // The endpoint answers 401 unless the credential arrives, so the card above was read with it, and a wrong one
+    // leaves only the public card.
+    A2aToolKit wrong = check new (card, secret = "not-the-secret");
+    test:assertFalse(a2aOnlyTool(wrong).description.includes("Admin"), "a credential the agent refuses");
 }
 
 @test:Config {groups: ["a2a"]}
@@ -544,8 +571,10 @@ function testA2aToolKitDoesNotAskForTheExtendedCardWithoutACredential() returns 
 @test:Config {groups: ["a2a"]}
 function testA2aSecondCallInTheSameConversationWaitsItsTurn() returns error? {
     A2aToolKit toolkit = check new (a2aScriptedAgentUrl);
+    int startedBefore = a2aBriefStartCount();
     future<string|error> first = start a2aAsk(toolkit, "brief", "turns");
-    runtime:sleep(0.3);
+    // The first call holds the conversation once the agent has received its request.
+    a2aWaitForBriefStart(startedBefore);
     string|error second = a2aAsk(toolkit, "echo too soon", "turns");
     if second is string {
         test:assertFail("a second call in the same conversation must not run alongside the first: " + second);
@@ -611,8 +640,9 @@ function testA2aTaskSnapshotsCompareTheWholeStatus() {
         message: {messageId: "q1", role: a2a:ROLE_AGENT, parts: [{text: "which one?"}]}}};
     a2a:Task askedAgain = {id: "t", contextId: "c", status: {state: a2a:TASK_STATE_INPUT_REQUIRED,
         message: {messageId: "q2", role: a2a:ROLE_AGENT, parts: [{text: "and which size?"}]}}};
-    test:assertTrue(unchangedSince(asked, asked.clone()), "a re-sent snapshot is unchanged");
-    test:assertFalse(unchangedSince(asked, askedAgain), "a second question without timestamps has moved on");
+    test:assertTrue(stillAsking(asked.clone(), asked.status), "a re-sent snapshot is unchanged");
+    test:assertFalse(stillAsking(askedAgain, asked.status), "a second question without timestamps has moved on");
+    test:assertFalse(stillAsking(askedAgain, ()), "with no question asked, nothing is stale");
 }
 
 @test:Config {groups: ["a2a"]}
@@ -631,4 +661,74 @@ function testA2aToolListsAtMostFiftySkills() returns error? {
     test:assertTrue(description.includes("Skill 50 (id s50)"), "the first fifty are listed");
     test:assertFalse(description.includes("Skill 51 (id s51)"), "the rest are not");
     test:assertTrue(description.includes("- (10 more skills not listed)"), description);
+}
+
+// ---- review fixes: answers, the old question, busy conversations, long examples ----------
+
+@test:Config {groups: ["a2a"]}
+function testA2aAskDeliversTheAnswerOfAnAgentThatCannotStream() returns error? {
+    // The agent cannot stream, so the answer comes back as one complete task, which is not the old question.
+    a2a:AgentCard card = (check a2a:resolveAgentCard(a2aScriptedAgentUrl)).clone();
+    card.capabilities.streaming = false;
+    A2aToolKit toolkit = check new (card);
+    string question = check a2aAsk(toolkit, "ask", "blocking-answer");
+    test:assertTrue(question.startsWith("[INPUT_REQUIRED] which one?"), question);
+    test:assertEquals(check a2aAsk(toolkit, "the red one", "blocking-answer"), "the red one");
+}
+
+@test:Config {groups: ["a2a"]}
+function testA2aAskDoesNotShowTheOldQuestionAgainWhenTheAnswerHasNotTakenEffect() returns error? {
+    A2aToolKit toolkit = check new (a2aScriptedAgentUrl, clientConfig = {timeout: 1});
+    string question = check a2aAsk(toolkit, "ask", "unanswered");
+    test:assertTrue(question.startsWith("[INPUT_REQUIRED] which one?"), question);
+    A2aConversation asked = toolkit.conversationOf("unanswered");
+    test:assertTrue(asked?.interrupted is a2a:TaskStatus, "the question handed over is kept as the baseline");
+
+    // As if the stream had dropped after the answer was sent: the task is recorded as running, and the agent still
+    // shows the question that was asked. The question is not handed over again as if it were new.
+    A2aConversation running = {...asked};
+    running.taskState = a2a:TASK_STATE_WORKING;
+    toolkit.store("unanswered", running);
+    string reply = check a2aAsk(toolkit, "echo next", "unanswered");
+    test:assertTrue(reply.startsWith("[WORKING]"), reply);
+    test:assertFalse(reply.includes("which one?"), reply);
+    test:assertEquals(toolkit.conversationOf("unanswered")?.interrupted, asked?.interrupted,
+            "the question stays the baseline until the task moves on");
+}
+
+@test:Config {groups: ["a2a"]}
+function testA2aConversationInUseIsNotForgottenForNewerOnes() returns error? {
+    A2aToolKit toolkit = check new (a2aScriptedAgentUrl);
+    test:assertEquals(check a2aAsk(toolkit, "echo warm", "in-use"), "warm");
+    string? contextId = toolkit.conversationOf("in-use")?.contextId;
+    test:assertTrue(contextId is string);
+
+    int startedBefore = a2aBriefStartCount();
+    future<string|error> first = start a2aAsk(toolkit, "brief", "in-use");
+    a2aWaitForBriefStart(startedBefore);
+    // More conversations than the toolkit keeps arrive while that call is running.
+    foreach int i in 0 ..< A2A_MAX_CONVERSATIONS + 5 {
+        toolkit.store(string `newer-${i}`, {contextId: string `context-${i}`});
+    }
+    test:assertEquals(toolkit.conversationOf("in-use")?.contextId, contextId, "a call is still using it");
+    string firstReply = check wait first;
+    test:assertEquals(firstReply, "brief work finished");
+}
+
+@test:Config {groups: ["a2a"]}
+function testAnOversizedA2aSkillSummaryCutsItsExamplesAndKeepsTheSkillsAfterIt() returns error? {
+    string longText = string:'join(" ", ...from int i in 0 ..< 600
+                select "lengthy detail");
+    string hugeExample = string:'join(" ", ...from int i in 0 ..< 3000
+                select "example");
+    a2a:AgentSkill[] skills = [
+        {id: "big", name: "Big skill", description: longText, tags: [], examples: [hugeExample, "two", "three"]},
+        {id: "small", name: "Small skill", description: "Stays whole.", tags: [], examples: ["a"]}
+    ];
+    A2aToolKit toolkit = check new (a2aCard("Huge Example", skills = skills));
+    string description = a2aOnlyTool(toolkit).description;
+    test:assertTrue(description.includes("[summarized: the skill's full text was over 4096 characters]"), description);
+    test:assertTrue(description.includes("... [truncated]\"; \"two\"]"), "the long example is cut: " + description);
+    test:assertTrue(description.includes("- Small skill (id small): Stays whole."),
+            "the skill after the big one is still listed: " + description);
 }

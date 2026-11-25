@@ -32,6 +32,9 @@ public isolated class Context {
     # Returns the ID of the session the agent is running in, as passed to `ai:Agent.run`. Tools use it to keep
     # per-conversation state apart, such as the conversation an `ai:A2aToolKit` holds with a remote agent.
     #
+    # The run sets the session ID on the context it is given, so a `Context` must not be shared by runs that execute
+    # at the same time with different session IDs; give each run its own.
+    #
     # + return - The session ID, or `()` when the context is not used by an agent run
     public isolated function getSessionId() returns string? {
         lock {

@@ -1035,8 +1035,8 @@ It also carries what the Agent Card says about the remote agent:
 3. Every skill is listed on its own line with its name, id, description, tags, all of its examples, and its input
    and output modes. Every text is flattened to a single line.
 4. A skill whose line is longer than 4096 characters is summarized: its name is truncated to 80 characters, its
-   description to 240 characters, and only its first two examples are kept. The line ends with a note that the skill
-   was summarized. Other skills are not affected.
+   description to 240 characters, and only its first two examples are kept, each truncated to 200 characters. The line
+   ends with a note that the skill was summarized. Other skills are not affected.
 5. At most 50 skills are listed, in at most 16384 characters together. A final line says how many more skills the
    card has.
 
@@ -1048,7 +1048,8 @@ session when there is none. A conversation records the A2A `contextId` and the l
 seen in. The model never sees a task id or a context id.
 
 A toolkit keeps at most 1000 conversations. When there are more, the one used least recently is forgotten, and its
-next request starts a new conversation.
+next request starts a new conversation. A conversation a call is using counts as used and is not forgotten while the
+call lasts.
 
 A conversation takes one call at a time. A call made while another call in the same conversation is in flight, as
 when the model makes parallel tool calls to the same remote agent, returns an error that tells the model to call
@@ -1060,15 +1061,20 @@ The first such call logs a warning.
 ##### 4.3.4.5. Sending a request
 
 1. If the last task of the conversation was still running when it was last seen, the toolkit reads it once with
-   `getTask` and, if it is still running, follows it with `subscribeToTask` as in step 5, before sending anything.
+   `getTask` and, if it is still running, follows it with `subscribeToTask` as in step 5, before sending anything. If
+   the task cannot be followed, for example because it finished since it was read, it is read once more.
+   * A task whose status (state, timestamp and message, compared in full) is still the question the toolkit last
+     handed over has not acted on the answer sent after it; it is treated as still running, not as a new question.
    * If it settled in `TASK_STATE_INPUT_REQUIRED` or `TASK_STATE_AUTH_REQUIRED`, the result is its reply (step 6)
      with a note that the new request was not sent, because the question comes first.
    * If it settled in any other state, its reply (step 6) is kept, the request is sent as in step 2, and the result
      is the earlier reply followed by the reply to the request.
    * If it is still running, the result is `[WORKING]`, saying that the new request was not sent. A task whose state,
      status timestamp and number of artifact parts have not changed over three such replies in a row shows no
-     progress: on the next call the toolkit asks the remote agent to cancel it (`cancelTask`, whose failure is
-     ignored), keeps the conversation's context, sends the request as in step 2, and says so in the result.
+     progress: on the next call the toolkit asks the remote agent to cancel it (`cancelTask`), keeps the conversation's
+     context, sends the request as in step 2, and says so in the result. The result says that the task was
+     cancelled only when the remote agent confirmed it; if `cancelTask` fails, the result says that the toolkit
+     stopped waiting and that the agent did not confirm the cancellation.
    * If the remote agent no longer knows the task (`a2a:TaskNotFoundError`), the conversation is forgotten and the
      request is sent as in step 2. Any other failure to read it is returned as an error, and the conversation is
      kept, because the task may still be running.
@@ -1081,7 +1087,8 @@ The first such call logs a warning.
    `capabilities.streaming`, the client sends one blocking `sendMessage` instead and treats its reply as a stream of
    one event.
 3. If the remote agent rejects the message with `a2a:TaskNotFoundError` and the message carried the conversation's
-   ids, the conversation is forgotten and the request is sent once more as a new conversation.
+   ids, the conversation is forgotten and the request is sent once more as a new conversation, without the rejected
+   ids; a direct reply to that request that has no `contextId` does not bring them back.
 4. If the remote agent replies with a message, the result is the text of its parts joined with a space. The
    conversation keeps its `contextId` and has no open task.
 5. If the remote agent replies with a task, the toolkit reads the stream: the task, then its status updates and
@@ -1090,7 +1097,8 @@ The first such call logs a warning.
    state is `TASK_STATE_COMPLETED`, `TASK_STATE_FAILED`, `TASK_STATE_CANCELED`, `TASK_STATE_REJECTED`,
    `TASK_STATE_INPUT_REQUIRED`, or `TASK_STATE_AUTH_REQUIRED`. When the message continued a task, the first task in
    the stream may be the task as it was before the remote agent saw the new message; the task is not settled until
-   its status (state, timestamp and message, compared in full) differs from that snapshot. If the stream ends, fails, or stays silent for
+   its status (state, timestamp and message, compared in full) differs from the question the message answered. A
+   task that is already completed, or that asks something new, differs from it and settles at once. If the stream ends, fails, or stays silent for
    longer than `clientConfig.timeout` before the task settles, the task is still running on the remote agent: the
    result is `[WORKING]`, and the conversation records the task as running, so the next call picks it up (step 1).
    The toolkit never polls.
@@ -1158,6 +1166,9 @@ no way to sign a request.
 * The toolkit does not verify card signatures. To rely on a signature, verify the card first and pass the verified
   `a2a:AgentCard` as `agent`.
 * `secret` is kept in memory in an `a2a:InMemoryCredentialStore` and sent only to the remote agent it was given for.
+* A credential (`secret`, `clientConfig.auth` or `headers`) sent over plain `http://` to a host other than
+  `localhost`, `*.localhost` or a loopback address can be read on the network. The toolkit does not refuse such a
+  configuration, since an internal network may be trusted, but logs a warning when it is created. Use `https://`.
 * Conversations are kept apart by session id. Runs that do not pass a `sessionId` share the default session, and so
   share one conversation with the remote agent: a question the remote agent asked one user can be answered by the
   next. A warning is logged the first time it happens. A service that runs an agent for several users MUST pass a
