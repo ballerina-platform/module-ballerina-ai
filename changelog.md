@@ -12,6 +12,7 @@ This file documents all significant changes made to the Ballerina AI package acr
 - [Fix OpenAPI Spec Defaulting to Port 9090 When an AI Agent Listener Uses an Inline `http:Listener`](https://github.com/wso2/product-integrator/issues/1676)
 
 ### Updated
+- [Update the `http`, `crypto` and `oauth2` dependencies to 2.14.15, 2.9.4 and 2.14.2 and `log4j` to 2.25.5 to pick up security fixes](https://github.com/ballerina-platform/ballerina-library/issues/9645)
 - [Execute Multiple Tool Calls Returned in a Single LLM Response Together](https://github.com/wso2/product-integrator/issues/1833)
 
 ## [1.11.1] - 2026-04-16
