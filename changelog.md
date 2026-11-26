@@ -4,6 +4,9 @@ This file documents all significant changes made to the Ballerina AI package acr
 
 ## [Unreleased]
 
+### Changed
+- [Update the `http`, `crypto` and `oauth2` dependencies to 2.14.15, 2.9.4 and 2.14.2 to pick up the Netty, lz4-java and Bouncy Castle security fixes](https://github.com/ballerina-platform/ballerina-library/issues/9645)
+
 ## [1.15.0] - 2026-09-09
 
 ### Added
