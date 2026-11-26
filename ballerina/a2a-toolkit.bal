@@ -18,7 +18,9 @@ import ballerina/a2a;
 import ballerina/crypto;
 import ballerina/http;
 import ballerina/lang.regexp;
+import ballerina/lang.runtime;
 import ballerina/log;
+import ballerina/time;
 import ballerina/uuid;
 
 // The tool is named `ask<Name>`. A name part of up to 60 characters keeps the tool name within the 64 characters that
@@ -45,6 +47,9 @@ const int A2A_MAX_STALLED_REPLIES = 3;
 // The tool description lists at most this many skills, in at most this many characters.
 const int A2A_MAX_SKILLS = 50;
 const int A2A_MAX_SKILLS_TEXT_LENGTH = 16384;
+
+// How often a call waiting for its turn in a conversation looks again.
+const decimal A2A_QUEUE_POLL_SECONDS = 0.05;
 
 // How many conversations one toolkit remembers. Past this, the conversation used least recently is forgotten, and
 // its next request starts a new conversation with the remote agent.
@@ -107,8 +112,13 @@ public isolated class A2aToolKit {
     // Whether the card says the agent can stream. When it cannot, a call is one blocking request.
     private final boolean streams;
     private final map<A2aConversation & readonly> conversations = {};
-    // Sessions with a call in flight. One call at a time per conversation.
+    // Sessions with a call in flight. One call at a time per conversation; the others wait for their turn.
     private final map<boolean> busy = {};
+    // Calls waiting for their turn in a conversation, by session, in the order they arrived.
+    private final map<int[]> waiting = {};
+    private int lastTicket = 0;
+    // How long a call waits for its turn: the time a call may be silent.
+    private final decimal turnWait;
     private boolean warnedSharedSession = false;
     // Session ids, least recently used first, to forget the oldest conversation once there are too many.
     private final string[] sessionOrder = [];
@@ -163,6 +173,7 @@ public isolated class A2aToolKit {
         string? schemeName = check schemeFor(card, displayName, secret);
         self.agentUrl = check requireHttpJson(card, displayName);
         self.streams = card.capabilities.streaming == true;
+        self.turnWait = clientConfig.timeout;
 
         a2a:RestClient|error agentClient = connect(card, schemeName, secret, clientConfig, headers);
         if agentClient is error {
@@ -222,13 +233,17 @@ public isolated class A2aToolKit {
         if session == DEFAULT_SESSION_ID {
             self.warnSharedSession();
         }
-        // Two calls in flight in one conversation would both read where it stands and both overwrite it, so a second
-        // call waits for its turn through the model instead. An agent runs parallel tool calls by default.
-        if !self.claim(session) {
-            return error Error(string `another request to this agent is still running in this conversation; call `
-                + string `${self.toolName} with this request again once that one has returned`);
+        // An agent runs parallel tool calls by default, so two calls can arrive for one conversation at once. They
+        // would both read where it stands and both overwrite it, and the remote agent may keep the conversation's
+        // memory in a way that two requests at once corrupt. A call takes its turn instead, in the order the calls
+        // arrived. Calls in other conversations are not held up.
+        if !self.takeTurn(session) {
+            return error Error(string `another request to this agent has been running in this conversation for `
+                + string `${self.turnWait} seconds; call ${self.toolName} with this request again once that one `
+                + string `has returned`);
         }
-        string|error reply = self.askInSession(session, request);
+        // Trapped so that a panic cannot leave the conversation held, which would stall every call waiting behind it.
+        string|error reply = trap self.askInSession(session, request);
         self.release(session);
         return reply;
     }
@@ -397,12 +412,56 @@ public isolated class A2aToolKit {
         return confirmed;
     }
 
-    // Module-visible, not private, so the tests can hold a conversation busy.
-    isolated function claim(string session) returns boolean {
-        lock {
-            if self.busy.hasKey(session) {
+    // Waits for this call's turn in the conversation, for at most `turnWait`. Returns false when the turn did not come
+    // in time. The call that has waited longest goes first, and a call that arrives while others wait joins the line.
+    isolated function takeTurn(string session) returns boolean {
+        if self.claim(session) {
+            return true;
+        }
+        int ticket = self.joinLine(session);
+        time:Utc began = time:utcNow();
+        while true {
+            if self.claimInTurn(session, ticket) {
+                return true;
+            }
+            if time:utcDiffSeconds(time:utcNow(), began) >= self.turnWait {
+                self.leaveLine(session, ticket);
                 return false;
             }
+            runtime:sleep(A2A_QUEUE_POLL_SECONDS);
+        }
+    }
+
+    // Takes the conversation if no call is using it and no call is waiting for it. Module-visible, not private, so
+    // the tests can hold a conversation busy.
+    isolated function claim(string session) returns boolean {
+        lock {
+            if self.busy.hasKey(session) || self.waiting.hasKey(session) {
+                return false;
+            }
+            self.occupy(session);
+            return true;
+        }
+    }
+
+    // Takes the conversation for the call at the front of the line, once the call using it has returned.
+    private isolated function claimInTurn(string session, int ticket) returns boolean {
+        lock {
+            int[] line = self.waiting[session] ?: [];
+            if self.busy.hasKey(session) || line.length() == 0 || line[0] != ticket {
+                return false;
+            }
+            _ = line.shift();
+            if line.length() == 0 {
+                _ = self.waiting.remove(session);
+            }
+            self.occupy(session);
+            return true;
+        }
+    }
+
+    private isolated function occupy(string session) {
+        lock {
             self.busy[session] = true;
             // A conversation in use is the most recently used, so it is not the next one forgotten.
             int? at = self.sessionOrder.indexOf(session);
@@ -410,7 +469,30 @@ public isolated class A2aToolKit {
                 _ = self.sessionOrder.remove(at);
                 self.sessionOrder.push(session);
             }
-            return true;
+        }
+    }
+
+    private isolated function joinLine(string session) returns int {
+        lock {
+            self.lastTicket += 1;
+            int ticket = self.lastTicket;
+            int[] line = self.waiting[session] ?: [];
+            line.push(ticket);
+            self.waiting[session] = line;
+            return ticket;
+        }
+    }
+
+    private isolated function leaveLine(string session, int ticket) {
+        lock {
+            int[] line = self.waiting[session] ?: [];
+            int? at = line.indexOf(ticket);
+            if at is int {
+                _ = line.remove(at);
+            }
+            if line.length() == 0 {
+                _ = self.waiting.removeIfHasKey(session);
+            }
         }
     }
 
@@ -429,7 +511,7 @@ public isolated class A2aToolKit {
         lock {
             foreach int i in 0 ..< self.sessionOrder.length() {
                 string candidate = self.sessionOrder[i];
-                if !self.busy.hasKey(candidate) {
+                if !self.busy.hasKey(candidate) && !self.waiting.hasKey(candidate) {
                     _ = self.sessionOrder.remove(i);
                     _ = self.conversations.removeIfHasKey(candidate);
                     return true;

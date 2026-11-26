@@ -1052,8 +1052,11 @@ next request starts a new conversation. A conversation a call is using counts as
 call lasts.
 
 A conversation takes one call at a time. A call made while another call in the same conversation is in flight, as
-when the model makes parallel tool calls to the same remote agent, returns an error that tells the model to call
-again once the first call has returned. Calls in other conversations are not held up.
+when the model makes parallel tool calls to the same remote agent, waits for its turn. Calls take their turns in the
+order they arrived, and calls in other conversations are not held up. A call that has waited as long as the client
+`timeout` returns an error that tells the model to call again once the earlier call has returned. This is done here
+because the toolkit keeps one record of where a conversation stands, and because a remote agent that keeps a
+conversation's memory may not support two requests in it at once, as `ai:Agent.run` does not for one session.
 
 Runs that do not pass a session id all use the default session, and so share one conversation with the remote agent.
 The first such call logs a warning.

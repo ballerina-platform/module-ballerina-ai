@@ -575,16 +575,86 @@ function testA2aSecondCallInTheSameConversationWaitsItsTurn() returns error? {
     future<string|error> first = start a2aAsk(toolkit, "brief", "turns");
     // The first call holds the conversation once the agent has received its request.
     a2aWaitForBriefStart(startedBefore);
-    string|error second = a2aAsk(toolkit, "echo too soon", "turns");
-    if second is string {
-        test:assertFail("a second call in the same conversation must not run alongside the first: " + second);
-    }
-    test:assertTrue(second.message().startsWith("another request to this agent is still running"), second.message());
-    // Another conversation is not held up.
+    future<string|error> second = start a2aAsk(toolkit, "echo my turn", "turns");
+    // Another conversation is not held up by the one that is waiting.
     test:assertEquals(check a2aAsk(toolkit, "echo elsewhere", "other"), "elsewhere");
     string firstReply = check wait first;
     test:assertEquals(firstReply, "brief work finished");
-    test:assertEquals(check a2aAsk(toolkit, "echo my turn", "turns"), "my turn");
+    // Nothing is rejected: the second call ran once the first had returned.
+    string secondReply = check wait second;
+    test:assertEquals(secondReply, "my turn");
+}
+
+isolated string[] a2aTurnOrder = [];
+
+isolated function a2aAskAndNote(A2aToolKit toolkit, string request, string session) returns string|error {
+    string reply = check a2aAsk(toolkit, request, session);
+    lock {
+        a2aTurnOrder.push(reply);
+    }
+    return reply;
+}
+
+@test:Config {groups: ["a2a"]}
+function testA2aCallsInTheSameConversationTakeTurnsInTheOrderTheyArrived() returns error? {
+    A2aToolKit toolkit = check new (a2aScriptedAgentUrl);
+    lock {
+        a2aTurnOrder = [];
+    }
+    int startedBefore = a2aBriefStartCount();
+    future<string|error> first = start a2aAskAndNote(toolkit, "brief", "in-line");
+    a2aWaitForBriefStart(startedBefore);
+    future<string|error>[] later = [];
+    foreach string word in ["one", "two", "three", "four"] {
+        future<string|error> call = start a2aAskAndNote(toolkit, "echo " + word, "in-line");
+        later.push(call);
+        // Each call has joined the line before the next one arrives.
+        runtime:sleep(0.1);
+    }
+    string|error firstReply = wait first;
+    test:assertTrue(firstReply is string, "the first call ran");
+    foreach future<string|error> call in later {
+        string|error laterReply = wait call;
+        test:assertTrue(laterReply is string, "a call that waited ran");
+    }
+    lock {
+        test:assertEquals(a2aTurnOrder.cloneReadOnly(), ["brief work finished", "one", "two", "three", "four"]);
+    }
+}
+
+@test:Config {groups: ["a2a"]}
+function testA2aCallStopsWaitingForItsTurnAfterTheTimeout() returns error? {
+    A2aToolKit toolkit = check new (a2aScriptedAgentUrl, clientConfig = {timeout: 0.3});
+    // A call that does not return holds the conversation.
+    test:assertTrue(toolkit.claim("held"));
+    string|error refused = a2aAsk(toolkit, "echo never", "held");
+    if refused is string {
+        test:assertFail("the conversation was held, so the call must not run: " + refused);
+    }
+    test:assertTrue(refused.message().includes("has been running in this conversation for 0.3 seconds"),
+            refused.message());
+    // The call that gave up does not hold a place in the line: the next one gets the turn the holder frees.
+    toolkit.release("held");
+    test:assertEquals(check a2aAsk(toolkit, "echo my turn", "held"), "my turn");
+}
+
+@test:Config {groups: ["a2a"]}
+function testA2aConversationWaitedForIsNotForgottenForNewerOnes() returns error? {
+    A2aToolKit toolkit = check new (a2aScriptedAgentUrl);
+    test:assertEquals(check a2aAsk(toolkit, "echo warm", "queued"), "warm");
+    string? contextId = toolkit.conversationOf("queued")?.contextId;
+    test:assertTrue(contextId is string);
+    test:assertTrue(toolkit.claim("queued"));
+    future<string|error> waiting = start a2aAsk(toolkit, "echo after", "queued");
+    runtime:sleep(0.2);
+    // More conversations than the toolkit keeps arrive while one call holds the conversation and another waits for it.
+    foreach int i in 0 ..< A2A_MAX_CONVERSATIONS + 5 {
+        toolkit.store(string `newer-${i}`, {contextId: string `context-${i}`});
+    }
+    toolkit.release("queued");
+    string afterReply = check wait waiting;
+    test:assertEquals(afterReply, "after");
+    test:assertEquals(toolkit.conversationOf("queued")?.contextId, contextId, "the waiting call kept its conversation");
 }
 
 @test:Config {groups: ["a2a"]}
