@@ -21,6 +21,24 @@ Each model provider exposes two main high-level APIs:
 Ballerina offers several model providers available on [Ballerina Central](https://central.ballerina.io/search?q=model+provider&sort=relevance%2CDESC&page=1&m=packages).
 You can also implement your own custom provider if required.
 
+> **Recommended default**: When no specific model is requested, prefer the WSO2-managed default provider. Obtain it with `ai:getDefaultModelProvider()` rather than calling `new`, and prefer model providers over using the underlying connectors directly. Use `ai:getDefaultEmbeddingProvider()` for the default embedding provider in the same way.
+>
+> These two functions read the `wso2ProviderConfig` configurable variable of the `ballerina/ai` module and return an `ai:Error` when it is not configured. Provide it in `Config.toml` before using them:
+>
+> ```toml
+> [ballerina.ai.wso2ProviderConfig]
+> serviceUrl = "<service-url>"
+> accessToken = "<access-token>"
+> ```
+>
+> ```ballerina
+> import ballerina/ai;
+>
+> final ai:Wso2ModelProvider modelProvider = check ai:getDefaultModelProvider();
+> ```
+>
+> Also, always wrap the prompt passed to the `generate` API in backticks (for example, `` `How are you?` ``) rather than passing a plain string.
+
 Before using a model provider, you must first initialize it.
 
 ### 1.1 Initializing a Model Provider
@@ -376,6 +394,37 @@ ai:ChatAssistantMessage assistantMessage = check model->chat(augmentedQuery);
 
 // Print the assistant's answer
 io:println("Answer: ", assistantMessage.content);
+```
+
+## Writing AI Chat Services
+
+The `ai:Listener` is a thin wrapper over HTTP designed for chat interfaces. Use it only when a new chat service needs to be created.
+
+A service attached to an `ai:Listener` must conform to `ai:ChatService`, which requires a `post chat` resource accepting an `ai:ChatReqMessage` and returning an `ai:ChatRespMessage`. Since the resource path is always `chat`, declare the service without a base path so the endpoint is `/chat`; adding a `/chat` base path as well would expose it at `/chat/chat`. Use a base path only when a different prefix is wanted (for example, `service /assistant on chatListener` exposes `/assistant/chat`).
+
+```ballerina
+import ballerina/ai;
+import ballerina/http;
+
+listener ai:Listener chatListener = new (listenOn = check http:getDefaultListener());
+
+service on chatListener {
+    resource function post chat(@http:Payload ai:ChatReqMessage request) returns ai:ChatRespMessage|error {
+        string message = request.message;
+        string sessionId = request.sessionId;
+        // Typically, run an agent for the message and session, then return its result.
+        return {message: "AI Response goes here"};
+    }
+}
+```
+
+To back the chat service with an agent, run the agent inside the resource using the request message and session ID:
+
+```ballerina
+resource function post chat(@http:Payload ai:ChatReqMessage request) returns ai:ChatRespMessage|error {
+    string result = check chatAgent.run(request.message, request.sessionId);
+    return {message: result};
+}
 ```
 
 ## Examples
