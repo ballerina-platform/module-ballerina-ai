@@ -305,7 +305,24 @@ function testShortTermMemoryTrimKeepsToolResultsWithTheirCall() returns error? {
 
 @test:Config
 function testShortTermMemoryTrimNeverStartsWithToolResult() returns error? {
-    ChatInteractiveMessage[] messages = [...toolCallingRun, toolCallingRunFollowUp];
+    ChatInteractiveMessage[] wideToolCall = [
+        {role: USER, content: "Compare four hotels"},
+        {
+            role: ASSISTANT,
+            toolCalls: [
+                {name: "getRate", id: "rate_1"},
+                {name: "getRate", id: "rate_2"},
+                {name: "getRate", id: "rate_3"},
+                {name: "getRate", id: "rate_4"}
+            ]
+        },
+        {role: FUNCTION, name: "getRate", id: "rate_1", content: "1"},
+        {role: FUNCTION, name: "getRate", id: "rate_2", content: "2"},
+        {role: FUNCTION, name: "getRate", id: "rate_3", content: "3"},
+        {role: FUNCTION, name: "getRate", id: "rate_4", content: "4"},
+        {role: ASSISTANT, content: "The second hotel is the cheapest"}
+    ];
+    ChatInteractiveMessage[] messages = [...toolCallingRun, toolCallingRunFollowUp, ...wideToolCall];
     // The store requires a capacity of at least 3.
     foreach int capacity in 3 ... 13 {
         foreach int trimCount in 1 ... 13 {
@@ -362,18 +379,70 @@ function testShortTermMemoryTrimDropsToolCallThatDoesNotFit() returns error? {
 }
 
 @test:Config
+function testShortTermMemoryDoesNotStoreLaterResultsOfARemovedToolCall() returns error? {
+    ChatAssistantMessage toolCall = {
+        role: ASSISTANT,
+        toolCalls: [
+            {name: "getRate", id: "call_1"},
+            {name: "getRate", id: "call_2"},
+            {name: "getRate", id: "call_3"},
+            {name: "getRate", id: "call_4"}
+        ]
+    };
+    ChatFunctionMessage result1 = {role: FUNCTION, name: "getRate", id: "call_1", content: "1"};
+    ChatFunctionMessage result2 = {role: FUNCTION, name: "getRate", id: "call_2", content: "2"};
+    ChatFunctionMessage result3 = {role: FUNCTION, name: "getRate", id: "call_3", content: "3"};
+    ChatFunctionMessage result4 = {role: FUNCTION, name: "getRate", id: "call_4", content: "4"};
+
+    // The third result removes the tool call along with everything else, since the tool call and its results do
+    // not fit within the capacity of 3. The fourth result then fits, but its tool call is gone, so it is not stored.
+    Memory single = check new ShortTermMemory(check new InMemoryShortTermMemoryStore(3));
+    foreach ChatMessage message in [K1M1, toolCall, result1, result2, result3] {
+        check single.update(K1, message);
+    }
+    test:assertEquals((check single.get(K1)).length(), 0);
+    check single.update(K1, result4);
+    test:assertEquals((check single.get(K1)).length(), 0);
+
+    Memory batch = check new ShortTermMemory(check new InMemoryShortTermMemoryStore(3));
+    check batch.update(K1, [K1M1, toolCall, result1, result2]);
+    check batch.update(K1, [result3]);
+    test:assertEquals((check batch.get(K1)).length(), 0);
+    check batch.update(K1, [result4, k1m2]);
+    ChatMessage[] current = check batch.get(K1);
+    test:assertEquals(current.length(), 1);
+    assertChatMessageEquals(current[0], k1m2);
+
+    // A tool result is still stored after its tool call when memory is below capacity.
+    check batch.delete(K1);
+    check batch.update(K1, [K1M1, toolCall]);
+    check batch.update(K1, [result1]);
+    current = check batch.get(K1);
+    test:assertEquals(current.length(), 3);
+    assertChatMessageEquals(current[2], result1);
+}
+
+@test:Config
 function testShortTermMemoryTrimDoesNotKeepToolResultsWithAnAssistantMessageWithoutToolCalls() returns error? {
     ChatAssistantMessage answer = {role: ASSISTANT, content: "Here you go"};
     ChatFunctionMessage result1 = {role: FUNCTION, name: "getRate", id: "call_1", content: "1"};
     ChatFunctionMessage result2 = {role: FUNCTION, name: "getRate", id: "call_2", content: "2"};
     ChatFunctionMessage result3 = {role: FUNCTION, name: "getRate", id: "call_3", content: "3"};
 
-    // Trimming three messages lands on a tool result. The assistant message before the tool results has no
-    // tool calls, so it is not kept with them, although they would fit within the capacity of 4. No tool result
-    // can be kept without a tool call, so nothing is kept.
-    Memory memory = check new ShortTermMemory(check new InMemoryShortTermMemoryStore(4),
-        <TrimOverflowHandlerConfiguration>{trimCount: 3});
-    check memory.update(K1, [K1M1, answer, result1, result2]);
+    // Tool results after an assistant message without tool calls are not stored.
+    Memory memory = check new ShortTermMemory(check new InMemoryShortTermMemoryStore(4));
+    check memory.update(K1, [K1M1, answer, result1]);
+    ChatMessage[] current = check memory.get(K1);
+    test:assertEquals(current.length(), 2);
+    assertChatMessageEquals(current[1], answer);
+
+    // A store may already hold such tool results, for example ones stored before they were rejected. Trimming three
+    // messages lands on a tool result, and the assistant message before the tool results has no tool calls, so it
+    // is not kept with them, although they would fit within the capacity of 4. No tool result can be kept without
+    // a tool call, so nothing is kept.
+    InMemoryShortTermMemoryStore store = check new (4);
+    check store.put(K1, [K1M1, answer, result1, result2]);
+    memory = check new ShortTermMemory(store, <TrimOverflowHandlerConfiguration>{trimCount: 3});
     check memory.update(K1, result3);
     test:assertEquals((check memory.get(K1)).length(), 0);
 }

@@ -1733,6 +1733,10 @@ instead, keeping the assistant message with the tool call and its results, as lo
 Otherwise, all interactive messages are removed, including the newest one. This happens only when a tool call has at
 least as many results as the capacity.
 
+For the same reason, whichever overflow handling is configured, a tool result is stored only when the message before
+it is an assistant message with tool calls or another tool result. Any other tool result is not stored, for example
+a later result of a tool call that trimming removed.
+
 `trimCount` must be a positive integer; otherwise, the `ai:ShortTermMemory` initializer returns an `ai:MemoryError`.
 
 #### 6.2.2. Model-assisted overflow handling

@@ -134,6 +134,11 @@ public isolated class ShortTermMemory {
             // Fetched once and used both to detect the overflow and to handle it, which saves a round trip
             // with a remote store.
             ChatInteractiveMessage[] existing = check self.store.getChatInteractiveMessages(key);
+            if memoryChatMessage is ChatFunctionMessage
+                    && !isToolCallOrResult(existing.length() > 0 ? existing[existing.length() - 1] : ()) {
+                // A tool result whose tool call is not stored, for example because trimming removed it, is not kept.
+                return;
+            }
             int capacity = self.store.getCapacity();
             if existing.length() + 1 > capacity {
                 final OverflowHandler overflowHandler = self.overflowHandler;
@@ -168,6 +173,15 @@ public isolated class ShortTermMemory {
                 // Update only the latest system message, ignore others
                 allMessages = [systemMessages.pop()];
             }
+
+            // Only a batch that starts with a tool result needs the stored messages, to check that its tool call
+            // is stored; agents always start a batch with the user message.
+            ChatInteractiveMessage? previous = ();
+            if interactiveMessages.length() > 0 && interactiveMessages[0] is ChatFunctionMessage {
+                ChatInteractiveMessage[] existing = check self.store.getChatInteractiveMessages(key);
+                previous = existing.length() > 0 ? existing[existing.length() - 1] : ();
+            }
+            interactiveMessages = removeOrphanedToolResults(previous, interactiveMessages);
 
             if check self.exceedsMemoryLimit(key, interactiveMessages) {
                 final OverflowHandler overflowHandler = self.overflowHandler;
@@ -329,6 +343,27 @@ isolated function getTrimmedCount(ChatMessage[] messages, int removals, int capa
     }
     return messages.length();
 }
+
+// Returns the incoming messages without the tool results that would be stored without their tool call. A tool
+// result is kept only when the message before it, starting with `previous`, the last stored message, is an assistant
+// message with tool calls or another kept tool result. Since the stored messages never hold such a tool result, this
+// keeps it out of memory, for example when trimming removed its tool call.
+isolated function removeOrphanedToolResults(ChatInteractiveMessage? previous,
+        MemoryChatInteractiveMessage[] incoming) returns MemoryChatInteractiveMessage[] {
+    MemoryChatInteractiveMessage[] kept = [];
+    ChatInteractiveMessage? last = previous;
+    foreach MemoryChatInteractiveMessage message in incoming {
+        if message is ChatFunctionMessage && !isToolCallOrResult(last) {
+            continue;
+        }
+        kept.push(message);
+        last = message;
+    }
+    return kept;
+}
+
+isolated function isToolCallOrResult(ChatMessage? message) returns boolean =>
+    message is ChatFunctionMessage || (message is ChatAssistantMessage && (message.toolCalls ?: []).length() > 0);
 
 isolated function handleOverflow(
             ModelProvider model, Prompt & readonly prompt, ChatInteractiveMessage[] memory) 
