@@ -51,6 +51,12 @@ const int A2A_MAX_SKILLS_TEXT_LENGTH = 16384;
 // How often a call waiting for its turn in a conversation looks again.
 const decimal A2A_QUEUE_POLL_SECONDS = 0.05;
 
+// What a call waiting in the line finds when it looks.
+const string A2A_TURN_TAKEN = "taken";
+const string A2A_TURN_WAIT = "wait";
+const string A2A_TURN_EXPIRED = "expired";
+type A2aTurn A2A_TURN_TAKEN|A2A_TURN_WAIT|A2A_TURN_EXPIRED;
+
 // How many conversations one toolkit remembers. Past this, the conversation used least recently is forgotten, and
 // its next request starts a new conversation with the remote agent.
 const int A2A_MAX_CONVERSATIONS = 1000;
@@ -415,20 +421,78 @@ public isolated class A2aToolKit {
     // Waits for this call's turn in the conversation, for at most `turnWait`. Returns false when the turn did not come
     // in time. The call that has waited longest goes first, and a call that arrives while others wait joins the line.
     isolated function takeTurn(string session) returns boolean {
-        if self.claim(session) {
+        // A monotonic clock, so a change of the system clock cannot stretch or shorten the wait.
+        decimal deadline = time:monotonicNow() + self.turnWait;
+        int ticket = self.enter(session);
+        if ticket == 0 {
             return true;
         }
-        int ticket = self.joinLine(session);
-        time:Utc began = time:utcNow();
         while true {
-            if self.claimInTurn(session, ticket) {
+            A2aTurn turn = self.claimInTurn(session, ticket, deadline);
+            if turn == A2A_TURN_TAKEN {
                 return true;
             }
-            if time:utcDiffSeconds(time:utcNow(), began) >= self.turnWait {
-                self.leaveLine(session, ticket);
+            if turn == A2A_TURN_EXPIRED {
+                // The call that held the conversation may have returned while this one was still in the line, and
+                // left the cache over its limit because this call's conversation was waited for.
+                self.forgetExcessConversations();
                 return false;
             }
             runtime:sleep(A2A_QUEUE_POLL_SECONDS);
+        }
+    }
+
+    // Takes the conversation when no call is using it and no call is waiting for it, and otherwise joins the line.
+    // One decision under one lock, so a call cannot take the conversation ahead of one that arrived before it.
+    // Returns 0 when the call has the conversation, and its place in the line when it has to wait.
+    // Module-visible, not private, so the tests can hold a conversation.
+    isolated function enter(string session) returns int {
+        lock {
+            if !self.busy.hasKey(session) && !self.waiting.hasKey(session) {
+                self.occupy(session);
+                return 0;
+            }
+            self.lastTicket += 1;
+            int ticket = self.lastTicket;
+            int[] line = self.waiting[session] ?: [];
+            line.push(ticket);
+            self.waiting[session] = line;
+            return ticket;
+        }
+    }
+
+    // The call at the front of the line takes the conversation once the call using it has returned, unless its time
+    // is up. The time is checked in the same step as the claim, so a call is never started after it ran out of time.
+    // Module-visible, not private, so the tests can drive the line.
+    isolated function claimInTurn(string session, int ticket, decimal deadline) returns A2aTurn {
+        lock {
+            int[] line = self.waiting[session] ?: [];
+            if time:monotonicNow() >= deadline {
+                int? at = line.indexOf(ticket);
+                if at is int {
+                    _ = line.remove(at);
+                }
+                if line.length() == 0 {
+                    _ = self.waiting.removeIfHasKey(session);
+                }
+                return A2A_TURN_EXPIRED;
+            }
+            if self.busy.hasKey(session) || line.length() == 0 || line[0] != ticket {
+                return A2A_TURN_WAIT;
+            }
+            _ = line.shift();
+            if line.length() == 0 {
+                _ = self.waiting.remove(session);
+            }
+            self.occupy(session);
+            return A2A_TURN_TAKEN;
+        }
+    }
+
+    // How many calls wait for their turn in the conversation. Module-visible for the tests.
+    isolated function waitingCount(string session) returns int {
+        lock {
+            return (self.waiting[session] ?: []).length();
         }
     }
 
@@ -438,22 +502,6 @@ public isolated class A2aToolKit {
         lock {
             if self.busy.hasKey(session) || self.waiting.hasKey(session) {
                 return false;
-            }
-            self.occupy(session);
-            return true;
-        }
-    }
-
-    // Takes the conversation for the call at the front of the line, once the call using it has returned.
-    private isolated function claimInTurn(string session, int ticket) returns boolean {
-        lock {
-            int[] line = self.waiting[session] ?: [];
-            if self.busy.hasKey(session) || line.length() == 0 || line[0] != ticket {
-                return false;
-            }
-            _ = line.shift();
-            if line.length() == 0 {
-                _ = self.waiting.remove(session);
             }
             self.occupy(session);
             return true;
@@ -472,35 +520,18 @@ public isolated class A2aToolKit {
         }
     }
 
-    private isolated function joinLine(string session) returns int {
-        lock {
-            self.lastTicket += 1;
-            int ticket = self.lastTicket;
-            int[] line = self.waiting[session] ?: [];
-            line.push(ticket);
-            self.waiting[session] = line;
-            return ticket;
-        }
-    }
-
-    private isolated function leaveLine(string session, int ticket) {
-        lock {
-            int[] line = self.waiting[session] ?: [];
-            int? at = line.indexOf(ticket);
-            if at is int {
-                _ = line.remove(at);
-            }
-            if line.length() == 0 {
-                _ = self.waiting.removeIfHasKey(session);
-            }
-        }
-    }
-
     isolated function release(string session) {
         lock {
             _ = self.busy.removeIfHasKey(session);
-            // While every conversation was in use, a new one could not push another out. Now that this call has
-            // ended, the ones over the limit that no call uses are forgotten, least recently used first.
+        }
+        self.forgetExcessConversations();
+    }
+
+    // While every conversation was in use, a new one could not push another out. Once a call has ended or given up
+    // waiting, the ones over the limit that no call uses are forgotten, least recently used first.
+    // Module-visible, not private, so the tests can run it.
+    isolated function forgetExcessConversations() {
+        lock {
             while self.sessionOrder.length() > A2A_MAX_CONVERSATIONS && self.forgetLeastRecentIdle() {
             }
         }

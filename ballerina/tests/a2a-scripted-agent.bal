@@ -65,6 +65,7 @@ isolated class A2aScriptedAgentExecutor {
     public isolated function execute(a2a:RequestContext context, a2a:TaskUpdater updater)
             returns a2a:Message|a2a:Error? {
         string text = a2aScriptedText(context.message);
+        a2aNoteRequest(text);
 
         if text.startsWith("echo ") {
             check updater.addArtifact([{text: text.substring(5)}]);
@@ -124,6 +125,27 @@ isolated class A2aScriptedAgentExecutor {
             return;
         }
         return {messageId: "scripted-direct-reply", role: a2a:ROLE_AGENT, parts: [{text: "direct: " + text}]};
+    }
+}
+
+// The requests in the order they reached the handler, so a test can check the order calls were let through.
+isolated string[] a2aRequestLog = [];
+
+isolated function a2aNoteRequest(string text) {
+    lock {
+        a2aRequestLog.push(text);
+    }
+}
+
+isolated function a2aRequestsSince(int count) returns string[] {
+    lock {
+        return a2aRequestLog.slice(count).cloneReadOnly();
+    }
+}
+
+isolated function a2aRequestCount() returns int {
+    lock {
+        return a2aRequestLog.length();
     }
 }
 
