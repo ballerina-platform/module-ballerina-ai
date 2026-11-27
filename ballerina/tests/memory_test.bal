@@ -265,6 +265,133 @@ function testShortTermMemoryBatchTrimWithTrimCountLargerThanHistory() returns er
     assertChatMessageEquals(k1CurrentMemory[0], K1M4);
 }
 
+// One agent run with three rounds of two parallel tool calls: 11 messages, more than the default capacity of 10.
+final readonly & ChatInteractiveMessage[] toolCallingRun = [
+    {role: USER, content: "Plan a trip to Tokyo"},
+    {role: ASSISTANT, toolCalls: [{name: "findAirportCodes", id: "call_1"}, {name: "lookupLocation", id: "call_2"}]},
+    {role: FUNCTION, name: "findAirportCodes", id: "call_1", content: "HND, NRT"},
+    {role: FUNCTION, name: "lookupLocation", id: "call_2", content: "35.68, 139.76"},
+    {role: ASSISTANT, toolCalls: [{name: "searchFlights", id: "call_3"}, {name: "searchHotels", id: "call_4"}]},
+    {role: FUNCTION, name: "searchFlights", id: "call_3", content: "4 offers"},
+    {role: FUNCTION, name: "searchHotels", id: "call_4", content: "5 hotels"},
+    {role: ASSISTANT, toolCalls: [{name: "getHotelRates", id: "call_5"}, {name: "getHotelRates", id: "call_6"}]},
+    {role: FUNCTION, name: "getHotelRates", id: "call_5", content: "3 rates"},
+    {role: FUNCTION, name: "getHotelRates", id: "call_6", content: "3 rates"},
+    {role: ASSISTANT, content: "Here are the best options"}
+];
+
+final readonly & ChatUserMessage toolCallingRunFollowUp = {role: USER, content: "Try a cheaper hotel"};
+
+@test:Config
+function testShortTermMemoryTrimKeepsToolResultsWithTheirCall() returns error? {
+    Memory single = check new ShortTermMemory();
+    foreach ChatInteractiveMessage message in toolCallingRun {
+        check single.update(K1, message);
+    }
+    check single.update(K1, toolCallingRunFollowUp);
+    ChatMessage[] current = check single.get(K1);
+    test:assertEquals(current.length(), 8);
+    assertChatMessageEquals(current[0], toolCallingRun[4]);
+    assertNoOrphanedToolResults(current, "one message at a time");
+
+    Memory batch = check new ShortTermMemory();
+    check batch.update(K1, toolCallingRun);
+    check batch.update(K1, [toolCallingRunFollowUp]);
+    current = check batch.get(K1);
+    test:assertEquals(current.length(), 8);
+    assertChatMessageEquals(current[0], toolCallingRun[4]);
+    assertNoOrphanedToolResults(current, "batch updates");
+}
+
+@test:Config
+function testShortTermMemoryTrimNeverStartsWithToolResult() returns error? {
+    ChatInteractiveMessage[] messages = [...toolCallingRun, toolCallingRunFollowUp];
+    // The store requires a capacity of at least 3.
+    foreach int capacity in 3 ... 13 {
+        foreach int trimCount in 1 ... 13 {
+            string label = string `capacity ${capacity}, trimCount ${trimCount}`;
+            Memory single = check new ShortTermMemory(check new InMemoryShortTermMemoryStore(capacity),
+                <TrimOverflowHandlerConfiguration>{trimCount});
+            Memory batch = check new ShortTermMemory(check new InMemoryShortTermMemoryStore(capacity),
+                <TrimOverflowHandlerConfiguration>{trimCount});
+            foreach ChatInteractiveMessage message in messages {
+                check single.update(K1, message);
+                assertNoOrphanedToolResults(check single.get(K1), label + ", one message at a time");
+            }
+            foreach int batchSize in [2, 3, 5] {
+                check batch.delete(K1);
+                int index = 0;
+                while index < messages.length() {
+                    check batch.update(K1, messages.slice(index, int:min(index + batchSize, messages.length())));
+                    assertNoOrphanedToolResults(check batch.get(K1), string `${label}, batches of ${batchSize}`);
+                    index += batchSize;
+                }
+            }
+        }
+    }
+}
+
+@test:Config
+function testShortTermMemoryTrimDropsToolCallThatDoesNotFit() returns error? {
+    ChatAssistantMessage toolCall = {
+        role: ASSISTANT,
+        toolCalls: [{name: "getRate", id: "call_1"}, {name: "getRate", id: "call_2"}, {name: "getRate", id: "call_3"}]
+    };
+    ChatFunctionMessage result1 = {role: FUNCTION, name: "getRate", id: "call_1", content: "1"};
+    ChatFunctionMessage result2 = {role: FUNCTION, name: "getRate", id: "call_2", content: "2"};
+    ChatFunctionMessage result3 = {role: FUNCTION, name: "getRate", id: "call_3", content: "3"};
+    ChatAssistantMessage answer = {role: ASSISTANT, content: "The rates are 1, 2, and 3."};
+
+    // The tool call and its three results take four messages, more than the capacity of 3. Keeping the newest
+    // result would separate it from its tool call, so nothing is kept.
+    Memory single = check new ShortTermMemory(check new InMemoryShortTermMemoryStore(3));
+    foreach ChatMessage message in [K1M1, toolCall, result1, result2, result3] {
+        check single.update(K1, message);
+    }
+    test:assertEquals((check single.get(K1)).length(), 0);
+    check single.update(K1, answer);
+    ChatMessage[] current = check single.get(K1);
+    test:assertEquals(current.length(), 1);
+    assertChatMessageEquals(current[0], answer);
+
+    Memory batch = check new ShortTermMemory(check new InMemoryShortTermMemoryStore(3));
+    check batch.update(K1, [K1SM1, K1M1, toolCall, result1, result2, result3]);
+    current = check batch.get(K1);
+    test:assertEquals(current.length(), 1);
+    assertChatMessageEquals(current[0], K1SM1);
+}
+
+@test:Config
+function testShortTermMemoryTrimDoesNotKeepToolResultsWithAnAssistantMessageWithoutToolCalls() returns error? {
+    ChatAssistantMessage answer = {role: ASSISTANT, content: "Here you go"};
+    ChatFunctionMessage result1 = {role: FUNCTION, name: "getRate", id: "call_1", content: "1"};
+    ChatFunctionMessage result2 = {role: FUNCTION, name: "getRate", id: "call_2", content: "2"};
+    ChatFunctionMessage result3 = {role: FUNCTION, name: "getRate", id: "call_3", content: "3"};
+
+    // Trimming three messages lands on a tool result. The assistant message before the tool results has no
+    // tool calls, so it is not kept with them, although they would fit within the capacity of 4. No tool result
+    // can be kept without a tool call, so nothing is kept.
+    Memory memory = check new ShortTermMemory(check new InMemoryShortTermMemoryStore(4),
+        <TrimOverflowHandlerConfiguration>{trimCount: 3});
+    check memory.update(K1, [K1M1, answer, result1, result2]);
+    check memory.update(K1, result3);
+    test:assertEquals((check memory.get(K1)).length(), 0);
+}
+
+// Asserts that every stored tool result has its tool call in the stored history.
+isolated function assertNoOrphanedToolResults(ChatMessage[] messages, string label) {
+    string[] issuedCalls = [];
+    foreach ChatMessage message in messages {
+        if message is ChatAssistantMessage {
+            foreach FunctionCall call in message.toolCalls ?: [] {
+                issuedCalls.push(call.id ?: "");
+            }
+        } else if message is ChatFunctionMessage && issuedCalls.indexOf(message.id ?: "") is () {
+            test:assertFail(string `${label}: tool result ${message.id ?: ""} is kept without its tool call`);
+        }
+    }
+}
+
 @test:Config
 function testShortTermMemoryRejectsNonPositiveTrimCount() returns error? {
     ShortTermMemory|MemoryError memory = new (overflowConfiguration = <TrimOverflowHandlerConfiguration>{trimCount: 0});

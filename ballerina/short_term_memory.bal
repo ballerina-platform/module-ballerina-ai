@@ -38,7 +38,8 @@ final readonly & Prompt defaultSummarizationPrompt = `
 
 # Represents configuration to trim messages when overflow occurs.
 public type TrimOverflowHandlerConfiguration record {|
-    # Number of messages to trim when overflow occurs.
+    # Number of messages to trim when overflow occurs. Trimming may remove more or fewer messages to keep tool
+    # results with their tool calls.
     int trimCount = 1;
 |};
 
@@ -130,13 +131,26 @@ public isolated class ShortTermMemory {
                 return self.store.put(key, memoryChatMessage);
             }
 
-            if check self.exceedsMemoryLimit(key, memoryChatMessage) {
+            // Fetched once and used both to detect the overflow and to handle it, which saves a round trip
+            // with a remote store.
+            ChatInteractiveMessage[] existing = check self.store.getChatInteractiveMessages(key);
+            int capacity = self.store.getCapacity();
+            if existing.length() + 1 > capacity {
                 final OverflowHandler overflowHandler = self.overflowHandler;
                 if overflowHandler is TrimOverflowHandlerConfiguration {
-                    check self.store.removeChatInteractiveMessages(key, overflowHandler.trimCount);
+                    int removals = getTrimmedCount([...existing, memoryChatMessage], overflowHandler.trimCount,
+                        capacity);
+                    int storedRemovals = int:min(removals, existing.length());
+                    if storedRemovals > 0 {
+                        check self.store.removeChatInteractiveMessages(key, storedRemovals);
+                    }
+                    if removals > existing.length() {
+                        // The new message is a tool result whose tool call cannot be kept with it.
+                        return;
+                    }
                     return self.store.put(key, memoryChatMessage);
                 }
-                ChatMessage[] updatedMessages = check overflowHandler(check self.store.getChatInteractiveMessages(key));
+                ChatMessage[] updatedMessages = check overflowHandler(existing);
                 check self.store.removeChatInteractiveMessages(key);
                 return self.store.put(key, [...updatedMessages, memoryChatMessage]);
             }
@@ -202,9 +216,7 @@ public isolated class ShortTermMemory {
             int totalRemovals = trimCycles * trimCount;
 
             ChatMessage[] combined = [...existing, ...incomingInteractiveMsgs.clone()];
-            // Trimming in multiples of the trim count may exceed the messages available; the newest
-            // message is always kept, as when a single message is added.
-            totalRemovals = int:min(totalRemovals, combined.length() - 1);
+            totalRemovals = getTrimmedCount(combined, totalRemovals, capacity);
             combined = totalRemovals > 0 ? combined.slice(totalRemovals) : combined;
             ChatMessage[] trimmed = combined.'map(msg => check mapToMemoryChatMessage(msg)).clone();
             check self.store.removeChatInteractiveMessages(key);
@@ -286,6 +298,36 @@ public isolated class ShortTermMemory {
     # + return - The claimed pending approval, `()` if none was pending, or an `ai:Error` if the operation fails
     public isolated function takeCheckpoint(string sessionId) returns PendingApproval?|Error =>
         self.store.takeCheckpoint(sessionId);
+}
+
+// Returns how many of the oldest `messages` to remove, given that `removals` must be removed to fit the capacity.
+// The kept messages never start with a tool result separated from its tool call: tool results at the start are
+// removed as well, so trimming only ever removes more than `removals`, with one exception. The newest message is
+// kept, even when `removals` exceeds the messages available, unless it is a tool result: then fewer messages are
+// removed instead, keeping the assistant message with the tool call and its results, as long as they fit within the
+// capacity. Otherwise, all messages are removed, since the tool result cannot be kept without its tool call.
+isolated function getTrimmedCount(ChatMessage[] messages, int removals, int capacity) returns int {
+    int lastIndex = messages.length() - 1;
+    if lastIndex < 0 {
+        return 0;
+    }
+    int firstKept = int:min(removals, lastIndex);
+    while firstKept < lastIndex && messages[firstKept] is ChatFunctionMessage {
+        firstKept += 1;
+    }
+    if messages[firstKept] !is ChatFunctionMessage {
+        return firstKept;
+    }
+    int toolCallIndex = firstKept;
+    while toolCallIndex > 0 && messages[toolCallIndex] is ChatFunctionMessage {
+        toolCallIndex -= 1;
+    }
+    ChatMessage toolCallMessage = messages[toolCallIndex];
+    if toolCallMessage is ChatAssistantMessage && (toolCallMessage.toolCalls ?: []).length() > 0
+            && messages.length() - toolCallIndex <= capacity {
+        return toolCallIndex;
+    }
+    return messages.length();
 }
 
 isolated function handleOverflow(

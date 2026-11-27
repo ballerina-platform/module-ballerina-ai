@@ -1723,8 +1723,17 @@ public type TrimOverflowHandlerConfiguration record {|
 On overflow, the oldest interactive messages are removed in multiples of `trimCount` until the incoming messages
 fit within the capacity, and the incoming messages are then stored. When a batch of messages is added, the stored
 and incoming messages are trimmed together, so a batch larger than the capacity also loses its own leading
-messages. The newest message is always kept, even when `trimCount` exceeds the number of messages. `trimCount` must
-be a positive integer; otherwise, the `ai:ShortTermMemory` initializer returns an `ai:MemoryError`.
+messages. The newest message is always kept, even when `trimCount` exceeds the number of messages, unless it is a
+tool result that cannot be kept with its tool call, as described below.
+
+Trimming never leaves a tool result (`ChatFunctionMessage`) in the kept history without its tool call: tool results
+at the start of the kept history are removed as well, so trimming may remove more messages than a multiple of
+`trimCount`. When that would leave only the newest message and it is a tool result, fewer messages are removed
+instead, keeping the assistant message with the tool call and its results, as long as they fit within the capacity.
+Otherwise, all interactive messages are removed, including the newest one. This happens only when a tool call has at
+least as many results as the capacity.
+
+`trimCount` must be a positive integer; otherwise, the `ai:ShortTermMemory` initializer returns an `ai:MemoryError`.
 
 #### 6.2.2. Model-assisted overflow handling
 
