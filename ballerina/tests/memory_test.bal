@@ -322,27 +322,60 @@ function testShortTermMemoryTrimNeverStartsWithToolResult() returns error? {
         {role: FUNCTION, name: "getRate", id: "rate_4", content: "4"},
         {role: ASSISTANT, content: "The second hotel is the cheapest"}
     ];
-    ChatInteractiveMessage[] messages = [...toolCallingRun, toolCallingRunFollowUp, ...wideToolCall];
+    ChatInteractiveMessage[] parallelToolCalls = [...toolCallingRun, toolCallingRunFollowUp, ...wideToolCall];
+    // Agents store each tool call as an assistant message with that one call, followed by its result, and write
+    // each run as one batch.
+    ChatInteractiveMessage[][] agentRuns = [
+        [
+            {role: USER, content: "Plan a trip to Tokyo"},
+            {role: ASSISTANT, toolCalls: [{name: "findAirportCodes", id: "agent_1"}]},
+            {role: FUNCTION, name: "findAirportCodes", id: "agent_1", content: "HND, NRT"},
+            {role: ASSISTANT, toolCalls: [{name: "searchFlights", id: "agent_2"}]},
+            {role: FUNCTION, name: "searchFlights", id: "agent_2", content: "4 offers"},
+            {role: ASSISTANT, toolCalls: [{name: "searchHotels", id: "agent_3"}]},
+            {role: FUNCTION, name: "searchHotels", id: "agent_3", content: "5 hotels"},
+            {role: ASSISTANT, content: "Here are the best options"}
+        ],
+        [
+            {role: USER, content: "Try a cheaper hotel"},
+            {role: ASSISTANT, toolCalls: [{name: "getHotelRates", id: "agent_4"}]},
+            {role: FUNCTION, name: "getHotelRates", id: "agent_4", content: "3 rates"},
+            {role: ASSISTANT, content: "This one is cheaper"}
+        ]
+    ];
+    ChatInteractiveMessage[] agentToolCalls = [...agentRuns[0], ...agentRuns[1]];
+
     // The store requires a capacity of at least 3.
     foreach int capacity in 3 ... 13 {
         foreach int trimCount in 1 ... 13 {
-            string label = string `capacity ${capacity}, trimCount ${trimCount}`;
-            Memory single = check new ShortTermMemory(check new InMemoryShortTermMemoryStore(capacity),
-                <TrimOverflowHandlerConfiguration>{trimCount});
-            Memory batch = check new ShortTermMemory(check new InMemoryShortTermMemoryStore(capacity),
-                <TrimOverflowHandlerConfiguration>{trimCount});
-            foreach ChatInteractiveMessage message in messages {
-                check single.update(K1, message);
-                assertNoOrphanedToolResults(check single.get(K1), label + ", one message at a time");
-            }
-            foreach int batchSize in [2, 3, 5] {
-                check batch.delete(K1);
-                int index = 0;
-                while index < messages.length() {
-                    check batch.update(K1, messages.slice(index, int:min(index + batchSize, messages.length())));
-                    assertNoOrphanedToolResults(check batch.get(K1), string `${label}, batches of ${batchSize}`);
-                    index += batchSize;
+            foreach [string, ChatInteractiveMessage[]] [shape, messages] in
+                    [["parallel tool calls", parallelToolCalls], ["agent tool calls", agentToolCalls]] {
+                string label = string `${shape}, capacity ${capacity}, trimCount ${trimCount}`;
+                Memory single = check new ShortTermMemory(check new InMemoryShortTermMemoryStore(capacity),
+                    <TrimOverflowHandlerConfiguration>{trimCount});
+                Memory batch = check new ShortTermMemory(check new InMemoryShortTermMemoryStore(capacity),
+                    <TrimOverflowHandlerConfiguration>{trimCount});
+                foreach ChatInteractiveMessage message in messages {
+                    check single.update(K1, message);
+                    assertNoOrphanedToolResults(check single.get(K1), label + ", one message at a time");
                 }
+                foreach int batchSize in [2, 3, 5] {
+                    check batch.delete(K1);
+                    int index = 0;
+                    while index < messages.length() {
+                        check batch.update(K1, messages.slice(index, int:min(index + batchSize, messages.length())));
+                        assertNoOrphanedToolResults(check batch.get(K1), string `${label}, batches of ${batchSize}`);
+                        index += batchSize;
+                    }
+                }
+            }
+
+            string label = string `agent runs, capacity ${capacity}, trimCount ${trimCount}`;
+            Memory runs = check new ShortTermMemory(check new InMemoryShortTermMemoryStore(capacity),
+                <TrimOverflowHandlerConfiguration>{trimCount});
+            foreach ChatInteractiveMessage[] run in agentRuns {
+                check runs.update(K1, run);
+                assertNoOrphanedToolResults(check runs.get(K1), label);
             }
         }
     }
