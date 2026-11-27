@@ -745,14 +745,26 @@ isolated function schemeFor(a2a:AgentCard card, string displayName, string? secr
     string? schemeName = ();
     a2a:SecurityRequirement[]? securityRequirements = card.securityRequirements;
     if securityRequirements is a2a:SecurityRequirement[] && securityRequirements.length() > 0 {
-        string[] schemes = securityRequirements[0].keys();
-        if schemes.length() > 1 {
-            // An AND across several schemes needs several secrets, and a single `secret` cannot say which is which.
-            return error Error(string `agent "${displayName}" requires ${schemes.length()} security schemes `
-                + string `together (${string:'join(", ", ...schemes)}), which a single secret cannot satisfy`);
+        // The requirements are alternatives, and the schemes inside one are all needed together. A single `secret`
+        // can satisfy an alternative that names one scheme, so the first of those is used.
+        boolean anonymousAllowed = false;
+        string[]? together = ();
+        foreach a2a:SecurityRequirement requirement in securityRequirements {
+            string[] schemes = requirement.keys();
+            if schemes.length() == 1 {
+                if schemeName is () {
+                    schemeName = schemes[0];
+                }
+            } else if schemes.length() == 0 {
+                anonymousAllowed = true;
+            } else if together is () {
+                together = schemes;
+            }
         }
-        if schemes.length() == 1 {
-            schemeName = schemes[0];
+        if schemeName is () && !anonymousAllowed && together is string[] {
+            // Every alternative needs several secrets, and a single `secret` cannot say which is which.
+            return error Error(string `agent "${displayName}" requires ${together.length()} security schemes `
+                + string `together (${string:'join(", ", ...together)}), which a single secret cannot satisfy`);
         }
     }
     if secret is string && schemeName is () {

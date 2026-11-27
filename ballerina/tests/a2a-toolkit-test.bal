@@ -19,6 +19,7 @@ import ballerina/http;
 import ballerina/jballerina.java;
 import ballerina/lang.runtime;
 import ballerina/test;
+import ballerina/time;
 
 // ---- helpers ---------------------------------------------------------------
 
@@ -585,6 +586,11 @@ function testA2aSecondCallInTheSameConversationWaitsItsTurn() returns error? {
     test:assertEquals(secondReply, "my turn");
 }
 
+// Deadlines for the line, from the monotonic clock, whose zero is arbitrary and may be negative.
+isolated function a2aInTheFuture() returns decimal => time:monotonicNow() + 3600d;
+
+isolated function a2aInThePast() returns decimal => time:monotonicNow() - 1d;
+
 isolated function a2aWaitForWaiting(A2aToolKit toolkit, string session, int count) {
     foreach int _ in 0 ..< 100 {
         if toolkit.waitingCount(session) >= count {
@@ -630,11 +636,35 @@ function testA2aACallThatArrivesWhileOthersWaitJoinsTheLine() {
     int second = toolkit.enter("line");
     test:assertTrue(second > first, "a call arriving behind a waiting call goes behind it");
     test:assertEquals(toolkit.waitingCount("line"), 2);
-    test:assertEquals(toolkit.claimInTurn("line", second, 1000000d), A2A_TURN_WAIT);
-    test:assertEquals(toolkit.claimInTurn("line", first, 1000000d), A2A_TURN_TAKEN);
+    test:assertEquals(toolkit.claimInTurn("line", second, a2aInTheFuture()), A2A_TURN_WAIT);
+    test:assertEquals(toolkit.claimInTurn("line", first, a2aInTheFuture()), A2A_TURN_TAKEN);
     toolkit.release("line");
-    test:assertEquals(toolkit.claimInTurn("line", second, 1000000d), A2A_TURN_TAKEN);
+    test:assertEquals(toolkit.claimInTurn("line", second, a2aInTheFuture()), A2A_TURN_TAKEN);
     toolkit.release("line");
+}
+
+@test:Config {groups: ["a2a"]}
+function testA2aUsesTheSingleSchemeAlternativeWhenAnEarlierOneNeedsSeveral() returns error? {
+    // The requirements are alternatives: the first needs two secrets, the second only a bearer token.
+    A2aToolKit toolkit = check new (a2aCard("Alternatives", [{"apiKey": [], "secondFactor": []}, {"bearer": []}]),
+            secret = "shh");
+    test:assertEquals(toolkit.getTools().length(), 1);
+}
+
+@test:Config {groups: ["a2a"]}
+function testA2aUsesTheSchemeWhenAnEarlierAlternativeNeedsNoCredential() returns error? {
+    A2aToolKit toolkit = check new (a2aCard("Optional Auth", [{}, {"bearer": []}]), secret = "shh");
+    test:assertEquals(toolkit.getTools().length(), 1);
+}
+
+@test:Config {groups: ["a2a"]}
+function testA2aRejectsACardWhoseEveryAlternativeNeedsSeveralSchemes() {
+    A2aToolKit|Error toolkit = new (a2aCard("All Several",
+            [{"apiKey": [], "bearer": []}, {"oauth": [], "mutualTls": []}]), secret = "shh");
+    test:assertTrue(toolkit is Error);
+    if toolkit is Error {
+        test:assertTrue(toolkit.message().includes("requires 2 security schemes together"), toolkit.message());
+    }
 }
 
 @test:Config {groups: ["a2a"]}
@@ -644,7 +674,7 @@ function testA2aCallIsNotLetThroughAfterItsTimeIsUp() {
     int ticket = toolkit.enter("late");
     // The holder returns, so the call could take the conversation, but its time ran out first.
     toolkit.release("late");
-    test:assertEquals(toolkit.claimInTurn("late", ticket, 0d), A2A_TURN_EXPIRED);
+    test:assertEquals(toolkit.claimInTurn("late", ticket, a2aInThePast()), A2A_TURN_EXPIRED);
     test:assertEquals(toolkit.waitingCount("late"), 0, "a call that gave up leaves the line");
     test:assertTrue(toolkit.claim("late"), "and the conversation is free for the next call");
     toolkit.release("late");
@@ -685,7 +715,7 @@ function testA2aConversationWaitedForIsNotForgottenForNewerOnes() returns error?
     test:assertTrue(toolkit.claim("other"));
     toolkit.release("other");
     test:assertEquals(toolkit.conversationOf("queued")?.contextId, contextId, "a call is waiting for it");
-    test:assertEquals(toolkit.claimInTurn("queued", ticket, 1000000d), A2A_TURN_TAKEN);
+    test:assertEquals(toolkit.claimInTurn("queued", ticket, a2aInTheFuture()), A2A_TURN_TAKEN);
     toolkit.release("queued");
     test:assertEquals(toolkit.conversationOf("queued")?.contextId, contextId, "the waiting call kept its conversation");
 }
@@ -708,7 +738,7 @@ function testA2aCacheIsTrimmedWhenACallGivesUpWaiting() returns error? {
     test:assertTrue(toolkit.conversationOf("oldest")?.contextId is string, "a call is waiting for it");
     // The call gives up. Nothing else will trim the cache, since no call that holds a conversation ends here, so the
     // call that gave up does it.
-    test:assertEquals(toolkit.claimInTurn("oldest", ticket, 0d), A2A_TURN_EXPIRED);
+    test:assertEquals(toolkit.claimInTurn("oldest", ticket, a2aInThePast()), A2A_TURN_EXPIRED);
     toolkit.forgetExcessConversations();
     test:assertEquals(toolkit.conversationOf("oldest"), {}, "forgotten once nothing waits for it");
 }
