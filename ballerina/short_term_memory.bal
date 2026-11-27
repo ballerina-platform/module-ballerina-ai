@@ -14,6 +14,8 @@
 // specific language governing permissions and limitations
 // under the License.
 
+import ballerina/log;
+
 final readonly & Prompt defaultSummarizationPrompt = `
     You are an expert at summarizing conversations. You will summarize a chat history between a 
     user and an AI agent to create a concise summary that preserves the most important information.
@@ -38,7 +40,8 @@ final readonly & Prompt defaultSummarizationPrompt = `
 
 # Represents configuration to trim messages when overflow occurs.
 public type TrimOverflowHandlerConfiguration record {|
-    # Number of messages to trim when overflow occurs.
+    # Number of messages to trim when overflow occurs. Trimming may remove more or fewer messages to keep tool
+    # results with their tool calls.
     int trimCount = 1;
 |};
 
@@ -130,15 +133,33 @@ public isolated class ShortTermMemory {
                 return self.store.put(key, memoryChatMessage);
             }
 
-            if check self.exceedsMemoryLimit(key, memoryChatMessage) {
+            // Fetched once and used both to detect the overflow and to trim it, which saves a round trip with a
+            // remote store.
+            ChatInteractiveMessage[] existing = check self.store.getChatInteractiveMessages(key);
+            if memoryChatMessage is ChatFunctionMessage
+                    && !isToolCallOrResult(existing.length() > 0 ? existing[existing.length() - 1] : ()) {
+                // A tool result whose tool call is not stored, for example because trimming removed it, is not kept.
+                return;
+            }
+            int capacity = self.store.getCapacity();
+            if existing.length() + 1 > capacity {
                 final OverflowHandler overflowHandler = self.overflowHandler;
                 if overflowHandler is TrimOverflowHandlerConfiguration {
-                    check self.store.removeChatInteractiveMessages(key, overflowHandler.trimCount);
+                    int removals = getTrimmedCount([...existing, memoryChatMessage], overflowHandler.trimCount,
+                        capacity);
+                    int storedRemovals = int:min(removals, existing.length());
+                    if storedRemovals > 0 {
+                        check self.store.removeChatInteractiveMessages(key, storedRemovals);
+                    }
+                    if removals > existing.length() {
+                        // The new message is a tool result whose tool call cannot be kept with it.
+                        return;
+                    }
                     return self.store.put(key, memoryChatMessage);
                 }
-                ChatMessage[] updatedMessages = check overflowHandler(check self.store.getChatInteractiveMessages(key));
-                check self.store.removeChatInteractiveMessages(key);
-                return self.store.put(key, [...updatedMessages, memoryChatMessage]);
+                // A tool result is summarized together with its tool call instead of being stored after the summary.
+                return self.store.put(key,
+                    check self.getInteractiveMessagesAfterSummarization(key, overflowHandler, [memoryChatMessage]));
             }
             return self.store.put(key, memoryChatMessage);
         }
@@ -154,6 +175,15 @@ public isolated class ShortTermMemory {
                 // Update only the latest system message, ignore others
                 allMessages = [systemMessages.pop()];
             }
+
+            // Only a batch that starts with a tool result needs the stored messages, to check that its tool call
+            // is stored; agents always start a batch with the user message.
+            ChatInteractiveMessage? previous = ();
+            if interactiveMessages.length() > 0 && interactiveMessages[0] is ChatFunctionMessage {
+                ChatInteractiveMessage[] existing = check self.store.getChatInteractiveMessages(key);
+                previous = existing.length() > 0 ? existing[existing.length() - 1] : ();
+            }
+            interactiveMessages = removeOrphanedToolResults(previous, interactiveMessages);
 
             if check self.exceedsMemoryLimit(key, interactiveMessages) {
                 final OverflowHandler overflowHandler = self.overflowHandler;
@@ -202,9 +232,7 @@ public isolated class ShortTermMemory {
             int totalRemovals = trimCycles * trimCount;
 
             ChatMessage[] combined = [...existing, ...incomingInteractiveMsgs.clone()];
-            // Trimming in multiples of the trim count may exceed the messages available; the newest
-            // message is always kept, as when a single message is added.
-            totalRemovals = int:min(totalRemovals, combined.length() - 1);
+            totalRemovals = getTrimmedCount(combined, totalRemovals, capacity);
             combined = totalRemovals > 0 ? combined.slice(totalRemovals) : combined;
             ChatMessage[] trimmed = combined.'map(msg => check mapToMemoryChatMessage(msg)).clone();
             check self.store.removeChatInteractiveMessages(key);
@@ -287,6 +315,59 @@ public isolated class ShortTermMemory {
     public isolated function takeCheckpoint(string sessionId) returns PendingApproval?|Error =>
         self.store.takeCheckpoint(sessionId);
 }
+
+// Returns how many of the oldest `messages` to remove, given that `removals` must be removed to fit the capacity.
+// The kept messages never start with a tool result separated from its tool call: tool results at the start are
+// removed as well, so trimming only ever removes more than `removals`, with one exception. The newest message is
+// kept, even when `removals` exceeds the messages available, unless it is a tool result: then fewer messages are
+// removed instead, keeping the assistant message with the tool call and its results, as long as they fit within the
+// capacity. Otherwise, all messages are removed, since the tool result cannot be kept without its tool call.
+isolated function getTrimmedCount(ChatMessage[] messages, int removals, int capacity) returns int {
+    int lastIndex = messages.length() - 1;
+    if lastIndex < 0 {
+        return 0;
+    }
+    int firstKept = int:min(removals, lastIndex);
+    while firstKept < lastIndex && messages[firstKept] is ChatFunctionMessage {
+        firstKept += 1;
+    }
+    if messages[firstKept] !is ChatFunctionMessage {
+        return firstKept;
+    }
+    int toolCallIndex = firstKept;
+    while toolCallIndex > 0 && messages[toolCallIndex] is ChatFunctionMessage {
+        toolCallIndex -= 1;
+    }
+    ChatMessage toolCallMessage = messages[toolCallIndex];
+    if toolCallMessage is ChatAssistantMessage && (toolCallMessage.toolCalls ?: []).length() > 0
+            && messages.length() - toolCallIndex <= capacity {
+        return toolCallIndex;
+    }
+    log:printWarn("Removing all messages from the short-term memory, since a tool call and its results do not fit "
+        + "within the memory capacity");
+    return messages.length();
+}
+
+// Returns the incoming messages without the tool results that would be stored without their tool call. A tool
+// result is kept only when the message before it, starting with `previous`, the last stored message, is an assistant
+// message with tool calls or another kept tool result. Since the stored messages never hold such a tool result, this
+// keeps it out of memory, for example when trimming removed its tool call.
+isolated function removeOrphanedToolResults(ChatInteractiveMessage? previous,
+        MemoryChatInteractiveMessage[] incoming) returns MemoryChatInteractiveMessage[] {
+    MemoryChatInteractiveMessage[] kept = [];
+    ChatInteractiveMessage? last = previous;
+    foreach MemoryChatInteractiveMessage message in incoming {
+        if message is ChatFunctionMessage && !isToolCallOrResult(last) {
+            continue;
+        }
+        kept.push(message);
+        last = message;
+    }
+    return kept;
+}
+
+isolated function isToolCallOrResult(ChatMessage? message) returns boolean =>
+    message is ChatFunctionMessage || (message is ChatAssistantMessage && (message.toolCalls ?: []).length() > 0);
 
 isolated function handleOverflow(
             ModelProvider model, Prompt & readonly prompt, ChatInteractiveMessage[] memory) 

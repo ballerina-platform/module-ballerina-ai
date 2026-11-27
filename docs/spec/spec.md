@@ -1723,8 +1723,22 @@ public type TrimOverflowHandlerConfiguration record {|
 On overflow, the oldest interactive messages are removed in multiples of `trimCount` until the incoming messages
 fit within the capacity, and the incoming messages are then stored. When a batch of messages is added, the stored
 and incoming messages are trimmed together, so a batch larger than the capacity also loses its own leading
-messages. The newest message is always kept, even when `trimCount` exceeds the number of messages. `trimCount` must
-be a positive integer; otherwise, the `ai:ShortTermMemory` initializer returns an `ai:MemoryError`.
+messages. The newest message is always kept, even when `trimCount` exceeds the number of messages, unless it is a
+tool result that cannot be kept with its tool call, as described below.
+
+Trimming never leaves a tool result (`ChatFunctionMessage`) in the kept history without its tool call: tool results
+at the start of the kept history are removed as well, so trimming may remove more messages than a multiple of
+`trimCount`. When that would leave only the newest message and it is a tool result, fewer messages are removed
+instead, keeping the assistant message with the tool call and its results, as long as they fit within the capacity.
+Otherwise, all interactive messages are removed, including the newest one, and a warning is logged. This happens when
+the tool result cannot be kept with an assistant message that issues its tool call within the capacity, for example
+when a tool call has at least as many results as the capacity.
+
+For the same reason, whichever overflow handling is configured, a tool result is stored only when the message before
+it is an assistant message with tool calls or another tool result. Any other tool result is not stored, for example
+a later result of a tool call that trimming removed.
+
+`trimCount` must be a positive integer; otherwise, the `ai:ShortTermMemory` initializer returns an `ai:MemoryError`.
 
 #### 6.2.2. Model-assisted overflow handling
 
@@ -1748,6 +1762,8 @@ The summarized history is replaced by a single assistant message containing the 
   with the stored messages, and the trailing part is kept as is. The trailing part holds only as many messages as
   fit within the capacity alongside the summary, and never starts with a tool result message: tool results are
   summarized together with the tool call message they answer.
+- When a single incoming tool result overflows the capacity, it is summarized together with the stored messages,
+  including the tool call message it answers, instead of being stored after the summary.
 - If the summarization call fails, `update` returns an `ai:MemoryError`.
 
 ```ballerina

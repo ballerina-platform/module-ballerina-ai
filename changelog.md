@@ -4,6 +4,12 @@ This file documents all significant changes made to the Ballerina AI package acr
 
 ## [Unreleased]
 
+### Fixed
+- [Fix `ShortTermMemory` Trimming Separating Tool Results from Their Tool Calls](https://github.com/ballerina-platform/ballerina-library/issues/9723)
+
+
+## [1.17.0] - 2026-11-11
+
 ### Added
 - [Support MCP Servers on Spec Version `2026-07-28` through `mcp` 1.5.0](https://github.com/ballerina-platform/ballerina-library/issues/9647)
   - `ai:getPermittedMcpToolConfigs` also accepts the `ballerina/mcp.v2` `StreamableHttpClient`, which uses the
