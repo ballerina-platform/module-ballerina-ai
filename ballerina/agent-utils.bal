@@ -718,6 +718,7 @@ isolated function run(Agent agent, string instruction, string|Prompt query, int 
     // and append the user message for the current interaction.
     // After iterating and collecting execution steps in temporary memory,
     // update the actual memory in a single batch, including the system prompt and user message for this interaction.
+    context.setSessionId(sessionId);
     ChatMessage[]|MemoryError prevHistory = agent.memory.get(sessionId);
     if prevHistory is MemoryError {
         log:printDebug("Failed to retrieve conversation history from memory",
@@ -763,6 +764,7 @@ isolated function resumeRun(Agent agent, PendingApproval pendingApproval, map<Hu
         ResponseSchema? responseSchema = ())
         returns ExecutionTrace {
     string executionId = pendingApproval.executionId;
+    context.setSessionId(sessionId);
     log:printDebug("Agent resume loop started",
         agentId = agentId,
         executionId = executionId,

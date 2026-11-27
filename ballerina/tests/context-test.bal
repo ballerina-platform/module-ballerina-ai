@@ -71,3 +71,11 @@ isolated function testContextGetWithTypeErrors() {
     }
     test:assertEquals(wrongType.message(), "type conversion failed for value of key: count");
 }
+
+@test:Config
+isolated function testContextSessionIdIsUnsetOutsideAnAgentRun() {
+    Context ctx = new;
+    test:assertEquals(ctx.getSessionId(), ());
+    ctx.setSessionId("session-1");
+    test:assertEquals(ctx.getSessionId(), "session-1");
+}

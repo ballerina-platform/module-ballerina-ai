@@ -5,6 +5,8 @@ This file documents all significant changes made to the Ballerina AI package acr
 ## [Unreleased]
 
 ### Added
+- [Add `A2aToolKit` to expose a remote A2A agent as a single tool for an agent](https://github.com/ballerina-platform/ballerina-library/issues/9912)
+- [Add `Context.getSessionId()` so tools can read the session ID of the agent run](https://github.com/ballerina-platform/ballerina-library/issues/9912)
 - [Support MCP Servers on Spec Version `2026-07-28` through `mcp` 1.5.0](https://github.com/ballerina-platform/ballerina-library/issues/9647)
   - `ai:getPermittedMcpToolConfigs` also accepts the `ballerina/mcp.v2` `StreamableHttpClient`, which uses the
     modern protocol when the server offers it and the legacy handshake otherwise, and an `mcp.v2` `Implementation`.
