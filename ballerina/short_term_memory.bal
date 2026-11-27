@@ -14,6 +14,8 @@
 // specific language governing permissions and limitations
 // under the License.
 
+import ballerina/log;
+
 final readonly & Prompt defaultSummarizationPrompt = `
     You are an expert at summarizing conversations. You will summarize a chat history between a 
     user and an AI agent to create a concise summary that preserves the most important information.
@@ -131,8 +133,8 @@ public isolated class ShortTermMemory {
                 return self.store.put(key, memoryChatMessage);
             }
 
-            // Fetched once and used both to detect the overflow and to handle it, which saves a round trip
-            // with a remote store.
+            // Fetched once and used both to detect the overflow and to trim it, which saves a round trip with a
+            // remote store.
             ChatInteractiveMessage[] existing = check self.store.getChatInteractiveMessages(key);
             if memoryChatMessage is ChatFunctionMessage
                     && !isToolCallOrResult(existing.length() > 0 ? existing[existing.length() - 1] : ()) {
@@ -155,9 +157,9 @@ public isolated class ShortTermMemory {
                     }
                     return self.store.put(key, memoryChatMessage);
                 }
-                ChatMessage[] updatedMessages = check overflowHandler(existing);
-                check self.store.removeChatInteractiveMessages(key);
-                return self.store.put(key, [...updatedMessages, memoryChatMessage]);
+                // A tool result is summarized together with its tool call instead of being stored after the summary.
+                return self.store.put(key,
+                    check self.getInteractiveMessagesAfterSummarization(key, overflowHandler, [memoryChatMessage]));
             }
             return self.store.put(key, memoryChatMessage);
         }
@@ -341,6 +343,8 @@ isolated function getTrimmedCount(ChatMessage[] messages, int removals, int capa
             && messages.length() - toolCallIndex <= capacity {
         return toolCallIndex;
     }
+    log:printWarn("Removing all messages from the short-term memory, since a tool call and its results do not fit "
+        + "within the memory capacity");
     return messages.length();
 }
 

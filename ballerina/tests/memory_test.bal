@@ -249,6 +249,26 @@ function testShortTermMemorySummarizationKeepsToolResultsWithTheirCall() returns
     test:assertEquals(current.length(), 2);
     assertChatMessageEquals(current[0], summary);
     assertChatMessageEquals(current[1], answer);
+
+    // A single tool result that overflows is summarized with its tool call instead of being stored after the summary.
+    check memory.delete(K1);
+    check memory.update(K1, answer);
+    check memory.update(K1, question);
+    check memory.update(K1, toolCall);
+    check memory.update(K1, toolResult);
+    current = check memory.get(K1);
+    test:assertEquals(current.length(), 1);
+    assertChatMessageEquals(current[0], summary);
+
+    // Any other message is still stored after the summary.
+    check memory.update(K1, answer);
+    check memory.update(K1, question);
+    check memory.update(K1, toolCall);
+    current = check memory.get(K1);
+    test:assertEquals(current.length(), 3);
+    assertChatMessageEquals(current[0], summary);
+    assertChatMessageEquals(current[1], question);
+    assertChatMessageEquals(current[2], toolCall);
 }
 
 @test:Config
